@@ -1,4 +1,5 @@
 import { initializeApp } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { DateTime } from "luxon";
@@ -37,6 +38,23 @@ async function assertAdminByUid(uid: string): Promise<void> {
   if (!adminSnap.exists) {
     throw new HttpsError("permission-denied", "僅限管理員操作");
   }
+}
+
+/** 後台儲值：可填 UID，或填會員 Email（含 @ 時改查 Auth） */
+async function resolveCustomerUidForTopup(raw: string): Promise<string> {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    throw new HttpsError("invalid-argument", "請填入會員識別（Email 或 UID）");
+  }
+  if (trimmed.includes("@")) {
+    try {
+      const userRecord = await getAuth().getUserByEmail(trimmed);
+      return userRecord.uid;
+    } catch {
+      throw new HttpsError("not-found", "找不到此 Email 的會員帳號");
+    }
+  }
+  return trimmed;
 }
 
 function asPositiveInteger(v: unknown): number | null {
@@ -258,15 +276,14 @@ export const topupWallet = onCall(publicCall, async (request) => {
   }
   await assertAdminByUid(uid);
 
-  const customerId = typeof request.data?.customerId === "string" ? request.data.customerId.trim() : "";
+  const customerIdRaw = typeof request.data?.customerId === "string" ? request.data.customerId.trim() : "";
   const note = typeof request.data?.note === "string" ? request.data.note.trim() : "";
   const amount = asPositiveInteger(request.data?.amount);
-  if (!customerId) {
-    throw new HttpsError("invalid-argument", "customerId 必填");
-  }
   if (!amount) {
     throw new HttpsError("invalid-argument", "儲值金額需為正整數");
   }
+
+  const customerId = await resolveCustomerUidForTopup(customerIdRaw);
 
   const customerRef = db.collection("customers").doc(customerId);
   const walletTxRef = db.collection("walletTransactions").doc();
@@ -296,6 +313,91 @@ export const topupWallet = onCall(publicCall, async (request) => {
   });
 
   return { ok: true };
+});
+
+export const getAdminStatus = onCall(publicCall, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    return { isAdmin: false };
+  }
+  const adminSnap = await db.collection("admins").doc(uid).get();
+  return { isAdmin: adminSnap.exists };
+});
+
+export const createMemberAccount = onCall(publicCall, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", "請先登入");
+  }
+  await assertAdminByUid(uid);
+
+  const email = typeof request.data?.email === "string" ? request.data.email.trim() : "";
+  const password = typeof request.data?.password === "string" ? request.data.password : "";
+  if (!email) {
+    throw new HttpsError("invalid-argument", "Email 必填");
+  }
+  if (password.length < 6) {
+    throw new HttpsError("invalid-argument", "密碼至少 6 碼");
+  }
+
+  const auth = getAuth();
+  try {
+    const userRecord = await auth.createUser({
+      email,
+      password,
+      emailVerified: false,
+      disabled: false,
+    });
+    await db.collection("customers").doc(userRecord.uid).set(
+      {
+        walletBalance: 0,
+        drawChances: 0,
+        createdAt: FieldValueOrServerTimestamp(),
+        updatedAt: FieldValueOrServerTimestamp(),
+      },
+      { merge: true },
+    );
+    return { ok: true, uid: userRecord.uid };
+  } catch (e) {
+    console.error(e);
+    throw new HttpsError("already-exists", "建立會員失敗：Email 可能已存在");
+  }
+});
+
+/** 後台依 Email 前綴搜尋會員（掃描 Auth 使用者列表，適合人數不多的場景） */
+export const searchMemberUsers = onCall(publicCall, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", "請先登入");
+  }
+  await assertAdminByUid(uid);
+
+  const prefixRaw = typeof request.data?.prefix === "string" ? request.data.prefix.trim().toLowerCase() : "";
+  if (prefixRaw.length < 2) {
+    return { users: [] as { uid: string; email: string }[] };
+  }
+
+  const auth = getAuth();
+  const matches: { uid: string; email: string }[] = [];
+  let pageToken: string | undefined;
+  const maxMatches = 15;
+  const maxPages = 12;
+
+  for (let page = 0; page < maxPages && matches.length < maxMatches; page++) {
+    const res = await auth.listUsers(1000, pageToken);
+    for (const u of res.users) {
+      const email = u.email;
+      if (!email) continue;
+      if (email.toLowerCase().startsWith(prefixRaw)) {
+        matches.push({ uid: u.uid, email });
+        if (matches.length >= maxMatches) break;
+      }
+    }
+    if (!res.pageToken || matches.length >= maxMatches) break;
+    pageToken = res.pageToken;
+  }
+
+  return { users: matches };
 });
 
 export const completeBooking = onCall(publicCall, async (request) => {

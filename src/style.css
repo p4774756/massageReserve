@@ -353,6 +353,39 @@ tr:last-child td {
   font-size: 1rem;
 }
 
+.member-typeahead-wrap {
+  position: relative;
+  display: block;
+}
+
+.member-typeahead-list {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  max-height: 220px;
+  overflow: auto;
+  z-index: 40;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+
+.member-typeahead-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.member-typeahead-item:hover,
+.member-typeahead-item:focus {
+  background: #f0ebe3;
+}
+
 .checkbox-field {
   display: flex;
   align-items: center;

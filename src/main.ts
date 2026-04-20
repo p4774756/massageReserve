@@ -1,6 +1,5 @@
 import "./style.css";
 import {
-  createUserWithEmailAndPassword,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut,
@@ -19,11 +18,14 @@ import {
   cancelBookingCall,
   completeBookingCall,
   createBookingCall,
+  createMemberAccountCall,
   getAvailabilityCall,
+  getAdminStatusCall,
   getDb,
   getFirebaseAuth,
   getMyWalletCall,
   isFirebaseConfigured,
+  searchMemberUsersCall,
   spinWheelCall,
   topupWalletCall,
 } from "./firebase";
@@ -176,8 +178,7 @@ function render() {
   const titleBlock = el("div", {}, [titleHeading, titleDesc]);
 
   const memberEntryBtn = el("button", { class: "ghost member-entry", type: "button" }, ["會員登入"]);
-  const memberRegisterBtn = el("button", { class: "ghost member-entry", type: "button" }, ["會員註冊"]);
-  const headActions = el("div", { class: "head-actions" }, [memberEntryBtn, memberRegisterBtn]);
+  const headActions = el("div", { class: "head-actions" }, [memberEntryBtn]);
 
   const panelBook = el("main", { class: "panel" });
   const panelAdmin = el("main", { class: "panel", hidden: true });
@@ -236,7 +237,6 @@ function render() {
   function updateMemberEntryLabel() {
     const user = auth.currentUser;
     memberEntryBtn.textContent = user ? "會員中心" : "會員登入";
-    memberRegisterBtn.hidden = Boolean(user);
   }
 
   function openMemberAuthModal() {
@@ -301,54 +301,7 @@ function render() {
     document.body.append(overlay);
   }
 
-  function openMemberRegisterModal() {
-    const overlay = el("div", { class: "modal-overlay" });
-    const dialog = el("div", { class: "modal-card member-modal" });
-    dialog.setAttribute("role", "dialog");
-    dialog.setAttribute("aria-modal", "true");
-
-    const email = el("input", { type: "email", autocomplete: "username", placeholder: "會員 Email" });
-    const password = el("input", {
-      type: "password",
-      autocomplete: "new-password",
-      placeholder: "密碼（至少 6 碼）",
-    });
-    const status = el("div", { class: "status-line" });
-    const cancelBtn = el("button", { class: "ghost", type: "button" }, ["關閉"]);
-    const registerBtn = el("button", { class: "primary", type: "button" }, ["註冊"]);
-
-    cancelBtn.addEventListener("click", () => overlay.remove());
-    registerBtn.addEventListener("click", async () => {
-      status.textContent = "";
-      status.className = "status-line";
-      registerBtn.setAttribute("disabled", "true");
-      try {
-        await createUserWithEmailAndPassword(auth, email.value.trim(), password.value);
-        overlay.remove();
-      } catch (e) {
-        status.textContent = e instanceof Error ? e.message : "註冊失敗";
-        status.classList.add("error");
-      } finally {
-        registerBtn.removeAttribute("disabled");
-      }
-    });
-    overlay.addEventListener("click", (ev) => {
-      if (ev.target === overlay) overlay.remove();
-    });
-
-    dialog.append(
-      el("h3", {}, ["會員註冊"]),
-      el("label", { class: "field" }, ["Email", email]),
-      el("label", { class: "field" }, ["密碼", password]),
-      status,
-      el("div", { class: "modal-actions" }, [cancelBtn, registerBtn]),
-    );
-    overlay.append(dialog);
-    document.body.append(overlay);
-  }
-
   memberEntryBtn.addEventListener("click", openMemberAuthModal);
-  memberRegisterBtn.addEventListener("click", openMemberRegisterModal);
   function refillBookingModes(isMember: boolean) {
     const current = bookingModeSelect.value as BookingMode;
     bookingModeSelect.innerHTML = "";
@@ -679,6 +632,16 @@ function render() {
     adminWrap.append(box);
   }
 
+  function renderAdminForbidden() {
+    stopAdminListener();
+    adminWrap.innerHTML = "";
+    adminWrap.append(
+      el("div", { class: "admin-login" }, [
+        el("p", { class: "status-line error" }, ["無權限：此帳號不是管理員。"]),
+      ]),
+    );
+  }
+
   function renderAdminTable(userId: string) {
     stopAdminListener();
     adminWrap.innerHTML = "";
@@ -690,7 +653,71 @@ function render() {
 
     const adminStatus = el("div", { class: "status-line" });
     const walletTopupSection = el("div", { class: "admin-announce" }, []);
-    const topupCustomerId = el("input", { type: "text", placeholder: "會員 customerId（通常是 UID）" });
+    const accountCreateSection = el("div", { class: "admin-announce" }, []);
+    const topupCustomerId = el("input", {
+      type: "text",
+      placeholder: "會員 Email（建議）或 UID",
+      autocomplete: "off",
+    });
+    const topupSuggestions = el("ul", {
+      class: "member-typeahead-list",
+      hidden: true,
+      role: "listbox",
+    });
+    const topupTypeaheadWrap = el("div", { class: "member-typeahead-wrap" });
+    topupTypeaheadWrap.append(topupCustomerId, topupSuggestions);
+
+    let topupSearchTimer: ReturnType<typeof setTimeout> | null = null;
+    async function runTopupMemberSearch() {
+      const q = topupCustomerId.value.trim();
+      if (q.length < 2) {
+        topupSuggestions.hidden = true;
+        topupSuggestions.innerHTML = "";
+        return;
+      }
+      try {
+        const fn = searchMemberUsersCall();
+        const res = await fn({ prefix: q });
+        const users = (res.data as { users?: { uid: string; email: string }[] }).users ?? [];
+        topupSuggestions.innerHTML = "";
+        if (users.length === 0) {
+          topupSuggestions.hidden = true;
+          return;
+        }
+        for (const u of users) {
+          const li = el("li", { class: "member-typeahead-item", role: "option" }, [u.email]);
+          li.addEventListener("mousedown", (ev) => {
+            ev.preventDefault();
+            topupCustomerId.value = u.email;
+            topupSuggestions.hidden = true;
+            topupSuggestions.innerHTML = "";
+          });
+          topupSuggestions.append(li);
+        }
+        topupSuggestions.hidden = false;
+      } catch {
+        topupSuggestions.hidden = true;
+      }
+    }
+
+    topupCustomerId.addEventListener("input", () => {
+      const raw = topupCustomerId.value.trim();
+      if (raw.length < 2) {
+        topupSuggestions.hidden = true;
+        topupSuggestions.innerHTML = "";
+        return;
+      }
+      if (topupSearchTimer) clearTimeout(topupSearchTimer);
+      topupSearchTimer = setTimeout(() => void runTopupMemberSearch(), 280);
+    });
+    topupCustomerId.addEventListener("focus", () => {
+      void runTopupMemberSearch();
+    });
+    topupCustomerId.addEventListener("blur", () => {
+      setTimeout(() => {
+        topupSuggestions.hidden = true;
+      }, 200);
+    });
     const topupAmount = el("input", { type: "number", value: "100", min: "1", step: "1" });
     const topupNote = el("input", { type: "text", placeholder: "備註（選填）" });
     const topupBtn = el("button", { class: "ghost", type: "button" }, ["儲值"]);
@@ -702,7 +729,7 @@ function render() {
       const amount = Number(topupAmount.value);
       const note = topupNote.value.trim();
       if (!customerId) {
-        topupStatus.textContent = "請輸入 customerId。";
+        topupStatus.textContent = "請輸入會員 Email 或 UID。";
         topupStatus.classList.add("error");
         return;
       }
@@ -783,11 +810,56 @@ function render() {
     );
     walletTopupSection.append(
       el("h3", {}, ["會員儲值"]),
-      el("label", { class: "field" }, ["會員 customerId", topupCustomerId]),
+      el("label", { class: "field" }, ["會員（Email 或 UID）", topupTypeaheadWrap]),
+      el("div", { class: "hint" }, [
+        "輸入至少 2 個字元會顯示符合的 Email；亦可直接貼上 UID。",
+      ]),
       el("label", { class: "field" }, ["儲值金額", topupAmount]),
       el("label", { class: "field" }, ["備註（選填）", topupNote]),
       el("div", { class: "row-actions" }, [topupBtn]),
       topupStatus,
+    );
+    const createMemberEmail = el("input", { type: "email", placeholder: "會員 Email" });
+    const createMemberPassword = el("input", {
+      type: "password",
+      placeholder: "初始密碼（至少 6 碼）",
+      autocomplete: "new-password",
+    });
+    const createMemberBtn = el("button", { class: "ghost", type: "button" }, ["建立會員帳號"]);
+    const createMemberStatus = el("div", { class: "status-line" });
+    createMemberBtn.addEventListener("click", async () => {
+      createMemberStatus.textContent = "";
+      createMemberStatus.className = "status-line";
+      const email = createMemberEmail.value.trim();
+      const password = createMemberPassword.value;
+      if (!email || !password) {
+        createMemberStatus.textContent = "請輸入 Email 與密碼。";
+        createMemberStatus.classList.add("error");
+        return;
+      }
+      createMemberBtn.setAttribute("disabled", "true");
+      try {
+        const fn = createMemberAccountCall();
+        const res = await fn({ email, password });
+        const data = res.data as { uid: string };
+        createMemberStatus.textContent = `建立成功，UID：${data.uid}（儲值欄已帶入 Email）`;
+        createMemberStatus.classList.add("ok");
+        createMemberPassword.value = "";
+        topupCustomerId.value = email;
+      } catch (e) {
+        createMemberStatus.textContent = errorMessage(e);
+        createMemberStatus.classList.add("error");
+      } finally {
+        createMemberBtn.removeAttribute("disabled");
+      }
+    });
+    accountCreateSection.append(
+      el("h3", {}, ["建立會員帳號"]),
+      el("label", { class: "field" }, ["會員 Email", createMemberEmail]),
+      el("label", { class: "field" }, ["初始密碼", createMemberPassword]),
+      el("div", { class: "hint" }, ["註冊入口已關閉，僅管理後台可建立新會員帳號。"]),
+      el("div", { class: "row-actions" }, [createMemberBtn]),
+      createMemberStatus,
     );
     const tableHolder = el("div", { class: "table-wrap" });
     const table = el("table", {}, []);
@@ -802,7 +874,7 @@ function render() {
     );
     tableHolder.append(table);
 
-    adminWrap.append(top, announcementSection, walletTopupSection, adminStatus, tableHolder);
+    adminWrap.append(top, accountCreateSection, announcementSection, walletTopupSection, adminStatus, tableHolder);
 
     const q = query(collection(db, "bookings"), orderBy("startAt", "desc"));
     adminUnsub = onSnapshot(
@@ -908,11 +980,38 @@ function render() {
     );
   }
 
+  async function canCurrentUserAccessAdmin(): Promise<boolean> {
+    const user = auth.currentUser;
+    if (!user) return false;
+    try {
+      const fn = getAdminStatusCall();
+      const res = await fn();
+      const data = res.data as { isAdmin?: boolean };
+      return data.isAdmin === true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function syncAdminView() {
+    if (tab !== "admin") return;
+    const user = auth.currentUser;
+    if (!user) {
+      renderAdminLoggedOut();
+      return;
+    }
+    const allowed = await canCurrentUserAccessAdmin();
+    if (!allowed) {
+      renderAdminForbidden();
+      return;
+    }
+    renderAdminTable(user.uid);
+  }
+
   onAuthStateChanged(auth, (user) => {
     void refreshWalletStatus();
     if (tab !== "admin") return;
-    if (!user) renderAdminLoggedOut();
-    else renderAdminTable(user.uid);
+    void syncAdminView();
   });
 
   function tabFromPath(): "book" | "admin" {
@@ -924,7 +1023,6 @@ function render() {
     const isBook = next === "book";
     shell.classList.toggle("admin-mode", !isBook);
     memberEntryBtn.hidden = !isBook;
-    memberRegisterBtn.hidden = !isBook || Boolean(auth.currentUser);
     titleHeading.textContent = isBook ? "辦公室按摩預約" : "管理後台";
     titleDesc.textContent = isBook
       ? "週一至週五 · 以 30 分鐘估算 · 午休 11:45–13:15 不開放 · 最晚 17:30 開始、18:00 前結束"
@@ -934,10 +1032,8 @@ function render() {
     announcementBox.hidden = !isBook;
     if (isBook) {
       stopAdminListener();
-    } else if (auth.currentUser) {
-      renderAdminTable(auth.currentUser.uid);
     } else {
-      renderAdminLoggedOut();
+      void syncAdminView();
     }
   }
 
