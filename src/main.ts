@@ -6,6 +6,7 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   updateDoc,
   doc,
 } from "firebase/firestore";
@@ -112,6 +113,29 @@ function render() {
   ]);
 
   root.append(shell);
+
+  const announcementBox = el("div", { class: "marquee", hidden: true });
+  onSnapshot(
+    doc(db, "siteSettings", "announcement"),
+    (snap) => {
+      const data = snap.data() as { text?: unknown; enabled?: unknown } | undefined;
+      const text = typeof data?.text === "string" ? data.text.trim() : "";
+      const enabled = typeof data?.enabled === "boolean" ? data.enabled : false;
+      if (!enabled || !text) {
+        announcementBox.hidden = true;
+        announcementBox.textContent = "";
+        return;
+      }
+      announcementBox.hidden = false;
+      announcementBox.innerHTML = "";
+      announcementBox.append(el("div", { class: "marquee-track" }, [text, "  •  ", text]));
+    },
+    () => {
+      announcementBox.hidden = true;
+      announcementBox.textContent = "";
+    },
+  );
+  shell.prepend(announcementBox);
 
   /** --- 預約表單 --- */
   const nameInput = el("input", { type: "text", autocomplete: "name", maxLength: 80 });
@@ -273,11 +297,16 @@ function render() {
   panelAdmin.append(adminWrap);
 
   let adminUnsub: (() => void) | null = null;
+  let adminAnnouncementUnsub: (() => void) | null = null;
 
   function stopAdminListener() {
     if (adminUnsub) {
       adminUnsub();
       adminUnsub = null;
+    }
+    if (adminAnnouncementUnsub) {
+      adminAnnouncementUnsub();
+      adminAnnouncementUnsub = null;
     }
   }
 
@@ -326,6 +355,62 @@ function render() {
     top.append(who, outBtn);
 
     const adminStatus = el("div", { class: "status-line" });
+    const announcementSection = el("div", { class: "admin-announce" }, []);
+    const announcementEnabled = el("input", { type: "checkbox" });
+    const announcementText = el("textarea", {
+      maxLength: 240,
+      placeholder: "輸入公告內容，例如：本週三 15:00-16:00 暫停服務",
+    });
+    const saveAnnouncementBtn = el("button", { class: "ghost", type: "button" }, ["儲存公告"]);
+    const announcementStatus = el("div", { class: "status-line" });
+
+    const announcementDocRef = doc(db, "siteSettings", "announcement");
+    adminAnnouncementUnsub = onSnapshot(
+      announcementDocRef,
+      (snap) => {
+        const data = snap.data() as { text?: unknown; enabled?: unknown } | undefined;
+        announcementText.value = typeof data?.text === "string" ? data.text : "";
+        announcementEnabled.checked = typeof data?.enabled === "boolean" ? data.enabled : false;
+      },
+      () => {
+        announcementStatus.textContent = "無法讀取公告設定。";
+        announcementStatus.className = "status-line error";
+      },
+    );
+    saveAnnouncementBtn.addEventListener("click", async () => {
+      announcementStatus.textContent = "儲存中…";
+      announcementStatus.className = "status-line";
+      saveAnnouncementBtn.setAttribute("disabled", "true");
+      try {
+        await setDoc(
+          announcementDocRef,
+          {
+            text: announcementText.value.trim(),
+            enabled: announcementEnabled.checked,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+        announcementStatus.textContent = "公告已更新";
+        announcementStatus.classList.add("ok");
+      } catch (e) {
+        announcementStatus.textContent = e instanceof Error ? e.message : "公告更新失敗";
+        announcementStatus.classList.add("error");
+      } finally {
+        saveAnnouncementBtn.removeAttribute("disabled");
+      }
+    });
+
+    announcementSection.append(
+      el("h3", {}, ["跑馬燈公告"]),
+      el("label", { class: "field" }, ["公告內容", announcementText]),
+      el("label", { class: "field checkbox-field" }, [
+        announcementEnabled,
+        el("span", {}, ["啟用公告"]),
+      ]),
+      el("div", { class: "row-actions" }, [saveAnnouncementBtn]),
+      announcementStatus,
+    );
     const tableHolder = el("div", { class: "table-wrap" });
     const table = el("table", {}, []);
     table.append(
@@ -338,7 +423,7 @@ function render() {
     );
     tableHolder.append(table);
 
-    adminWrap.append(top, adminStatus, tableHolder);
+    adminWrap.append(top, announcementSection, adminStatus, tableHolder);
 
     const q = query(collection(db, "bookings"), orderBy("startAt", "desc"));
     adminUnsub = onSnapshot(

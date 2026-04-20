@@ -5,6 +5,7 @@
 - 僅 **週一～週五**，**08:00–17:30** 開始、每 **30 分鐘**一格，預估 **30 分鐘**（結束不晚於 **18:00**，`Asia/Taipei`）。
 - **同一天最多 2 筆**、**同一工作週最多 4 筆**（`cancelled` 不計入）。
 - **管理員** 以 Email/密碼登入後，可於 Firestore 讀取列表並更新 `status`。
+- 首頁支援「跑馬燈公告」，管理員可在後台編輯 `siteSettings/announcement`。
 
 ## 本機開發
 
@@ -61,4 +62,4 @@
 
 - `src/`：Vite 前端（預約表單＋管理分頁）。
 - `functions/`：`getAvailability`、`createBooking`（`invoker: public`，供未登入呼叫）。
-- `firestore.rules`：僅 `admins/{uid}` 可讀取預約；僅能更新 `status` / `updatedAt`。
+- `firestore.rules`：僅 `admins/{uid}` 可讀取預約；僅能更新 `status` / `updatedAt`；公告設定提供公開讀取、管理員可寫入。
