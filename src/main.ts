@@ -224,6 +224,9 @@ function render() {
   const slotSelect = el("select", {}, []);
   const noteInput = el("textarea", { maxLength: 500 });
   const bookingModeSelect = el("select", {}, []);
+  const bookingModeHint = el("span", { class: "hint" }, [
+    "訪客預約以現金 50 元結帳；儲值與抽獎請使用右上角登入。",
+  ]);
   const submitBtn = el("button", { class: "primary", type: "button" }, ["送出預約"]);
   const bookStatus = el("div", { class: "status-line" });
   const meta = el("div", { class: "meta-pills" });
@@ -231,6 +234,8 @@ function render() {
   const wheelStatus = el("div", { class: "status-line" });
   const wheelResult = el("div", { class: "pill", hidden: true });
   const spinBtn = el("button", { class: "ghost", type: "button" }, ["抽輪盤"]);
+  /** 僅登入後顯示：餘額／抽輪盤（訪客預約不需此區） */
+  const memberExtrasWrap = el("div", { class: "book-member-extras", hidden: true });
   let walletBalance = 0;
   let drawChances = 0;
 
@@ -310,17 +315,16 @@ function render() {
           { value: "member_wallet", label: "會員儲值（扣 50 元）" },
           { value: "member_cash", label: "會員現金（50 元）" },
         ]
-      : [
-          { value: "guest_cash", label: "訪客現金（50 元）" },
-          { value: "member_wallet", label: "會員儲值（需先登入）", disabled: true },
-          { value: "member_cash", label: "會員現金（需先登入）", disabled: true },
-        ];
+      : [{ value: "guest_cash", label: "訪客現金（50 元）" }];
     for (const mode of modes) {
       const opt = el("option", { value: mode.value, disabled: mode.disabled }, [mode.label]);
       bookingModeSelect.append(opt);
     }
     const values = modes.map((m) => m.value);
     bookingModeSelect.value = values.includes(current) ? current : modes[0].value;
+    bookingModeHint.textContent = isMember
+      ? "可選儲值扣款或會員現金（均為 50 元）。"
+      : "訪客預約以現金 50 元結帳；儲值與抽獎請使用右上角登入。";
   }
 
   async function refreshWalletStatus() {
@@ -330,14 +334,16 @@ function render() {
     if (!user) {
       walletBalance = 0;
       drawChances = 0;
-      walletStatus.textContent = "未登入：目前僅可使用訪客現金付款。";
+      memberExtrasWrap.hidden = true;
+      walletStatus.textContent = "";
       walletStatus.className = "status-line";
       spinBtn.setAttribute("disabled", "true");
-      wheelStatus.textContent = "登入後可使用抽獎次數。";
+      wheelStatus.textContent = "";
       wheelStatus.className = "status-line";
       wheelResult.hidden = true;
       return;
     }
+    memberExtrasWrap.hidden = false;
     walletStatus.textContent = "讀取會員餘額中…";
     walletStatus.className = "status-line";
     try {
@@ -355,6 +361,7 @@ function render() {
     } catch (e) {
       walletBalance = 0;
       drawChances = 0;
+      memberExtrasWrap.hidden = false;
       walletStatus.textContent = errorMessage(e);
       walletStatus.className = "status-line error";
       spinBtn.setAttribute("disabled", "true");
@@ -534,12 +541,18 @@ function render() {
     }
   });
 
+  memberExtrasWrap.append(
+    walletStatus,
+    el("div", { class: "row-actions" }, [spinBtn, wheelResult]),
+    wheelStatus,
+  );
+
   panelBook.append(
     el("div", { class: "grid grid-2" }, [
       el("label", { class: "field" }, [
         "姓名",
         nameInput,
-        el("span", { class: "hint" }, ["不需登入；僅作為辦公室內辨識用"]),
+        el("span", { class: "hint" }, ["可不登入，打個暱稱即可"]),
       ]),
       el("label", { class: "field" }, [
         "日期（週一至週五）",
@@ -558,12 +571,10 @@ function render() {
       el("label", { class: "field" }, [
         "付款方式",
         bookingModeSelect,
-        el("span", { class: "hint" }, ["儲值功能需先以會員身份登入"]),
+        bookingModeHint,
       ]),
     ]),
-    walletStatus,
-    el("div", { class: "row-actions" }, [spinBtn, wheelResult]),
-    wheelStatus,
+    memberExtrasWrap,
     meta,
     el("div", { class: "grid" }, [
       el("label", { class: "field" }, [
