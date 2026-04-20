@@ -26,6 +26,8 @@
   --shadow-sm: 0 4px 16px rgb(15 118 110 / 0.08);
   --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
   --font: "DM Sans", "Noto Sans TC", system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* 版面呼吸：主內容區塊之間的垂直節奏 */
+  --section-gap: 26px;
   font-family: var(--font);
 }
 
@@ -43,7 +45,7 @@ body {
     radial-gradient(ellipse 720px 420px at 100% 4%, rgb(194 65 12 / 0.08) 0%, transparent 50%),
     var(--bg);
   color: var(--ink);
-  line-height: 1.58;
+  line-height: 1.64;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -65,16 +67,16 @@ a:hover {
 #app {
   max-width: 940px;
   margin: 0 auto;
-  padding: 28px 20px 56px;
+  padding: 36px 24px 72px;
 }
 
 .banner {
   background: linear-gradient(180deg, var(--accent-muted-bg) 0%, var(--accent-soft) 100%);
   border: 1px solid rgb(var(--accent-rgb) / 0.35);
   color: var(--accent-deep);
-  padding: 14px 16px;
+  padding: 16px 18px;
   border-radius: var(--radius);
-  margin-bottom: 20px;
+  margin-bottom: 24px;
   box-shadow: var(--shadow-sm);
 }
 
@@ -97,7 +99,7 @@ a:hover {
   color: var(--accent-deep);
   overflow: hidden;
   white-space: nowrap;
-  padding: 11px 0;
+  padding: 13px 0;
   font-size: 0.92rem;
   letter-spacing: 0.02em;
 }
@@ -119,12 +121,12 @@ a:hover {
 }
 
 header.page-head {
-  padding: 24px 26px 20px;
+  padding: 28px 28px 24px;
   border-bottom: 1px solid rgb(var(--accent-rgb) / 0.15);
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 18px;
+  gap: 22px;
   flex-wrap: wrap;
   background: linear-gradient(180deg, var(--surface) 0%, var(--accent-muted-bg) 100%);
 }
@@ -139,11 +141,11 @@ header.page-head {
 }
 
 .page-head p {
-  margin: 8px 0 0;
+  margin: 12px 0 0;
   max-width: 52ch;
   color: var(--muted);
   font-size: 0.94rem;
-  line-height: 1.55;
+  line-height: 1.62;
 }
 
 .tabs {
@@ -159,8 +161,8 @@ header.page-head {
   align-items: center;
   justify-content: flex-end;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-top: -6px;
+  gap: 12px;
+  margin-top: -2px;
 }
 
 .member-entry {
@@ -211,12 +213,15 @@ header.page-head {
 }
 
 main.panel {
-  padding: 26px 26px 30px;
+  padding: 32px 28px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--section-gap);
 }
 
 .grid {
   display: grid;
-  gap: 18px;
+  gap: 22px;
 }
 
 @media (min-width: 720px) {
@@ -227,7 +232,7 @@ main.panel {
 
 label.field {
   display: grid;
-  gap: 7px;
+  gap: 9px;
   font-weight: 600;
   font-size: 0.9rem;
   letter-spacing: 0.01em;
@@ -238,7 +243,7 @@ label.field {
   font-weight: 500;
   color: var(--muted);
   font-size: 0.84rem;
-  line-height: 1.45;
+  line-height: 1.55;
 }
 
 input[type="text"],
@@ -249,7 +254,7 @@ input[type="date"],
 select,
 textarea {
   width: 100%;
-  padding: 11px 14px;
+  padding: 12px 16px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: var(--surface-muted);
@@ -266,7 +271,7 @@ textarea:hover {
 }
 
 textarea {
-  min-height: 96px;
+  min-height: 108px;
   resize: vertical;
 }
 
@@ -281,10 +286,10 @@ textarea:focus-visible {
 
 .row-actions {
   display: flex;
-  gap: 12px;
+  gap: 14px;
   flex-wrap: wrap;
   align-items: center;
-  margin-top: 8px;
+  margin-top: 0;
 }
 
 button.primary {
@@ -292,7 +297,7 @@ button.primary {
   border: 0;
   background: linear-gradient(175deg, var(--accent-bright) 0%, var(--accent) 42%, var(--accent-deep) 100%);
   color: white;
-  padding: 12px 20px;
+  padding: 14px 22px;
   border-radius: var(--radius-sm);
   font: inherit;
   font-weight: 700;
@@ -322,7 +327,7 @@ button.ghost {
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--ink);
-  padding: 10px 16px;
+  padding: 11px 18px;
   border-radius: var(--radius-sm);
   font: inherit;
   font-weight: 600;
@@ -346,9 +351,10 @@ button.ghost:disabled {
 }
 
 .status-line {
-  min-height: 22px;
+  min-height: 24px;
   font-size: 0.91rem;
   color: var(--muted);
+  line-height: 1.5;
 }
 
 .status-line.error {
@@ -363,8 +369,8 @@ button.ghost:disabled {
 .meta-pills {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
+  gap: 10px;
+  margin-top: 0;
 }
 
 .book-member-extras[hidden] {
@@ -373,8 +379,8 @@ button.ghost:disabled {
 
 .book-member-extras:not([hidden]) {
   display: grid;
-  gap: 12px;
-  margin-top: 6px;
+  gap: 14px;
+  margin-top: 0;
 }
 
 .pill {
@@ -414,7 +420,7 @@ table {
 
 th,
 td {
-  padding: 11px 12px;
+  padding: 13px 14px;
   border-bottom: 1px solid var(--border);
   vertical-align: top;
   text-align: left;
@@ -443,9 +449,9 @@ tbody tr:hover td {
 
 .admin-login {
   display: grid;
-  gap: 14px;
+  gap: 18px;
   max-width: 440px;
-  padding: 8px 0 4px;
+  padding: 12px 0 8px;
 }
 
 .admin-login .hint,
@@ -455,9 +461,9 @@ tbody tr:hover td {
 
 .admin-announce {
   display: grid;
-  gap: 12px;
-  margin: 10px 0 20px;
-  padding: 16px 18px;
+  gap: 14px;
+  margin: 0 0 18px;
+  padding: 18px 20px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-muted);
@@ -518,12 +524,12 @@ tbody tr:hover td {
 }
 
 .footer-note {
-  margin-top: 22px;
-  padding-top: 18px;
+  margin-top: 0;
+  padding-top: 22px;
   border-top: 1px solid var(--border);
   color: var(--muted);
   font-size: 0.87rem;
-  line-height: 1.5;
+  line-height: 1.58;
 }
 
 .modal-overlay {
@@ -544,9 +550,9 @@ tbody tr:hover td {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
-  padding: 22px;
+  padding: 26px;
   display: grid;
-  gap: 14px;
+  gap: 18px;
 }
 
 .modal-card h3 {
@@ -568,26 +574,30 @@ tbody tr:hover td {
   background: var(--surface-muted);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 14px;
-  line-height: 1.5;
+  padding: 16px;
+  line-height: 1.58;
 }
 
 .modal-actions {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   justify-content: flex-end;
   flex-wrap: wrap;
 }
 
 @media (max-width: 640px) {
+  :root {
+    --section-gap: 22px;
+  }
+
   #app {
-    padding: 14px 12px 36px;
+    padding: 20px 14px 48px;
   }
 
   header.page-head {
-    padding: 18px 16px 16px;
+    padding: 22px 18px 18px;
     align-items: flex-start;
-    gap: 12px;
+    gap: 14px;
   }
 
   .page-head h1 {
@@ -612,11 +622,15 @@ tbody tr:hover td {
   }
 
   main.panel {
-    padding: 18px 14px 22px;
+    padding: 24px 16px 28px;
+  }
+
+  .grid {
+    gap: 20px;
   }
 
   label.field {
-    gap: 8px;
+    gap: 10px;
     font-size: 0.93rem;
   }
 
@@ -646,7 +660,7 @@ tbody tr:hover td {
   }
 
   .meta-pills {
-    gap: 6px;
+    gap: 8px;
   }
 
   .pill {
@@ -667,8 +681,8 @@ tbody tr:hover td {
 
   .modal-card {
     width: 100%;
-    padding: 18px;
-    gap: 12px;
+    padding: 22px;
+    gap: 16px;
   }
 
   .modal-actions {
