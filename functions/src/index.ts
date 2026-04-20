@@ -24,7 +24,43 @@ type CreateBookingInput = {
   note?: unknown;
   dateKey?: unknown;
   startSlot?: unknown;
+  bookingMode?: unknown;
 };
+
+const BOOKING_PRICE = 50;
+
+type BookingStatus = "pending" | "confirmed" | "done" | "cancelled" | "deleted";
+type PrizeType = "credit" | "chance" | "thanks" | "penalty_text";
+
+async function assertAdminByUid(uid: string): Promise<void> {
+  const adminSnap = await db.collection("admins").doc(uid).get();
+  if (!adminSnap.exists) {
+    throw new HttpsError("permission-denied", "僅限管理員操作");
+  }
+}
+
+function asPositiveInteger(v: unknown): number | null {
+  if (typeof v !== "number" || !Number.isFinite(v)) return null;
+  const n = Math.trunc(v);
+  if (n <= 0 || n !== v) return null;
+  return n;
+}
+
+function asNonNegativeInteger(v: unknown): number {
+  if (typeof v !== "number" || !Number.isFinite(v)) return 0;
+  const n = Math.trunc(v);
+  return n >= 0 ? n : 0;
+}
+
+function pickWeighted<T extends { weight: number }>(items: T[]): T {
+  const total = items.reduce((acc, x) => acc + x.weight, 0);
+  let cursor = Math.random() * total;
+  for (const item of items) {
+    cursor -= item.weight;
+    if (cursor <= 0) return item;
+  }
+  return items[items.length - 1];
+}
 
 export const getAvailability = onCall(publicCall, async (request) => {
   const dateKey = request.data?.dateKey;
@@ -72,6 +108,7 @@ export const createBooking = onCall(publicCall, async (request) => {
   const note = typeof data.note === "string" ? data.note.trim() : "";
   const dateKey = typeof data.dateKey === "string" ? data.dateKey : "";
   const startSlot = typeof data.startSlot === "string" ? data.startSlot : "";
+  const bookingMode = typeof data.bookingMode === "string" ? data.bookingMode : "guest_cash";
 
   if (!displayName || displayName.length > 80) {
     throw new HttpsError("invalid-argument", "請填寫姓名（最多 80 字）");
@@ -81,6 +118,13 @@ export const createBooking = onCall(publicCall, async (request) => {
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
     throw new HttpsError("invalid-argument", "日期格式錯誤");
+  }
+  if (!["guest_cash", "member_cash", "member_wallet"].includes(bookingMode)) {
+    throw new HttpsError("invalid-argument", "付款模式錯誤");
+  }
+  const uid = request.auth?.uid ?? null;
+  if (bookingMode !== "guest_cash" && !uid) {
+    throw new HttpsError("unauthenticated", "會員付款需先登入");
   }
 
   let startLocal: DateTime;
@@ -128,6 +172,42 @@ export const createBooking = onCall(publicCall, async (request) => {
         throw new HttpsError("already-exists", "此時段已被預約");
       }
 
+      let customerId: string | null = null;
+      let walletDeducted = 0;
+      let paidCash = BOOKING_PRICE;
+      if (bookingMode === "member_cash") {
+        customerId = uid;
+      } else if (bookingMode === "member_wallet") {
+        customerId = uid;
+        paidCash = 0;
+        walletDeducted = BOOKING_PRICE;
+        const customerRef = db.collection("customers").doc(uid!);
+        const customerSnap = await tx.get(customerRef);
+        const walletBalanceRaw = customerSnap.exists ? customerSnap.get("walletBalance") : 0;
+        const walletBalance = typeof walletBalanceRaw === "number" ? walletBalanceRaw : 0;
+        if (walletBalance < BOOKING_PRICE) {
+          throw new HttpsError("resource-exhausted", "儲值餘額不足，請改用現金或先儲值");
+        }
+        tx.set(
+          customerRef,
+          {
+            walletBalance: walletBalance - BOOKING_PRICE,
+            updatedAt: FieldValueOrServerTimestamp(),
+          },
+          { merge: true },
+        );
+        const txRef = db.collection("walletTransactions").doc();
+        tx.set(txRef, {
+          customerId,
+          bookingId: bookingRef.id,
+          type: "charge",
+          amount: -BOOKING_PRICE,
+          note: "預約建立時扣款",
+          operatorId: uid,
+          createdAt: FieldValueOrServerTimestamp(),
+        });
+      }
+
       tx.set(bookingRef, {
         displayName,
         note,
@@ -135,8 +215,15 @@ export const createBooking = onCall(publicCall, async (request) => {
         startSlot,
         weekStart,
         startAt,
+        bookingMode,
+        customerId,
+        price: BOOKING_PRICE,
+        walletDeducted,
+        paidCash,
+        drawGranted: false,
         status: "pending",
         createdAt: FieldValueOrServerTimestamp(),
+        updatedAt: FieldValueOrServerTimestamp(),
       });
     });
   } catch (e) {
@@ -148,6 +235,323 @@ export const createBooking = onCall(publicCall, async (request) => {
   }
 
   return { id: bookingRef.id };
+});
+
+export const getMyWallet = onCall(publicCall, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", "請先登入");
+  }
+  const snap = await db.collection("customers").doc(uid).get();
+  const walletBalanceRaw = snap.exists ? snap.get("walletBalance") : 0;
+  const drawChancesRaw = snap.exists ? snap.get("drawChances") : 0;
+  return {
+    walletBalance: typeof walletBalanceRaw === "number" ? walletBalanceRaw : 0,
+    drawChances: typeof drawChancesRaw === "number" ? drawChancesRaw : 0,
+  };
+});
+
+export const topupWallet = onCall(publicCall, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", "請先登入");
+  }
+  await assertAdminByUid(uid);
+
+  const customerId = typeof request.data?.customerId === "string" ? request.data.customerId.trim() : "";
+  const note = typeof request.data?.note === "string" ? request.data.note.trim() : "";
+  const amount = asPositiveInteger(request.data?.amount);
+  if (!customerId) {
+    throw new HttpsError("invalid-argument", "customerId 必填");
+  }
+  if (!amount) {
+    throw new HttpsError("invalid-argument", "儲值金額需為正整數");
+  }
+
+  const customerRef = db.collection("customers").doc(customerId);
+  const walletTxRef = db.collection("walletTransactions").doc();
+  await db.runTransaction(async (tx) => {
+    const customerSnap = await tx.get(customerRef);
+    const walletBalanceRaw = customerSnap.exists ? customerSnap.get("walletBalance") : 0;
+    const drawChancesRaw = customerSnap.exists ? customerSnap.get("drawChances") : 0;
+    const nextWallet = (typeof walletBalanceRaw === "number" ? walletBalanceRaw : 0) + amount;
+    const drawChances = typeof drawChancesRaw === "number" ? drawChancesRaw : 0;
+    tx.set(
+      customerRef,
+      {
+        walletBalance: nextWallet,
+        drawChances,
+        updatedAt: FieldValueOrServerTimestamp(),
+      },
+      { merge: true },
+    );
+    tx.set(walletTxRef, {
+      customerId,
+      type: "topup",
+      amount,
+      note: note || "後台儲值",
+      operatorId: uid,
+      createdAt: FieldValueOrServerTimestamp(),
+    });
+  });
+
+  return { ok: true };
+});
+
+export const completeBooking = onCall(publicCall, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", "請先登入");
+  }
+  await assertAdminByUid(uid);
+
+  const bookingId = typeof request.data?.bookingId === "string" ? request.data.bookingId.trim() : "";
+  if (!bookingId) {
+    throw new HttpsError("invalid-argument", "bookingId 必填");
+  }
+  const bookingRef = db.collection("bookings").doc(bookingId);
+  await db.runTransaction(async (tx) => {
+    const bookingSnap = await tx.get(bookingRef);
+    if (!bookingSnap.exists) {
+      throw new HttpsError("not-found", "找不到預約");
+    }
+    const data = bookingSnap.data() as Record<string, unknown>;
+    const status = (data.status as BookingStatus | undefined) ?? "pending";
+    if (status === "done") {
+      throw new HttpsError("failed-precondition", "此預約已完成");
+    }
+    if (!["pending", "confirmed"].includes(status)) {
+      throw new HttpsError("failed-precondition", "目前狀態不可完成");
+    }
+
+    const customerId = typeof data.customerId === "string" ? data.customerId : null;
+    const drawGranted = data.drawGranted === true;
+    if (customerId && !drawGranted) {
+      const customerRef = db.collection("customers").doc(customerId);
+      const customerSnap = await tx.get(customerRef);
+      const walletBalanceRaw = customerSnap.exists ? customerSnap.get("walletBalance") : 0;
+      const drawChancesRaw = customerSnap.exists ? customerSnap.get("drawChances") : 0;
+      tx.set(
+        customerRef,
+        {
+          walletBalance: typeof walletBalanceRaw === "number" ? walletBalanceRaw : 0,
+          drawChances: (typeof drawChancesRaw === "number" ? drawChancesRaw : 0) + 1,
+          updatedAt: FieldValueOrServerTimestamp(),
+        },
+        { merge: true },
+      );
+      tx.update(bookingRef, {
+        drawGranted: true,
+      });
+    }
+
+    tx.update(bookingRef, {
+      status: "done",
+      updatedAt: FieldValueOrServerTimestamp(),
+      completedAt: FieldValueOrServerTimestamp(),
+      completedBy: uid,
+    });
+  });
+
+  return { ok: true };
+});
+
+export const cancelBooking = onCall(publicCall, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", "請先登入");
+  }
+  await assertAdminByUid(uid);
+
+  const bookingId = typeof request.data?.bookingId === "string" ? request.data.bookingId.trim() : "";
+  if (!bookingId) {
+    throw new HttpsError("invalid-argument", "bookingId 必填");
+  }
+  const bookingRef = db.collection("bookings").doc(bookingId);
+  await db.runTransaction(async (tx) => {
+    const bookingSnap = await tx.get(bookingRef);
+    if (!bookingSnap.exists) {
+      throw new HttpsError("not-found", "找不到預約");
+    }
+    const data = bookingSnap.data() as Record<string, unknown>;
+    const status = (data.status as BookingStatus | undefined) ?? "pending";
+    if (status === "cancelled") {
+      throw new HttpsError("failed-precondition", "此預約已取消");
+    }
+    if (status === "deleted") {
+      throw new HttpsError("failed-precondition", "此預約已刪除");
+    }
+    if (status === "done") {
+      throw new HttpsError("failed-precondition", "已完成預約不可直接取消");
+    }
+
+    const customerId = typeof data.customerId === "string" ? data.customerId : null;
+    const walletDeductedRaw = data.walletDeducted;
+    const walletDeducted = typeof walletDeductedRaw === "number" ? walletDeductedRaw : 0;
+    if (customerId && walletDeducted > 0) {
+      const customerRef = db.collection("customers").doc(customerId);
+      const customerSnap = await tx.get(customerRef);
+      const walletBalanceRaw = customerSnap.exists ? customerSnap.get("walletBalance") : 0;
+      const drawChancesRaw = customerSnap.exists ? customerSnap.get("drawChances") : 0;
+      tx.set(
+        customerRef,
+        {
+          walletBalance: (typeof walletBalanceRaw === "number" ? walletBalanceRaw : 0) + walletDeducted,
+          drawChances: typeof drawChancesRaw === "number" ? drawChancesRaw : 0,
+          updatedAt: FieldValueOrServerTimestamp(),
+        },
+        { merge: true },
+      );
+      const walletTxRef = db.collection("walletTransactions").doc();
+      tx.set(walletTxRef, {
+        customerId,
+        bookingId,
+        type: "refund",
+        amount: walletDeducted,
+        note: "取消預約退款",
+        operatorId: uid,
+        createdAt: FieldValueOrServerTimestamp(),
+      });
+    }
+
+    tx.update(bookingRef, {
+      status: "cancelled",
+      updatedAt: FieldValueOrServerTimestamp(),
+      cancelledAt: FieldValueOrServerTimestamp(),
+      cancelledBy: uid,
+    });
+  });
+
+  return { ok: true };
+});
+
+export const spinWheel = onCall(publicCall, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", "請先登入");
+  }
+  const prizeSnap = await db.collection("wheelPrizes").where("active", "==", true).get();
+  const prizes = prizeSnap.docs
+    .map((d) => {
+      const data = d.data();
+      const weightRaw = data.weight;
+      const weight = typeof weightRaw === "number" ? weightRaw : 0;
+      const type = data.type as PrizeType | undefined;
+      const name = typeof data.name === "string" ? data.name : "";
+      const value = asNonNegativeInteger(data.value);
+      if (!name || !type || !["credit", "chance", "thanks", "penalty_text"].includes(type) || weight <= 0) {
+        return null;
+      }
+      return {
+        id: d.id,
+        name,
+        type,
+        value,
+        weight,
+      };
+    })
+    .filter((x): x is { id: string; name: string; type: PrizeType; value: number; weight: number } => Boolean(x));
+
+  if (prizes.length === 0) {
+    throw new HttpsError("failed-precondition", "目前沒有可用輪盤獎項");
+  }
+  const picked = pickWeighted(prizes);
+
+  const customerRef = db.collection("customers").doc(uid);
+  const spinRef = db.collection("wheelSpins").doc();
+  const walletTxRef = db.collection("walletTransactions").doc();
+
+  let remainingDrawChances = 0;
+  let nextWalletBalance = 0;
+  await db.runTransaction(async (tx) => {
+    const customerSnap = await tx.get(customerRef);
+    const drawChances = asNonNegativeInteger(customerSnap.exists ? customerSnap.get("drawChances") : 0);
+    const walletBalance = asNonNegativeInteger(customerSnap.exists ? customerSnap.get("walletBalance") : 0);
+    if (drawChances < 1) {
+      throw new HttpsError("failed-precondition", "可抽次數不足");
+    }
+
+    let walletDelta = 0;
+    let chanceDelta = -1;
+    if (picked.type === "credit") {
+      walletDelta = picked.value;
+    } else if (picked.type === "chance") {
+      chanceDelta += picked.value;
+    }
+    remainingDrawChances = drawChances + chanceDelta;
+    nextWalletBalance = walletBalance + walletDelta;
+
+    tx.set(
+      customerRef,
+      {
+        walletBalance: nextWalletBalance,
+        drawChances: remainingDrawChances,
+        updatedAt: FieldValueOrServerTimestamp(),
+      },
+      { merge: true },
+    );
+
+    if (walletDelta > 0) {
+      tx.set(walletTxRef, {
+        customerId: uid,
+        type: "prize_credit",
+        amount: walletDelta,
+        note: `輪盤獎勵：${picked.name}`,
+        operatorId: uid,
+        createdAt: FieldValueOrServerTimestamp(),
+      });
+    }
+
+    tx.set(spinRef, {
+      customerId: uid,
+      prizeId: picked.id,
+      prizeSnapshot: {
+        name: picked.name,
+        type: picked.type,
+        value: picked.value,
+        weight: picked.weight,
+      },
+      operatorId: uid,
+      createdAt: FieldValueOrServerTimestamp(),
+    });
+  });
+
+  return {
+    prize: {
+      id: picked.id,
+      name: picked.name,
+      type: picked.type,
+      value: picked.value,
+    },
+    drawChances: remainingDrawChances,
+    walletBalance: nextWalletBalance,
+  };
+});
+
+export const seedWheelPrizes = onCall(publicCall, async () => {
+  const existing = await db.collection("wheelPrizes").limit(1).get();
+  if (!existing.empty) {
+    return { ok: true, seeded: false, message: "wheelPrizes 已存在資料，略過初始化" };
+  }
+
+  const defaults: Array<{ id: string; name: string; type: PrizeType; value: number; weight: number }> = [
+    { id: "credit10", name: "+10 儲值金", type: "credit", value: 10, weight: 20 },
+    { id: "credit5", name: "+5 儲值金", type: "credit", value: 5, weight: 25 },
+    { id: "chance1", name: "再抽一次", type: "chance", value: 1, weight: 15 },
+    { id: "thanks", name: "銘謝惠顧", type: "thanks", value: 0, weight: 30 },
+    { id: "penalty", name: "小處罰文案", type: "penalty_text", value: 0, weight: 10 },
+  ];
+  const batch = db.batch();
+  for (const item of defaults) {
+    const ref = db.collection("wheelPrizes").doc(item.id);
+    batch.set(ref, {
+      ...item,
+      active: true,
+      updatedAt: FieldValueOrServerTimestamp(),
+    });
+  }
+  await batch.commit();
+  return { ok: true, seeded: true, count: defaults.length };
 });
 
 /** 使用 admin Timestamp.now 避免額外 import serverTimestamp 型別問題 */

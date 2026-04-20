@@ -7,12 +7,15 @@
     "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:e2e": "playwright test",
+    "test:e2e:full": "node --env-file=.env.e2e ./node_modules/@playwright/test/cli.js test"
   },
   "dependencies": {
     "firebase": "^11.6.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "typescript": "~5.7.2",
     "vite": "^6.2.0"
   }

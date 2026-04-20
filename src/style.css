@@ -113,6 +113,33 @@ header.page-head {
   margin-top: 4px;
 }
 
+.head-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: -8px;
+}
+
+.member-entry {
+  padding: 8px 12px;
+}
+
+.shell.admin-mode {
+  border-color: #d8cbbf;
+  box-shadow: 0 12px 36px rgba(120, 70, 40, 0.14);
+}
+
+.shell.admin-mode header.page-head {
+  background: #fbf6f1;
+}
+
+.shell.admin-mode main.panel {
+  background: #fffdfa;
+}
+
 .tab {
   appearance: none;
   border: 1px solid transparent;
@@ -367,6 +394,10 @@ tr:last-child td {
   margin: 0;
 }
 
+.member-modal {
+  width: min(420px, 100%);
+}
+
 .modal-message {
   margin: 0;
   white-space: pre-wrap;
@@ -383,4 +414,99 @@ tr:last-child td {
   display: flex;
   gap: 10px;
   justify-content: flex-end;
+}
+
+@media (max-width: 640px) {
+  #app {
+    padding: 16px 12px 32px;
+  }
+
+  header.page-head {
+    padding: 16px 14px 14px;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .page-head h1 {
+    font-size: 1.8rem;
+  }
+
+  .page-head p {
+    font-size: 1.05rem;
+    line-height: 1.45;
+  }
+
+  .head-actions {
+    width: 100%;
+    justify-content: flex-start;
+    margin-top: 4px;
+  }
+
+  .member-entry,
+  .head-actions > button.ghost {
+    min-height: 44px;
+  }
+
+  main.panel {
+    padding: 16px 14px 20px;
+  }
+
+  label.field {
+    gap: 8px;
+    font-size: 0.95rem;
+  }
+
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="date"],
+  select,
+  textarea {
+    min-height: 44px;
+    padding: 11px 12px;
+  }
+
+  textarea {
+    min-height: 110px;
+  }
+
+  .row-actions {
+    width: 100%;
+    gap: 10px;
+  }
+
+  .row-actions > button {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .meta-pills {
+    gap: 6px;
+  }
+
+  .pill {
+    font-size: 0.82rem;
+    padding: 6px 9px;
+  }
+
+  th,
+  td {
+    padding: 9px 8px;
+    font-size: 0.86rem;
+    white-space: nowrap;
+  }
+
+  .modal-overlay {
+    padding: 10px;
+  }
+
+  .modal-card {
+    width: 100%;
+    padding: 14px;
+    gap: 10px;
+  }
+
+  .modal-actions {
+    gap: 8px;
+  }
 }

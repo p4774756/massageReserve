@@ -38,6 +38,11 @@ export function getFns() {
 
 export const createBookingCall = () => httpsCallable(getFns(), "createBooking");
 export const getAvailabilityCall = () => httpsCallable(getFns(), "getAvailability");
+export const getMyWalletCall = () => httpsCallable(getFns(), "getMyWallet");
+export const topupWalletCall = () => httpsCallable(getFns(), "topupWallet");
+export const completeBookingCall = () => httpsCallable(getFns(), "completeBooking");
+export const cancelBookingCall = () => httpsCallable(getFns(), "cancelBooking");
+export const spinWheelCall = () => httpsCallable(getFns(), "spinWheel");
 
 export function getDb() {
   return getFirestore(getFirebaseApp());

@@ -1,5 +1,10 @@
 import "./style.css";
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import {
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+} from "firebase/auth";
 import {
   collection,
   onSnapshot,
@@ -11,11 +16,16 @@ import {
   doc,
 } from "firebase/firestore";
 import {
+  cancelBookingCall,
+  completeBookingCall,
   createBookingCall,
   getAvailabilityCall,
   getDb,
   getFirebaseAuth,
+  getMyWalletCall,
   isFirebaseConfigured,
+  spinWheelCall,
+  topupWalletCall,
 } from "./firebase";
 import { allStartSlots } from "./slots";
 
@@ -27,6 +37,14 @@ type Booking = {
   startSlot: string;
   status: string;
   startAt?: { seconds: number };
+};
+
+type BookingMode = "guest_cash" | "member_cash" | "member_wallet";
+
+const BOOKING_MODE_LABEL: Record<BookingMode, string> = {
+  guest_cash: "訪客現金",
+  member_cash: "會員現金",
+  member_wallet: "會員儲值",
 };
 
 const STATUS_OPTIONS: { value: string; label: string }[] = [
@@ -79,6 +97,7 @@ function buildBookingSummary(
   dateKey: string,
   startSlot: string,
   note: string,
+  bookingMode: BookingMode,
 ): string {
   const noteSummary = note || "（未填寫）";
   return [
@@ -86,6 +105,7 @@ function buildBookingSummary(
     `姓名：${displayName}`,
     `日期：${dateKey}`,
     `開始時間：${startSlot}`,
+    `付款方式：${BOOKING_MODE_LABEL[bookingMode]}`,
     `備註：${noteSummary}`,
     "",
     "確認無誤後按「確定」送出。",
@@ -151,23 +171,19 @@ function render() {
 
   let tab: "book" | "admin" = "book";
 
-  const titleBlock = el("div", {}, [
-    el("h1", {}, ["辦公室按摩預約"]),
-    el("p", {}, ["週一至週五 · 以 30 分鐘估算 · 午休 11:45–13:15 不開放 · 最晚 17:30 開始、18:00 前結束"]),
-  ]);
+  const titleHeading = el("h1", {}, ["辦公室按摩預約"]);
+  const titleDesc = el("p", {}, ["週一至週五 · 以 30 分鐘估算 · 午休 11:45–13:15 不開放 · 最晚 17:30 開始、18:00 前結束"]);
+  const titleBlock = el("div", {}, [titleHeading, titleDesc]);
 
-  const tabs = el("div", { class: "tabs" }, []);
-  const tabBook = el("button", { class: "tab", type: "button" }, ["預約"]);
-  const tabAdmin = el("button", { class: "tab", type: "button" }, ["管理後台"]);
-  tabBook.setAttribute("aria-selected", "true");
-  tabAdmin.setAttribute("aria-selected", "false");
-  tabs.append(tabBook, tabAdmin);
+  const memberEntryBtn = el("button", { class: "ghost member-entry", type: "button" }, ["會員登入"]);
+  const memberRegisterBtn = el("button", { class: "ghost member-entry", type: "button" }, ["會員註冊"]);
+  const headActions = el("div", { class: "head-actions" }, [memberEntryBtn, memberRegisterBtn]);
 
   const panelBook = el("main", { class: "panel" });
   const panelAdmin = el("main", { class: "panel", hidden: true });
 
   const shell = el("div", { class: "shell" }, [
-    el("header", { class: "page-head" }, [titleBlock, tabs]),
+    el("header", { class: "page-head" }, [titleBlock, headActions]),
     panelBook,
     panelAdmin,
   ]);
@@ -178,6 +194,10 @@ function render() {
   onSnapshot(
     doc(db, "siteSettings", "announcement"),
     (snap) => {
+      if (tab !== "book") {
+        announcementBox.hidden = true;
+        return;
+      }
       const data = snap.data() as { text?: unknown; enabled?: unknown } | undefined;
       const text = typeof data?.text === "string" ? data.text.trim() : "";
       const enabled = typeof data?.enabled === "boolean" ? data.enabled : false;
@@ -202,9 +222,228 @@ function render() {
   const dateInput = el("input", { type: "date" });
   const slotSelect = el("select", {}, []);
   const noteInput = el("textarea", { maxLength: 500 });
+  const bookingModeSelect = el("select", {}, []);
   const submitBtn = el("button", { class: "primary", type: "button" }, ["送出預約"]);
   const bookStatus = el("div", { class: "status-line" });
   const meta = el("div", { class: "meta-pills" });
+  const walletStatus = el("div", { class: "status-line" });
+  const wheelStatus = el("div", { class: "status-line" });
+  const wheelResult = el("div", { class: "pill", hidden: true });
+  const spinBtn = el("button", { class: "ghost", type: "button" }, ["抽輪盤"]);
+  let walletBalance = 0;
+  let drawChances = 0;
+
+  function updateMemberEntryLabel() {
+    const user = auth.currentUser;
+    memberEntryBtn.textContent = user ? "會員中心" : "會員登入";
+    memberRegisterBtn.hidden = Boolean(user);
+  }
+
+  function openMemberAuthModal() {
+    const overlay = el("div", { class: "modal-overlay" });
+    const dialog = el("div", { class: "modal-card member-modal" });
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    const user = auth.currentUser;
+
+    const status = el("div", { class: "status-line" });
+    if (!user) {
+      const email = el("input", { type: "email", autocomplete: "username", placeholder: "會員 Email" });
+      const password = el("input", {
+        type: "password",
+        autocomplete: "current-password",
+        placeholder: "會員密碼",
+      });
+      const loginBtn = el("button", { class: "primary", type: "button" }, ["登入"]);
+      const cancelBtn = el("button", { class: "ghost", type: "button" }, ["關閉"]);
+      loginBtn.addEventListener("click", async () => {
+        status.textContent = "";
+        status.className = "status-line";
+        loginBtn.setAttribute("disabled", "true");
+        try {
+          await signInWithEmailAndPassword(auth, email.value.trim(), password.value);
+          overlay.remove();
+        } catch (e) {
+          status.textContent = e instanceof Error ? e.message : "登入失敗";
+          status.classList.add("error");
+        } finally {
+          loginBtn.removeAttribute("disabled");
+        }
+      });
+      cancelBtn.addEventListener("click", () => overlay.remove());
+      dialog.append(
+        el("h3", {}, ["會員登入"]),
+        el("label", { class: "field" }, ["Email", email]),
+        el("label", { class: "field" }, ["密碼", password]),
+        status,
+        el("div", { class: "modal-actions" }, [cancelBtn, loginBtn]),
+      );
+    } else {
+      const closeBtn = el("button", { class: "ghost", type: "button" }, ["關閉"]);
+      const logoutBtn = el("button", { class: "primary", type: "button" }, ["登出"]);
+      closeBtn.addEventListener("click", () => overlay.remove());
+      logoutBtn.addEventListener("click", async () => {
+        await signOut(auth);
+        overlay.remove();
+      });
+      dialog.append(
+        el("h3", {}, ["會員中心"]),
+        el("div", { class: "hint" }, [`目前登入：${user.email ?? user.uid}`]),
+        walletStatus.cloneNode(true),
+        el("div", { class: "modal-actions" }, [closeBtn, logoutBtn]),
+      );
+    }
+
+    overlay.addEventListener("click", (ev) => {
+      if (ev.target === overlay) overlay.remove();
+    });
+    overlay.append(dialog);
+    document.body.append(overlay);
+  }
+
+  function openMemberRegisterModal() {
+    const overlay = el("div", { class: "modal-overlay" });
+    const dialog = el("div", { class: "modal-card member-modal" });
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+
+    const email = el("input", { type: "email", autocomplete: "username", placeholder: "會員 Email" });
+    const password = el("input", {
+      type: "password",
+      autocomplete: "new-password",
+      placeholder: "密碼（至少 6 碼）",
+    });
+    const status = el("div", { class: "status-line" });
+    const cancelBtn = el("button", { class: "ghost", type: "button" }, ["關閉"]);
+    const registerBtn = el("button", { class: "primary", type: "button" }, ["註冊"]);
+
+    cancelBtn.addEventListener("click", () => overlay.remove());
+    registerBtn.addEventListener("click", async () => {
+      status.textContent = "";
+      status.className = "status-line";
+      registerBtn.setAttribute("disabled", "true");
+      try {
+        await createUserWithEmailAndPassword(auth, email.value.trim(), password.value);
+        overlay.remove();
+      } catch (e) {
+        status.textContent = e instanceof Error ? e.message : "註冊失敗";
+        status.classList.add("error");
+      } finally {
+        registerBtn.removeAttribute("disabled");
+      }
+    });
+    overlay.addEventListener("click", (ev) => {
+      if (ev.target === overlay) overlay.remove();
+    });
+
+    dialog.append(
+      el("h3", {}, ["會員註冊"]),
+      el("label", { class: "field" }, ["Email", email]),
+      el("label", { class: "field" }, ["密碼", password]),
+      status,
+      el("div", { class: "modal-actions" }, [cancelBtn, registerBtn]),
+    );
+    overlay.append(dialog);
+    document.body.append(overlay);
+  }
+
+  memberEntryBtn.addEventListener("click", openMemberAuthModal);
+  memberRegisterBtn.addEventListener("click", openMemberRegisterModal);
+  function refillBookingModes(isMember: boolean) {
+    const current = bookingModeSelect.value as BookingMode;
+    bookingModeSelect.innerHTML = "";
+    const modes: { value: BookingMode; label: string; disabled?: boolean }[] = isMember
+      ? [
+          { value: "member_wallet", label: "會員儲值（扣 50 元）" },
+          { value: "member_cash", label: "會員現金（50 元）" },
+        ]
+      : [
+          { value: "guest_cash", label: "訪客現金（50 元）" },
+          { value: "member_wallet", label: "會員儲值（需先登入）", disabled: true },
+          { value: "member_cash", label: "會員現金（需先登入）", disabled: true },
+        ];
+    for (const mode of modes) {
+      const opt = el("option", { value: mode.value, disabled: mode.disabled }, [mode.label]);
+      bookingModeSelect.append(opt);
+    }
+    const values = modes.map((m) => m.value);
+    bookingModeSelect.value = values.includes(current) ? current : modes[0].value;
+  }
+
+  async function refreshWalletStatus() {
+    const user = auth.currentUser;
+    refillBookingModes(Boolean(user));
+    updateMemberEntryLabel();
+    if (!user) {
+      walletBalance = 0;
+      drawChances = 0;
+      walletStatus.textContent = "未登入：目前僅可使用訪客現金付款。";
+      walletStatus.className = "status-line";
+      spinBtn.setAttribute("disabled", "true");
+      wheelStatus.textContent = "登入後可使用抽獎次數。";
+      wheelStatus.className = "status-line";
+      wheelResult.hidden = true;
+      return;
+    }
+    walletStatus.textContent = "讀取會員餘額中…";
+    walletStatus.className = "status-line";
+    try {
+      const fn = getMyWalletCall();
+      const res = await fn();
+      const data = res.data as { walletBalance: number; drawChances: number };
+      walletBalance = typeof data.walletBalance === "number" ? data.walletBalance : 0;
+      drawChances = typeof data.drawChances === "number" ? data.drawChances : 0;
+      walletStatus.textContent = `會員已登入：儲值餘額 ${walletBalance} 元，可抽次數 ${drawChances}。`;
+      walletStatus.className = "status-line ok";
+      wheelStatus.textContent = drawChances > 0 ? "可抽輪盤，祝你好運！" : "目前無可抽次數。";
+      wheelStatus.className = "status-line";
+      if (drawChances > 0) spinBtn.removeAttribute("disabled");
+      else spinBtn.setAttribute("disabled", "true");
+    } catch (e) {
+      walletBalance = 0;
+      drawChances = 0;
+      walletStatus.textContent = errorMessage(e);
+      walletStatus.className = "status-line error";
+      spinBtn.setAttribute("disabled", "true");
+      wheelStatus.textContent = "無法讀取抽獎狀態。";
+      wheelStatus.className = "status-line error";
+    }
+  }
+
+  spinBtn.addEventListener("click", async () => {
+    wheelStatus.textContent = "";
+    wheelStatus.className = "status-line";
+    if (!auth.currentUser) {
+      wheelStatus.textContent = "請先登入會員。";
+      wheelStatus.classList.add("error");
+      return;
+    }
+    if (drawChances < 1) {
+      wheelStatus.textContent = "目前沒有可抽次數。";
+      wheelStatus.classList.add("error");
+      return;
+    }
+    spinBtn.setAttribute("disabled", "true");
+    wheelStatus.textContent = "抽獎中…";
+    try {
+      const fn = spinWheelCall();
+      const res = await fn();
+      const data = res.data as {
+        prize: { name: string; type: string; value: number };
+        drawChances: number;
+        walletBalance: number;
+      };
+      wheelResult.textContent = `抽中：${data.prize.name}`;
+      wheelResult.hidden = false;
+      wheelStatus.textContent = "抽獎完成！";
+      wheelStatus.classList.add("ok");
+      await refreshWalletStatus();
+    } catch (e) {
+      wheelStatus.textContent = errorMessage(e);
+      wheelStatus.classList.add("error");
+      if (drawChances > 0) spinBtn.removeAttribute("disabled");
+    }
+  });
 
   function refillSlots(taken: Set<string>, disabled: boolean) {
     slotSelect.innerHTML = "";
@@ -294,6 +533,7 @@ function render() {
     const dateKey = dateInput.value;
     const startSlot = slotSelect.value;
     const note = noteInput.value.trim();
+    const bookingMode = bookingModeSelect.value as BookingMode;
     if (!displayName) {
       bookStatus.textContent = "請填寫姓名。";
       bookStatus.classList.add("error");
@@ -304,9 +544,19 @@ function render() {
       bookStatus.classList.add("error");
       return;
     }
+    if (bookingMode !== "guest_cash" && !auth.currentUser) {
+      bookStatus.textContent = "會員付款模式需先登入。";
+      bookStatus.classList.add("error");
+      return;
+    }
+    if (bookingMode === "member_wallet" && walletBalance < 50) {
+      bookStatus.textContent = "儲值餘額不足，請改用現金或先儲值。";
+      bookStatus.classList.add("error");
+      return;
+    }
     const confirmed = await showConfirmModal(
       "確認送出預約",
-      buildBookingSummary(displayName, dateKey, startSlot, note),
+      buildBookingSummary(displayName, dateKey, startSlot, note, bookingMode),
       "確認送出",
     );
     if (!confirmed) {
@@ -316,12 +566,13 @@ function render() {
     submitBtn.setAttribute("disabled", "true");
     try {
       const fn = createBookingCall();
-      await fn({ displayName, note, dateKey, startSlot });
+      await fn({ displayName, note, dateKey, startSlot, bookingMode });
       bookStatus.textContent = "已送出！狀態為「待確認」，實際時間會依現場情況微調。";
       bookStatus.classList.add("ok");
       nameInput.value = "";
       noteInput.value = "";
       await refreshAvailability();
+      await refreshWalletStatus();
     } catch (e) {
       bookStatus.textContent = errorMessage(e);
       bookStatus.classList.add("error");
@@ -350,6 +601,16 @@ function render() {
         el("span", { class: "hint" }, ["系統以約 30 分鐘估算；實際長度依情況調整"]),
       ]),
     ]),
+    el("div", { class: "grid" }, [
+      el("label", { class: "field" }, [
+        "付款方式",
+        bookingModeSelect,
+        el("span", { class: "hint" }, ["儲值功能需先以會員身份登入"]),
+      ]),
+    ]),
+    walletStatus,
+    el("div", { class: "row-actions" }, [spinBtn, wheelResult]),
+    wheelStatus,
     meta,
     el("div", { class: "grid" }, [
       el("label", { class: "field" }, [
@@ -428,6 +689,42 @@ function render() {
     top.append(who, outBtn);
 
     const adminStatus = el("div", { class: "status-line" });
+    const walletTopupSection = el("div", { class: "admin-announce" }, []);
+    const topupCustomerId = el("input", { type: "text", placeholder: "會員 customerId（通常是 UID）" });
+    const topupAmount = el("input", { type: "number", value: "100", min: "1", step: "1" });
+    const topupNote = el("input", { type: "text", placeholder: "備註（選填）" });
+    const topupBtn = el("button", { class: "ghost", type: "button" }, ["儲值"]);
+    const topupStatus = el("div", { class: "status-line" });
+    topupBtn.addEventListener("click", async () => {
+      topupStatus.textContent = "";
+      topupStatus.className = "status-line";
+      const customerId = topupCustomerId.value.trim();
+      const amount = Number(topupAmount.value);
+      const note = topupNote.value.trim();
+      if (!customerId) {
+        topupStatus.textContent = "請輸入 customerId。";
+        topupStatus.classList.add("error");
+        return;
+      }
+      if (!Number.isFinite(amount) || amount <= 0 || !Number.isInteger(amount)) {
+        topupStatus.textContent = "儲值金額需為正整數。";
+        topupStatus.classList.add("error");
+        return;
+      }
+      topupBtn.setAttribute("disabled", "true");
+      topupStatus.textContent = "儲值中…";
+      try {
+        const fn = topupWalletCall();
+        await fn({ customerId, amount, note });
+        topupStatus.textContent = "儲值成功";
+        topupStatus.classList.add("ok");
+      } catch (e) {
+        topupStatus.textContent = errorMessage(e);
+        topupStatus.classList.add("error");
+      } finally {
+        topupBtn.removeAttribute("disabled");
+      }
+    });
     const announcementSection = el("div", { class: "admin-announce" }, []);
     const announcementEnabled = el("input", { type: "checkbox" });
     const announcementText = el("textarea", {
@@ -484,6 +781,14 @@ function render() {
       el("div", { class: "row-actions" }, [saveAnnouncementBtn]),
       announcementStatus,
     );
+    walletTopupSection.append(
+      el("h3", {}, ["會員儲值"]),
+      el("label", { class: "field" }, ["會員 customerId", topupCustomerId]),
+      el("label", { class: "field" }, ["儲值金額", topupAmount]),
+      el("label", { class: "field" }, ["備註（選填）", topupNote]),
+      el("div", { class: "row-actions" }, [topupBtn]),
+      topupStatus,
+    );
     const tableHolder = el("div", { class: "table-wrap" });
     const table = el("table", {}, []);
     table.append(
@@ -497,7 +802,7 @@ function render() {
     );
     tableHolder.append(table);
 
-    adminWrap.append(top, announcementSection, adminStatus, tableHolder);
+    adminWrap.append(top, announcementSection, walletTopupSection, adminStatus, tableHolder);
 
     const q = query(collection(db, "bookings"), orderBy("startAt", "desc"));
     adminUnsub = onSnapshot(
@@ -529,15 +834,29 @@ function render() {
             sel.append(o);
           }
           sel.addEventListener("change", async () => {
+            const nextStatus = sel.value;
+            const prevStatus = b.status;
             adminStatus.textContent = "更新中…";
             try {
-              await updateDoc(doc(db, "bookings", b.id), {
-                status: sel.value,
-                updatedAt: serverTimestamp(),
-              });
+              if (nextStatus === "done") {
+                const fn = completeBookingCall();
+                await fn({ bookingId: b.id });
+              } else if (nextStatus === "cancelled") {
+                const fn = cancelBookingCall();
+                await fn({ bookingId: b.id });
+              } else {
+                await updateDoc(doc(db, "bookings", b.id), {
+                  status: nextStatus,
+                  updatedAt: serverTimestamp(),
+                });
+              }
               adminStatus.textContent = "已更新";
               adminStatus.classList.add("ok");
+              if (nextStatus === "done" || nextStatus === "cancelled") {
+                await refreshWalletStatus();
+              }
             } catch (e) {
+              sel.value = prevStatus;
               adminStatus.textContent =
                 e instanceof Error ? e.message : "更新失敗（你是否已加入 admins 集合？）";
               adminStatus.classList.add("error");
@@ -590,18 +909,29 @@ function render() {
   }
 
   onAuthStateChanged(auth, (user) => {
+    void refreshWalletStatus();
     if (tab !== "admin") return;
     if (!user) renderAdminLoggedOut();
     else renderAdminTable(user.uid);
   });
 
+  function tabFromPath(): "book" | "admin" {
+    return window.location.pathname === "/admin" ? "admin" : "book";
+  }
+
   function setTab(next: "book" | "admin") {
     tab = next;
     const isBook = next === "book";
-    tabBook.setAttribute("aria-selected", isBook ? "true" : "false");
-    tabAdmin.setAttribute("aria-selected", isBook ? "false" : "true");
+    shell.classList.toggle("admin-mode", !isBook);
+    memberEntryBtn.hidden = !isBook;
+    memberRegisterBtn.hidden = !isBook || Boolean(auth.currentUser);
+    titleHeading.textContent = isBook ? "辦公室按摩預約" : "管理後台";
+    titleDesc.textContent = isBook
+      ? "週一至週五 · 以 30 分鐘估算 · 午休 11:45–13:15 不開放 · 最晚 17:30 開始、18:00 前結束"
+      : "管理預約狀態、會員儲值、公告與資料維護";
     panelBook.hidden = !isBook;
     panelAdmin.hidden = isBook;
+    announcementBox.hidden = !isBook;
     if (isBook) {
       stopAdminListener();
     } else if (auth.currentUser) {
@@ -611,10 +941,10 @@ function render() {
     }
   }
 
-  tabBook.addEventListener("click", () => setTab("book"));
-  tabAdmin.addEventListener("click", () => setTab("admin"));
+  window.addEventListener("popstate", () => setTab(tabFromPath()));
 
-  setTab("book");
+  void refreshWalletStatus();
+  setTab(tabFromPath());
 }
 
 render();

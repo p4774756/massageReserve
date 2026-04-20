@@ -61,5 +61,39 @@
 ## 專案結構
 
 - `src/`：Vite 前端（預約表單＋管理分頁）。
-- `functions/`：`getAvailability`、`createBooking`（`invoker: public`，供未登入呼叫）。
+- `functions/`：`getAvailability`、`createBooking`、`getMyWallet`、`topupWallet`、`completeBooking`、`cancelBooking`、`spinWheel`、`seedWheelPrizes`。
 - `firestore.rules`：僅 `admins/{uid}` 可讀取預約；管理員可更新 `status` / `updatedAt`（含軟刪除欄位），不開放硬刪除；公告設定提供公開讀取、管理員可寫入。
+
+## 輪盤獎項初始化（必要）
+
+可用腳本快速初始化：
+
+```bash
+node --env-file=.env scripts/seed-wheel-prizes.mjs
+```
+
+若想手動建立，請在 Firestore 建立 `wheelPrizes` 文件（至少一筆 `active=true`），欄位範例：
+
+- `name`: `+10 儲值金`
+- `type`: `credit`（可用值：`credit` / `chance` / `thanks` / `penalty_text`）
+- `value`: `10`
+- `weight`: `20`
+- `active`: `true`
+
+## Playwright E2E（選用）
+
+```bash
+npm run test:e2e
+```
+
+若要跑完整「會員預約 -> 後台完成 -> 抽輪盤」流程，請先設定：
+
+- `E2E_USER_EMAIL`
+- `E2E_USER_PASSWORD`
+
+建議做法：
+
+```bash
+cp .env.e2e.example .env.e2e
+npm run test:e2e:full
+```
