@@ -13,11 +13,12 @@ service cloud.firestore {
 
     match /bookings/{id} {
       allow read: if isAdmin();
-      allow create, delete: if false;
+      allow create: if false;
+      allow delete: if false;
 
       allow update: if isAdmin()
         && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['status', 'updatedAt']);
+          .hasOnly(['status', 'updatedAt', 'deletedAt', 'deletedBy']);
     }
 
     match /siteSettings/{id} {

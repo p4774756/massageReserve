@@ -62,4 +62,4 @@
 
 - `src/`：Vite 前端（預約表單＋管理分頁）。
 - `functions/`：`getAvailability`、`createBooking`（`invoker: public`，供未登入呼叫）。
-- `firestore.rules`：僅 `admins/{uid}` 可讀取預約；僅能更新 `status` / `updatedAt`；公告設定提供公開讀取、管理員可寫入。
+- `firestore.rules`：僅 `admins/{uid}` 可讀取預約；管理員可更新 `status` / `updatedAt`（含軟刪除欄位），不開放硬刪除；公告設定提供公開讀取、管理員可寫入。

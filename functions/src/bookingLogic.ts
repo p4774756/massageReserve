@@ -3,16 +3,21 @@ import { DateTime } from "luxon";
 export const TIMEZONE = "Asia/Taipei";
 export const SLOT_STEP_MINUTES = 30;
 export const BOOKING_DURATION_MINUTES = 30;
+const LUNCH_START_MINUTES = 11 * 60 + 45;
+const LUNCH_END_MINUTES = 13 * 60 + 15;
 export const MAX_PER_DAY = 2;
 export const MAX_PER_WORK_WEEK = 4;
 
 export const ACTIVE_STATUSES = ["pending", "confirmed", "done"] as const;
 
-/** 可預約開始時間：08:00–17:30，每 30 分鐘一格（當地時區） */
+/** 可預約開始時間：08:00–17:30，每 30 分鐘一格（避開 11:45–13:15 午休） */
 export function allStartSlots(): string[] {
   const slots: string[] = [];
   const endMinutes = 17 * 60 + 30;
   for (let m = 8 * 60; m <= endMinutes; m += SLOT_STEP_MINUTES) {
+    const slotEnd = m + BOOKING_DURATION_MINUTES;
+    const overlapsLunch = m < LUNCH_END_MINUTES && slotEnd > LUNCH_START_MINUTES;
+    if (overlapsLunch) continue;
     const h = Math.floor(m / 60);
     const min = m % 60;
     slots.push(`${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`);

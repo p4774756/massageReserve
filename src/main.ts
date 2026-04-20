@@ -34,6 +34,7 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "confirmed", label: "已確認" },
   { value: "done", label: "已完成" },
   { value: "cancelled", label: "已取消" },
+  { value: "deleted", label: "已刪除" },
 ];
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -73,6 +74,65 @@ function formatWhen(b: Booking): string {
   return `${base}（${d.toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}）`;
 }
 
+function buildBookingSummary(
+  displayName: string,
+  dateKey: string,
+  startSlot: string,
+  note: string,
+): string {
+  const noteSummary = note || "（未填寫）";
+  return [
+    "請確認以下預約資訊：",
+    `姓名：${displayName}`,
+    `日期：${dateKey}`,
+    `開始時間：${startSlot}`,
+    `備註：${noteSummary}`,
+    "",
+    "確認無誤後按「確定」送出。",
+  ].join("\n");
+}
+
+function showConfirmModal(title: string, message: string, confirmText = "確定"): Promise<boolean> {
+  return new Promise((resolve) => {
+    const overlay = el("div", { class: "modal-overlay" });
+    const dialog = el("div", { class: "modal-card" });
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    dialog.setAttribute("aria-labelledby", "confirm-modal-title");
+    const heading = el("h3", { id: "confirm-modal-title" }, [title]);
+    const body = el("pre", { class: "modal-message" }, [message]);
+    const cancelBtn = el("button", { class: "ghost", type: "button" }, ["取消"]);
+    const confirmBtn = el("button", { class: "primary", type: "button" }, [confirmText]);
+    const actions = el("div", { class: "modal-actions" }, [cancelBtn, confirmBtn]);
+    dialog.append(heading, body, actions);
+    overlay.append(dialog);
+
+    const close = (ok: boolean) => {
+      document.removeEventListener("keydown", onKeyDown);
+      overlay.remove();
+      resolve(ok);
+    };
+    const onKeyDown = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape") {
+        ev.preventDefault();
+        close(false);
+      }
+    };
+
+    cancelBtn.addEventListener("click", () => close(false));
+    confirmBtn.addEventListener("click", () => close(true));
+    overlay.addEventListener("click", (ev) => {
+      if (ev.target === overlay) {
+        close(false);
+      }
+    });
+    document.addEventListener("keydown", onKeyDown);
+
+    document.body.append(overlay);
+    confirmBtn.focus();
+  });
+}
+
 function render() {
   const root = document.querySelector<HTMLDivElement>("#app")!;
   root.innerHTML = "";
@@ -93,7 +153,7 @@ function render() {
 
   const titleBlock = el("div", {}, [
     el("h1", {}, ["辦公室按摩預約"]),
-    el("p", {}, ["週一至週五 · 以 30 分鐘估算 · 最晚 17:30 開始、18:00 前結束"]),
+    el("p", {}, ["週一至週五 · 以 30 分鐘估算 · 午休 11:45–13:15 不開放 · 最晚 17:30 開始、18:00 前結束"]),
   ]);
 
   const tabs = el("div", { class: "tabs" }, []);
@@ -244,6 +304,15 @@ function render() {
       bookStatus.classList.add("error");
       return;
     }
+    const confirmed = await showConfirmModal(
+      "確認送出預約",
+      buildBookingSummary(displayName, dateKey, startSlot, note),
+      "確認送出",
+    );
+    if (!confirmed) {
+      bookStatus.textContent = "已取消送出。";
+      return;
+    }
     submitBtn.setAttribute("disabled", "true");
     try {
       const fn = createBookingCall();
@@ -283,7 +352,11 @@ function render() {
     ]),
     meta,
     el("div", { class: "grid" }, [
-      el("label", { class: "field" }, ["備註（選填）", noteInput]),
+      el("label", { class: "field" }, [
+        "備註（選填）",
+        noteInput,
+        el("span", { class: "hint" }, ["可填寫需求，例如：頭痛、背部痠痛、腿部需要按壓等"]),
+      ]),
     ]),
     el("div", { class: "row-actions" }, [submitBtn]),
     bookStatus,
@@ -419,6 +492,7 @@ function render() {
         el("th", {}, ["姓名"]),
         el("th", {}, ["備註"]),
         el("th", {}, ["狀態"]),
+        el("th", {}, ["操作"]),
       ]),
     );
     tableHolder.append(table);
@@ -439,11 +513,16 @@ function render() {
             el("th", {}, ["姓名"]),
             el("th", {}, ["備註"]),
             el("th", {}, ["狀態"]),
+            el("th", {}, ["操作"]),
           ]),
         );
         for (const d of snap.docs) {
           const b = { id: d.id, ...d.data() } as Booking;
           const sel = el("select", {}, []);
+          if (b.status === "deleted") {
+            continue;
+          }
+          const deleteBtn = el("button", { class: "ghost", type: "button" }, ["刪除（軟）"]);
           for (const opt of STATUS_OPTIONS) {
             const o = el("option", { value: opt.value }, [opt.label]);
             if (opt.value === b.status) o.setAttribute("selected", "selected");
@@ -464,12 +543,39 @@ function render() {
               adminStatus.classList.add("error");
             }
           });
+          deleteBtn.addEventListener("click", async () => {
+            const confirmed = await showConfirmModal(
+              "確認刪除（軟刪除）",
+              `確定刪除這筆預約嗎？\n\n（此操作為軟刪除，資料會保留於系統中）\n\n姓名：${b.displayName ?? ""}\n日期：${b.dateKey ?? ""}\n開始時間：${b.startSlot ?? ""}`,
+              "刪除",
+            );
+            if (!confirmed) return;
+            adminStatus.textContent = "刪除中…";
+            adminStatus.className = "status-line";
+            deleteBtn.setAttribute("disabled", "true");
+            try {
+              await updateDoc(doc(db, "bookings", b.id), {
+                status: "deleted",
+                deletedBy: userId,
+                deletedAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+              });
+              adminStatus.textContent = "已刪除（軟刪除）";
+              adminStatus.classList.add("ok");
+            } catch (e) {
+              adminStatus.textContent =
+                e instanceof Error ? e.message : "刪除失敗（你是否已加入 admins 集合？）";
+              adminStatus.classList.add("error");
+              deleteBtn.removeAttribute("disabled");
+            }
+          });
           table.append(
             el("tr", {}, [
               el("td", { class: "mono" }, [formatWhen(b)]),
               el("td", {}, [b.displayName ?? ""]),
               el("td", {}, [b.note ?? ""]),
               el("td", {}, [sel]),
+              el("td", {}, [deleteBtn]),
             ]),
           );
         }
