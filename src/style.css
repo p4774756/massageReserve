@@ -252,19 +252,34 @@ main.panel[hidden] {
   gap: 22px;
 }
 
+/** 預約表單：姓名＋日期雙欄頂對齊，避免右欄被左欄說明文字撐高後留白不整齊 */
+.grid.grid-2 {
+  align-items: start;
+}
+
 @media (min-width: 720px) {
-  .grid-2 {
-    grid-template-columns: 1fr 1fr;
+  .grid.grid-2 {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 28px;
+    row-gap: 22px;
+  }
+
+  .grid.grid-2 label.field input[type="text"],
+  .grid.grid-2 label.field input[type="date"] {
+    min-height: 46px;
+    box-sizing: border-box;
   }
 }
 
 label.field {
   display: grid;
   gap: 9px;
+  align-content: start;
   font-weight: 600;
   font-size: 0.9rem;
   letter-spacing: 0.01em;
   color: var(--ink);
+  min-width: 0;
 }
 
 .hint {

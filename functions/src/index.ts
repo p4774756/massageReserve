@@ -162,6 +162,7 @@ export const createBooking = onCall(publicCall, async (request) => {
     const map: Record<string, string> = {
       invalid_dateKey: "日期無效",
       past_date: "無法預約過去的日期",
+      past_slot: "此開始時間已過，請選擇較晚的時段",
       not_weekday: "僅能預約週一到週五",
       invalid_slot: "開始時間不在可預約範圍",
       ends_after_1800: "此開始時間將超過 18:00 結束上限",

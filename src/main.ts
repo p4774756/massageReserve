@@ -105,6 +105,30 @@ function isDateKeyMonFri(dateKey: string): boolean {
   return dow >= 1 && dow <= 5;
 }
 
+/** 今日日曆日（台北），YYYY-MM-DD；與 date input 的 min、後端 dateKey 一致 */
+function taipeiTodayDateKey(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" });
+}
+
+/** 該 dateKey + startSlot 在台北時區的開始瞬間（ms）；無效則 NaN */
+function slotStartInstantMsTaipei(dateKey: string, startSlot: string): number {
+  const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
+  if (!dm) return Number.NaN;
+  const [, y, mo, d] = dm;
+  const sm = /^(\d{1,2}):(\d{2})$/.exec(startSlot.trim());
+  if (!sm) return Number.NaN;
+  const hh = String(Number(sm[1])).padStart(2, "0");
+  const mm = String(Number(sm[2])).padStart(2, "0");
+  return new Date(`${y}-${mo}-${d}T${hh}:${mm}:00+08:00`).getTime();
+}
+
+/** 選「今天」且該格開始時間已早於現在（台北當日） */
+function isStartSlotInPastForTaipeiToday(dateKey: string, startSlot: string): boolean {
+  if (dateKey !== taipeiTodayDateKey()) return false;
+  const t = slotStartInstantMsTaipei(dateKey, startSlot);
+  return Number.isFinite(t) && t < Date.now();
+}
+
 function formatWhen(b: Booking): string {
   const base = `${b.dateKey} ${b.startSlot}`;
   if (!b.startAt?.seconds) return base;
@@ -187,6 +211,7 @@ function showConfirmModal(title: string, message: string, confirmText = "確定"
 function render() {
   const root = document.querySelector<HTMLDivElement>("#app")!;
   root.innerHTML = "";
+  root.className = "";
 
   if (!isFirebaseConfigured()) {
     root.append(
@@ -325,6 +350,7 @@ function render() {
   /** --- 預約表單 --- */
   const nameInput = el("input", { type: "text", autocomplete: "name", maxLength: 80 });
   const dateInput = el("input", { type: "date" });
+  dateInput.min = taipeiTodayDateKey();
   const slotSelect = el("select", {}, []);
   const noteInput = el("textarea", { maxLength: 500 });
   const bookingModeSelect = el("select", {}, []);
@@ -616,21 +642,28 @@ function render() {
     }
   });
 
-  function refillSlots(taken: Set<string>, disabled: boolean) {
+  function refillSlots(taken: Set<string>, disabled: boolean, selectedDateKey: string) {
+    const prev = slotSelect.value;
     slotSelect.innerHTML = "";
     slotSelect.disabled = disabled;
     const opt0 = el("option", { value: "" }, ["請選擇開始時間"]);
     slotSelect.append(opt0);
     for (const s of allStartSlots()) {
       const takenHere = taken.has(s);
-      const o = el("option", { value: s, disabled: takenHere }, [
-        `${s}${takenHere ? "（已佔用）" : ""}`,
+      const pastHere = isStartSlotInPastForTaipeiToday(selectedDateKey, s);
+      const o = el("option", { value: s, disabled: takenHere || pastHere }, [
+        `${s}${takenHere ? "（已佔用）" : pastHere ? "（已過）" : ""}`,
       ]);
       slotSelect.append(o);
     }
+    if (prev) {
+      const keep = [...slotSelect.options].some((o) => o.value === prev && !o.disabled);
+      if (!keep) slotSelect.value = "";
+      else slotSelect.value = prev;
+    }
   }
 
-  refillSlots(new Set(), true);
+  refillSlots(new Set(), true, "");
 
   async function refreshAvailability() {
     bookStatus.textContent = "";
@@ -638,15 +671,24 @@ function render() {
     meta.innerHTML = "";
     const dk = dateInput.value;
     if (!dk) {
-      refillSlots(new Set(), true);
+      refillSlots(new Set(), true, "");
       meta.append(
         el("span", { class: "pill" }, ["先選擇日期後，會顯示可選時段與名額"]),
       );
       return;
     }
 
+    const minKey = taipeiTodayDateKey();
+    if (dk < minKey) {
+      refillSlots(new Set(), true, "");
+      bookStatus.textContent = "不可選擇今天以前的日期。";
+      bookStatus.classList.add("error");
+      dateInput.value = "";
+      return;
+    }
+
     if (!isDateKeyMonFri(dk)) {
-      refillSlots(new Set(), true);
+      refillSlots(new Set(), true, dk);
       bookStatus.textContent = "僅能預約週一到週五。";
       bookStatus.classList.add("error");
       return;
@@ -667,7 +709,7 @@ function render() {
       const weekFull = data.weekCount >= data.weekCap;
       const blocked = dayFull || weekFull;
 
-      refillSlots(taken, blocked);
+      refillSlots(taken, blocked, dk);
       meta.append(
         el("span", { class: "pill" }, [
           "當日已預約 ",
@@ -689,7 +731,7 @@ function render() {
       }
     } catch (e) {
       console.error(e);
-      refillSlots(new Set(), true);
+      refillSlots(new Set(), true, dk);
       bookStatus.textContent = "無法載入空檔，請稍後再試。";
       bookStatus.classList.add("error");
     }
@@ -712,6 +754,16 @@ function render() {
     }
     if (!dateKey || !startSlot) {
       bookStatus.textContent = "請選擇日期與開始時間。";
+      bookStatus.classList.add("error");
+      return;
+    }
+    if (dateKey < taipeiTodayDateKey()) {
+      bookStatus.textContent = "不可預約今天以前的日期。";
+      bookStatus.classList.add("error");
+      return;
+    }
+    if (isStartSlotInPastForTaipeiToday(dateKey, startSlot)) {
+      bookStatus.textContent = "此開始時間已過，請選擇較晚的時段。";
       bookStatus.classList.add("error");
       return;
     }
@@ -768,11 +820,7 @@ function render() {
           "可不登入，打個暱稱即可；若已登入且帳號有設定稱呼，會自動帶入（仍可改）。",
         ]),
       ]),
-      el("label", { class: "field" }, [
-        "日期（週一至週五）",
-        dateInput,
-        el("span", { class: "hint" }, ["請選擇你有空的上班日"]),
-      ]),
+      el("label", { class: "field" }, ["日期（週一至週五）", dateInput]),
     ]),
     el("div", { class: "grid" }, [
       el("label", { class: "field" }, [

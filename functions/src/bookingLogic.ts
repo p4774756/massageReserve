@@ -58,6 +58,10 @@ export function assertSlotAllowed(dateKey: string, startSlot: string): DateTime 
   }
   const [hh, mm] = startSlot.split(":").map((x) => Number(x));
   const start = day.set({ hour: hh, minute: mm, second: 0, millisecond: 0 });
+  const nowZoned = DateTime.now().setZone(TIMEZONE);
+  if (start < nowZoned) {
+    throw new Error("past_slot");
+  }
   const end = start.plus({ minutes: BOOKING_DURATION_MINUTES });
   const dayEnd = day.set({ hour: 18, minute: 0, second: 0, millisecond: 0 });
   if (end > dayEnd) {
