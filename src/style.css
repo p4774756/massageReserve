@@ -104,20 +104,25 @@ a:hover {
   letter-spacing: 0.02em;
 }
 
-.marquee-track {
-  display: inline-block;
-  padding-left: 100%;
-  font-weight: 700;
-  animation: marquee-move 18s linear infinite;
+/* 公告改為 Canvas 點陣 LED 時覆蓋底色與內距 */
+.marquee.marquee-led {
+  padding: 0;
+  white-space: normal;
+  background: linear-gradient(180deg, #0a1514 0%, #050a0a 100%);
+  color: transparent;
 }
 
-@keyframes marquee-move {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-100%);
-  }
+.marquee-led-host {
+  display: block;
+  width: 100%;
+  min-height: 52px;
+}
+
+.led-marquee-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  vertical-align: top;
 }
 
 header.page-head {
@@ -217,6 +222,11 @@ main.panel {
   display: flex;
   flex-direction: column;
   gap: var(--section-gap);
+}
+
+/* 作者樣式若指定 display:flex，會蓋過部分瀏覽器對 [hidden] 的預設，導致兩個 main 同時可見 */
+main.panel[hidden] {
+  display: none !important;
 }
 
 .grid {

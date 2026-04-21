@@ -30,6 +30,7 @@ import {
   topupWalletCall,
 } from "./firebase";
 import { allStartSlots } from "./slots";
+import { createLedMarquee, type LedMarqueeHandle } from "./ledMarquee";
 
 type Booking = {
   id: string;
@@ -191,7 +192,16 @@ function render() {
 
   root.append(shell);
 
-  const announcementBox = el("div", { class: "marquee", hidden: true });
+  const announcementBox = el("div", { class: "marquee marquee-led", hidden: true });
+  const ledHost = el("div", { class: "marquee-led-host" });
+  announcementBox.append(ledHost);
+  let ledMarquee: LedMarqueeHandle | null = null;
+
+  function disposeLedMarquee() {
+    ledMarquee?.destroy();
+    ledMarquee = null;
+  }
+
   onSnapshot(
     doc(db, "siteSettings", "announcement"),
     (snap) => {
@@ -204,16 +214,18 @@ function render() {
       const enabled = typeof data?.enabled === "boolean" ? data.enabled : false;
       if (!enabled || !text) {
         announcementBox.hidden = true;
-        announcementBox.textContent = "";
+        disposeLedMarquee();
         return;
       }
       announcementBox.hidden = false;
-      announcementBox.innerHTML = "";
-      announcementBox.append(el("div", { class: "marquee-track" }, [text, "  •  ", text]));
+      if (!ledMarquee) {
+        ledMarquee = createLedMarquee(ledHost);
+      }
+      ledMarquee.setText(`${text}     ·     ${text}`);
     },
     () => {
       announcementBox.hidden = true;
-      announcementBox.textContent = "";
+      disposeLedMarquee();
     },
   );
   shell.prepend(announcementBox);
@@ -1019,14 +1031,15 @@ function render() {
     renderAdminTable(user.uid);
   }
 
-  onAuthStateChanged(auth, (user) => {
+  onAuthStateChanged(auth, () => {
     void refreshWalletStatus();
     if (tab !== "admin") return;
     void syncAdminView();
   });
 
   function tabFromPath(): "book" | "admin" {
-    return window.location.pathname === "/admin" ? "admin" : "book";
+    const path = (window.location.pathname.replace(/\/+$/, "") || "/").toLowerCase();
+    return path === "/admin" ? "admin" : "book";
   }
 
   function setTab(next: "book" | "admin") {
