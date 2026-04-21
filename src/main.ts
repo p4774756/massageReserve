@@ -192,6 +192,15 @@ function render() {
 
   root.append(shell);
 
+  /** 頂部：一般文字跑馬燈（與底部 LED 同一則公告） */
+  const announcementTextStrip = el("div", {
+    class: "marquee marquee-text-announce",
+    hidden: true,
+    role: "status",
+    ariaLive: "polite",
+  });
+  shell.prepend(announcementTextStrip);
+
   const announcementBox = el("div", { class: "marquee marquee-led", hidden: true });
   const ledHost = el("div", { class: "marquee-led-host" });
   announcementBox.append(ledHost);
@@ -206,6 +215,7 @@ function render() {
     doc(db, "siteSettings", "announcement"),
     (snap) => {
       if (tab !== "book") {
+        announcementTextStrip.hidden = true;
         announcementBox.hidden = true;
         return;
       }
@@ -213,10 +223,16 @@ function render() {
       const text = typeof data?.text === "string" ? data.text.trim() : "";
       const enabled = typeof data?.enabled === "boolean" ? data.enabled : false;
       if (!enabled || !text) {
+        announcementTextStrip.hidden = true;
+        announcementTextStrip.replaceChildren();
         announcementBox.hidden = true;
         disposeLedMarquee();
         return;
       }
+      announcementTextStrip.hidden = false;
+      announcementTextStrip.replaceChildren(
+        el("div", { class: "marquee-track" }, [text, "  •  ", text]),
+      );
       announcementBox.hidden = false;
       if (!ledMarquee) {
         ledMarquee = createLedMarquee(ledHost);
@@ -224,11 +240,13 @@ function render() {
       ledMarquee.setText(`${text}     ·     ${text}`);
     },
     () => {
+      announcementTextStrip.hidden = true;
+      announcementTextStrip.replaceChildren();
       announcementBox.hidden = true;
       disposeLedMarquee();
     },
   );
-  shell.prepend(announcementBox);
+  shell.append(announcementBox);
 
   /** --- 預約表單 --- */
   const nameInput = el("input", { type: "text", autocomplete: "name", maxLength: 80 });
@@ -1053,6 +1071,7 @@ function render() {
       : "管理預約狀態、會員儲值、公告與資料維護";
     panelBook.hidden = !isBook;
     panelAdmin.hidden = isBook;
+    announcementTextStrip.hidden = !isBook || announcementTextStrip.childElementCount === 0;
     announcementBox.hidden = !isBook;
     if (isBook) {
       stopAdminListener();

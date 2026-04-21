@@ -16,9 +16,7 @@ type LedMarqueeOptions = {
   threshold?: number;
 };
 
-function luminanceAt(data: ImageData, x: number, y: number): number {
-  const xi = Math.floor(x);
-  const yi = Math.floor(y);
+function luminanceAt(data: ImageData, xi: number, yi: number): number {
   if (xi < 0 || yi < 0 || xi >= data.width || yi >= data.height) return 0;
   const i = (yi * data.width + xi) * 4;
   const r = data.data[i];
@@ -28,14 +26,29 @@ function luminanceAt(data: ImageData, x: number, y: number): number {
   return ((r + g + b) / 3) * a;
 }
 
+/** 以 3×3 鄰域取最大亮度，補齊抗鋸齒造成的斷筆、較適合中文與符號 */
+function luminanceNeighborhoodMax(data: ImageData, x: number, y: number): number {
+  const cx = Math.floor(x);
+  const cy = Math.floor(y);
+  let max = 0;
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const v = luminanceAt(data, cx + dx, cy + dy);
+      if (v > max) max = v;
+    }
+  }
+  return max;
+}
+
 export function createLedMarquee(
   container: HTMLElement,
   options: LedMarqueeOptions = {},
 ): LedMarqueeHandle {
-  const pitch = options.pitch ?? 5;
-  const rows = options.rows ?? 9;
-  const speed = options.speed ?? 42;
-  const threshold = options.threshold ?? 105;
+  const pitch = options.pitch ?? 6;
+  /** 預設 28 行：約為原 14 行之 2 倍高度，筆畫較易辨識 */
+  const rows = options.rows ?? 28;
+  const speed = options.speed ?? 30;
+  const threshold = options.threshold ?? 108;
 
   const canvas = document.createElement("canvas");
   canvas.className = "led-marquee-canvas";
@@ -75,7 +88,7 @@ export function createLedMarquee(
     if (!octx) return;
 
     const h = rows * pitch;
-    const fontPx = Math.max(12, h * 0.68);
+    const fontPx = Math.max(14, h * 0.74);
     octx.font = `700 ${fontPx}px "Noto Sans TC", "DM Sans", system-ui, sans-serif`;
     const metrics = octx.measureText(text);
     const tw = Math.min(12000, Math.ceil(metrics.width + pitch * 6));
@@ -86,7 +99,7 @@ export function createLedMarquee(
     octx.fillRect(0, 0, oc.width, oc.height);
     octx.fillStyle = "#ffffff";
     octx.textBaseline = "middle";
-    octx.fillText(text, pitch * 2, h / 2);
+    octx.fillText(text, pitch * 2, h / 2 + 0.5);
     bitmap = octx.getImageData(0, 0, oc.width, oc.height);
     bitmapW = oc.width;
     cycleLen = bitmapW + pitch * 10;
@@ -101,7 +114,7 @@ export function createLedMarquee(
 
     const rect = container.getBoundingClientRect();
     const cssW = Math.max(1, rect.width);
-    const cssH = rows * pitch + 10;
+    const cssH = rows * pitch + 12;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
 
     if (canvas.width !== Math.floor(cssW * dpr) || canvas.height !== Math.floor(cssH * dpr)) {
@@ -127,7 +140,7 @@ export function createLedMarquee(
       while (scroll >= cycleLen) scroll -= cycleLen;
     }
 
-    const dotR = pitch * 0.36;
+    const dotR = pitch * 0.38;
     const padY = (cssH - rows * pitch) / 2;
     const cols = Math.ceil(cssW / pitch);
 
@@ -144,14 +157,14 @@ export function createLedMarquee(
         ctx.fill();
 
         if (!bitmap) continue;
-        const lum = luminanceAt(bitmap, sx, sy);
+        const lum = luminanceNeighborhoodMax(bitmap, sx, sy);
         if (lum <= threshold) continue;
 
         const hue = ((i * 13 + j * 5 + scroll * 0.65) % 360 + 360) % 360;
         ctx.save();
-        ctx.shadowColor = `hsl(${hue} 90% 45%)`;
-        ctx.shadowBlur = 5;
-        ctx.fillStyle = `hsl(${hue} 90% 55%)`;
+        ctx.shadowColor = `hsl(${hue} 88% 48%)`;
+        ctx.shadowBlur = 3.5;
+        ctx.fillStyle = `hsl(${hue} 82% 58%)`;
         ctx.beginPath();
         ctx.arc(cx, cy, dotR, 0, Math.PI * 2);
         ctx.fill();

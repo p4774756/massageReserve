@@ -104,18 +104,36 @@ a:hover {
   letter-spacing: 0.02em;
 }
 
-/* 公告改為 Canvas 點陣 LED 時覆蓋底色與內距 */
+.marquee-track {
+  display: inline-block;
+  padding-left: 100%;
+  font-weight: 700;
+  animation: marquee-move 18s linear infinite;
+}
+
+@keyframes marquee-move {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+/* 公告改為 Canvas 點陣 LED 時覆蓋底色與內距；置於卡片底部時與上方內容分界 */
 .marquee.marquee-led {
   padding: 0;
   white-space: normal;
   background: linear-gradient(180deg, #0a1514 0%, #050a0a 100%);
   color: transparent;
+  border-bottom: none;
+  border-top: 1px solid rgb(var(--accent-rgb) / 0.22);
 }
 
 .marquee-led-host {
   display: block;
   width: 100%;
-  min-height: 52px;
+  min-height: 182px;
 }
 
 .led-marquee-canvas {
