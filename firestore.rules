@@ -7,12 +7,17 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
+    function isBookingOwner() {
+      return request.auth != null
+        && resource.data.customerId == request.auth.uid;
+    }
+
     match /admins/{uid} {
       allow read, write: if false;
     }
 
     match /bookings/{id} {
-      allow read: if isAdmin();
+      allow read: if isAdmin() || isBookingOwner();
       allow create: if false;
       allow delete: if false;
 

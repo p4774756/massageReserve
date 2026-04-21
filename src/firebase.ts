@@ -46,6 +46,8 @@ export const spinWheelCall = () => httpsCallable(getFns(), "spinWheel");
 export const getAdminStatusCall = () => httpsCallable(getFns(), "getAdminStatus");
 export const createMemberAccountCall = () => httpsCallable(getFns(), "createMemberAccount");
 export const searchMemberUsersCall = () => httpsCallable(getFns(), "searchMemberUsers");
+export const listMembersAdminCall = () => httpsCallable(getFns(), "listMembersAdmin");
+export const updateMemberNicknameAdminCall = () => httpsCallable(getFns(), "updateMemberNicknameAdmin");
 
 export function getDb() {
   return getFirestore(getFirebaseApp());

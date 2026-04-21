@@ -126,7 +126,23 @@ export const createBooking = onCall(publicCall, async (request) => {
   const note = typeof data.note === "string" ? data.note.trim() : "";
   const dateKey = typeof data.dateKey === "string" ? data.dateKey : "";
   const startSlot = typeof data.startSlot === "string" ? data.startSlot : "";
-  const bookingMode = typeof data.bookingMode === "string" ? data.bookingMode : "guest_cash";
+  const bookingModeRaw = typeof data.bookingMode === "string" ? data.bookingMode.trim() : "";
+  const bookingMode =
+    bookingModeRaw === "guest_cash" ||
+    bookingModeRaw === "guest_beverage" ||
+    bookingModeRaw === "member_cash" ||
+    bookingModeRaw === "member_wallet" ||
+    bookingModeRaw === "member_beverage"
+      ? bookingModeRaw
+      : "";
+  const uid = request.auth?.uid;
+  if (!bookingMode) {
+    throw new HttpsError("invalid-argument", "請選擇付款方式");
+  }
+  const isGuestMode = bookingMode === "guest_cash" || bookingMode === "guest_beverage";
+  if (!isGuestMode && !uid) {
+    throw new HttpsError("unauthenticated", "會員付款模式需先登入");
+  }
 
   if (!displayName || displayName.length > 80) {
     throw new HttpsError("invalid-argument", "請填寫姓名（最多 80 字）");
@@ -136,13 +152,6 @@ export const createBooking = onCall(publicCall, async (request) => {
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
     throw new HttpsError("invalid-argument", "日期格式錯誤");
-  }
-  if (!["guest_cash", "member_cash", "member_wallet"].includes(bookingMode)) {
-    throw new HttpsError("invalid-argument", "付款模式錯誤");
-  }
-  const uid = request.auth?.uid ?? null;
-  if (bookingMode !== "guest_cash" && !uid) {
-    throw new HttpsError("unauthenticated", "會員付款需先登入");
   }
 
   let startLocal: DateTime;
@@ -192,12 +201,18 @@ export const createBooking = onCall(publicCall, async (request) => {
 
       let customerId: string | null = null;
       let walletDeducted = 0;
-      let paidCash = BOOKING_PRICE;
-      if (bookingMode === "member_cash") {
-        customerId = uid;
-      } else if (bookingMode === "member_wallet") {
-        customerId = uid;
-        paidCash = 0;
+      let paidCash = 0;
+      if (bookingMode === "guest_cash") {
+        paidCash = BOOKING_PRICE;
+      } else if (bookingMode === "guest_beverage") {
+        // 訪客以飲料折抵：不綁 customerId、不扣款
+      } else if (bookingMode === "member_cash") {
+        customerId = uid!;
+        paidCash = BOOKING_PRICE;
+      } else if (bookingMode === "member_beverage") {
+        customerId = uid!;
+      } else {
+        customerId = uid!;
         walletDeducted = BOOKING_PRICE;
         const customerRef = db.collection("customers").doc(uid!);
         const customerSnap = await tx.get(customerRef);
@@ -221,7 +236,7 @@ export const createBooking = onCall(publicCall, async (request) => {
           type: "charge",
           amount: -BOOKING_PRICE,
           note: "預約建立時扣款",
-          operatorId: uid,
+          operatorId: uid!,
           createdAt: FieldValueOrServerTimestamp(),
         });
       }
@@ -263,9 +278,12 @@ export const getMyWallet = onCall(publicCall, async (request) => {
   const snap = await db.collection("customers").doc(uid).get();
   const walletBalanceRaw = snap.exists ? snap.get("walletBalance") : 0;
   const drawChancesRaw = snap.exists ? snap.get("drawChances") : 0;
+  const nicknameRaw = snap.exists ? snap.get("nickname") : "";
+  const nickname = typeof nicknameRaw === "string" ? nicknameRaw.trim() : "";
   return {
     walletBalance: typeof walletBalanceRaw === "number" ? walletBalanceRaw : 0,
     drawChances: typeof drawChancesRaw === "number" ? drawChancesRaw : 0,
+    nickname,
   };
 });
 
@@ -333,6 +351,8 @@ export const createMemberAccount = onCall(publicCall, async (request) => {
 
   const email = typeof request.data?.email === "string" ? request.data.email.trim() : "";
   const password = typeof request.data?.password === "string" ? request.data.password : "";
+  const nickname =
+    typeof request.data?.nickname === "string" ? request.data.nickname.trim().slice(0, 80) : "";
   if (!email) {
     throw new HttpsError("invalid-argument", "Email 必填");
   }
@@ -345,6 +365,7 @@ export const createMemberAccount = onCall(publicCall, async (request) => {
     const userRecord = await auth.createUser({
       email,
       password,
+      displayName: nickname || undefined,
       emailVerified: false,
       disabled: false,
     });
@@ -352,6 +373,7 @@ export const createMemberAccount = onCall(publicCall, async (request) => {
       {
         walletBalance: 0,
         drawChances: 0,
+        ...(nickname ? { nickname } : {}),
         createdAt: FieldValueOrServerTimestamp(),
         updatedAt: FieldValueOrServerTimestamp(),
       },
@@ -398,6 +420,94 @@ export const searchMemberUsers = onCall(publicCall, async (request) => {
   }
 
   return { users: matches };
+});
+
+type ListMembersAdminRow = {
+  uid: string;
+  email: string | null;
+  nickname: string;
+  walletBalance: number;
+  drawChances: number;
+};
+
+/** 後台：列出 Auth 內所有使用者並合併 Firestore `customers` 餘額與稱呼（適合人數不多的場景） */
+export const listMembersAdmin = onCall(publicCall, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", "請先登入");
+  }
+  await assertAdminByUid(uid);
+
+  const auth = getAuth();
+  const members: ListMembersAdminRow[] = [];
+  let pageToken: string | undefined;
+  const maxPages = 50;
+
+  for (let p = 0; p < maxPages; p++) {
+    const res = await auth.listUsers(1000, pageToken);
+    const uids = res.users.map((u) => u.uid);
+    const refs = uids.map((id) => db.collection("customers").doc(id));
+    const snaps = refs.length > 0 ? await db.getAll(...refs) : [];
+    const snapByUid = new Map(snaps.map((s) => [s.id, s]));
+
+    for (const u of res.users) {
+      const snap = snapByUid.get(u.uid);
+      const d = snap?.exists ? (snap.data() as Record<string, unknown>) : {};
+      members.push({
+        uid: u.uid,
+        email: u.email ?? null,
+        nickname: typeof d.nickname === "string" ? d.nickname : "",
+        walletBalance: typeof d.walletBalance === "number" ? d.walletBalance : 0,
+        drawChances: typeof d.drawChances === "number" ? d.drawChances : 0,
+      });
+    }
+
+    pageToken = res.pageToken;
+    if (!pageToken) break;
+  }
+
+  members.sort((a, b) => (a.email ?? a.uid).localeCompare(b.email ?? b.uid, "zh-Hant"));
+  return { members };
+});
+
+/** 後台：更新會員稱呼（Firestore `customers.nickname` + Auth displayName） */
+export const updateMemberNicknameAdmin = onCall(publicCall, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", "請先登入");
+  }
+  await assertAdminByUid(uid);
+
+  const customerRaw = typeof request.data?.customerId === "string" ? request.data.customerId.trim() : "";
+  const nicknameRaw = typeof request.data?.nickname === "string" ? request.data.nickname : "";
+  if (!customerRaw) {
+    throw new HttpsError("invalid-argument", "customerId 必填（會員 UID 或 Email）");
+  }
+
+  const targetUid = await resolveCustomerUidForTopup(customerRaw);
+  const nickname = nicknameRaw.trim().slice(0, 80);
+
+  await db
+    .collection("customers")
+    .doc(targetUid)
+    .set(
+      {
+        nickname,
+        updatedAt: FieldValueOrServerTimestamp(),
+      },
+      { merge: true },
+    );
+
+  const auth = getAuth();
+  try {
+    await auth.updateUser(targetUid, {
+      displayName: nickname.length > 0 ? nickname : null,
+    });
+  } catch (e) {
+    console.warn("updateMemberNicknameAdmin: Auth displayName 更新失敗（可能已刪除帳號）", e);
+  }
+
+  return { ok: true };
 });
 
 export const completeBooking = onCall(publicCall, async (request) => {
@@ -463,15 +573,15 @@ export const cancelBooking = onCall(publicCall, async (request) => {
   if (!uid) {
     throw new HttpsError("unauthenticated", "請先登入");
   }
-  await assertAdminByUid(uid);
 
   const bookingId = typeof request.data?.bookingId === "string" ? request.data.bookingId.trim() : "";
   if (!bookingId) {
     throw new HttpsError("invalid-argument", "bookingId 必填");
   }
   const bookingRef = db.collection("bookings").doc(bookingId);
+  const adminRef = db.collection("admins").doc(uid);
   await db.runTransaction(async (tx) => {
-    const bookingSnap = await tx.get(bookingRef);
+    const [bookingSnap, adminSnap] = await Promise.all([tx.get(bookingRef), tx.get(adminRef)]);
     if (!bookingSnap.exists) {
       throw new HttpsError("not-found", "找不到預約");
     }
@@ -488,6 +598,10 @@ export const cancelBooking = onCall(publicCall, async (request) => {
     }
 
     const customerId = typeof data.customerId === "string" ? data.customerId : null;
+    const isAdmin = adminSnap.exists;
+    if (!isAdmin && customerId !== uid) {
+      throw new HttpsError("permission-denied", "僅能取消自己的預約，或需具管理員權限");
+    }
     const walletDeductedRaw = data.walletDeducted;
     const walletDeducted = typeof walletDeductedRaw === "number" ? walletDeductedRaw : 0;
     if (customerId && walletDeducted > 0) {

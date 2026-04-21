@@ -6,13 +6,14 @@ import {
 } from "firebase/auth";
 import {
   collection,
+  doc,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
   setDoc,
   updateDoc,
-  doc,
+  where,
 } from "firebase/firestore";
 import {
   cancelBookingCall,
@@ -26,6 +27,8 @@ import {
   getMyWalletCall,
   isFirebaseConfigured,
   searchMemberUsersCall,
+  listMembersAdminCall,
+  updateMemberNicknameAdminCall,
   spinWheelCall,
   topupWalletCall,
 } from "./firebase";
@@ -48,12 +51,21 @@ type Booking = {
   startAt?: { seconds: number };
 };
 
-type BookingMode = "guest_cash" | "member_cash" | "member_wallet";
+type BookingMode =
+  | "guest_cash"
+  | "guest_beverage"
+  | "member_cash"
+  | "member_wallet"
+  | "member_beverage";
+
+const BEVERAGE_OPTION_LABEL = "請師傅一杯飲料";
 
 const BOOKING_MODE_LABEL: Record<BookingMode, string> = {
   guest_cash: "訪客現金",
+  guest_beverage: BEVERAGE_OPTION_LABEL,
   member_cash: "會員現金",
   member_wallet: "會員儲值",
+  member_beverage: BEVERAGE_OPTION_LABEL,
 };
 
 const STATUS_OPTIONS: { value: string; label: string }[] = [
@@ -61,7 +73,6 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "confirmed", label: "已確認" },
   { value: "done", label: "已完成" },
   { value: "cancelled", label: "已取消" },
-  { value: "deleted", label: "已刪除" },
 ];
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -99,6 +110,17 @@ function formatWhen(b: Booking): string {
   if (!b.startAt?.seconds) return base;
   const d = new Date(b.startAt.seconds * 1000);
   return `${base}（${d.toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}）`;
+}
+
+function bookingStatusLabel(status: string): string {
+  const map: Record<string, string> = {
+    pending: "待確認",
+    confirmed: "已確認",
+    done: "已完成",
+    cancelled: "已取消",
+    deleted: "已刪除",
+  };
+  return map[status] ?? status;
 }
 
 function buildBookingSummary(
@@ -321,6 +343,100 @@ function render() {
   let walletBalance = 0;
   let drawChances = 0;
 
+  let myBookingsUnsub: (() => void) | null = null;
+  let myBookingsListenerUid: string | null = null;
+  const myBookingsSection = el("div", { class: "my-bookings" }, []);
+  const myBookingsHint = el("div", { class: "status-line" });
+  const myBookingsList = el("div", { class: "my-bookings-list" }, []);
+  myBookingsSection.append(
+    el("h3", { class: "my-bookings-heading" }, ["我的預約"]),
+    el("p", { class: "hint my-bookings-intro" }, [
+      "以下為綁定你帳號的預約（須使用會員付款方式送出）。訪客預約不會出現在此。",
+    ]),
+    myBookingsHint,
+    myBookingsList,
+  );
+
+  function stopMyBookingsListener() {
+    if (myBookingsUnsub) {
+      myBookingsUnsub();
+      myBookingsUnsub = null;
+    }
+    myBookingsListenerUid = null;
+    myBookingsList.innerHTML = "";
+    myBookingsHint.textContent = "";
+    myBookingsHint.className = "status-line";
+  }
+
+  function ensureMyBookingsListener(customerUid: string) {
+    if (myBookingsListenerUid === customerUid && myBookingsUnsub) return;
+    stopMyBookingsListener();
+    myBookingsListenerUid = customerUid;
+    const db = getDb();
+    const q = query(
+      collection(db, "bookings"),
+      where("customerId", "==", customerUid),
+      orderBy("startAt", "desc"),
+    );
+    myBookingsUnsub = onSnapshot(
+      q,
+      (snap) => {
+        myBookingsList.innerHTML = "";
+        myBookingsHint.textContent = "";
+        myBookingsHint.className = "status-line";
+        if (snap.empty) {
+          myBookingsList.append(
+            el("p", { class: "hint my-bookings-empty" }, [
+              "尚無紀錄。請用會員儲值／現金／飲料折抵送出預約後，會顯示於此。",
+            ]),
+          );
+          return;
+        }
+        for (const d of snap.docs) {
+          const b = { id: d.id, ...d.data() } as Booking;
+          const canCancel = b.status === "pending" || b.status === "confirmed";
+          const row = el("div", { class: "my-booking-row" }, []);
+          const mainCol = el("div", { class: "my-booking-main" }, []);
+          mainCol.append(
+            el("div", { class: "mono my-booking-when" }, [formatWhen(b)]),
+            el("div", { class: "my-booking-status" }, [bookingStatusLabel(b.status)]),
+          );
+          const actions = el("div", { class: "my-booking-actions" }, []);
+          if (canCancel) {
+            const btn = el("button", { class: "ghost", type: "button" }, ["取消預約"]);
+            btn.addEventListener("click", async () => {
+              const ok = await showConfirmModal(
+                "取消預約",
+                `確定取消這筆預約？\n\n${formatWhen(b)}`,
+                "取消預約",
+              );
+              if (!ok) return;
+              btn.setAttribute("disabled", "true");
+              try {
+                const fn = cancelBookingCall();
+                await fn({ bookingId: b.id });
+                await refreshWalletStatus();
+              } catch (e) {
+                myBookingsHint.textContent = e instanceof Error ? e.message : "取消失敗";
+                myBookingsHint.classList.add("error");
+                btn.removeAttribute("disabled");
+              }
+            });
+            actions.append(btn);
+          }
+          row.append(mainCol, actions);
+          myBookingsList.append(row);
+        }
+      },
+      (err) => {
+        console.error(err);
+        myBookingsHint.textContent =
+          "無法載入我的預約。若專案剛新增索引，請執行 firebase deploy 並等待索引建立完成。";
+        myBookingsHint.classList.add("error");
+      },
+    );
+  }
+
   function updateMemberEntryLabel() {
     const user = auth.currentUser;
     memberEntryBtn.textContent = user ? "會員中心" : "會員登入";
@@ -396,8 +512,12 @@ function render() {
       ? [
           { value: "member_wallet", label: "會員儲值（扣 50 元）" },
           { value: "member_cash", label: "會員現金（50 元）" },
+          { value: "member_beverage", label: BEVERAGE_OPTION_LABEL },
         ]
-      : [{ value: "guest_cash", label: "訪客現金（50 元）" }];
+      : [
+          { value: "guest_cash", label: "訪客現金（50 元）" },
+          { value: "guest_beverage", label: BEVERAGE_OPTION_LABEL },
+        ];
     for (const mode of modes) {
       const opt = el("option", { value: mode.value, disabled: mode.disabled }, [mode.label]);
       bookingModeSelect.append(opt);
@@ -405,8 +525,8 @@ function render() {
     const values = modes.map((m) => m.value);
     bookingModeSelect.value = values.includes(current) ? current : modes[0].value;
     bookingModeHint.textContent = isMember
-      ? "可選儲值扣款或會員現金（均為 50 元）。"
-      : "訪客預約以現金 50 元結帳；儲值與抽獎請使用右上角登入。";
+      ? "可選儲值扣款、會員現金（50 元），或「請師傅一杯飲料」（依現場約定）。"
+      : "訪客可選現金 50 元或「請師傅一杯飲料」；儲值與抽獎請使用右上角登入。";
   }
 
   async function refreshWalletStatus() {
@@ -414,6 +534,7 @@ function render() {
     refillBookingModes(Boolean(user));
     updateMemberEntryLabel();
     if (!user) {
+      stopMyBookingsListener();
       walletBalance = 0;
       drawChances = 0;
       memberExtrasWrap.hidden = true;
@@ -426,14 +547,22 @@ function render() {
       return;
     }
     memberExtrasWrap.hidden = false;
+    ensureMyBookingsListener(user.uid);
     walletStatus.textContent = "讀取會員餘額中…";
     walletStatus.className = "status-line";
     try {
       const fn = getMyWalletCall();
       const res = await fn();
-      const data = res.data as { walletBalance: number; drawChances: number };
+      const data = res.data as { walletBalance: number; drawChances: number; nickname?: string };
       walletBalance = typeof data.walletBalance === "number" ? data.walletBalance : 0;
       drawChances = typeof data.drawChances === "number" ? data.drawChances : 0;
+      const nickFromDb =
+        typeof data.nickname === "string" && data.nickname.trim() ? data.nickname.trim() : "";
+      const nickFromAuth = user.displayName?.trim() ?? "";
+      const profileNick = nickFromDb || nickFromAuth;
+      if (profileNick && !nameInput.value.trim()) {
+        nameInput.value = profileNick.slice(0, 80);
+      }
       walletStatus.textContent = `會員已登入：儲值餘額 ${walletBalance} 元，可抽次數 ${drawChances}。`;
       walletStatus.className = "status-line ok";
       wheelStatus.textContent = drawChances > 0 ? "可抽輪盤，祝你好運！" : "目前無可抽次數。";
@@ -586,13 +715,13 @@ function render() {
       bookStatus.classList.add("error");
       return;
     }
-    if (bookingMode !== "guest_cash" && !auth.currentUser) {
+    if (bookingMode !== "guest_cash" && bookingMode !== "guest_beverage" && !auth.currentUser) {
       bookStatus.textContent = "會員付款模式需先登入。";
       bookStatus.classList.add("error");
       return;
     }
     if (bookingMode === "member_wallet" && walletBalance < 50) {
-      bookStatus.textContent = "儲值餘額不足，請改用現金或先儲值。";
+      bookStatus.textContent = "儲值餘額不足，請改用現金、「請師傅一杯飲料」或先儲值。";
       bookStatus.classList.add("error");
       return;
     }
@@ -625,6 +754,7 @@ function render() {
 
   memberExtrasWrap.append(
     walletStatus,
+    myBookingsSection,
     el("div", { class: "row-actions" }, [spinBtn, wheelResult]),
     wheelStatus,
   );
@@ -634,7 +764,9 @@ function render() {
       el("label", { class: "field" }, [
         "姓名",
         nameInput,
-        el("span", { class: "hint" }, ["可不登入，打個暱稱即可"]),
+        el("span", { class: "hint" }, [
+          "可不登入，打個暱稱即可；若已登入且帳號有設定稱呼，會自動帶入（仍可改）。",
+        ]),
       ]),
       el("label", { class: "field" }, [
         "日期（週一至週五）",
@@ -1003,6 +1135,12 @@ function render() {
       placeholder: "初始密碼（至少 6 碼）",
       autocomplete: "new-password",
     });
+    const createMemberNickname = el("input", {
+      type: "text",
+      maxLength: 80,
+      placeholder: "例如：小陳（選填，會寫入預約姓名預設）",
+      autocomplete: "off",
+    });
     const createMemberBtn = el("button", { class: "ghost", type: "button" }, ["建立會員帳號"]);
     const createMemberStatus = el("div", { class: "status-line" });
     createMemberBtn.addEventListener("click", async () => {
@@ -1010,6 +1148,7 @@ function render() {
       createMemberStatus.className = "status-line";
       const email = createMemberEmail.value.trim();
       const password = createMemberPassword.value;
+      const nickname = createMemberNickname.value.trim();
       if (!email || !password) {
         createMemberStatus.textContent = "請輸入 Email 與密碼。";
         createMemberStatus.classList.add("error");
@@ -1018,11 +1157,12 @@ function render() {
       createMemberBtn.setAttribute("disabled", "true");
       try {
         const fn = createMemberAccountCall();
-        const res = await fn({ email, password });
+        const res = await fn({ email, password, nickname });
         const data = res.data as { uid: string };
         createMemberStatus.textContent = `建立成功，UID：${data.uid}（儲值欄已帶入 Email）`;
         createMemberStatus.classList.add("ok");
         createMemberPassword.value = "";
+        createMemberNickname.value = "";
         topupCustomerId.value = email;
       } catch (e) {
         createMemberStatus.textContent = errorMessage(e);
@@ -1035,6 +1175,10 @@ function render() {
       el("h3", {}, ["建立會員帳號"]),
       el("label", { class: "field" }, ["會員 Email", createMemberEmail]),
       el("label", { class: "field" }, ["初始密碼", createMemberPassword]),
+      el("label", { class: "field" }, ["稱呼（選填）", createMemberNickname]),
+      el("div", { class: "hint" }, [
+        "稱呼會存進會員資料，登入預約時若姓名欄為空會自動帶入；亦會寫入 Firebase Auth 顯示名稱。",
+      ]),
       el("div", { class: "hint" }, ["註冊入口已關閉，僅管理後台可建立新會員帳號。"]),
       el("div", { class: "row-actions" }, [createMemberBtn]),
       createMemberStatus,
@@ -1052,7 +1196,187 @@ function render() {
     );
     tableHolder.append(table);
 
-    adminWrap.append(top, accountCreateSection, announcementSection, walletTopupSection, adminStatus, tableHolder);
+    const memberListSection = el("div", { class: "admin-member-list" }, []);
+    const memberListRefreshBtn = el("button", { class: "ghost", type: "button" }, ["重新載入會員清單"]);
+    const memberListStatus = el("div", { class: "status-line" });
+    const memberListTableWrap = el("div", { class: "table-wrap admin-member-list-table" });
+    const memberListTable = el("table", {}, []);
+    memberListTable.append(
+      el("tr", {}, [
+        el("th", {}, ["Email"]),
+        el("th", {}, ["UID"]),
+        el("th", {}, ["稱呼"]),
+        el("th", {}, ["儲值餘額"]),
+        el("th", {}, ["可抽次數"]),
+        el("th", {}, ["操作"]),
+      ]),
+    );
+    memberListTableWrap.append(memberListTable);
+
+    async function loadMemberList() {
+      memberListStatus.textContent = "載入會員清單中…";
+      memberListStatus.className = "status-line";
+      memberListRefreshBtn.setAttribute("disabled", "true");
+      try {
+        const fn = listMembersAdminCall();
+        const res = await fn({});
+        const data = res.data as {
+          members: {
+            uid: string;
+            email: string | null;
+            nickname: string;
+            walletBalance: number;
+            drawChances: number;
+          }[];
+        };
+        const members = Array.isArray(data.members) ? data.members : [];
+        memberListTable.innerHTML = "";
+        memberListTable.append(
+          el("tr", {}, [
+            el("th", {}, ["Email"]),
+            el("th", {}, ["UID"]),
+            el("th", {}, ["稱呼"]),
+            el("th", {}, ["儲值餘額"]),
+            el("th", {}, ["可抽次數"]),
+            el("th", {}, ["操作"]),
+          ]),
+        );
+        for (const m of members) {
+          const nickInput = el("input", {
+            type: "text",
+            maxLength: 80,
+            value: m.nickname,
+            class: "admin-member-nick-input",
+            autocomplete: "off",
+          });
+          const saveBtn = el("button", { class: "ghost", type: "button" }, ["儲存稱呼"]);
+          saveBtn.addEventListener("click", async () => {
+            memberListStatus.textContent = "";
+            memberListStatus.className = "status-line";
+            saveBtn.setAttribute("disabled", "true");
+            try {
+              const updateFn = updateMemberNicknameAdminCall();
+              await updateFn({ customerId: m.uid, nickname: nickInput.value });
+              memberListStatus.textContent = `已更新 ${m.email ?? m.uid} 的稱呼。`;
+              memberListStatus.classList.add("ok");
+            } catch (e) {
+              memberListStatus.textContent = e instanceof Error ? e.message : "儲存失敗";
+              memberListStatus.classList.add("error");
+            } finally {
+              saveBtn.removeAttribute("disabled");
+            }
+          });
+          memberListTable.append(
+            el("tr", {}, [
+              el("td", {}, [m.email ?? "（無 Email）"]),
+              el("td", { class: "mono admin-member-uid" }, [m.uid]),
+              el("td", {}, [nickInput]),
+              el("td", { class: "mono" }, [String(m.walletBalance)]),
+              el("td", { class: "mono" }, [String(m.drawChances)]),
+              el("td", {}, [saveBtn]),
+            ]),
+          );
+        }
+        memberListStatus.textContent = `已載入 ${members.length} 位使用者。`;
+        memberListStatus.classList.add("ok");
+      } catch (e) {
+        memberListStatus.textContent = e instanceof Error ? e.message : "載入失敗";
+        memberListStatus.classList.add("error");
+      } finally {
+        memberListRefreshBtn.removeAttribute("disabled");
+      }
+    }
+
+    memberListRefreshBtn.addEventListener("click", () => {
+      void loadMemberList();
+    });
+
+    memberListSection.append(
+      el("h3", {}, ["會員清單"]),
+      el("p", { class: "hint" }, [
+        "資料來自 Firebase Authentication 全部使用者，並合併 Firestore ",
+        el("code", {}, ["customers/{uid}"]),
+        " 的餘額與稱呼。人數極多時載入可能較久。",
+      ]),
+      el("div", { class: "row-actions" }, [memberListRefreshBtn]),
+      memberListStatus,
+      memberListTableWrap,
+    );
+
+    const tabBookings = el("button", { type: "button", class: "admin-tab", role: "tab" }, ["預約管理"]);
+    tabBookings.id = "admin-tab-trigger-bookings";
+    const tabMembers = el("button", { type: "button", class: "admin-tab", role: "tab" }, ["會員與儲值"]);
+    tabMembers.id = "admin-tab-trigger-members";
+    const tabAnnounce = el("button", { type: "button", class: "admin-tab", role: "tab" }, ["跑馬燈公告"]);
+    tabAnnounce.id = "admin-tab-trigger-announce";
+
+    const adminTablist = el("div", { class: "admin-tabs", role: "tablist" });
+    adminTablist.append(tabBookings, tabMembers, tabAnnounce);
+
+    const panelBookingsEl = el("div", { class: "admin-tab-panel", role: "tabpanel", id: "admin-tab-panel-bookings" });
+    panelBookingsEl.setAttribute("aria-labelledby", "admin-tab-trigger-bookings");
+    const panelMembersEl = el("div", {
+      class: "admin-tab-panel",
+      role: "tabpanel",
+      id: "admin-tab-panel-members",
+      hidden: true,
+    });
+    panelMembersEl.setAttribute("aria-labelledby", "admin-tab-trigger-members");
+    const panelAnnounceEl = el("div", {
+      class: "admin-tab-panel",
+      role: "tabpanel",
+      id: "admin-tab-panel-announce",
+      hidden: true,
+    });
+    panelAnnounceEl.setAttribute("aria-labelledby", "admin-tab-trigger-announce");
+
+    tabBookings.setAttribute("aria-controls", "admin-tab-panel-bookings");
+    tabMembers.setAttribute("aria-controls", "admin-tab-panel-members");
+    tabAnnounce.setAttribute("aria-controls", "admin-tab-panel-announce");
+
+    panelBookingsEl.append(adminStatus, tableHolder);
+    panelMembersEl.append(accountCreateSection, walletTopupSection, memberListSection);
+    panelAnnounceEl.append(announcementSection);
+
+    const adminPanelsWrap = el("div", { class: "admin-tab-panels" });
+    adminPanelsWrap.append(panelBookingsEl, panelMembersEl, panelAnnounceEl);
+
+    const adminTabButtons = [tabBookings, tabMembers, tabAnnounce] as const;
+    const adminTabPanels = [panelBookingsEl, panelMembersEl, panelAnnounceEl] as const;
+
+    function selectAdminTab(index: 0 | 1 | 2) {
+      adminTabButtons.forEach((btn, i) => {
+        const on = i === index;
+        btn.setAttribute("aria-selected", String(on));
+        btn.classList.toggle("is-active", on);
+        btn.tabIndex = on ? 0 : -1;
+      });
+      adminTabPanels.forEach((panel, i) => {
+        panel.hidden = i !== index;
+        panel.classList.toggle("is-active", i === index);
+      });
+    }
+
+    tabBookings.addEventListener("click", () => selectAdminTab(0));
+    tabMembers.addEventListener("click", () => selectAdminTab(1));
+    tabAnnounce.addEventListener("click", () => selectAdminTab(2));
+
+    adminTablist.addEventListener("keydown", (ev) => {
+      if (ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;
+      ev.preventDefault();
+      const cur = adminTabButtons.findIndex((b) => b.getAttribute("aria-selected") === "true");
+      if (cur < 0) return;
+      const delta = ev.key === "ArrowRight" ? 1 : -1;
+      const next = ((cur + delta) % 3 + 3) % 3;
+      selectAdminTab(next as 0 | 1 | 2);
+      adminTabButtons[next].focus();
+    });
+
+    selectAdminTab(0);
+
+    adminWrap.append(top, adminTablist, adminPanelsWrap);
+
+    void loadMemberList();
 
     const q = query(collection(db, "bookings"), orderBy("startAt", "desc"));
     adminUnsub = onSnapshot(
@@ -1205,7 +1529,7 @@ function render() {
     titleHeading.textContent = isBook ? "辦公室按摩預約" : "管理後台";
     titleDesc.textContent = isBook
       ? "週一至週五 · 以 30 分鐘估算 · 午休 11:45–13:15 不開放 · 最晚 17:30 開始、18:00 前結束"
-      : "管理預約狀態、會員儲值、公告與資料維護";
+      : "以分頁切換：預約管理、會員與儲值、跑馬燈公告。";
     panelBook.hidden = !isBook;
     panelAdmin.hidden = isBook;
     syncMarqueeVisibilityForTab();
