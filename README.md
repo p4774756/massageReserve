@@ -60,6 +60,7 @@
 
 ## 專案結構
 
+- 架構與流程（含預約、錢包、輪盤抽獎）：[`docs/architecture-and-flows.md`](docs/architecture-and-flows.md)。
 - `src/`：Vite 前端（預約表單＋管理分頁）。
 - `functions/`：`getAvailability`、`createBooking`、`getMyWallet`、`topupWallet`、`completeBooking`、`cancelBooking`、`spinWheel`、`seedWheelPrizes`。
 - `firestore.rules`：僅 `admins/{uid}` 可讀取預約；管理員可更新 `status` / `updatedAt`（含軟刪除欄位），不開放硬刪除；公告設定提供公開讀取、管理員可寫入。
