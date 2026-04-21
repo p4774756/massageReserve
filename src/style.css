@@ -513,6 +513,28 @@ tbody tr:hover td {
   color: var(--accent-deep);
 }
 
+.led-speed-field .led-speed-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 6px;
+}
+
+.led-speed-field input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--accent);
+}
+
+.led-speed-readout {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--accent-deep);
+  min-width: 2.25rem;
+  text-align: right;
+}
+
 .member-typeahead-wrap {
   position: relative;
   display: block;

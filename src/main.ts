@@ -30,7 +30,13 @@ import {
   topupWalletCall,
 } from "./firebase";
 import { allStartSlots } from "./slots";
-import { createLedMarquee, type LedMarqueeHandle } from "./ledMarquee";
+import {
+  clampLedSpeed,
+  createLedMarquee,
+  LED_SPEED_MAX,
+  LED_SPEED_MIN,
+  type LedMarqueeHandle,
+} from "./ledMarquee";
 
 type Booking = {
   id: string;
@@ -265,7 +271,11 @@ function render() {
         announcementBox.hidden = true;
         return;
       }
-      const { text, enabled } = parseMarqueeSettings(snap.data());
+      const raw = snap.data() as
+        | { text?: unknown; enabled?: unknown; speed?: unknown }
+        | undefined;
+      const { text, enabled } = parseMarqueeSettings(raw);
+      const speed = clampLedSpeed(raw?.speed);
       if (!enabled || !text) {
         bottomMarqueeOn = false;
         disposeLedMarquee();
@@ -274,7 +284,9 @@ function render() {
       }
       bottomMarqueeOn = true;
       if (!ledMarquee) {
-        ledMarquee = createLedMarquee(ledHost);
+        ledMarquee = createLedMarquee(ledHost, { speed });
+      } else {
+        ledMarquee.setSpeed(speed);
       }
       ledMarquee.setText(`${text}     ·     ${text}`);
       syncMarqueeVisibilityForTab();
@@ -841,18 +853,34 @@ function render() {
     const announcementSection = el("div", { class: "admin-announce" }, []);
 
     const marqueeTextEnabled = el("input", { type: "checkbox" });
-    const marqueeTextBody = el("textarea", {
+    const marqueeTextBody = el("input", {
+      type: "text",
       maxLength: 240,
       placeholder: "頂部橫幅：例如本週三 15:00-16:00 暫停服務",
+      autocomplete: "off",
     });
     const saveMarqueeTextBtn = el("button", { class: "ghost", type: "button" }, ["儲存頂部跑馬燈"]);
     const marqueeTextStatus = el("div", { class: "status-line" });
     const marqueeTextDocRef = doc(db, "siteSettings", "marqueeText");
 
     const marqueeLedEnabled = el("input", { type: "checkbox" });
-    const marqueeLedBody = el("textarea", {
+    const marqueeLedBody = el("input", {
+      type: "text",
       maxLength: 500,
       placeholder: "底部 LED：可較長，例如活動標語",
+      autocomplete: "off",
+    });
+    const marqueeLedSpeed = el("input", {
+      type: "range",
+      min: String(LED_SPEED_MIN),
+      max: String(LED_SPEED_MAX),
+      step: "1",
+    });
+    const marqueeLedSpeedValue = el("span", { class: "led-speed-readout" }, [
+      String(clampLedSpeed(undefined)),
+    ]);
+    marqueeLedSpeed.addEventListener("input", () => {
+      marqueeLedSpeedValue.textContent = marqueeLedSpeed.value;
     });
     const saveMarqueeLedBtn = el("button", { class: "ghost", type: "button" }, ["儲存底部 LED"]);
     const marqueeLedStatus = el("div", { class: "status-line" });
@@ -873,9 +901,12 @@ function render() {
     adminMarqueeLedUnsub = onSnapshot(
       marqueeLedDocRef,
       (snap) => {
-        const data = snap.data() as { text?: unknown; enabled?: unknown } | undefined;
+        const data = snap.data() as { text?: unknown; enabled?: unknown; speed?: unknown } | undefined;
         marqueeLedBody.value = typeof data?.text === "string" ? data.text : "";
         marqueeLedEnabled.checked = typeof data?.enabled === "boolean" ? data.enabled : false;
+        const s = clampLedSpeed(data?.speed);
+        marqueeLedSpeed.value = String(s);
+        marqueeLedSpeedValue.textContent = String(s);
       },
       () => {
         marqueeLedStatus.textContent = "無法讀取底部 LED 設定。";
@@ -917,6 +948,7 @@ function render() {
           {
             text: marqueeLedBody.value.trim(),
             enabled: marqueeLedEnabled.checked,
+            speed: clampLedSpeed(Number(marqueeLedSpeed.value)),
             updatedAt: serverTimestamp(),
           },
           { merge: true },
@@ -943,6 +975,13 @@ function render() {
       marqueeTextStatus,
       el("h4", { class: "admin-subhead" }, ["底部 · LED 跑馬燈"]),
       el("label", { class: "field" }, ["內容", marqueeLedBody]),
+      el("label", { class: "field led-speed-field" }, [
+        "捲動速度",
+        el("div", { class: "led-speed-row" }, [marqueeLedSpeed, marqueeLedSpeedValue]),
+        el("span", { class: "hint" }, [
+          `約 ${LED_SPEED_MIN}～${LED_SPEED_MAX}（數字愈大移動愈快，單位：像素／秒）。`,
+        ]),
+      ]),
       el("label", { class: "field checkbox-field" }, [marqueeLedEnabled, el("span", {}, ["啟用"])]),
       el("div", { class: "row-actions" }, [saveMarqueeLedBtn]),
       marqueeLedStatus,

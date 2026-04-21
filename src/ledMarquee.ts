@@ -1,7 +1,19 @@
 /** 頂部公告區：Canvas 點陣 LED 橫向捲動（取樣自離屏文字點陣） */
 
+export const LED_SPEED_MIN = 8;
+/** 後台拉霸上限；數值為 CSS 像素／秒，可明顯快於舊版 85 */
+export const LED_SPEED_MAX = 200;
+export const LED_SPEED_DEFAULT = 30;
+
+/** 後台／Firestore `speed` 欄位（px/s）合法範圍 */
+export function clampLedSpeed(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return LED_SPEED_DEFAULT;
+  return Math.min(LED_SPEED_MAX, Math.max(LED_SPEED_MIN, Math.round(value)));
+}
+
 export type LedMarqueeHandle = {
   setText: (text: string) => void;
+  setSpeed: (pxPerSec: number) => void;
   destroy: () => void;
 };
 
@@ -47,7 +59,7 @@ export function createLedMarquee(
   const pitch = options.pitch ?? 6;
   /** 預設 28 行：約為原 14 行之 2 倍高度，筆畫較易辨識 */
   const rows = options.rows ?? 28;
-  const speed = options.speed ?? 30;
+  let scrollSpeed = clampLedSpeed(options.speed ?? LED_SPEED_DEFAULT);
   const threshold = options.threshold ?? 108;
 
   const canvas = document.createElement("canvas");
@@ -136,7 +148,7 @@ export function createLedMarquee(
     ctx.fillRect(0, 0, cssW, cssH);
 
     if (intersecting && bitmap && bitmapW > 0) {
-      scroll += speed * dt;
+      scroll += scrollSpeed * dt;
       while (scroll >= cycleLen) scroll -= cycleLen;
     }
 
@@ -181,6 +193,9 @@ export function createLedMarquee(
     setText(text: string) {
       canvas.setAttribute("aria-label", text.trim().slice(0, 200) || "公告跑馬燈");
       rebuildBitmap(text);
+    },
+    setSpeed(pxPerSec: number) {
+      scrollSpeed = clampLedSpeed(pxPerSec);
     },
     destroy() {
       destroyed = true;
