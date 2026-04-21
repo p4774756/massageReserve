@@ -506,6 +506,13 @@ tbody tr:hover td {
   letter-spacing: 0.02em;
 }
 
+.admin-announce h4.admin-subhead {
+  margin: 10px 0 0;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--accent-deep);
+}
+
 .member-typeahead-wrap {
   position: relative;
   display: block;
@@ -546,8 +553,17 @@ tbody tr:hover td {
   gap: 10px;
 }
 
+/* label.field 為 grid，權重高於單獨 .checkbox-field，會把核取方塊與文字排成上下兩列；強制橫向對齊 */
+label.field.checkbox-field {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
 .checkbox-field input[type="checkbox"] {
   width: auto;
+  flex-shrink: 0;
   accent-color: var(--accent);
 }
 

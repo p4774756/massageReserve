@@ -211,39 +211,79 @@ function render() {
     ledMarquee = null;
   }
 
+  let topMarqueeOn = false;
+  let bottomMarqueeOn = false;
+
+  function parseMarqueeSettings(data: unknown): { text: string; enabled: boolean } {
+    const o = data as { text?: unknown; enabled?: unknown } | undefined;
+    const text = typeof o?.text === "string" ? o.text.trim() : "";
+    const enabled = typeof o?.enabled === "boolean" ? o.enabled : false;
+    return { text, enabled };
+  }
+
+  function syncMarqueeVisibilityForTab() {
+    if (tab !== "book") {
+      announcementTextStrip.hidden = true;
+      announcementBox.hidden = true;
+      return;
+    }
+    announcementTextStrip.hidden = !topMarqueeOn;
+    announcementBox.hidden = !bottomMarqueeOn;
+  }
+
   onSnapshot(
-    doc(db, "siteSettings", "announcement"),
+    doc(db, "siteSettings", "marqueeText"),
     (snap) => {
       if (tab !== "book") {
         announcementTextStrip.hidden = true;
-        announcementBox.hidden = true;
         return;
       }
-      const data = snap.data() as { text?: unknown; enabled?: unknown } | undefined;
-      const text = typeof data?.text === "string" ? data.text.trim() : "";
-      const enabled = typeof data?.enabled === "boolean" ? data.enabled : false;
+      const { text, enabled } = parseMarqueeSettings(snap.data());
       if (!enabled || !text) {
-        announcementTextStrip.hidden = true;
+        topMarqueeOn = false;
         announcementTextStrip.replaceChildren();
+      } else {
+        topMarqueeOn = true;
+        announcementTextStrip.replaceChildren(
+          el("div", { class: "marquee-track" }, [text, "  •  ", text]),
+        );
+      }
+      syncMarqueeVisibilityForTab();
+    },
+    () => {
+      topMarqueeOn = false;
+      announcementTextStrip.replaceChildren();
+      announcementTextStrip.hidden = true;
+      syncMarqueeVisibilityForTab();
+    },
+  );
+
+  onSnapshot(
+    doc(db, "siteSettings", "marqueeLed"),
+    (snap) => {
+      if (tab !== "book") {
         announcementBox.hidden = true;
-        disposeLedMarquee();
         return;
       }
-      announcementTextStrip.hidden = false;
-      announcementTextStrip.replaceChildren(
-        el("div", { class: "marquee-track" }, [text, "  •  ", text]),
-      );
-      announcementBox.hidden = false;
+      const { text, enabled } = parseMarqueeSettings(snap.data());
+      if (!enabled || !text) {
+        bottomMarqueeOn = false;
+        disposeLedMarquee();
+        syncMarqueeVisibilityForTab();
+        return;
+      }
+      bottomMarqueeOn = true;
       if (!ledMarquee) {
         ledMarquee = createLedMarquee(ledHost);
       }
       ledMarquee.setText(`${text}     ·     ${text}`);
+      syncMarqueeVisibilityForTab();
     },
     () => {
-      announcementTextStrip.hidden = true;
-      announcementTextStrip.replaceChildren();
-      announcementBox.hidden = true;
+      bottomMarqueeOn = false;
       disposeLedMarquee();
+      announcementBox.hidden = true;
+      syncMarqueeVisibilityForTab();
     },
   );
   shell.append(announcementBox);
@@ -625,16 +665,21 @@ function render() {
   panelAdmin.append(adminWrap);
 
   let adminUnsub: (() => void) | null = null;
-  let adminAnnouncementUnsub: (() => void) | null = null;
+  let adminMarqueeTextUnsub: (() => void) | null = null;
+  let adminMarqueeLedUnsub: (() => void) | null = null;
 
   function stopAdminListener() {
     if (adminUnsub) {
       adminUnsub();
       adminUnsub = null;
     }
-    if (adminAnnouncementUnsub) {
-      adminAnnouncementUnsub();
-      adminAnnouncementUnsub = null;
+    if (adminMarqueeTextUnsub) {
+      adminMarqueeTextUnsub();
+      adminMarqueeTextUnsub = null;
+    }
+    if (adminMarqueeLedUnsub) {
+      adminMarqueeLedUnsub();
+      adminMarqueeLedUnsub = null;
     }
   }
 
@@ -794,60 +839,113 @@ function render() {
       }
     });
     const announcementSection = el("div", { class: "admin-announce" }, []);
-    const announcementEnabled = el("input", { type: "checkbox" });
-    const announcementText = el("textarea", {
-      maxLength: 240,
-      placeholder: "輸入公告內容，例如：本週三 15:00-16:00 暫停服務",
-    });
-    const saveAnnouncementBtn = el("button", { class: "ghost", type: "button" }, ["儲存公告"]);
-    const announcementStatus = el("div", { class: "status-line" });
 
-    const announcementDocRef = doc(db, "siteSettings", "announcement");
-    adminAnnouncementUnsub = onSnapshot(
-      announcementDocRef,
+    const marqueeTextEnabled = el("input", { type: "checkbox" });
+    const marqueeTextBody = el("textarea", {
+      maxLength: 240,
+      placeholder: "頂部橫幅：例如本週三 15:00-16:00 暫停服務",
+    });
+    const saveMarqueeTextBtn = el("button", { class: "ghost", type: "button" }, ["儲存頂部跑馬燈"]);
+    const marqueeTextStatus = el("div", { class: "status-line" });
+    const marqueeTextDocRef = doc(db, "siteSettings", "marqueeText");
+
+    const marqueeLedEnabled = el("input", { type: "checkbox" });
+    const marqueeLedBody = el("textarea", {
+      maxLength: 500,
+      placeholder: "底部 LED：可較長，例如活動標語",
+    });
+    const saveMarqueeLedBtn = el("button", { class: "ghost", type: "button" }, ["儲存底部 LED"]);
+    const marqueeLedStatus = el("div", { class: "status-line" });
+    const marqueeLedDocRef = doc(db, "siteSettings", "marqueeLed");
+
+    adminMarqueeTextUnsub = onSnapshot(
+      marqueeTextDocRef,
       (snap) => {
         const data = snap.data() as { text?: unknown; enabled?: unknown } | undefined;
-        announcementText.value = typeof data?.text === "string" ? data.text : "";
-        announcementEnabled.checked = typeof data?.enabled === "boolean" ? data.enabled : false;
+        marqueeTextBody.value = typeof data?.text === "string" ? data.text : "";
+        marqueeTextEnabled.checked = typeof data?.enabled === "boolean" ? data.enabled : false;
       },
       () => {
-        announcementStatus.textContent = "無法讀取公告設定。";
-        announcementStatus.className = "status-line error";
+        marqueeTextStatus.textContent = "無法讀取頂部跑馬燈設定。";
+        marqueeTextStatus.className = "status-line error";
       },
     );
-    saveAnnouncementBtn.addEventListener("click", async () => {
-      announcementStatus.textContent = "儲存中…";
-      announcementStatus.className = "status-line";
-      saveAnnouncementBtn.setAttribute("disabled", "true");
+    adminMarqueeLedUnsub = onSnapshot(
+      marqueeLedDocRef,
+      (snap) => {
+        const data = snap.data() as { text?: unknown; enabled?: unknown } | undefined;
+        marqueeLedBody.value = typeof data?.text === "string" ? data.text : "";
+        marqueeLedEnabled.checked = typeof data?.enabled === "boolean" ? data.enabled : false;
+      },
+      () => {
+        marqueeLedStatus.textContent = "無法讀取底部 LED 設定。";
+        marqueeLedStatus.className = "status-line error";
+      },
+    );
+
+    saveMarqueeTextBtn.addEventListener("click", async () => {
+      marqueeTextStatus.textContent = "儲存中…";
+      marqueeTextStatus.className = "status-line";
+      saveMarqueeTextBtn.setAttribute("disabled", "true");
       try {
         await setDoc(
-          announcementDocRef,
+          marqueeTextDocRef,
           {
-            text: announcementText.value.trim(),
-            enabled: announcementEnabled.checked,
+            text: marqueeTextBody.value.trim(),
+            enabled: marqueeTextEnabled.checked,
             updatedAt: serverTimestamp(),
           },
           { merge: true },
         );
-        announcementStatus.textContent = "公告已更新";
-        announcementStatus.classList.add("ok");
+        marqueeTextStatus.textContent = "頂部跑馬燈已更新";
+        marqueeTextStatus.classList.add("ok");
       } catch (e) {
-        announcementStatus.textContent = e instanceof Error ? e.message : "公告更新失敗";
-        announcementStatus.classList.add("error");
+        marqueeTextStatus.textContent = e instanceof Error ? e.message : "儲存失敗";
+        marqueeTextStatus.classList.add("error");
       } finally {
-        saveAnnouncementBtn.removeAttribute("disabled");
+        saveMarqueeTextBtn.removeAttribute("disabled");
+      }
+    });
+
+    saveMarqueeLedBtn.addEventListener("click", async () => {
+      marqueeLedStatus.textContent = "儲存中…";
+      marqueeLedStatus.className = "status-line";
+      saveMarqueeLedBtn.setAttribute("disabled", "true");
+      try {
+        await setDoc(
+          marqueeLedDocRef,
+          {
+            text: marqueeLedBody.value.trim(),
+            enabled: marqueeLedEnabled.checked,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+        marqueeLedStatus.textContent = "底部 LED 已更新";
+        marqueeLedStatus.classList.add("ok");
+      } catch (e) {
+        marqueeLedStatus.textContent = e instanceof Error ? e.message : "儲存失敗";
+        marqueeLedStatus.classList.add("error");
+      } finally {
+        saveMarqueeLedBtn.removeAttribute("disabled");
       }
     });
 
     announcementSection.append(
       el("h3", {}, ["跑馬燈公告"]),
-      el("label", { class: "field" }, ["公告內容", announcementText]),
-      el("label", { class: "field checkbox-field" }, [
-        announcementEnabled,
-        el("span", {}, ["啟用公告"]),
+      el("p", { class: "hint" }, [
+        "頂部與底部分開設定：Firestore `siteSettings/marqueeText`、`siteSettings/marqueeLed`。",
       ]),
-      el("div", { class: "row-actions" }, [saveAnnouncementBtn]),
-      announcementStatus,
+      el("h4", { class: "admin-subhead" }, ["頂部 · 文字跑馬燈"]),
+      el("label", { class: "field" }, ["內容", marqueeTextBody]),
+      el("label", { class: "field checkbox-field" }, [marqueeTextEnabled, el("span", {}, ["啟用"])]),
+      el("div", { class: "row-actions" }, [saveMarqueeTextBtn]),
+      marqueeTextStatus,
+      el("h4", { class: "admin-subhead" }, ["底部 · LED 跑馬燈"]),
+      el("label", { class: "field" }, ["內容", marqueeLedBody]),
+      el("label", { class: "field checkbox-field" }, [marqueeLedEnabled, el("span", {}, ["啟用"])]),
+      el("div", { class: "row-actions" }, [saveMarqueeLedBtn]),
+      marqueeLedStatus,
     );
     walletTopupSection.append(
       el("h3", {}, ["會員儲值"]),
@@ -940,7 +1038,7 @@ function render() {
           if (b.status === "deleted") {
             continue;
           }
-          const deleteBtn = el("button", { class: "ghost", type: "button" }, ["刪除（軟）"]);
+          const deleteBtn = el("button", { class: "ghost", type: "button" }, ["刪除"]);
           for (const opt of STATUS_OPTIONS) {
             const o = el("option", { value: opt.value }, [opt.label]);
             if (opt.value === b.status) o.setAttribute("selected", "selected");
@@ -1071,8 +1169,7 @@ function render() {
       : "管理預約狀態、會員儲值、公告與資料維護";
     panelBook.hidden = !isBook;
     panelAdmin.hidden = isBook;
-    announcementTextStrip.hidden = !isBook || announcementTextStrip.childElementCount === 0;
-    announcementBox.hidden = !isBook;
+    syncMarqueeVisibilityForTab();
     if (isBook) {
       stopAdminListener();
     } else {

@@ -5,7 +5,7 @@
 - 僅 **週一～週五**，**08:00–17:30** 開始、每 **30 分鐘**一格，預估 **30 分鐘**（結束不晚於 **18:00**，`Asia/Taipei`）。
 - **同一天最多 2 筆**、**同一工作週最多 4 筆**（`cancelled` 不計入）。
 - **管理員** 以 Email/密碼登入後，可於 Firestore 讀取列表並更新 `status`。
-- 首頁支援「跑馬燈公告」，管理員可在後台編輯 `siteSettings/announcement`。
+- 首頁支援兩則跑馬燈（分開設定）：頂部文字 `siteSettings/marqueeText`、底部 LED `siteSettings/marqueeLed`（欄位皆為 `text`、`enabled`）。舊的 `siteSettings/announcement` 已不再使用，請在後台各別儲存兩項。
 
 ## 本機開發
 
