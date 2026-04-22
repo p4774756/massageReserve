@@ -882,7 +882,9 @@ function render() {
       });
       const modalBody: HTMLElement[] = [
         el("h3", {}, ["會員中心"]),
-        el("div", { class: "hint" }, [`目前登入：${user.email ?? user.uid}`]),
+        el("div", { class: "hint" }, [
+          `目前登入：${user.email ?? "（無 Email）"}（UID：${shortUidForDisplay(user.uid)}）`,
+        ]),
       ];
       if (!user.emailVerified) {
         const verifyHint = el("div", { class: "status-line" }, [
