@@ -2,6 +2,7 @@ node_modules
 dist
 .env
 .env.local
+functions/.env.*
 .firebase
 *-debug.log
 *-debug.*.log

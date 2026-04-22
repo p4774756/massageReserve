@@ -70,6 +70,8 @@
 可用腳本快速初始化：
 
 ```bash
+# .env 須含 VITE_FIREBASE_* 與管理員帳密（同 Firestore admins/{uid}）
+# SEED_WHEEL_ADMIN_EMAIL=…  SEED_WHEEL_ADMIN_PASSWORD=…
 node --env-file=.env scripts/seed-wheel-prizes.mjs
 ```
 

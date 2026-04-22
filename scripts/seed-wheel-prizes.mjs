@@ -1,4 +1,5 @@
 import { initializeApp } from "firebase/app";
+import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
 import { getFunctions, httpsCallable } from "firebase/functions";
 
 function required(name) {
@@ -19,6 +20,15 @@ const app = initializeApp({
 });
 
 async function run() {
+  const adminEmail = process.env.SEED_WHEEL_ADMIN_EMAIL;
+  const adminPassword = process.env.SEED_WHEEL_ADMIN_PASSWORD;
+  if (!adminEmail || !adminPassword) {
+    throw new Error(
+      "請在 .env 設定 SEED_WHEEL_ADMIN_EMAIL、SEED_WHEEL_ADMIN_PASSWORD（須為 Firestore admins/{uid} 對應的管理員帳號）",
+    );
+  }
+  await signInWithEmailAndPassword(getAuth(app), adminEmail, adminPassword);
+
   const fns = getFunctions(app, "asia-east1");
   const seed = httpsCallable(fns, "seedWheelPrizes");
   const res = await seed({});

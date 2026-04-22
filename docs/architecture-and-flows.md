@@ -86,7 +86,7 @@ flowchart LR
 | `createMemberAccount` | 管理員 | 建立 Auth 使用者 + `customers` 初始文件 |
 | `searchMemberUsers` / `listMembersAdmin` / `updateMemberNicknameAdmin` | 管理員 | 會員搜尋、列表、暱稱 |
 | `spinWheel` | 已登入 | 消耗可抽次數、加權隨機獎項、更新餘額與紀錄 |
-| `seedWheelPrizes` | 可呼叫但**無 Auth 檢查** | 若 `wheelPrizes` 為空則寫入預設獎項（上線後應限制來源或改為僅管理員） |
+| `seedWheelPrizes` | 需已登入且為 **admin** | 若 `wheelPrizes` 為空則寫入預設獎項 |
 
 ---
 

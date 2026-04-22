@@ -811,7 +811,13 @@ export const spinWheel = onCall(publicCall, async (request) => {
   };
 });
 
-export const seedWheelPrizes = onCall(publicCall, async () => {
+export const seedWheelPrizes = onCall(publicCall, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", "請先登入");
+  }
+  await assertAdminByUid(uid);
+
   const existing = await db.collection("wheelPrizes").limit(1).get();
   if (!existing.empty) {
     return { ok: true, seeded: false, message: "wheelPrizes 已存在資料，略過初始化" };
