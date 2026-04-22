@@ -1649,7 +1649,7 @@ function render() {
       el("div", { class: "row-actions" }, [createMemberBtn]),
       createMemberStatus,
     );
-    const tableHolder = el("div", { class: "table-wrap" });
+    const tableHolder = el("div", { class: "table-wrap admin-bookings-table" });
     const table = el("table", {}, []);
     table.append(
       el("tr", {}, [
