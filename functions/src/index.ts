@@ -20,6 +20,17 @@ import {
 initializeApp();
 const db = getFirestore();
 
+/** `sendEachForMulticast` 預設走 HTTP/2，部分環境易出現 `messaging/internal-error`，改走 HTTP/1.1 較穩定 */
+let messagingLegacyTransportEnabled = false;
+function getMessagingForPush() {
+  const messaging = getMessaging();
+  if (!messagingLegacyTransportEnabled) {
+    messaging.enableLegacyHttpTransport();
+    messagingLegacyTransportEnabled = true;
+  }
+  return messaging;
+}
+
 const region = "asia-east1";
 /** 允許未登入呼叫（預約與查詢空檔） */
 const publicCall = { region, invoker: "public" as const };
@@ -503,7 +514,7 @@ export const sendImmediatePush = onCall(publicCall, async (request) => {
     };
   }
 
-  const messaging = getMessaging();
+  const messaging = getMessagingForPush();
   const batchSize = 500;
   let successCount = 0;
   let failureCount = 0;
