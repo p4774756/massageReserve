@@ -7,6 +7,7 @@ import {
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
+  type User,
 } from "firebase/auth";
 import {
   collection,
@@ -233,6 +234,24 @@ function showConfirmModal(title: string, message: string, confirmText = "確定"
     document.body.append(overlay);
     confirmBtn.focus();
   });
+}
+
+function shortUidForDisplay(uid: string, headChars = 8): string {
+  if (!uid) return "";
+  if (uid.length <= headChars) return uid;
+  return `${uid.slice(0, headChars)}…`;
+}
+
+function adminSessionCallName(user: User): string {
+  const fromDisplay = user.displayName?.trim();
+  if (fromDisplay) return fromDisplay;
+  const email = user.email?.trim();
+  if (email) {
+    const at = email.indexOf("@");
+    const local = at > 0 ? email.slice(0, at).trim() : email;
+    if (local) return local;
+  }
+  return "管理員";
 }
 
 function render() {
@@ -1316,7 +1335,12 @@ function render() {
     stopAdminListener();
     adminWrap.innerHTML = "";
     const top = el("div", { class: "row-actions" }, []);
-    const who = el("span", { class: "hint" }, [`已登入：${userId}`]);
+    const u = auth.currentUser;
+    const whoLabel =
+      u != null
+        ? `已登入：${adminSessionCallName(u)}（${shortUidForDisplay(u.uid)}）`
+        : `已登入：（${shortUidForDisplay(userId)}）`;
+    const who = el("span", { class: "hint" }, [whoLabel]);
     const outBtn = el("button", { class: "ghost", type: "button" }, ["登出"]);
     outBtn.addEventListener("click", () => signOut(auth));
     top.append(who, outBtn);
