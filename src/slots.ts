@@ -4,8 +4,10 @@ export function allStartSlots(): string[] {
   const endMinutes = 17 * 60 + 30;
   const lunchStartMinutes = 11 * 60 + 45;
   const lunchEndMinutes = 13 * 60 + 15;
-  for (let m = 8 * 60; m <= endMinutes; m += 30) {
-    const slotEnd = m + 30;
+  const slotStepMinutes = 15;
+  const bookingDurationMinutes = 30;
+  for (let m = 8 * 60; m <= endMinutes; m += slotStepMinutes) {
+    const slotEnd = m + bookingDurationMinutes;
     const overlapsLunch = m < lunchEndMinutes && slotEnd > lunchStartMinutes;
     if (overlapsLunch) continue;
     const h = Math.floor(m / 60);

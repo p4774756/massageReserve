@@ -31,7 +31,7 @@ test("會員預約 -> 後台完成 -> 前台抽輪盤", async ({ page }) => {
   // 建立會員現金預約（避免依賴儲值餘額）
   await page.getByRole("textbox", { name: /姓名/ }).fill(bookingName);
   await page.getByRole("textbox", { name: /日期（週一至週五）/ }).fill(nextWeekdayDateString());
-  const startTime = page.getByRole("combobox", { name: /開始時間（30 分鐘一格）/ });
+  const startTime = page.getByRole("combobox", { name: /開始時間（15 分鐘一格）/ });
   await expect(startTime).toBeEnabled();
   const chosen = await startTime.evaluate((el) => {
     const select = el as HTMLSelectElement;

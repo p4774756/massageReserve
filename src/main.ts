@@ -274,7 +274,7 @@ function render() {
   let tab: "book" | "admin" = "book";
 
   const titleHeading = el("h1", {}, ["辦公室按摩預約"]);
-  const titleDesc = el("p", {}, ["週一至週五 · 以 30 分鐘估算 · 午休 11:45–13:15 不開放 · 最晚 17:30 開始、18:00 前結束"]);
+  const titleDesc = el("p", {}, ["週一至週五 · 開始時間 15 分鐘一格 · 單次服務約 30 分鐘 · 午休 11:45–13:15 不開放 · 最晚 17:30 開始、18:00 前結束"]);
   const titleGuestHint = el("p", { class: "page-head-guest-hint" }, [
     "免事先註冊也可預約，選「訪客」付款方式即可；註冊會員則可儲值與抽獎。",
   ]);
@@ -1228,9 +1228,9 @@ function render() {
     ]),
     el("div", { class: "grid" }, [
       el("label", { class: "field" }, [
-        "開始時間（30 分鐘一格）",
+        "開始時間（15 分鐘一格）",
         slotSelect,
-        el("span", { class: "hint" }, ["系統以約 30 分鐘估算；實際長度依情況調整"]),
+        el("span", { class: "hint" }, ["開始時間為 15 分鐘一格；單次服務仍以約 30 分鐘估算，實際長度依情況調整"]),
       ]),
     ]),
     el("div", { class: "grid" }, [
@@ -2019,7 +2019,7 @@ function render() {
     titleGuestHint.hidden = !isBook;
     titleHeading.textContent = isBook ? "辦公室按摩預約" : "管理後台";
     titleDesc.textContent = isBook
-      ? "週一至週五 · 以 30 分鐘估算 · 午休 11:45–13:15 不開放 · 最晚 17:30 開始、18:00 前結束"
+      ? "週一至週五 · 開始時間 15 分鐘一格 · 單次服務約 30 分鐘 · 午休 11:45–13:15 不開放 · 最晚 17:30 開始、18:00 前結束"
       : "以分頁切換：預約管理、會員與儲值、跑馬燈公告。";
     panelBook.hidden = !isBook;
     panelAdmin.hidden = isBook;

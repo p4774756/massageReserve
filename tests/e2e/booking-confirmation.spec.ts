@@ -29,7 +29,7 @@ test("送出預約前會顯示確認摘要視窗", async ({ page }) => {
   await page.getByRole("textbox", { name: /姓名/ }).fill("Playwright 測試");
   await page.getByRole("textbox", { name: /日期（週一至週五）/ }).fill(nextWeekdayDateString());
 
-  const startTime = page.getByRole("combobox", { name: /開始時間（30 分鐘一格）/ });
+  const startTime = page.getByRole("combobox", { name: /開始時間（15 分鐘一格）/ });
   await expect(startTime).toBeEnabled();
   const chosen = await startTime.evaluate((el) => {
     const select = el as HTMLSelectElement;

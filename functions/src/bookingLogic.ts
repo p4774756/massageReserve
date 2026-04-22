@@ -1,7 +1,7 @@
 import { DateTime } from "luxon";
 
 export const TIMEZONE = "Asia/Taipei";
-export const SLOT_STEP_MINUTES = 30;
+export const SLOT_STEP_MINUTES = 15;
 export const BOOKING_DURATION_MINUTES = 30;
 const LUNCH_START_MINUTES = 11 * 60 + 45;
 const LUNCH_END_MINUTES = 13 * 60 + 15;
@@ -10,7 +10,7 @@ export const MAX_PER_WORK_WEEK = 4;
 
 export const ACTIVE_STATUSES = ["pending", "confirmed", "done"] as const;
 
-/** 可預約開始時間：08:00–17:30，每 30 分鐘一格（避開 11:45–13:15 午休） */
+/** 可預約開始時間：08:00–17:30，每 15 分鐘一格（避開 11:45–13:15 午休） */
 export function allStartSlots(): string[] {
   const slots: string[] = [];
   const endMinutes = 17 * 60 + 30;
