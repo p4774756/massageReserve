@@ -507,6 +507,7 @@ export const sendImmediatePush = onCall(publicCall, async (request) => {
   const batchSize = 500;
   let successCount = 0;
   let failureCount = 0;
+  const failureDetails: string[] = [];
 
   for (let offset = 0; offset < tokens.length; offset += batchSize) {
     const batch = tokens.slice(offset, offset + batchSize);
@@ -522,6 +523,11 @@ export const sendImmediatePush = onCall(publicCall, async (request) => {
     res.responses.forEach((r, i) => {
       if (r.success) return;
       const code = r.error?.code;
+      if (failureDetails.length < 8) {
+        const piece = code ?? "unknown";
+        const hint = r.error?.message ? `（${String(r.error.message).slice(0, 120)}）` : "";
+        failureDetails.push(`${piece}${hint}`);
+      }
       if (
         code === "messaging/invalid-registration-token" ||
         code === "messaging/registration-token-not-registered"
@@ -537,6 +543,7 @@ export const sendImmediatePush = onCall(publicCall, async (request) => {
     failureCount,
     attempted: tokens.length,
     message: `已送出：成功 ${successCount}，失敗 ${failureCount}（合計 ${tokens.length} 個 token）。`,
+    failureDetails,
   };
 });
 

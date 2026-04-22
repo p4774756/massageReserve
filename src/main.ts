@@ -2114,10 +2114,17 @@ function render() {
           failureCount?: unknown;
           attempted?: unknown;
           message?: unknown;
+          failureDetails?: unknown;
         };
         const msg = typeof data.message === "string" ? data.message : "已處理。";
-        immediatePushStatus.textContent = msg;
-        immediatePushStatus.classList.add("ok");
+        const details = Array.isArray(data.failureDetails)
+          ? data.failureDetails.filter((x): x is string => typeof x === "string" && x.length > 0)
+          : [];
+        const extra = details.length > 0 ? ` 詳情：${details.join("；")}` : "";
+        immediatePushStatus.textContent = msg + extra;
+        const okN = typeof data.successCount === "number" ? data.successCount : 0;
+        const failN = typeof data.failureCount === "number" ? data.failureCount : 0;
+        immediatePushStatus.classList.add(failN > 0 && okN === 0 ? "error" : "ok");
       } catch (e) {
         immediatePushStatus.textContent = errorMessage(e);
         immediatePushStatus.classList.add("error");
