@@ -1,8 +1,10 @@
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
+import { defineSecret, defineString } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { DateTime } from "luxon";
+import { sendNewBookingEmailToOwner } from "./resendNotify";
 import {
   ACTIVE_STATUSES,
   MAX_PER_DAY,
@@ -19,6 +21,12 @@ const db = getFirestore();
 const region = "asia-east1";
 /** 允許未登入呼叫（預約與查詢空檔） */
 const publicCall = { region, invoker: "public" as const };
+
+const resendApiKey = defineSecret("RESEND_API_KEY");
+const ownerNotifyEmail = defineSecret("OWNER_NOTIFY_EMAIL");
+const resendFrom = defineString("RESEND_FROM", {
+  default: "Massage預約 <onboarding@resend.dev>",
+});
 
 type CreateBookingInput = {
   displayName?: unknown;
@@ -120,7 +128,9 @@ export const getAvailability = onCall(publicCall, async (request) => {
   };
 });
 
-export const createBooking = onCall(publicCall, async (request) => {
+export const createBooking = onCall(
+  { ...publicCall, secrets: [resendApiKey, ownerNotifyEmail] },
+  async (request) => {
   const data = request.data as CreateBookingInput;
   const displayName = typeof data.displayName === "string" ? data.displayName.trim() : "";
   const note = typeof data.note === "string" ? data.note.trim() : "";
@@ -268,8 +278,31 @@ export const createBooking = onCall(publicCall, async (request) => {
     throw new HttpsError("internal", "預約失敗，請稍後再試");
   }
 
+  const key = resendApiKey.value().trim();
+  const ownerTo = ownerNotifyEmail.value().trim();
+  const from = resendFrom.value().trim() || "Massage預約 <onboarding@resend.dev>";
+  if (key && ownerTo) {
+    const memberUid =
+      bookingMode === "guest_cash" || bookingMode === "guest_beverage" ? null : uid ?? null;
+    void sendNewBookingEmailToOwner({
+      apiKey: key,
+      from,
+      to: ownerTo,
+      payload: {
+        id: bookingRef.id,
+        displayName,
+        dateKey,
+        startSlot,
+        note,
+        bookingMode,
+        memberUid,
+      },
+    }).catch((err) => console.error("notify owner email failed", err));
+  }
+
   return { id: bookingRef.id };
-});
+  },
+);
 
 export const getMyWallet = onCall(publicCall, async (request) => {
   const uid = request.auth?.uid;
