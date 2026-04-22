@@ -73,11 +73,11 @@ const BOOKING_MODE_LABEL: Record<BookingMode, string> = {
   member_beverage: BEVERAGE_OPTION_LABEL,
 };
 
-const STATUS_OPTIONS: { value: string; label: string }[] = [
+/** 後台狀態下拉：不含「已取消」（改由「取消」按鈕呼叫 cancelBooking） */
+const ADMIN_STATUS_SELECT_OPTIONS: { value: string; label: string }[] = [
   { value: "pending", label: "待確認" },
   { value: "confirmed", label: "已確認" },
   { value: "done", label: "已完成" },
-  { value: "cancelled", label: "已取消" },
 ];
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -252,6 +252,55 @@ function adminSessionCallName(user: User): string {
     if (local) return local;
   }
   return "管理員";
+}
+
+/** 後台取消預約：可填原因（可留空）；null 表示關閉視窗未確認 */
+function showAdminCancelBookingModal(summaryLines: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const overlay = el("div", { class: "modal-overlay" });
+    const dialog = el("div", { class: "modal-card" });
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    dialog.setAttribute("aria-labelledby", "admin-cancel-modal-title");
+    const heading = el("h3", { id: "admin-cancel-modal-title" }, ["取消預約"]);
+    const body = el("pre", { class: "modal-message" }, [summaryLines]);
+    const reasonInput = el("textarea", {
+      maxLength: 500,
+      rows: 4,
+      placeholder: "取消原因（選填，可不填）",
+    });
+    reasonInput.setAttribute("aria-label", "取消原因");
+    const reasonField = el("label", { class: "field modal-cancel-reason-field" }, ["取消原因", reasonInput]);
+    const dismissBtn = el("button", { class: "ghost", type: "button" }, ["關閉"]);
+    const confirmBtn = el("button", { class: "primary", type: "button" }, ["確認取消"]);
+    const actions = el("div", { class: "modal-actions" }, [dismissBtn, confirmBtn]);
+    dialog.append(heading, body, reasonField, actions);
+    overlay.append(dialog);
+
+    const finish = (reason: string | null) => {
+      document.removeEventListener("keydown", onKeyDown);
+      overlay.remove();
+      resolve(reason);
+    };
+    const onKeyDown = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape") {
+        ev.preventDefault();
+        finish(null);
+      }
+    };
+
+    dismissBtn.addEventListener("click", () => finish(null));
+    confirmBtn.addEventListener("click", () => finish(reasonInput.value.trim()));
+    overlay.addEventListener("click", (ev) => {
+      if (ev.target === overlay) {
+        finish(null);
+      }
+    });
+    document.addEventListener("keydown", onKeyDown);
+
+    document.body.append(overlay);
+    reasonInput.focus();
+  });
 }
 
 function render() {
@@ -1887,45 +1936,87 @@ function render() {
         );
         for (const d of snap.docs) {
           const b = { id: d.id, ...d.data() } as Booking;
-          const sel = el("select", {}, []);
           if (b.status === "deleted") {
             continue;
           }
-          const deleteBtn = el("button", { class: "ghost", type: "button" }, ["刪除"]);
-          for (const opt of STATUS_OPTIONS) {
-            const o = el("option", { value: opt.value }, [opt.label]);
-            if (opt.value === b.status) o.setAttribute("selected", "selected");
-            sel.append(o);
+          const statusCell: HTMLElement =
+            b.status === "cancelled"
+              ? el("span", { class: "admin-booking-status-readonly" }, [bookingStatusLabel("cancelled")])
+              : el("select", {}, []);
+          const sel = b.status === "cancelled" ? null : (statusCell as HTMLSelectElement);
+          if (sel) {
+            for (const opt of ADMIN_STATUS_SELECT_OPTIONS) {
+              const o = el("option", { value: opt.value }, [opt.label]);
+              if (opt.value === b.status) o.setAttribute("selected", "selected");
+              sel.append(o);
+            }
+            sel.addEventListener("change", async () => {
+              const nextStatus = sel.value;
+              const prevStatus = b.status;
+              adminStatus.textContent = "更新中…";
+              try {
+                if (nextStatus === "done") {
+                  const fn = completeBookingCall();
+                  await fn({ bookingId: b.id });
+                } else {
+                  await updateDoc(doc(db, "bookings", b.id), {
+                    status: nextStatus,
+                    updatedAt: serverTimestamp(),
+                  });
+                }
+                adminStatus.textContent = "已更新";
+                adminStatus.classList.add("ok");
+                if (nextStatus === "done") {
+                  await refreshWalletStatus();
+                }
+              } catch (e) {
+                sel.value = prevStatus;
+                adminStatus.textContent =
+                  e instanceof Error ? e.message : "更新失敗（你是否已加入 admins 集合？）";
+                adminStatus.classList.add("error");
+              }
+            });
           }
-          sel.addEventListener("change", async () => {
-            const nextStatus = sel.value;
-            const prevStatus = b.status;
-            adminStatus.textContent = "更新中…";
+          const cancelBtn = el("button", { class: "ghost", type: "button" }, ["取消"]);
+          const canAdminCancel = b.status !== "done" && b.status !== "cancelled";
+          cancelBtn.disabled = !canAdminCancel;
+          cancelBtn.title = !canAdminCancel
+            ? b.status === "done"
+              ? "已完成預約不可取消"
+              : "已取消"
+            : "";
+          cancelBtn.addEventListener("click", async () => {
+            if (!canAdminCancel) return;
+            const summary = [
+              "即將取消以下預約。取消原因可留空。",
+              "",
+              `姓名：${b.displayName ?? ""}`,
+              `日期：${b.dateKey ?? ""}`,
+              `開始時間：${b.startSlot ?? ""}`,
+              `備註：${(b.note ?? "").trim() || "（無）"}`,
+            ].join("\n");
+            const reason = await showAdminCancelBookingModal(summary);
+            if (reason === null) return;
+            adminStatus.textContent = "取消中…";
+            adminStatus.className = "status-line";
+            cancelBtn.setAttribute("disabled", "true");
             try {
-              if (nextStatus === "done") {
-                const fn = completeBookingCall();
-                await fn({ bookingId: b.id });
-              } else if (nextStatus === "cancelled") {
-                const fn = cancelBookingCall();
-                await fn({ bookingId: b.id });
-              } else {
-                await updateDoc(doc(db, "bookings", b.id), {
-                  status: nextStatus,
-                  updatedAt: serverTimestamp(),
-                });
+              const fn = cancelBookingCall();
+              const payload: { bookingId: string; cancelReason?: string } = { bookingId: b.id };
+              if (reason.length > 0) {
+                payload.cancelReason = reason;
               }
-              adminStatus.textContent = "已更新";
+              await fn(payload);
+              adminStatus.textContent = "已取消";
               adminStatus.classList.add("ok");
-              if (nextStatus === "done" || nextStatus === "cancelled") {
-                await refreshWalletStatus();
-              }
+              await refreshWalletStatus();
             } catch (e) {
-              sel.value = prevStatus;
-              adminStatus.textContent =
-                e instanceof Error ? e.message : "更新失敗（你是否已加入 admins 集合？）";
+              adminStatus.textContent = e instanceof Error ? e.message : "取消失敗";
               adminStatus.classList.add("error");
+              cancelBtn.removeAttribute("disabled");
             }
           });
+          const deleteBtn = el("button", { class: "ghost", type: "button" }, ["刪除"]);
           deleteBtn.addEventListener("click", async () => {
             const confirmed = await showConfirmModal(
               "確認刪除（軟刪除）",
@@ -1952,13 +2043,14 @@ function render() {
               deleteBtn.removeAttribute("disabled");
             }
           });
+          const actionCell = el("div", { class: "admin-booking-actions" }, [cancelBtn, deleteBtn]);
           table.append(
             el("tr", {}, [
               el("td", { class: "mono" }, [formatWhen(b)]),
               el("td", {}, [b.displayName ?? ""]),
               el("td", {}, [b.note ?? ""]),
-              el("td", {}, [sel]),
-              el("td", {}, [deleteBtn]),
+              el("td", {}, [statusCell]),
+              el("td", {}, [actionCell]),
             ]),
           );
         }

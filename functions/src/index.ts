@@ -630,6 +630,9 @@ export const cancelBooking = onCall(publicCall, async (request) => {
   if (!bookingId) {
     throw new HttpsError("invalid-argument", "bookingId 必填");
   }
+  const cancelReasonRaw = request.data?.cancelReason;
+  const cancelReason =
+    typeof cancelReasonRaw === "string" ? cancelReasonRaw.trim().slice(0, 500) : "";
   const bookingRef = db.collection("bookings").doc(bookingId);
   const adminRef = db.collection("admins").doc(uid);
   const [bookingSnapPre, adminSnapPre] = await Promise.all([bookingRef.get(), adminRef.get()]);
@@ -696,12 +699,16 @@ export const cancelBooking = onCall(publicCall, async (request) => {
       });
     }
 
-    tx.update(bookingRef, {
+    const cancelPatch: Record<string, unknown> = {
       status: "cancelled",
       updatedAt: FieldValueOrServerTimestamp(),
       cancelledAt: FieldValueOrServerTimestamp(),
       cancelledBy: uid,
-    });
+    };
+    if (cancelReason.length > 0) {
+      cancelPatch.cancelReason = cancelReason;
+    }
+    tx.update(bookingRef, cancelPatch);
   });
 
   return { ok: true };

@@ -703,6 +703,46 @@ button.ghost:disabled {
   max-width: 100%;
 }
 
+/* 後台預約列表：欄寬依內容撐開，避免字被擠換行或下拉／按鈕過窄 */
+.admin-bookings-table table {
+  width: 100%;
+  min-width: max-content;
+}
+
+.admin-bookings-table th,
+.admin-bookings-table td {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.admin-bookings-table select {
+  min-width: 7rem;
+  width: auto;
+  max-width: none;
+}
+
+.admin-booking-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.admin-booking-status-readonly {
+  display: inline-block;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.modal-cancel-reason-field {
+  margin: 0;
+}
+
+.modal-card .modal-cancel-reason-field textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
