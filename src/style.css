@@ -540,6 +540,19 @@ button.ghost:disabled {
   margin-top: 0;
 }
 
+.book-wheel-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+
+.book-wheel-row > .status-line {
+  margin: 0;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
 .email-verify-banner {
   padding: 12px 14px;
   border-radius: var(--radius-sm);

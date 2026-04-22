@@ -1256,13 +1256,8 @@ function render() {
     }
   });
 
-  memberExtrasWrap.append(
-    emailVerifyBanner,
-    walletStatus,
-    myBookingsSection,
-    el("div", { class: "row-actions" }, [spinBtn, wheelResult]),
-    wheelStatus,
-  );
+  const wheelRow = el("div", { class: "book-wheel-row" }, [spinBtn, wheelStatus, wheelResult]);
+  memberExtrasWrap.append(emailVerifyBanner, walletStatus, myBookingsSection, wheelRow);
 
   panelBook.append(
     el("div", { class: "grid grid-2" }, [
