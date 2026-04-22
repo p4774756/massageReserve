@@ -288,11 +288,27 @@ function render() {
   });
   const headActions = el("div", { class: "head-actions" }, [headSessionStatus, memberEntryBtn]);
 
+  const hostPortrait = el("figure", { class: "host-atelier" }, [
+    el("div", { class: "host-atelier__frame" }, [
+      el("img", {
+        class: "host-atelier__img",
+        src: "/host-portrait.png",
+        alt: "主理人肖像：由凝視、伏案書寫與窗邊沉思三幅畫面組成的直式影像。",
+        loading: "lazy",
+        decoding: "async",
+      }),
+    ]),
+    el("figcaption", { class: "host-atelier__cap" }, [
+      "片刻的暗影與光，也是留給身體的空白。",
+    ]),
+  ]);
+
   const panelBook = el("main", { class: "panel" });
   const panelAdmin = el("main", { class: "panel", hidden: true });
 
   const shell = el("div", { class: "shell" }, [
     el("header", { class: "page-head" }, [titleBlock, headActions]),
+    hostPortrait,
     panelBook,
     panelAdmin,
   ]);
@@ -2007,6 +2023,7 @@ function render() {
       : "以分頁切換：預約管理、會員與儲值、跑馬燈公告。";
     panelBook.hidden = !isBook;
     panelAdmin.hidden = isBook;
+    hostPortrait.hidden = !isBook;
     syncMarqueeVisibilityForTab();
     if (isBook) {
       stopAdminListener();

@@ -147,6 +147,67 @@ header.page-head {
   background: var(--surface);
 }
 
+/* 預約頁：主理人肖像帶（與頁面其餘淺色區形成對比，呼應影像的明暗與質感） */
+figure.host-atelier {
+  margin: 0;
+  padding: 22px 22px 24px;
+  text-align: center;
+  background: linear-gradient(168deg, #0c0f14 0%, #151a24 52%, #0f1218 100%);
+  border-bottom: 1px solid rgb(0 0 0 / 0.4);
+}
+
+.host-atelier__frame {
+  position: relative;
+  display: block;
+  width: min(100%, 240px);
+  margin-inline: auto;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow:
+    0 22px 50px rgb(0 0 0 / 0.5),
+    0 0 0 1px rgb(255 255 255 / 0.07);
+}
+
+.host-atelier__img {
+  display: block;
+  width: 100%;
+  height: auto;
+  vertical-align: top;
+  filter: contrast(1.05) saturate(0.94);
+}
+
+.host-atelier__frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.16;
+  background:
+    repeating-radial-gradient(circle at 18% 22%, rgb(255 255 255 / 0.04) 0 0.6px, transparent 0.6px 2.5px),
+    repeating-radial-gradient(circle at 82% 78%, rgb(0 0 0 / 0.12) 0 1px, transparent 1px 3px);
+  mix-blend-mode: overlay;
+}
+
+.host-atelier__frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 48px rgb(0 0 0 / 0.35);
+  border-radius: inherit;
+}
+
+.host-atelier__cap {
+  margin: 16px 0 0;
+  max-width: 36ch;
+  margin-inline: auto;
+  font-size: 0.8rem;
+  font-weight: 400;
+  line-height: 1.55;
+  letter-spacing: 0.08em;
+  color: rgb(215 220 230 / 0.58);
+}
+
 .page-head-main {
   flex: 1 1 0;
   min-width: 0;
