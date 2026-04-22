@@ -20,10 +20,10 @@ test("送出預約前會顯示確認摘要視窗", async ({ page }) => {
   await page.goto("/");
 
   await page.getByRole("button", { name: "會員登入" }).click();
-  await expect(page.getByRole("heading", { name: "會員登入" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "會員登入／註冊" })).toBeVisible();
   await page.getByRole("textbox", { name: /^Email$/ }).fill(email!);
   await page.getByLabel("密碼").first().fill(password!);
-  await page.getByRole("button", { name: "會員登入" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "登入" }).click();
   await expect(page.getByRole("button", { name: "會員中心" })).toBeVisible();
 
   await page.getByRole("textbox", { name: /姓名/ }).fill("Playwright 測試");

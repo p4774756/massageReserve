@@ -426,6 +426,24 @@ button.ghost:disabled {
   margin-top: 0;
 }
 
+.email-verify-banner {
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+}
+
+.email-verify-banner .row-actions {
+  margin-top: 10px;
+}
+
+.member-auth-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
 .my-bookings {
   padding: 14px 16px;
   border: 1px solid var(--border);

@@ -22,10 +22,10 @@ test("會員預約 -> 後台完成 -> 前台抽輪盤", async ({ page }) => {
 
   // 前台會員登入
   await page.getByRole("button", { name: "會員登入" }).click();
-  await expect(page.getByRole("heading", { name: "會員登入" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "會員登入／註冊" })).toBeVisible();
   await page.getByRole("textbox", { name: /^Email$/ }).fill(email!);
   await page.getByLabel("密碼").first().fill(password!);
-  await page.getByRole("button", { name: "會員登入" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "登入" }).click();
   await expect(page.getByRole("button", { name: "會員中心" })).toBeVisible();
 
   // 建立會員現金預約（避免依賴儲值餘額）

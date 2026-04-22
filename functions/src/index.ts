@@ -48,6 +48,17 @@ async function assertAdminByUid(uid: string): Promise<void> {
   }
 }
 
+/** 會員儲值／預約／抽獎等需已驗證 Email（後台建立帳號可設為已驗證） */
+async function assertMemberEmailVerified(uid: string): Promise<void> {
+  const record = await getAuth().getUser(uid);
+  if (!record.emailVerified) {
+    throw new HttpsError(
+      "failed-precondition",
+      "請先至信箱完成 Email 驗證後再使用會員功能。",
+    );
+  }
+}
+
 /** 後台儲值：可填 UID，或填會員 Email（含 @ 時改查 Auth） */
 async function resolveCustomerUidForTopup(raw: string): Promise<string> {
   const trimmed = raw.trim();
@@ -152,6 +163,9 @@ export const createBooking = onCall(
   const isGuestMode = bookingMode === "guest_cash" || bookingMode === "guest_beverage";
   if (!isGuestMode && !uid) {
     throw new HttpsError("unauthenticated", "會員付款模式需先登入");
+  }
+  if (!isGuestMode && uid) {
+    await assertMemberEmailVerified(uid);
   }
 
   if (!displayName || displayName.length > 80) {
@@ -309,6 +323,7 @@ export const getMyWallet = onCall(publicCall, async (request) => {
   if (!uid) {
     throw new HttpsError("unauthenticated", "請先登入");
   }
+  await assertMemberEmailVerified(uid);
   const snap = await db.collection("customers").doc(uid).get();
   const walletBalanceRaw = snap.exists ? snap.get("walletBalance") : 0;
   const drawChancesRaw = snap.exists ? snap.get("drawChances") : 0;
@@ -400,7 +415,8 @@ export const createMemberAccount = onCall(publicCall, async (request) => {
       email,
       password,
       displayName: nickname || undefined,
-      emailVerified: false,
+      // 後台建立視為已驗證，否則會員功能會被擋且客戶端未寄出驗證信
+      emailVerified: true,
       disabled: false,
     });
     await db.collection("customers").doc(userRecord.uid).set(
@@ -614,6 +630,20 @@ export const cancelBooking = onCall(publicCall, async (request) => {
   }
   const bookingRef = db.collection("bookings").doc(bookingId);
   const adminRef = db.collection("admins").doc(uid);
+  const [bookingSnapPre, adminSnapPre] = await Promise.all([bookingRef.get(), adminRef.get()]);
+  if (!bookingSnapPre.exists) {
+    throw new HttpsError("not-found", "找不到預約");
+  }
+  const preData = bookingSnapPre.data() as Record<string, unknown>;
+  const preCustomerId = typeof preData.customerId === "string" ? preData.customerId : null;
+  const preIsAdmin = adminSnapPre.exists;
+  if (!preIsAdmin && preCustomerId !== uid) {
+    throw new HttpsError("permission-denied", "僅能取消自己的預約，或需具管理員權限");
+  }
+  if (!preIsAdmin && preCustomerId === uid) {
+    await assertMemberEmailVerified(uid);
+  }
+
   await db.runTransaction(async (tx) => {
     const [bookingSnap, adminSnap] = await Promise.all([tx.get(bookingRef), tx.get(adminRef)]);
     if (!bookingSnap.exists) {
@@ -680,6 +710,7 @@ export const spinWheel = onCall(publicCall, async (request) => {
   if (!uid) {
     throw new HttpsError("unauthenticated", "請先登入");
   }
+  await assertMemberEmailVerified(uid);
   const prizeSnap = await db.collection("wheelPrizes").where("active", "==", true).get();
   const prizes = prizeSnap.docs
     .map((d) => {

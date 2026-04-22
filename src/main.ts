@@ -1,6 +1,10 @@
 import "./style.css";
 import {
+  createUserWithEmailAndPassword,
   onAuthStateChanged,
+  reload,
+  sendEmailVerification,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
@@ -366,6 +370,11 @@ function render() {
   const spinBtn = el("button", { class: "ghost", type: "button" }, ["抽輪盤"]);
   /** 僅登入後顯示：餘額／抽輪盤（訪客預約不需此區） */
   const memberExtrasWrap = el("div", { class: "book-member-extras", hidden: true });
+  const emailVerifyBanner = el("div", { class: "email-verify-banner", hidden: true });
+  const emailVerifyText = el("p", { class: "hint" }, []);
+  const resendVerifyBtn = el("button", { class: "ghost", type: "button" }, ["重新寄送驗證信"]);
+  const reloadVerifyBtn = el("button", { class: "ghost", type: "button" }, ["我已驗證，重新整理狀態"]);
+  emailVerifyBanner.append(emailVerifyText, el("div", { class: "row-actions" }, [resendVerifyBtn, reloadVerifyBtn]));
   let walletBalance = 0;
   let drawChances = 0;
 
@@ -468,6 +477,43 @@ function render() {
     memberEntryBtn.textContent = user ? "會員中心" : "會員登入";
   }
 
+  function isVerifiedMember(): boolean {
+    const u = auth.currentUser;
+    return Boolean(u?.emailVerified);
+  }
+
+  resendVerifyBtn.addEventListener("click", async () => {
+    const u = auth.currentUser;
+    if (!u || u.emailVerified) return;
+    resendVerifyBtn.setAttribute("disabled", "true");
+    try {
+      await sendEmailVerification(u);
+      emailVerifyText.textContent = "已再次寄出驗證信，請檢查信箱（含垃圾郵件）。";
+    } catch (e) {
+      emailVerifyText.textContent = errorMessage(e);
+    } finally {
+      resendVerifyBtn.removeAttribute("disabled");
+    }
+  });
+
+  reloadVerifyBtn.addEventListener("click", async () => {
+    const u = auth.currentUser;
+    if (!u) return;
+    reloadVerifyBtn.setAttribute("disabled", "true");
+    try {
+      await reload(u);
+      const fresh = auth.currentUser;
+      await refreshWalletStatus();
+      emailVerifyText.textContent = fresh?.emailVerified
+        ? "驗證完成，已可使用會員功能。"
+        : "尚未偵測到驗證完成，請確認已點擊信內連結後再試。";
+    } catch (e) {
+      emailVerifyText.textContent = errorMessage(e);
+    } finally {
+      reloadVerifyBtn.removeAttribute("disabled");
+    }
+  });
+
   function openMemberAuthModal() {
     const overlay = el("div", { class: "modal-overlay" });
     const dialog = el("div", { class: "modal-card member-modal" });
@@ -477,20 +523,99 @@ function render() {
 
     const status = el("div", { class: "status-line" });
     if (!user) {
-      const email = el("input", { type: "email", autocomplete: "username", placeholder: "會員 Email" });
-      const password = el("input", {
+      const modalTitle = el("h3", {}, ["會員登入／註冊"]);
+      const loginStack = el("div", { class: "member-auth-stack" });
+      const registerStack = el("div", { class: "member-auth-stack", hidden: true });
+      const resetStack = el("div", { class: "member-auth-stack", hidden: true });
+
+      const loginEmail = el("input", { type: "email", autocomplete: "username", placeholder: "會員 Email" });
+      const loginPassword = el("input", {
         type: "password",
         autocomplete: "current-password",
         placeholder: "會員密碼",
       });
       const loginBtn = el("button", { class: "primary", type: "button" }, ["登入"]);
+      const registerEmail = el("input", { type: "email", autocomplete: "username", placeholder: "會員 Email" });
+      const registerPassword = el("input", {
+        type: "password",
+        autocomplete: "new-password",
+        placeholder: "密碼（至少 6 碼）",
+      });
+      const registerPassword2 = el("input", {
+        type: "password",
+        autocomplete: "new-password",
+        placeholder: "再次輸入密碼",
+      });
+      const registerBtn = el("button", { class: "primary", type: "button" }, ["註冊並寄驗證信"]);
+      const resetSendBtn = el("button", { class: "primary", type: "button" }, ["寄送重設密碼信"]);
       const cancelBtn = el("button", { class: "ghost", type: "button" }, ["關閉"]);
+      const switchToRegister = el("button", { class: "ghost", type: "button" }, ["還沒有帳號？註冊"]);
+      const switchToLogin = el("button", { class: "ghost", type: "button" }, ["返回登入"]);
+      const switchToForgot = el("button", { class: "ghost", type: "button" }, ["忘記密碼？"]);
+      const switchToForgotFromRegister = el("button", { class: "ghost", type: "button" }, ["忘記密碼？"]);
+      const switchToLoginFromReset = el("button", { class: "ghost", type: "button" }, ["返回登入"]);
+      const resetEmail = el("input", { type: "email", autocomplete: "username", placeholder: "註冊時使用的 Email" });
+
+      function syncAuthModalPrimaryButtons() {
+        loginBtn.hidden = loginStack.hidden;
+        registerBtn.hidden = registerStack.hidden;
+        resetSendBtn.hidden = resetStack.hidden;
+      }
+      function showLoginStack() {
+        loginStack.hidden = false;
+        registerStack.hidden = true;
+        resetStack.hidden = true;
+        modalTitle.textContent = "會員登入／註冊";
+        status.textContent = "";
+        status.className = "status-line";
+        syncAuthModalPrimaryButtons();
+      }
+      function showRegisterStack() {
+        loginStack.hidden = true;
+        registerStack.hidden = false;
+        resetStack.hidden = true;
+        modalTitle.textContent = "會員登入／註冊";
+        status.textContent = "";
+        status.className = "status-line";
+        syncAuthModalPrimaryButtons();
+      }
+      function showResetStack() {
+        loginStack.hidden = true;
+        registerStack.hidden = true;
+        resetStack.hidden = false;
+        modalTitle.textContent = "重設密碼";
+        status.textContent = "";
+        status.className = "status-line";
+        syncAuthModalPrimaryButtons();
+      }
+
+      switchToRegister.addEventListener("click", () => {
+        registerEmail.value = loginEmail.value.trim();
+        showRegisterStack();
+      });
+      switchToLogin.addEventListener("click", () => {
+        loginEmail.value = registerEmail.value.trim();
+        showLoginStack();
+      });
+      switchToForgot.addEventListener("click", () => {
+        resetEmail.value = loginEmail.value.trim();
+        showResetStack();
+      });
+      switchToForgotFromRegister.addEventListener("click", () => {
+        resetEmail.value = registerEmail.value.trim();
+        showResetStack();
+      });
+      switchToLoginFromReset.addEventListener("click", () => {
+        loginEmail.value = resetEmail.value.trim();
+        showLoginStack();
+      });
+
       loginBtn.addEventListener("click", async () => {
         status.textContent = "";
         status.className = "status-line";
         loginBtn.setAttribute("disabled", "true");
         try {
-          await signInWithEmailAndPassword(auth, email.value.trim(), password.value);
+          await signInWithEmailAndPassword(auth, loginEmail.value.trim(), loginPassword.value);
           overlay.remove();
         } catch (e) {
           status.textContent = e instanceof Error ? e.message : "登入失敗";
@@ -499,14 +624,97 @@ function render() {
           loginBtn.removeAttribute("disabled");
         }
       });
+
+      registerBtn.addEventListener("click", async () => {
+        status.textContent = "";
+        status.className = "status-line";
+        const em = registerEmail.value.trim();
+        const pw = registerPassword.value;
+        const pw2 = registerPassword2.value;
+        if (!em || !pw) {
+          status.textContent = "請輸入 Email 與密碼。";
+          status.classList.add("error");
+          return;
+        }
+        if (pw.length < 6) {
+          status.textContent = "密碼至少 6 碼。";
+          status.classList.add("error");
+          return;
+        }
+        if (pw !== pw2) {
+          status.textContent = "兩次輸入的密碼不一致。";
+          status.classList.add("error");
+          return;
+        }
+        registerBtn.setAttribute("disabled", "true");
+        try {
+          const cred = await createUserWithEmailAndPassword(auth, em, pw);
+          await sendEmailVerification(cred.user);
+          status.textContent =
+            "註冊成功，已寄出驗證信。請至信箱點擊連結後，再按主畫面的「我已驗證，重新整理狀態」或重新登入。";
+          status.classList.add("ok");
+          overlay.remove();
+        } catch (e) {
+          status.textContent = e instanceof Error ? e.message : "註冊失敗";
+          status.classList.add("error");
+        } finally {
+          registerBtn.removeAttribute("disabled");
+        }
+      });
+
       cancelBtn.addEventListener("click", () => overlay.remove());
-      dialog.append(
-        el("h3", {}, ["會員登入"]),
-        el("label", { class: "field" }, ["Email", email]),
-        el("label", { class: "field" }, ["密碼", password]),
-        status,
-        el("div", { class: "modal-actions" }, [cancelBtn, loginBtn]),
+
+      resetSendBtn.addEventListener("click", async () => {
+        status.textContent = "";
+        status.className = "status-line";
+        const em = resetEmail.value.trim();
+        if (!em) {
+          status.textContent = "請輸入 Email。";
+          status.classList.add("error");
+          return;
+        }
+        resetSendBtn.setAttribute("disabled", "true");
+        try {
+          await sendPasswordResetEmail(auth, em);
+          status.textContent =
+            "若此 Email 已註冊，您將很快收到重設密碼信（請一併查看垃圾郵件）。收到信後點連結即可設定新密碼。";
+          status.classList.add("ok");
+        } catch (e) {
+          status.textContent = e instanceof Error ? e.message : "寄送失敗";
+          status.classList.add("error");
+        } finally {
+          resetSendBtn.removeAttribute("disabled");
+        }
+      });
+
+      loginStack.append(
+        el("label", { class: "field" }, ["Email", loginEmail]),
+        el("label", { class: "field" }, ["密碼", loginPassword]),
+        el("div", { class: "hint member-auth-links" }, [switchToRegister, switchToForgot]),
       );
+      registerStack.append(
+        el("label", { class: "field" }, ["Email", registerEmail]),
+        el("label", { class: "field" }, ["密碼", registerPassword]),
+        el("label", { class: "field" }, ["確認密碼", registerPassword2]),
+        el("div", { class: "hint member-auth-links" }, [switchToLogin, switchToForgotFromRegister]),
+      );
+      resetStack.append(
+        el("p", { class: "hint" }, [
+          "輸入註冊時使用的 Email，我們將寄出重設密碼連結。若未收到信，請確認信箱正確並檢查垃圾郵件匣。",
+        ]),
+        el("label", { class: "field" }, ["Email", resetEmail]),
+        el("div", { class: "hint" }, [switchToLoginFromReset]),
+      );
+
+      dialog.append(
+        modalTitle,
+        loginStack,
+        registerStack,
+        resetStack,
+        status,
+        el("div", { class: "modal-actions" }, [cancelBtn, loginBtn, registerBtn, resetSendBtn]),
+      );
+      syncAuthModalPrimaryButtons();
     } else {
       const closeBtn = el("button", { class: "ghost", type: "button" }, ["關閉"]);
       const logoutBtn = el("button", { class: "primary", type: "button" }, ["登出"]);
@@ -515,12 +723,64 @@ function render() {
         await signOut(auth);
         overlay.remove();
       });
-      dialog.append(
+      const modalBody: HTMLElement[] = [
         el("h3", {}, ["會員中心"]),
         el("div", { class: "hint" }, [`目前登入：${user.email ?? user.uid}`]),
-        walletStatus.cloneNode(true),
-        el("div", { class: "modal-actions" }, [closeBtn, logoutBtn]),
-      );
+      ];
+      if (!user.emailVerified) {
+        const verifyHint = el("div", { class: "status-line" }, [
+          "請至信箱點擊驗證連結後，才能使用儲值、會員預約與抽獎。",
+        ]);
+        const modalVerifyStatus = el("div", { class: "status-line" });
+        const modalResendBtn = el("button", { class: "ghost", type: "button" }, ["重新寄送驗證信"]);
+        const modalReloadBtn = el("button", { class: "ghost", type: "button" }, ["我已驗證，重新整理"]);
+        modalResendBtn.addEventListener("click", async () => {
+          const u = auth.currentUser;
+          if (!u || u.emailVerified) return;
+          modalVerifyStatus.textContent = "";
+          modalVerifyStatus.className = "status-line";
+          modalResendBtn.setAttribute("disabled", "true");
+          try {
+            await sendEmailVerification(u);
+            modalVerifyStatus.textContent = "已寄出驗證信。";
+            modalVerifyStatus.classList.add("ok");
+          } catch (e) {
+            modalVerifyStatus.textContent = errorMessage(e);
+            modalVerifyStatus.classList.add("error");
+          } finally {
+            modalResendBtn.removeAttribute("disabled");
+          }
+        });
+        modalReloadBtn.addEventListener("click", async () => {
+          const u = auth.currentUser;
+          if (!u) return;
+          modalReloadBtn.setAttribute("disabled", "true");
+          modalVerifyStatus.textContent = "";
+          modalVerifyStatus.className = "status-line";
+          try {
+            await reload(u);
+            await refreshWalletStatus();
+            const fresh = auth.currentUser;
+            modalVerifyStatus.textContent = fresh?.emailVerified
+              ? "驗證完成。"
+              : "尚未偵測到驗證完成，請確認已點擊信內連結。";
+            modalVerifyStatus.classList.add(fresh?.emailVerified ? "ok" : "error");
+          } catch (e) {
+            modalVerifyStatus.textContent = errorMessage(e);
+            modalVerifyStatus.classList.add("error");
+          } finally {
+            modalReloadBtn.removeAttribute("disabled");
+          }
+        });
+        modalBody.push(
+          verifyHint,
+          modalVerifyStatus,
+          el("div", { class: "modal-actions" }, [modalResendBtn, modalReloadBtn]),
+        );
+      }
+      modalBody.push(walletStatus.cloneNode(true) as HTMLElement);
+      modalBody.push(el("div", { class: "modal-actions" }, [closeBtn, logoutBtn]));
+      dialog.append(...modalBody);
     }
 
     overlay.addEventListener("click", (ev) => {
@@ -550,20 +810,24 @@ function render() {
     }
     const values = modes.map((m) => m.value);
     bookingModeSelect.value = values.includes(current) ? current : modes[0].value;
+    const loggedInUnverified = Boolean(auth.currentUser && !auth.currentUser.emailVerified);
     bookingModeHint.textContent = isMember
       ? "可選儲值扣款、會員現金（50 元），或「請師傅一杯飲料」（依現場約定）。"
-      : "訪客可選現金 50 元或「請師傅一杯飲料」；儲值與抽獎請使用右上角登入。";
+      : loggedInUnverified
+        ? "已登入但尚未驗證信箱，暫以訪客方式預約；完成驗證後可選會員付款、儲值與抽獎。"
+        : "訪客可選現金 50 元或「請師傅一杯飲料」；儲值與抽獎請使用右上角登入。";
   }
 
   async function refreshWalletStatus() {
     const user = auth.currentUser;
-    refillBookingModes(Boolean(user));
+    refillBookingModes(isVerifiedMember());
     updateMemberEntryLabel();
     if (!user) {
       stopMyBookingsListener();
       walletBalance = 0;
       drawChances = 0;
       memberExtrasWrap.hidden = true;
+      emailVerifyBanner.hidden = true;
       walletStatus.textContent = "";
       walletStatus.className = "status-line";
       spinBtn.setAttribute("disabled", "true");
@@ -573,6 +837,22 @@ function render() {
       return;
     }
     memberExtrasWrap.hidden = false;
+    if (!user.emailVerified) {
+      stopMyBookingsListener();
+      walletBalance = 0;
+      drawChances = 0;
+      emailVerifyBanner.hidden = false;
+      emailVerifyText.textContent =
+        "已登入，但尚未完成 Email 驗證。請至信箱點擊驗證連結；完成後請按「我已驗證，重新整理狀態」。";
+      walletStatus.textContent = "";
+      walletStatus.className = "status-line";
+      spinBtn.setAttribute("disabled", "true");
+      wheelStatus.textContent = "完成信箱驗證後才可抽輪盤。";
+      wheelStatus.className = "status-line";
+      wheelResult.hidden = true;
+      return;
+    }
+    emailVerifyBanner.hidden = true;
     ensureMyBookingsListener(user.uid);
     walletStatus.textContent = "讀取會員餘額中…";
     walletStatus.className = "status-line";
@@ -612,6 +892,11 @@ function render() {
     wheelStatus.className = "status-line";
     if (!auth.currentUser) {
       wheelStatus.textContent = "請先登入會員。";
+      wheelStatus.classList.add("error");
+      return;
+    }
+    if (!auth.currentUser.emailVerified) {
+      wheelStatus.textContent = "請先完成 Email 驗證。";
       wheelStatus.classList.add("error");
       return;
     }
@@ -772,6 +1057,16 @@ function render() {
       bookStatus.classList.add("error");
       return;
     }
+    if (
+      bookingMode !== "guest_cash" &&
+      bookingMode !== "guest_beverage" &&
+      auth.currentUser &&
+      !auth.currentUser.emailVerified
+    ) {
+      bookStatus.textContent = "會員付款需先完成 Email 驗證，請至信箱點擊驗證連結。";
+      bookStatus.classList.add("error");
+      return;
+    }
     if (bookingMode === "member_wallet" && walletBalance < 50) {
       bookStatus.textContent = "儲值餘額不足，請改用現金、「請師傅一杯飲料」或先儲值。";
       bookStatus.classList.add("error");
@@ -805,6 +1100,7 @@ function render() {
   });
 
   memberExtrasWrap.append(
+    emailVerifyBanner,
     walletStatus,
     myBookingsSection,
     el("div", { class: "row-actions" }, [spinBtn, wheelResult]),
@@ -882,6 +1178,7 @@ function render() {
     const email = el("input", { type: "email", autocomplete: "username" });
     const password = el("input", { type: "password", autocomplete: "current-password" });
     const loginBtn = el("button", { class: "primary", type: "button" }, ["登入"]);
+    const resetBtn = el("button", { class: "ghost", type: "button" }, ["寄送重設密碼信"]);
     const adminStatus = el("div", { class: "status-line" });
     loginBtn.addEventListener("click", async () => {
       adminStatus.textContent = "";
@@ -896,6 +1193,28 @@ function render() {
         loginBtn.removeAttribute("disabled");
       }
     });
+    resetBtn.addEventListener("click", async () => {
+      adminStatus.textContent = "";
+      adminStatus.className = "status-line";
+      const em = email.value.trim();
+      if (!em) {
+        adminStatus.textContent = "請先輸入 Email。";
+        adminStatus.classList.add("error");
+        return;
+      }
+      resetBtn.setAttribute("disabled", "true");
+      try {
+        await sendPasswordResetEmail(auth, em);
+        adminStatus.textContent =
+          "若此 Email 已註冊，您將很快收到重設密碼信（請一併查看垃圾郵件）。點信內連結即可設定新密碼。";
+        adminStatus.classList.add("ok");
+      } catch (e) {
+        adminStatus.textContent = e instanceof Error ? e.message : "寄送失敗";
+        adminStatus.classList.add("error");
+      } finally {
+        resetBtn.removeAttribute("disabled");
+      }
+    });
     box.append(
       el("p", { class: "hint" }, [
         "僅限管理員。請先在 Firebase Console 建立 Email/Password 帳號，並在 Firestore 新增文件 ",
@@ -904,7 +1223,7 @@ function render() {
       ]),
       el("label", { class: "field" }, ["Email", email]),
       el("label", { class: "field" }, ["密碼", password]),
-      loginBtn,
+      el("div", { class: "row-actions" }, [loginBtn, resetBtn]),
       adminStatus,
     );
     adminWrap.append(box);
@@ -1227,7 +1546,9 @@ function render() {
       el("div", { class: "hint" }, [
         "稱呼會存進會員資料，登入預約時若姓名欄為空會自動帶入；亦會寫入 Firebase Auth 顯示名稱。",
       ]),
-      el("div", { class: "hint" }, ["註冊入口已關閉，僅管理後台可建立新會員帳號。"]),
+      el("div", { class: "hint" }, [
+        "會員也可於前台「會員登入／註冊」自行註冊；註冊後須完成信箱驗證才可使用儲值與會員預約。",
+      ]),
       el("div", { class: "row-actions" }, [createMemberBtn]),
       createMemberStatus,
     );
