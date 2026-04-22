@@ -49,6 +49,9 @@ export const createMemberAccountCall = () => httpsCallable(getFns(), "createMemb
 export const searchMemberUsersCall = () => httpsCallable(getFns(), "searchMemberUsers");
 export const listMembersAdminCall = () => httpsCallable(getFns(), "listMembersAdmin");
 export const updateMemberNicknameAdminCall = () => httpsCallable(getFns(), "updateMemberNicknameAdmin");
+export const registerPushTokenCall = () => httpsCallable(getFns(), "registerPushToken");
+export const unregisterPushTokenCall = () => httpsCallable(getFns(), "unregisterPushToken");
+export const sendImmediatePushCall = () => httpsCallable(getFns(), "sendImmediatePush");
 
 export function getDb() {
   return getFirestore(getFirebaseApp());

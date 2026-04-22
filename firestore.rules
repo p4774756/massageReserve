@@ -30,5 +30,10 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAdmin();
     }
+
+    /** FCM 裝置 token：僅 Cloud Functions（Admin SDK）讀寫，客戶端不透過 Rules 存取 */
+    match /pushDeviceTokens/{id} {
+      allow read, write: if false;
+    }
   }
 }

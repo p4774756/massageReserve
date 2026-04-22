@@ -851,6 +851,21 @@ tbody tr:hover td {
   display: none !important;
 }
 
+.admin-push-scope-fieldset {
+  margin: 0 0 14px;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+}
+
+.admin-push-scope-fieldset legend {
+  padding: 0 6px;
+  font-weight: 500;
+  font-size: 0.875rem;
+  color: var(--ink);
+}
+
 .admin-member-list {
   margin: 0 0 22px;
   padding: 18px 20px;

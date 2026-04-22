@@ -1,5 +1,7 @@
+import { createHash } from "node:crypto";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
+import { getMessaging } from "firebase-admin/messaging";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { defineSecret, defineString } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
@@ -417,6 +419,125 @@ export const getAdminStatus = onCall(publicCall, async (request) => {
   }
   const adminSnap = await db.collection("admins").doc(uid).get();
   return { isAdmin: adminSnap.exists };
+});
+
+function pushTokenDocId(token: string): string {
+  return createHash("sha256").update(token, "utf8").digest("hex");
+}
+
+/** 已登入使用者註冊 FCM Web token（寫入 `pushDeviceTokens`，僅後端／管理員可讀寫） */
+export const registerPushToken = onCall(publicCall, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", "請先登入");
+  }
+  const token = typeof request.data?.token === "string" ? request.data.token.trim() : "";
+  if (token.length < 80 || token.length > 4096) {
+    throw new HttpsError("invalid-argument", "裝置 token 格式不正確");
+  }
+  const uaRaw = request.rawRequest?.headers["user-agent"];
+  const userAgent = typeof uaRaw === "string" ? uaRaw.slice(0, 240) : "";
+  await db.collection("pushDeviceTokens").doc(pushTokenDocId(token)).set(
+    {
+      token,
+      uid,
+      userAgent,
+      updatedAt: Timestamp.now(),
+    },
+    { merge: true },
+  );
+  return { ok: true };
+});
+
+/** 登出時可呼叫，刪除本機對應之 token 文件（僅限自己的 uid） */
+export const unregisterPushToken = onCall(publicCall, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", "請先登入");
+  }
+  const token = typeof request.data?.token === "string" ? request.data.token.trim() : "";
+  if (token.length < 80 || token.length > 4096) {
+    throw new HttpsError("invalid-argument", "裝置 token 格式不正確");
+  }
+  const ref = db.collection("pushDeviceTokens").doc(pushTokenDocId(token));
+  const snap = await ref.get();
+  if (snap.exists && snap.get("uid") === uid) {
+    await ref.delete();
+  }
+  return { ok: true };
+});
+
+/** 管理員：立即對已訂閱裝置發送 FCM 通知 */
+export const sendImmediatePush = onCall(publicCall, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", "請先登入");
+  }
+  await assertAdminByUid(uid);
+  const titleRaw = typeof request.data?.title === "string" ? request.data.title.trim() : "";
+  const bodyRaw = typeof request.data?.body === "string" ? request.data.body.trim() : "";
+  const scopeRaw = request.data?.scope;
+  const scope = scopeRaw === "all" ? "all" : "self";
+  if (titleRaw.length < 1 || titleRaw.length > 50) {
+    throw new HttpsError("invalid-argument", "標題長度須為 1～50 字");
+  }
+  if (bodyRaw.length > 500) {
+    throw new HttpsError("invalid-argument", "內文最多 500 字");
+  }
+
+  const tokenSnap =
+    scope === "self"
+      ? await db.collection("pushDeviceTokens").where("uid", "==", uid).get()
+      : await db.collection("pushDeviceTokens").get();
+
+  const tokens = tokenSnap.docs
+    .map((d) => d.data().token)
+    .filter((t): t is string => typeof t === "string" && t.length >= 80);
+
+  if (tokens.length === 0) {
+    return {
+      successCount: 0,
+      failureCount: 0,
+      attempted: 0,
+      message: "沒有已訂閱的裝置（請先在前台會員中心按「訂閱推播」並允許通知）。",
+    };
+  }
+
+  const messaging = getMessaging();
+  const batchSize = 500;
+  let successCount = 0;
+  let failureCount = 0;
+
+  for (let offset = 0; offset < tokens.length; offset += batchSize) {
+    const batch = tokens.slice(offset, offset + batchSize);
+    const res = await messaging.sendEachForMulticast({
+      tokens: batch,
+      notification: {
+        title: titleRaw,
+        body: bodyRaw.length > 0 ? bodyRaw : " ",
+      },
+    });
+    successCount += res.successCount;
+    failureCount += res.failureCount;
+    res.responses.forEach((r, i) => {
+      if (r.success) return;
+      const code = r.error?.code;
+      if (
+        code === "messaging/invalid-registration-token" ||
+        code === "messaging/registration-token-not-registered"
+      ) {
+        const t = batch[i];
+        void db.collection("pushDeviceTokens").doc(pushTokenDocId(t)).delete();
+      }
+    });
+  }
+
+  return {
+    successCount,
+    failureCount,
+    attempted: tokens.length,
+    message: `已送出：成功 ${successCount}，失敗 ${failureCount}（合計 ${tokens.length} 個 token）。`,
+  };
 });
 
 export const createMemberAccount = onCall(publicCall, async (request) => {

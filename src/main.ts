@@ -34,10 +34,12 @@ import {
   searchMemberUsersCall,
   listMembersAdminCall,
   updateMemberNicknameAdminCall,
+  sendImmediatePushCall,
   spinWheelCall,
   listActiveWheelPrizesCall,
   topupWalletCall,
 } from "./firebase";
+import { getWebPushVapidKey, registerWebPushForCurrentUser, unregisterWebPushForCurrentUser } from "./webPush";
 import { allStartSlots } from "./slots";
 import { runWheelSpectacle } from "./wheelSpectacle";
 import {
@@ -874,6 +876,7 @@ function render() {
       const logoutBtn = el("button", { class: "primary", type: "button" }, ["登出"]);
       closeBtn.addEventListener("click", () => overlay.remove());
       logoutBtn.addEventListener("click", async () => {
+        await unregisterWebPushForCurrentUser();
         await signOut(auth);
         overlay.remove();
       });
@@ -932,6 +935,42 @@ function render() {
           el("div", { class: "modal-actions" }, [modalResendBtn, modalReloadBtn]),
         );
       }
+      const pushSubscribeBtn = el("button", { class: "ghost", type: "button" }, ["訂閱推播通知"]);
+      const pushSubscribeStatus = el("div", { class: "status-line" });
+      if (!getWebPushVapidKey()) {
+        pushSubscribeBtn.setAttribute("disabled", "true");
+        pushSubscribeStatus.textContent =
+          "尚未設定 VAPID 金鑰，無法訂閱（請於 .env 設定 VITE_FIREBASE_VAPID_KEY 後重新建置）。";
+        pushSubscribeStatus.className = "status-line error";
+      }
+      pushSubscribeBtn.addEventListener("click", async () => {
+        pushSubscribeStatus.textContent = "";
+        pushSubscribeStatus.className = "status-line";
+        pushSubscribeBtn.setAttribute("disabled", "true");
+        try {
+          const r = await registerWebPushForCurrentUser();
+          if (r.ok) {
+            pushSubscribeStatus.textContent = "已訂閱此裝置，可請管理員從後台發送立即推播。";
+            pushSubscribeStatus.classList.add("ok");
+          } else {
+            pushSubscribeStatus.textContent = r.message;
+            pushSubscribeStatus.classList.add("error");
+          }
+        } catch (e) {
+          pushSubscribeStatus.textContent = errorMessage(e);
+          pushSubscribeStatus.classList.add("error");
+        } finally {
+          pushSubscribeBtn.removeAttribute("disabled");
+        }
+      });
+      modalBody.push(
+        el("h4", { class: "admin-subhead" }, ["推播通知"]),
+        el("p", { class: "hint" }, [
+          "訂閱後可接收後台「立即推播」（瀏覽器須允許通知；背景時仍可能收到系統通知）。",
+        ]),
+        pushSubscribeStatus,
+        el("div", { class: "row-actions" }, [pushSubscribeBtn]),
+      );
       modalBody.push(walletStatus.cloneNode(true) as HTMLElement);
       modalBody.push(el("div", { class: "modal-actions" }, [closeBtn, logoutBtn]));
       dialog.append(...modalBody);
@@ -1369,6 +1408,7 @@ function render() {
   let adminMarqueeTextUnsub: (() => void) | null = null;
   let adminMarqueeLedUnsub: (() => void) | null = null;
   let adminWheelSpectacleUnsub: (() => void) | null = null;
+  let adminPushSettingsUnsub: (() => void) | null = null;
 
   function stopAdminListener() {
     if (adminUnsub) {
@@ -1386,6 +1426,10 @@ function render() {
     if (adminWheelSpectacleUnsub) {
       adminWheelSpectacleUnsub();
       adminWheelSpectacleUnsub = null;
+    }
+    if (adminPushSettingsUnsub) {
+      adminPushSettingsUnsub();
+      adminPushSettingsUnsub = null;
     }
   }
 
@@ -1468,7 +1512,10 @@ function render() {
         : `已登入：（${shortUidForDisplay(userId)}）`;
     const who = el("span", { class: "hint" }, [whoLabel]);
     const outBtn = el("button", { class: "ghost", type: "button" }, ["登出"]);
-    outBtn.addEventListener("click", () => signOut(auth));
+    outBtn.addEventListener("click", async () => {
+      await unregisterWebPushForCurrentUser();
+      await signOut(auth);
+    });
     top.append(who, outBtn);
 
     const adminStatus = el("div", { class: "status-line" });
@@ -1954,15 +2001,179 @@ function render() {
       memberListTableWrap,
     );
 
+    function clampPushReminderMinutes(raw: unknown): number {
+      const n = typeof raw === "number" && Number.isFinite(raw) ? Math.round(raw) : 60;
+      return Math.min(24 * 60, Math.max(5, n));
+    }
+
+    const pushSettingsSection = el("div", { class: "admin-announce" }, []);
+    const pushDocRef = doc(db, "siteSettings", "pushNotifications");
+    const bookingReminderEnabled = el("input", { type: "checkbox" });
+    const bookingReminderMinutesBefore = el("input", {
+      type: "number",
+      min: "5",
+      max: "1440",
+      step: "5",
+      value: "60",
+    });
+    const bookingReminderTitle = el("input", {
+      type: "text",
+      maxLength: 80,
+      placeholder: "留空則由發送端使用預設標題（例如：按摩預約提醒）",
+      autocomplete: "off",
+    });
+    const savePushSettingsBtn = el("button", { class: "ghost", type: "button" }, ["儲存推播設定"]);
+    const pushSettingsStatus = el("div", { class: "status-line" });
+
+    adminPushSettingsUnsub = onSnapshot(
+      pushDocRef,
+      (snap) => {
+        const data = snap.data() as
+          | {
+              bookingReminderEnabled?: unknown;
+              bookingReminderMinutesBefore?: unknown;
+              bookingReminderTitle?: unknown;
+            }
+          | undefined;
+        bookingReminderEnabled.checked =
+          typeof data?.bookingReminderEnabled === "boolean" ? data.bookingReminderEnabled : false;
+        bookingReminderMinutesBefore.value = String(clampPushReminderMinutes(data?.bookingReminderMinutesBefore));
+        bookingReminderTitle.value =
+          typeof data?.bookingReminderTitle === "string" ? data.bookingReminderTitle : "";
+      },
+      () => {
+        pushSettingsStatus.textContent = "無法讀取推播設定。";
+        pushSettingsStatus.className = "status-line error";
+      },
+    );
+
+    savePushSettingsBtn.addEventListener("click", async () => {
+      pushSettingsStatus.textContent = "";
+      pushSettingsStatus.className = "status-line";
+      const minutes = clampPushReminderMinutes(Number(bookingReminderMinutesBefore.value));
+      bookingReminderMinutesBefore.value = String(minutes);
+      savePushSettingsBtn.setAttribute("disabled", "true");
+      pushSettingsStatus.textContent = "儲存中…";
+      try {
+        await setDoc(
+          pushDocRef,
+          {
+            bookingReminderEnabled: bookingReminderEnabled.checked,
+            bookingReminderMinutesBefore: minutes,
+            bookingReminderTitle: bookingReminderTitle.value.trim(),
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+        pushSettingsStatus.textContent = "推播設定已更新";
+        pushSettingsStatus.classList.add("ok");
+      } catch (e) {
+        pushSettingsStatus.textContent = e instanceof Error ? e.message : "儲存失敗";
+        pushSettingsStatus.classList.add("error");
+      } finally {
+        savePushSettingsBtn.removeAttribute("disabled");
+      }
+    });
+
+    const immediateTitle = el("input", {
+      type: "text",
+      maxLength: 50,
+      placeholder: "推播標題（必填，最多 50 字）",
+      autocomplete: "off",
+    });
+    const immediateBody = el("textarea", {
+      rows: 3,
+      maxLength: 500,
+      placeholder: "內文（選填，最多 500 字）",
+    });
+    const scopeSelf = el("input", { type: "radio", name: "admin-immediate-push-scope", value: "self" });
+    scopeSelf.checked = true;
+    const scopeAll = el("input", { type: "radio", name: "admin-immediate-push-scope", value: "all" });
+    const sendImmediatePushBtn = el("button", { class: "primary", type: "button" }, ["立即送出推播"]);
+    const immediatePushStatus = el("div", { class: "status-line" });
+    sendImmediatePushBtn.addEventListener("click", async () => {
+      immediatePushStatus.textContent = "";
+      immediatePushStatus.className = "status-line";
+      const title = immediateTitle.value.trim();
+      const body = immediateBody.value.trim();
+      if (title.length < 1) {
+        immediatePushStatus.textContent = "請填寫標題。";
+        immediatePushStatus.classList.add("error");
+        return;
+      }
+      sendImmediatePushBtn.setAttribute("disabled", "true");
+      immediatePushStatus.textContent = "送出中…";
+      try {
+        const fn = sendImmediatePushCall();
+        const scope = scopeAll.checked ? "all" : "self";
+        const res = await fn({ title, body, scope });
+        const data = res.data as {
+          successCount?: unknown;
+          failureCount?: unknown;
+          attempted?: unknown;
+          message?: unknown;
+        };
+        const msg = typeof data.message === "string" ? data.message : "已處理。";
+        immediatePushStatus.textContent = msg;
+        immediatePushStatus.classList.add("ok");
+      } catch (e) {
+        immediatePushStatus.textContent = errorMessage(e);
+        immediatePushStatus.classList.add("error");
+      } finally {
+        sendImmediatePushBtn.removeAttribute("disabled");
+      }
+    });
+
+    pushSettingsSection.append(
+      el("h3", {}, ["推播設定"]),
+      el("p", { class: "hint" }, [
+        "「預約提醒」參數存在 Firestore ",
+        el("code", {}, ["siteSettings/pushNotifications"]),
+        "，供日後排程＋ FCM 使用。「立即推播」則由 Cloud Function ",
+        el("code", {}, ["sendImmediatePush"]),
+        " 透過 FCM 發送；會員須於前台「會員中心」按「訂閱推播通知」並允許通知。",
+      ]),
+      el("label", { class: "field checkbox-field" }, [
+        bookingReminderEnabled,
+        el("span", {}, ["啟用「預約開始前」提醒（總開關）"]),
+      ]),
+      el("label", { class: "field" }, [
+        "於預約開始前（分鐘）",
+        bookingReminderMinutesBefore,
+        el("span", { class: "hint" }, ["範圍 5～1440（24 小時），常用值：60。"]),
+      ]),
+      el("label", { class: "field" }, ["提醒推播標題（選填）", bookingReminderTitle]),
+      el("div", { class: "row-actions" }, [savePushSettingsBtn]),
+      pushSettingsStatus,
+      el("h4", { class: "admin-subhead" }, ["立即推播"]),
+      el("p", { class: "hint" }, [
+        "「僅發給自己」會只送到目前管理員帳號在本機已訂閱的瀏覽器，適合自測；「發給全部」會送到所有已訂閱裝置，請謹慎使用。",
+      ]),
+      el("label", { class: "field" }, ["標題", immediateTitle]),
+      el("label", { class: "field" }, ["內文", immediateBody]),
+      el("fieldset", { class: "admin-push-scope-fieldset" }, [
+        el("legend", {}, ["發送對象"]),
+        el("label", { class: "field checkbox-field" }, [
+          scopeSelf,
+          el("span", {}, ["僅發給自己（測試）"]),
+        ]),
+        el("label", { class: "field checkbox-field" }, [scopeAll, el("span", {}, ["發給所有已訂閱裝置"])]),
+      ]),
+      el("div", { class: "row-actions" }, [sendImmediatePushBtn]),
+      immediatePushStatus,
+    );
+
     const tabBookings = el("button", { type: "button", class: "admin-tab", role: "tab" }, ["預約管理"]);
     tabBookings.id = "admin-tab-trigger-bookings";
     const tabMembers = el("button", { type: "button", class: "admin-tab", role: "tab" }, ["會員與儲值"]);
     tabMembers.id = "admin-tab-trigger-members";
     const tabAnnounce = el("button", { type: "button", class: "admin-tab", role: "tab" }, ["跑馬燈公告"]);
     tabAnnounce.id = "admin-tab-trigger-announce";
+    const tabPush = el("button", { type: "button", class: "admin-tab", role: "tab" }, ["推播設定"]);
+    tabPush.id = "admin-tab-trigger-push";
 
     const adminTablist = el("div", { class: "admin-tabs", role: "tablist" });
-    adminTablist.append(tabBookings, tabMembers, tabAnnounce);
+    adminTablist.append(tabBookings, tabMembers, tabAnnounce, tabPush);
 
     const panelBookingsEl = el("div", { class: "admin-tab-panel", role: "tabpanel", id: "admin-tab-panel-bookings" });
     panelBookingsEl.setAttribute("aria-labelledby", "admin-tab-trigger-bookings");
@@ -1980,22 +2191,31 @@ function render() {
       hidden: true,
     });
     panelAnnounceEl.setAttribute("aria-labelledby", "admin-tab-trigger-announce");
+    const panelPushEl = el("div", {
+      class: "admin-tab-panel",
+      role: "tabpanel",
+      id: "admin-tab-panel-push",
+      hidden: true,
+    });
+    panelPushEl.setAttribute("aria-labelledby", "admin-tab-trigger-push");
 
     tabBookings.setAttribute("aria-controls", "admin-tab-panel-bookings");
     tabMembers.setAttribute("aria-controls", "admin-tab-panel-members");
     tabAnnounce.setAttribute("aria-controls", "admin-tab-panel-announce");
+    tabPush.setAttribute("aria-controls", "admin-tab-panel-push");
 
     panelBookingsEl.append(adminStatus, tableHolder);
     panelMembersEl.append(accountCreateSection, walletTopupSection, memberListSection);
     panelAnnounceEl.append(announcementSection);
+    panelPushEl.append(pushSettingsSection);
 
     const adminPanelsWrap = el("div", { class: "admin-tab-panels" });
-    adminPanelsWrap.append(panelBookingsEl, panelMembersEl, panelAnnounceEl);
+    adminPanelsWrap.append(panelBookingsEl, panelMembersEl, panelAnnounceEl, panelPushEl);
 
-    const adminTabButtons = [tabBookings, tabMembers, tabAnnounce] as const;
-    const adminTabPanels = [panelBookingsEl, panelMembersEl, panelAnnounceEl] as const;
+    const adminTabButtons = [tabBookings, tabMembers, tabAnnounce, tabPush] as const;
+    const adminTabPanels = [panelBookingsEl, panelMembersEl, panelAnnounceEl, panelPushEl] as const;
 
-    function selectAdminTab(index: 0 | 1 | 2) {
+    function selectAdminTab(index: 0 | 1 | 2 | 3) {
       adminTabButtons.forEach((btn, i) => {
         const on = i === index;
         btn.setAttribute("aria-selected", String(on));
@@ -2011,6 +2231,7 @@ function render() {
     tabBookings.addEventListener("click", () => selectAdminTab(0));
     tabMembers.addEventListener("click", () => selectAdminTab(1));
     tabAnnounce.addEventListener("click", () => selectAdminTab(2));
+    tabPush.addEventListener("click", () => selectAdminTab(3));
 
     adminTablist.addEventListener("keydown", (ev) => {
       if (ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;
@@ -2018,8 +2239,9 @@ function render() {
       const cur = adminTabButtons.findIndex((b) => b.getAttribute("aria-selected") === "true");
       if (cur < 0) return;
       const delta = ev.key === "ArrowRight" ? 1 : -1;
-      const next = ((cur + delta) % 3 + 3) % 3;
-      selectAdminTab(next as 0 | 1 | 2);
+      const n = adminTabButtons.length;
+      const next = ((cur + delta) % n + n) % n;
+      selectAdminTab(next as 0 | 1 | 2 | 3);
       adminTabButtons[next].focus();
     });
 
@@ -2224,7 +2446,7 @@ function render() {
     titleHeading.textContent = isBook ? "辦公室按摩預約" : "管理後台";
     titleDesc.textContent = isBook
       ? "週一至週五 · 開始時間 15 分鐘一格 · 單次服務約15~50分鐘, 看情況. · 午休 11:45–13:15 不開放 · 最晚 17:30 開始、18:00 前結束"
-      : "以分頁切換：預約管理、會員與儲值、跑馬燈公告。";
+      : "以分頁切換：預約管理、會員與儲值、跑馬燈公告、推播設定。";
     panelBook.hidden = !isBook;
     panelAdmin.hidden = isBook;
     hostPortrait.hidden = !isBook;
