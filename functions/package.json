@@ -8,7 +8,8 @@
   "scripts": {
     "build": "tsc",
     "serve": "npm run build && firebase emulators:start --only functions",
-    "lint": "eslint --ext .js,.ts ."
+    "lint": "eslint --ext .js,.ts .",
+    "verify-all-emails": "node ./scripts/verify-all-emails.mjs"
   },
   "dependencies": {
     "firebase-admin": "^13.0.0",
