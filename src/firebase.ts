@@ -43,6 +43,7 @@ export const topupWalletCall = () => httpsCallable(getFns(), "topupWallet");
 export const completeBookingCall = () => httpsCallable(getFns(), "completeBooking");
 export const cancelBookingCall = () => httpsCallable(getFns(), "cancelBooking");
 export const spinWheelCall = () => httpsCallable(getFns(), "spinWheel");
+export const listActiveWheelPrizesCall = () => httpsCallable(getFns(), "listActiveWheelPrizes");
 export const getAdminStatusCall = () => httpsCallable(getFns(), "getAdminStatus");
 export const createMemberAccountCall = () => httpsCallable(getFns(), "createMemberAccount");
 export const searchMemberUsersCall = () => httpsCallable(getFns(), "searchMemberUsers");

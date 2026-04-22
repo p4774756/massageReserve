@@ -61,6 +61,9 @@ test("會員預約 -> 後台完成 -> 前台抽輪盤", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("button", { name: "抽輪盤" })).toBeEnabled();
   await page.getByRole("button", { name: "抽輪盤" }).click();
+  await expect(page.getByRole("heading", { name: "幸運輪盤" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "收下" })).toBeVisible({ timeout: 20_000 });
+  await page.getByRole("button", { name: "收下" }).click();
   await expect(page.getByText("抽獎完成！")).toBeVisible();
   await expect(page.getByText("抽中：")).toBeVisible();
 });

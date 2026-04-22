@@ -99,6 +99,34 @@ function pickWeighted<T extends { weight: number }>(items: T[]): T {
   return items[items.length - 1];
 }
 
+type WheelPrizeRow = { id: string; name: string; type: PrizeType; value: number; weight: number };
+
+async function loadActiveWheelPrizes(): Promise<WheelPrizeRow[]> {
+  const prizeSnap = await db.collection("wheelPrizes").where("active", "==", true).get();
+  const prizes = prizeSnap.docs
+    .map((d) => {
+      const data = d.data();
+      const weightRaw = data.weight;
+      const weight = typeof weightRaw === "number" ? weightRaw : 0;
+      const type = data.type as PrizeType | undefined;
+      const name = typeof data.name === "string" ? data.name : "";
+      const value = asNonNegativeInteger(data.value);
+      if (!name || !type || !["credit", "chance", "thanks", "penalty_text"].includes(type) || weight <= 0) {
+        return null;
+      }
+      return {
+        id: d.id,
+        name,
+        type,
+        value,
+        weight,
+      };
+    })
+    .filter((x): x is WheelPrizeRow => Boolean(x));
+  prizes.sort((a, b) => a.id.localeCompare(b.id));
+  return prizes;
+}
+
 export const getAvailability = onCall(publicCall, async (request) => {
   const dateKey = request.data?.dateKey;
   if (typeof dateKey !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
@@ -714,33 +742,28 @@ export const cancelBooking = onCall(publicCall, async (request) => {
   return { ok: true };
 });
 
+export const listActiveWheelPrizes = onCall(publicCall, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", "請先登入");
+  }
+  await assertMemberEmailVerified(uid);
+  const prizes = await loadActiveWheelPrizes();
+  if (prizes.length === 0) {
+    throw new HttpsError("failed-precondition", "目前沒有可用輪盤獎項");
+  }
+  return {
+    prizes: prizes.map((p) => ({ id: p.id, name: p.name, type: p.type, weight: p.weight })),
+  };
+});
+
 export const spinWheel = onCall(publicCall, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) {
     throw new HttpsError("unauthenticated", "請先登入");
   }
   await assertMemberEmailVerified(uid);
-  const prizeSnap = await db.collection("wheelPrizes").where("active", "==", true).get();
-  const prizes = prizeSnap.docs
-    .map((d) => {
-      const data = d.data();
-      const weightRaw = data.weight;
-      const weight = typeof weightRaw === "number" ? weightRaw : 0;
-      const type = data.type as PrizeType | undefined;
-      const name = typeof data.name === "string" ? data.name : "";
-      const value = asNonNegativeInteger(data.value);
-      if (!name || !type || !["credit", "chance", "thanks", "penalty_text"].includes(type) || weight <= 0) {
-        return null;
-      }
-      return {
-        id: d.id,
-        name,
-        type,
-        value,
-        weight,
-      };
-    })
-    .filter((x): x is { id: string; name: string; type: PrizeType; value: number; weight: number } => Boolean(x));
+  const prizes = await loadActiveWheelPrizes();
 
   if (prizes.length === 0) {
     throw new HttpsError("failed-precondition", "目前沒有可用輪盤獎項");

@@ -35,9 +35,11 @@ import {
   listMembersAdminCall,
   updateMemberNicknameAdminCall,
   spinWheelCall,
+  listActiveWheelPrizesCall,
   topupWalletCall,
 } from "./firebase";
 import { allStartSlots } from "./slots";
+import { runWheelSpectacle } from "./wheelSpectacle";
 import {
   clampLedSpeed,
   createLedMarquee,
@@ -1044,6 +1046,22 @@ function render() {
     }
   }
 
+  async function fetchWheelPrizeLabelsForSpectacle() {
+    const fn = listActiveWheelPrizesCall();
+    const res = await fn();
+    const data = res.data as { prizes: { id: string; name: string; weight: number }[] };
+    return data.prizes;
+  }
+
+  /** 預覽輪盤用：固定示範獎項（不連後端），格內可立即看到文字與比例 */
+  const wheelPreviewMockPrizes: { id: string; name: string; weight: number }[] = [
+    { id: "pv-c10", name: "+10 儲值金", weight: 22 },
+    { id: "pv-c5", name: "+5 儲值金", weight: 26 },
+    { id: "pv-ch", name: "再抽一次", weight: 16 },
+    { id: "pv-th", name: "銘謝惠顧", weight: 24 },
+    { id: "pv-pn", name: "小處罰文案", weight: 12 },
+  ];
+
   spinBtn.addEventListener("click", async () => {
     wheelStatus.textContent = "";
     wheelStatus.className = "status-line";
@@ -1063,15 +1081,19 @@ function render() {
       return;
     }
     spinBtn.setAttribute("disabled", "true");
-    wheelStatus.textContent = "抽獎中…";
     try {
-      const fn = spinWheelCall();
-      const res = await fn();
-      const data = res.data as {
-        prize: { name: string; type: string; value: number };
-        drawChances: number;
-        walletBalance: number;
-      };
+      const data = await runWheelSpectacle(
+        async () => {
+          const fn = spinWheelCall();
+          const res = await fn();
+          return res.data as {
+            prize: { name: string; type: string; value: number };
+            drawChances: number;
+            walletBalance: number;
+          };
+        },
+        { splitAnchor: wheelRow, fetchPrizeLabels: fetchWheelPrizeLabelsForSpectacle },
+      );
       wheelResult.textContent = `抽中：${data.prize.name}`;
       wheelResult.hidden = false;
       wheelStatus.textContent = "抽獎完成！";
@@ -1256,8 +1278,47 @@ function render() {
     }
   });
 
-  const wheelRow = el("div", { class: "book-wheel-row" }, [spinBtn, wheelStatus, wheelResult]);
+  const wheelTestBtn = el("button", { class: "ghost", type: "button" }, ["預覽輪盤特效"]);
+  wheelTestBtn.hidden = true;
+  wheelTestBtn.title = "僅畫面預覽，不呼叫抽獎、不扣次數";
+  const wheelRow = el("div", { class: "book-wheel-row" }, [spinBtn, wheelTestBtn, wheelStatus, wheelResult]);
   memberExtrasWrap.append(emailVerifyBanner, walletStatus, myBookingsSection, wheelRow);
+
+  const wheelSpectacleSettingsRef = doc(db, "siteSettings", "wheelSpectacle");
+  onSnapshot(
+    wheelSpectacleSettingsRef,
+    (snap) => {
+      const data = snap.data() as { showTestButton?: unknown } | undefined;
+      wheelTestBtn.hidden = data?.showTestButton !== true;
+    },
+    () => {
+      wheelTestBtn.hidden = true;
+    },
+  );
+
+  wheelTestBtn.addEventListener("click", async () => {
+    wheelTestBtn.setAttribute("disabled", "true");
+    try {
+      await runWheelSpectacle(
+        async () => {
+          await new Promise((r) => setTimeout(r, 1200));
+          return {
+            prize: { id: "pv-c5", name: "【預覽】+5 儲值金", type: "credit", value: 5 },
+            drawChances,
+            walletBalance,
+          };
+        },
+        {
+          splitAnchor: wheelRow,
+          fetchPrizeLabels: async () => wheelPreviewMockPrizes,
+        },
+      );
+      wheelStatus.textContent = "以上為特效預覽，未實際抽獎、未扣除次數。";
+      wheelStatus.className = "status-line";
+    } finally {
+      wheelTestBtn.removeAttribute("disabled");
+    }
+  });
 
   panelBook.append(
     el("div", { class: "grid grid-2" }, [
@@ -1307,6 +1368,7 @@ function render() {
   let adminUnsub: (() => void) | null = null;
   let adminMarqueeTextUnsub: (() => void) | null = null;
   let adminMarqueeLedUnsub: (() => void) | null = null;
+  let adminWheelSpectacleUnsub: (() => void) | null = null;
 
   function stopAdminListener() {
     if (adminUnsub) {
@@ -1320,6 +1382,10 @@ function render() {
     if (adminMarqueeLedUnsub) {
       adminMarqueeLedUnsub();
       adminMarqueeLedUnsub = null;
+    }
+    if (adminWheelSpectacleUnsub) {
+      adminWheelSpectacleUnsub();
+      adminWheelSpectacleUnsub = null;
     }
   }
 
@@ -1541,6 +1607,45 @@ function render() {
     const saveMarqueeLedBtn = el("button", { class: "ghost", type: "button" }, ["儲存底部 LED"]);
     const marqueeLedStatus = el("div", { class: "status-line" });
     const marqueeLedDocRef = doc(db, "siteSettings", "marqueeLed");
+    const wheelSpectacleDocRef = doc(db, "siteSettings", "wheelSpectacle");
+    const wheelSpectacleShowTest = el("input", { type: "checkbox" });
+    const saveWheelSpectacleBtn = el("button", { class: "ghost", type: "button" }, ["儲存輪盤預覽開關"]);
+    const wheelSpectacleStatus = el("div", { class: "status-line" });
+
+    adminWheelSpectacleUnsub = onSnapshot(
+      wheelSpectacleDocRef,
+      (snap) => {
+        const data = snap.data() as { showTestButton?: unknown } | undefined;
+        wheelSpectacleShowTest.checked = data?.showTestButton === true;
+      },
+      () => {
+        wheelSpectacleStatus.textContent = "無法讀取輪盤預覽設定。";
+        wheelSpectacleStatus.className = "status-line error";
+      },
+    );
+
+    saveWheelSpectacleBtn.addEventListener("click", async () => {
+      wheelSpectacleStatus.textContent = "";
+      wheelSpectacleStatus.className = "status-line";
+      saveWheelSpectacleBtn.setAttribute("disabled", "true");
+      try {
+        await setDoc(
+          wheelSpectacleDocRef,
+          {
+            showTestButton: wheelSpectacleShowTest.checked,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+        wheelSpectacleStatus.textContent = "已更新前台「預覽輪盤特效」按鈕顯示設定";
+        wheelSpectacleStatus.classList.add("ok");
+      } catch (e) {
+        wheelSpectacleStatus.textContent = e instanceof Error ? e.message : "儲存失敗";
+        wheelSpectacleStatus.classList.add("error");
+      } finally {
+        saveWheelSpectacleBtn.removeAttribute("disabled");
+      }
+    });
 
     adminMarqueeTextUnsub = onSnapshot(
       marqueeTextDocRef,
@@ -1641,6 +1746,18 @@ function render() {
       el("label", { class: "field checkbox-field" }, [marqueeLedEnabled, el("span", {}, ["啟用"])]),
       el("div", { class: "row-actions" }, [saveMarqueeLedBtn]),
       marqueeLedStatus,
+      el("h4", { class: "admin-subhead" }, ["前台 · 輪盤特效預覽"]),
+      el("p", { class: "hint" }, [
+        "勾選並儲存後，預約頁「會員區」會出現「預覽輪盤特效」按鈕；僅播放動畫，不呼叫抽獎 API、不扣次數。正式上線建議關閉。Firestore：",
+        el("code", {}, ["siteSettings/wheelSpectacle"]),
+        "。",
+      ]),
+      el("label", { class: "field checkbox-field" }, [
+        wheelSpectacleShowTest,
+        el("span", {}, ["顯示前台「預覽輪盤特效」按鈕"]),
+      ]),
+      el("div", { class: "row-actions" }, [saveWheelSpectacleBtn]),
+      wheelSpectacleStatus,
     );
     walletTopupSection.append(
       el("h3", {}, ["會員儲值"]),
