@@ -662,11 +662,7 @@ button.ghost:disabled {
   box-shadow: none;
 }
 
-/* 後台預約表：依內容寬度延展，窄螢幕可左右滑，避免欄位與下拉擠成一團 */
-.admin-bookings-table {
-  -webkit-overflow-scrolling: touch;
-}
-
+/* 後台預約表：依內容寬度延展，窄螢幕可左右滑，避免欄位與下拉擠成一團（捲動由 .table-wrap 的 overflow 處理） */
 .admin-bookings-table table {
   width: max-content;
   min-width: 100%;
@@ -879,7 +875,6 @@ tbody tr:hover td {
   overflow-y: auto;
   max-height: min(52vh, 520px);
   margin-top: 12px;
-  -webkit-overflow-scrolling: touch;
 }
 
 .admin-member-list-table table {
@@ -1047,8 +1042,8 @@ label.field.checkbox-field {
   position: fixed;
   inset: 0;
   background: rgb(0 0 0 / 0.35);
-  backdrop-filter: none;
   -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   display: grid;
   place-items: center;
   padding: 16px;
@@ -1395,8 +1390,8 @@ body.wheel-spectacle-lock {
     0 0 0 1px rgb(255 255 255 / 0.08) inset,
     0 28px 80px rgb(0 0 0 / 0.55),
     0 0 60px rgb(255 200 120 / 0.12);
-  backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   transform: scale(0.94);
   opacity: 0.75;
   filter: saturate(0.92) brightness(0.95);
