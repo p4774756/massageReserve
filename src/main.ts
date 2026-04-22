@@ -102,6 +102,29 @@ function errorMessage(e: unknown): string {
   return "發生錯誤";
 }
 
+/** 密碼輸入框右側「顯示／隱藏」切換（不改變 input 的 value） */
+function wrapPasswordField(input: HTMLInputElement): HTMLElement {
+  const row = el("div", { class: "field-password-row" });
+  const btn = el("button", { type: "button", class: "ghost password-reveal-btn" }, ["顯示"]);
+  btn.setAttribute("aria-label", "顯示密碼");
+  btn.setAttribute("aria-pressed", "false");
+  btn.addEventListener("click", () => {
+    const show = input.type === "password";
+    input.type = show ? "text" : "password";
+    btn.textContent = show ? "隱藏" : "顯示";
+    btn.setAttribute("aria-label", show ? "隱藏密碼" : "顯示密碼");
+    btn.setAttribute("aria-pressed", String(show));
+  });
+  row.append(input, btn);
+  return row;
+}
+
+function truncateOneLine(s: string, maxChars: number): string {
+  const t = s.trim();
+  if (t.length <= maxChars) return t;
+  return `${t.slice(0, Math.max(0, maxChars - 1))}…`;
+}
+
 function isDateKeyMonFri(dateKey: string): boolean {
   const [y, m, d] = dateKey.split("-").map((x) => Number(x));
   if (!y || !m || !d) return false;
@@ -233,10 +256,18 @@ function render() {
 
   const titleHeading = el("h1", {}, ["辦公室按摩預約"]);
   const titleDesc = el("p", {}, ["週一至週五 · 以 30 分鐘估算 · 午休 11:45–13:15 不開放 · 最晚 17:30 開始、18:00 前結束"]);
-  const titleBlock = el("div", {}, [titleHeading, titleDesc]);
+  const titleGuestHint = el("p", { class: "page-head-guest-hint" }, [
+    "免事先註冊也可預約，選「訪客」付款方式即可；註冊會員則可儲值與抽獎。",
+  ]);
+  const titleBlock = el("div", { class: "page-head-main" }, [titleHeading, titleDesc, titleGuestHint]);
 
   const memberEntryBtn = el("button", { class: "ghost member-entry", type: "button" }, ["會員登入"]);
-  const headActions = el("div", { class: "head-actions" }, [memberEntryBtn]);
+  const headSessionStatus = el("span", {
+    class: "page-head-session",
+    role: "status",
+    ariaLive: "polite",
+  });
+  const headActions = el("div", { class: "head-actions" }, [headSessionStatus, memberEntryBtn]);
 
   const panelBook = el("main", { class: "panel" });
   const panelAdmin = el("main", { class: "panel", hidden: true });
@@ -477,6 +508,43 @@ function render() {
     memberEntryBtn.textContent = user ? "會員中心" : "會員登入";
   }
 
+  /** 預約頁右上角：訪客／登入與驗證狀態／稱呼（長字省略，信箱完整字串放 title 提示） */
+  function syncPageHeadSession(profileLabel?: string) {
+    if (tab !== "book") {
+      headSessionStatus.hidden = true;
+      return;
+    }
+    headSessionStatus.hidden = false;
+    const u = auth.currentUser;
+    if (!u) {
+      headSessionStatus.textContent = "訪客";
+      headSessionStatus.removeAttribute("title");
+      headSessionStatus.className = "page-head-session";
+      return;
+    }
+    if (!u.emailVerified) {
+      headSessionStatus.textContent = "已登入 · 待驗證信箱";
+      headSessionStatus.title = u.email ?? "尚未驗證信箱";
+      headSessionStatus.className = "page-head-session page-head-session--pending";
+      return;
+    }
+    const fromArg = profileLabel?.trim();
+    const fromAuthName = u.displayName?.trim();
+    const fromEmail = u.email?.trim();
+    const raw =
+      fromArg && fromArg.length > 0
+        ? fromArg
+        : fromAuthName && fromAuthName.length > 0
+          ? fromAuthName
+          : fromEmail && fromEmail.length > 0
+            ? fromEmail
+            : "會員";
+    const shown = truncateOneLine(raw, 18);
+    headSessionStatus.textContent = `已登入 · ${shown}`;
+    headSessionStatus.title = shown !== raw ? raw : "";
+    headSessionStatus.className = "page-head-session";
+  }
+
   function isVerifiedMember(): boolean {
     const u = auth.currentUser;
     return Boolean(u?.emailVerified);
@@ -689,13 +757,13 @@ function render() {
 
       loginStack.append(
         el("label", { class: "field" }, ["Email", loginEmail]),
-        el("label", { class: "field" }, ["密碼", loginPassword]),
+        el("label", { class: "field" }, ["密碼", wrapPasswordField(loginPassword)]),
         el("div", { class: "hint member-auth-links" }, [switchToRegister, switchToForgot]),
       );
       registerStack.append(
         el("label", { class: "field" }, ["Email", registerEmail]),
-        el("label", { class: "field" }, ["密碼", registerPassword]),
-        el("label", { class: "field" }, ["確認密碼", registerPassword2]),
+        el("label", { class: "field" }, ["密碼", wrapPasswordField(registerPassword)]),
+        el("label", { class: "field" }, ["確認密碼", wrapPasswordField(registerPassword2)]),
         el("div", { class: "hint member-auth-links" }, [switchToLogin, switchToForgotFromRegister]),
       );
       resetStack.append(
@@ -834,6 +902,7 @@ function render() {
       wheelStatus.textContent = "";
       wheelStatus.className = "status-line";
       wheelResult.hidden = true;
+      syncPageHeadSession();
       return;
     }
     memberExtrasWrap.hidden = false;
@@ -850,12 +919,14 @@ function render() {
       wheelStatus.textContent = "完成信箱驗證後才可抽輪盤。";
       wheelStatus.className = "status-line";
       wheelResult.hidden = true;
+      syncPageHeadSession();
       return;
     }
     emailVerifyBanner.hidden = true;
     ensureMyBookingsListener(user.uid);
     walletStatus.textContent = "讀取會員餘額中…";
     walletStatus.className = "status-line";
+    syncPageHeadSession(user.displayName?.trim() || user.email?.trim());
     try {
       const fn = getMyWalletCall();
       const res = await fn();
@@ -875,6 +946,7 @@ function render() {
       wheelStatus.className = "status-line";
       if (drawChances > 0) spinBtn.removeAttribute("disabled");
       else spinBtn.setAttribute("disabled", "true");
+      syncPageHeadSession(profileNick);
     } catch (e) {
       walletBalance = 0;
       drawChances = 0;
@@ -884,6 +956,7 @@ function render() {
       spinBtn.setAttribute("disabled", "true");
       wheelStatus.textContent = "無法讀取抽獎狀態。";
       wheelStatus.className = "status-line error";
+      syncPageHeadSession();
     }
   }
 
@@ -1222,7 +1295,7 @@ function render() {
         "（可用空物件 `{}`）。",
       ]),
       el("label", { class: "field" }, ["Email", email]),
-      el("label", { class: "field" }, ["密碼", password]),
+      el("label", { class: "field" }, ["密碼", wrapPasswordField(password)]),
       el("div", { class: "row-actions" }, [loginBtn, resetBtn]),
       adminStatus,
     );
@@ -1573,11 +1646,12 @@ function render() {
     memberListTable.append(
       el("tr", {}, [
         el("th", {}, ["Email"]),
+        el("th", {}, ["信箱驗證"]),
         el("th", {}, ["UID"]),
         el("th", {}, ["稱呼"]),
         el("th", {}, ["儲值餘額"]),
         el("th", {}, ["可抽次數"]),
-        el("th", {}, ["操作"]),
+        el("th", { class: "admin-member-th-actions" }, ["操作"]),
       ]),
     );
     memberListTableWrap.append(memberListTable);
@@ -1593,6 +1667,7 @@ function render() {
           members: {
             uid: string;
             email: string | null;
+            emailVerified?: boolean;
             nickname: string;
             walletBalance: number;
             drawChances: number;
@@ -1603,11 +1678,12 @@ function render() {
         memberListTable.append(
           el("tr", {}, [
             el("th", {}, ["Email"]),
+            el("th", {}, ["信箱驗證"]),
             el("th", {}, ["UID"]),
             el("th", {}, ["稱呼"]),
             el("th", {}, ["儲值餘額"]),
             el("th", {}, ["可抽次數"]),
-            el("th", {}, ["操作"]),
+            el("th", { class: "admin-member-th-actions" }, ["操作"]),
           ]),
         );
         for (const m of members) {
@@ -1618,7 +1694,7 @@ function render() {
             class: "admin-member-nick-input",
             autocomplete: "off",
           });
-          const saveBtn = el("button", { class: "ghost", type: "button" }, ["儲存稱呼"]);
+          const saveBtn = el("button", { class: "ghost admin-save-nick-btn", type: "button" }, ["儲存稱呼"]);
           saveBtn.addEventListener("click", async () => {
             memberListStatus.textContent = "";
             memberListStatus.className = "status-line";
@@ -1635,14 +1711,19 @@ function render() {
               saveBtn.removeAttribute("disabled");
             }
           });
+          const verified = m.emailVerified === true;
+          const verifyCell = el("td", { class: verified ? "admin-member-verify ok" : "admin-member-verify" }, [
+            verified ? "已驗證" : "未驗證",
+          ]);
           memberListTable.append(
             el("tr", {}, [
               el("td", {}, [m.email ?? "（無 Email）"]),
+              verifyCell,
               el("td", { class: "mono admin-member-uid" }, [m.uid]),
               el("td", {}, [nickInput]),
               el("td", { class: "mono" }, [String(m.walletBalance)]),
               el("td", { class: "mono" }, [String(m.drawChances)]),
-              el("td", {}, [saveBtn]),
+              el("td", { class: "admin-member-td-actions" }, [saveBtn]),
             ]),
           );
         }
@@ -1895,6 +1976,7 @@ function render() {
     const isBook = next === "book";
     shell.classList.toggle("admin-mode", !isBook);
     memberEntryBtn.hidden = !isBook;
+    titleGuestHint.hidden = !isBook;
     titleHeading.textContent = isBook ? "辦公室按摩預約" : "管理後台";
     titleDesc.textContent = isBook
       ? "週一至週五 · 以 30 分鐘估算 · 午休 11:45–13:15 不開放 · 最晚 17:30 開始、18:00 前結束"
@@ -1907,12 +1989,13 @@ function render() {
     } else {
       void syncAdminView();
     }
+    syncPageHeadSession();
   }
 
   window.addEventListener("popstate", () => setTab(tabFromPath()));
 
-  void refreshWalletStatus();
   setTab(tabFromPath());
+  void refreshWalletStatus();
 }
 
 render();

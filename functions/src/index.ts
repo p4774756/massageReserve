@@ -475,6 +475,7 @@ export const searchMemberUsers = onCall(publicCall, async (request) => {
 type ListMembersAdminRow = {
   uid: string;
   email: string | null;
+  emailVerified: boolean;
   nickname: string;
   walletBalance: number;
   drawChances: number;
@@ -506,6 +507,7 @@ export const listMembersAdmin = onCall(publicCall, async (request) => {
       members.push({
         uid: u.uid,
         email: u.email ?? null,
+        emailVerified: u.emailVerified === true,
         nickname: typeof d.nickname === "string" ? d.nickname : "",
         walletBalance: typeof d.walletBalance === "number" ? d.walletBalance : 0,
         drawChances: typeof d.drawChances === "number" ? d.drawChances : 0,

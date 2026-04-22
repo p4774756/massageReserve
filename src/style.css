@@ -147,11 +147,16 @@ header.page-head {
   padding: 28px 28px 24px;
   border-bottom: 1px solid rgb(var(--accent-rgb) / 0.15);
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 22px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   background: linear-gradient(180deg, var(--surface) 0%, var(--accent-muted-bg) 100%);
+}
+
+.page-head-main {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .page-head h1 {
@@ -171,6 +176,15 @@ header.page-head {
   line-height: 1.62;
 }
 
+.page-head .page-head-guest-hint {
+  margin-top: 8px;
+  max-width: 56ch;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--muted);
+  opacity: 0.95;
+}
+
 .tabs {
   display: flex;
   gap: 8px;
@@ -183,12 +197,33 @@ header.page-head {
   flex-direction: row;
   align-items: center;
   justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: -2px;
+  flex-wrap: nowrap;
+  gap: 10px 12px;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-top: 2px;
+}
+
+.page-head-session {
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: var(--muted);
+  text-align: right;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: min(46vw, 15rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.page-head-session--pending {
+  color: rgb(var(--accent-rgb) / 0.92);
+  font-weight: 600;
 }
 
 .member-entry {
+  flex-shrink: 0;
   padding: 9px 14px;
 }
 
@@ -280,6 +315,27 @@ label.field {
   letter-spacing: 0.01em;
   color: var(--ink);
   min-width: 0;
+}
+
+.field-password-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
+.field-password-row > input[type="password"],
+.field-password-row > input[type="text"] {
+  width: 100%;
+  min-width: 0;
+}
+
+button.password-reveal-btn {
+  padding: 9px 12px;
+  font-size: 0.86rem;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .hint {
@@ -637,8 +693,36 @@ tbody tr:hover td {
 }
 
 .admin-member-list-table {
+  overflow-x: auto;
+  overflow-y: auto;
   max-height: min(52vh, 520px);
   margin-top: 12px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.admin-member-list-table table {
+  width: max-content;
+  min-width: 100%;
+}
+
+.admin-member-th-actions,
+.admin-member-td-actions {
+  white-space: nowrap;
+  width: 1%;
+}
+
+.admin-save-nick-btn {
+  white-space: nowrap;
+}
+
+.admin-member-verify {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.admin-member-verify.ok {
+  color: var(--accent-deep);
 }
 
 .admin-member-nick-input {
@@ -842,7 +926,13 @@ label.field.checkbox-field {
   header.page-head {
     padding: 22px 18px 18px;
     align-items: flex-start;
+    flex-wrap: wrap;
     gap: 14px;
+  }
+
+  .page-head-main {
+    flex: 1 1 100%;
+    min-width: 0;
   }
 
   .page-head h1 {
@@ -855,10 +945,22 @@ label.field.checkbox-field {
     max-width: none;
   }
 
+  .page-head .page-head-guest-hint {
+    max-width: none;
+    font-size: 0.86rem;
+  }
+
   .head-actions {
     width: 100%;
-    justify-content: flex-start;
-    margin-top: 4px;
+    flex: 1 1 100%;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    margin-top: 0;
+  }
+
+  .page-head-session {
+    max-width: min(62vw, 12.5rem);
   }
 
   .member-entry,
