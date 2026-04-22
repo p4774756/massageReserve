@@ -1,5 +1,12 @@
 /** 抽輪盤全螢幕演出：沿觸發區上下割裂、露出後方輪盤 + 聲光 */
 
+import {
+  prefetchWheelSfx,
+  playBufferAt,
+  scheduleSpinTicksAtSliceCrossings,
+  type PrefetchedWheelSfx,
+} from "./wheelSpectacleSfx";
+
 export type SpinWheelSpectacleResult = {
   prize: { id?: string; name: string; type: string; value: number };
   drawChances: number;
@@ -19,6 +26,13 @@ export type RunWheelSpectacleOptions = {
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
+
+/** 與 CSS transition 秒數、`scheduleSpinTicksAtSliceCrossings` 一致 */
+const SPIN_TRANSITION_MS = 7200;
+/** 略長於 transition，讓最後一格聲音與減速尾段對齊 */
+const SPIN_WAIT_MS = SPIN_TRANSITION_MS + 250;
+/** 無獎項 SVG 時，與 `conic-gradient` 色塊數對齊（每塊約 32°） */
+const DECORATIVE_WHEEL_SLICES = 11;
 
 const SLICE_FILL = [
   "#e84d6a",
@@ -54,6 +68,51 @@ function shortWheelLabel(name: string, nSlices: number): string {
   const s = name.trim();
   if (s.length <= max) return s;
   return `${s.slice(0, max - 1)}…`;
+}
+
+/** 累積旋轉角 θ∈(0,finalDeg] 每跨過一個扇區邊界的角度（含整圈 360°） */
+function computeSliceBoundaryCrossingAnglesDeg(
+  finalDeg: number,
+  prizeList: WheelPrizeLabel[] | null,
+): number[] {
+  const boundariesOneRev: number[] = [];
+  if (prizeList && prizeList.length > 0) {
+    const totalW = prizeList.reduce((s, p) => s + Math.max(0, p.weight), 0) || 1;
+    let cum = 0;
+    for (let i = 0; i < prizeList.length - 1; i++) {
+      cum += (Math.max(0, prizeList[i].weight) / totalW) * 360;
+      boundariesOneRev.push(cum);
+    }
+  } else {
+    const n = DECORATIVE_WHEEL_SLICES;
+    const step = 360 / n;
+    for (let i = 1; i < n; i++) {
+      boundariesOneRev.push(i * step);
+    }
+  }
+
+  const perLap = [...boundariesOneRev, 360]
+    .filter((x) => x > 0 && x <= 360)
+    .sort((a, b) => a - b);
+  const dedup: number[] = [];
+  for (const x of perLap) {
+    if (!dedup.length || Math.abs(dedup[dedup.length - 1] - x) > 1e-4) dedup.push(x);
+  }
+
+  const out: number[] = [];
+  const maxM = Math.ceil(finalDeg / 360) + 2;
+  for (let m = 0; m <= maxM; m++) {
+    for (const b of dedup) {
+      const th = m * 360 + b;
+      if (th > 1e-4 && th <= finalDeg + 1e-4) out.push(th);
+    }
+  }
+  out.sort((a, b) => a - b);
+  const slim: number[] = [];
+  for (const th of out) {
+    if (!slim.length || th - slim[slim.length - 1] > 1e-3) slim.push(th);
+  }
+  return slim;
 }
 
 function mountPrizeWheelSvg(wheelEl: HTMLElement, prizes: WheelPrizeLabel[]) {
@@ -156,26 +215,161 @@ function playCrackBang(ctx: AudioContext) {
   o2.stop(t + 0.25);
 }
 
-function playRevealFanfare(ctx: AudioContext) {
+function playRevealFanfareSynth(ctx: AudioContext, destination: AudioNode, gainScale: number) {
   const base = ctx.currentTime + 0.04;
-  const freqs = [392, 523.25, 659.25, 783.99];
-  freqs.forEach((f, i) => {
+  const bus = ctx.createGain();
+  bus.gain.value = 0.92 * gainScale;
+  bus.connect(destination);
+
+  const tone = (
+    t: number,
+    freq: number,
+    dur: number,
+    peak: number,
+    wave: OscillatorType,
+    filterHz?: number,
+  ) => {
     const o = ctx.createOscillator();
     const g = ctx.createGain();
-    o.type = "triangle";
-    o.frequency.value = f;
-    const t = base + i * 0.065;
+    o.type = wave;
+    o.frequency.value = freq;
+    let src: AudioNode = o;
+    if (filterHz != null) {
+      const f = ctx.createBiquadFilter();
+      f.type = "lowpass";
+      f.frequency.value = filterHz;
+      f.Q.value = 0.9;
+      o.connect(f);
+      src = f;
+    }
+    src.connect(g);
+    g.connect(bus);
     g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(0.065, t + 0.035);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.48);
-    o.connect(g);
-    g.connect(ctx.destination);
+    g.gain.linearRampToValueAtTime(peak, t + 0.018);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.start(t);
-    o.stop(t + 0.5);
+    o.stop(t + dur + 0.06);
+  };
+
+  const sparkle = (t: number, freq: number, peak: number) => {
+    tone(t, freq, 0.11, peak, "sine", 4200);
+  };
+
+  // 低音「咚」+ 底鼓感
+  tone(base, 55, 0.38, 0.13, "sine");
+  tone(base, 65.41, 0.34, 0.12, "sine");
+  tone(base + 0.02, 98, 0.24, 0.07, "triangle", 240);
+  tone(base + 0.03, 130, 0.18, 0.045, "square", 420);
+
+  // 快速上行琶音（遊戲秀感）
+  const arp = [523.25, 659.25, 783.99, 987.77, 1174.66, 1318.51];
+  arp.forEach((f, i) => {
+    tone(base + 0.055 + i * 0.04, f, 0.22, 0.078, "triangle", 2800);
+  });
+
+  // 高八度再跑一遍（更亮）
+  arp.forEach((f, i) => {
+    tone(base + 0.05 + i * 0.032, f * 2, 0.14, 0.038, "sine", 6200);
+  });
+
+  // 主和弦齊奏（加八度堆疊）
+  const chordT = base + 0.32;
+  const chord = [
+    [261.63, 0.058],
+    [329.63, 0.064],
+    [392, 0.07],
+    [523.25, 0.076],
+    [659.25, 0.064],
+    [783.99, 0.056],
+    [1046.5, 0.05],
+  ] as const;
+  for (const [f, v] of chord) {
+    tone(chordT, f, 0.68, v, "triangle", 5200);
+    tone(chordT + 0.004, f * 1.008, 0.62, v * 0.38, "sine", 6200);
+    tone(chordT + 0.008, f * 0.5, 0.55, v * 0.28, "square", 900);
+  }
+
+  // 高音「叮叮叮」
+  sparkle(chordT + 0.07, 2093, 0.085);
+  sparkle(chordT + 0.1, 2637, 0.08);
+  sparkle(chordT + 0.14, 3136, 0.075);
+  sparkle(chordT + 0.19, 3520, 0.07);
+  sparkle(chordT + 0.24, 4186, 0.055);
+
+  // 延遲回聲和弦（較小聲）
+  const echoT = base + 0.5;
+  for (const [f, v] of chord) {
+    tone(echoT, f * 0.5, 0.5, v * 0.36, "sine", 900);
+    tone(echoT, f, 0.44, v * 0.26, "triangle", 3400);
+  }
+  sparkle(echoT + 0.11, 2093, 0.05);
+  sparkle(echoT + 0.18, 2793, 0.045);
+
+  // 尾韻再一輪弱琶音
+  const tail = echoT + 0.28;
+  const tailArp = [659.25, 783.99, 987.77, 1174.66];
+  tailArp.forEach((f, i) => {
+    tone(tail + i * 0.05, f, 0.35, 0.042, "triangle", 4000);
   });
 }
 
-function startSpinDrone(ctx: AudioContext): () => void {
+function playRevealFanfareCombined(ctx: AudioContext, sfx: PrefetchedWheelSfx, destination: AudioNode) {
+  const t0 = ctx.currentTime + 0.02;
+  const anyWinSample = Boolean(
+    sfx.winHorn ||
+      sfx.winBoing ||
+      sfx.winSlide ||
+      sfx.winCowbell ||
+      sfx.winFlicks ||
+      sfx.winTeamCheer ||
+      sfx.winCrowdCelebration ||
+      sfx.winCymbalCrash ||
+      sfx.winMagicChime ||
+      sfx.winPunchlineDrum,
+  );
+
+  if (sfx.winCymbalCrash) {
+    playBufferAt(ctx, sfx.winCymbalCrash, t0, 0.55, destination);
+    playBufferAt(ctx, sfx.winCymbalCrash, t0 + 1.02, 0.26, destination, 0.9);
+  }
+  if (sfx.winMagicChime) {
+    playBufferAt(ctx, sfx.winMagicChime, t0 + 0.04, 0.44, destination, 1.02);
+    playBufferAt(ctx, sfx.winMagicChime, t0 + 0.55, 0.24, destination, 1.14);
+  }
+  if (sfx.winTeamCheer) {
+    playBufferAt(ctx, sfx.winTeamCheer, t0 + 0.05, 0.46, destination);
+  }
+  if (sfx.winCrowdCelebration) {
+    playBufferAt(ctx, sfx.winCrowdCelebration, t0 + 0.2, 0.38, destination, 1.02);
+  }
+
+  if (sfx.winHorn) {
+    playBufferAt(ctx, sfx.winHorn, t0 + 0.08, 0.55, destination);
+    playBufferAt(ctx, sfx.winHorn, t0 + 0.86, 0.22, destination, 1.16);
+  }
+  if (sfx.winSlide) {
+    playBufferAt(ctx, sfx.winSlide, t0 + 0.1, 0.48, destination, 1.06);
+  }
+  if (sfx.winBoing) {
+    playBufferAt(ctx, sfx.winBoing, t0 + 0.14, 0.5, destination);
+    playBufferAt(ctx, sfx.winBoing, t0 + 0.48, 0.38, destination, 0.76);
+  }
+  if (sfx.winCowbell) {
+    playBufferAt(ctx, sfx.winCowbell, t0 + 0.22, 0.4, destination);
+    playBufferAt(ctx, sfx.winCowbell, t0 + 0.38, 0.34, destination, 1.14);
+  }
+  if (sfx.winFlicks) {
+    playBufferAt(ctx, sfx.winFlicks, t0 + 0.28, 0.38, destination, 1.04);
+  }
+  if (sfx.winPunchlineDrum) {
+    playBufferAt(ctx, sfx.winPunchlineDrum, t0 + 0.58, 0.46, destination);
+    playBufferAt(ctx, sfx.winPunchlineDrum, t0 + 1.32, 0.2, destination, 0.88);
+  }
+
+  playRevealFanfareSynth(ctx, destination, anyWinSample ? 0.45 : 1);
+}
+
+function startSpinDrone(ctx: AudioContext, destination: AudioNode, gain = 0.014): () => void {
   const o = ctx.createOscillator();
   const g = ctx.createGain();
   const f = ctx.createBiquadFilter();
@@ -183,10 +377,10 @@ function startSpinDrone(ctx: AudioContext): () => void {
   o.frequency.value = 48;
   f.type = "lowpass";
   f.frequency.value = 380;
-  g.gain.value = 0.014;
+  g.gain.value = gain;
   o.connect(f);
   f.connect(g);
-  g.connect(ctx.destination);
+  g.connect(destination);
   o.start();
   return () => {
     try {
@@ -288,10 +482,26 @@ export function runWheelSpectacle(
     document.body.append(overlay);
     document.body.classList.add("wheel-spectacle-lock");
 
+    const audioCtx = getAudioContext();
+    if (audioCtx?.state === "suspended") {
+      void audioCtx.resume();
+    }
+
     let settled = false;
     const tearDown = () => {
       if (settled) return;
       settled = true;
+      if (audioCtx && audioCtx.state !== "closed") {
+        try {
+          void audioCtx.close();
+        } catch {
+          try {
+            void audioCtx.suspend();
+          } catch {
+            /* ignore */
+          }
+        }
+      }
       document.body.classList.remove("wheel-spectacle-lock");
       document.removeEventListener("keydown", onKey);
       overlay.remove();
@@ -306,16 +516,41 @@ export function runWheelSpectacle(
     };
     document.addEventListener("keydown", onKey);
 
-    const audioCtx = getAudioContext();
-    if (audioCtx?.state === "suspended") {
-      void audioCtx.resume();
-    }
-
     void (async () => {
+      let reelBus: AudioNode | null = null;
+      if (audioCtx) {
+        const g = audioCtx.createGain();
+        g.gain.value = 0.88;
+        const c = audioCtx.createDynamicsCompressor();
+        c.threshold.value = -18;
+        c.knee.value = 8;
+        c.ratio.value = 2.8;
+        c.attack.value = 0.003;
+        c.release.value = 0.2;
+        g.connect(c);
+        c.connect(audioCtx.destination);
+        reelBus = g;
+      }
+
       const labelsPromise =
         options?.fetchPrizeLabels != null
           ? options.fetchPrizeLabels().catch(() => null)
           : Promise.resolve(null);
+      const sfxPromise = audioCtx
+        ? prefetchWheelSfx(audioCtx)
+        : Promise.resolve<PrefetchedWheelSfx>({
+            spinTick: null,
+            winHorn: null,
+            winBoing: null,
+            winSlide: null,
+            winCowbell: null,
+            winFlicks: null,
+            winTeamCheer: null,
+            winCrowdCelebration: null,
+            winCymbalCrash: null,
+            winMagicChime: null,
+            winPunchlineDrum: null,
+          });
 
       requestAnimationFrame(() => {
         overlay.classList.add("is-open");
@@ -328,8 +563,7 @@ export function runWheelSpectacle(
         }
       });
 
-      await Promise.all([sleep(980), labelsPromise]);
-      const prizeList = await labelsPromise;
+      const [, prizeList, sfx] = await Promise.all([sleep(980), labelsPromise, sfxPromise]);
       if (prizeList && prizeList.length > 0) {
         mountPrizeWheelSvg(wheel, prizeList);
       }
@@ -369,22 +603,34 @@ export function runWheelSpectacle(
       const apiMs = performance.now() - tApi;
       await sleep(Math.max(0, 2000 - apiMs));
 
+      let stopTicks: (() => void) | null = null;
       let stopDrone: (() => void) | null = null;
-      if (audioCtx) {
+
+      const spins = 7 + Math.floor(Math.random() * 4);
+      const jitter = Math.random() * 360;
+      const finalDeg = spins * 360 + jitter;
+      const crossingAngles = computeSliceBoundaryCrossingAnglesDeg(finalDeg, prizeList);
+
+      wheel.classList.add("is-rim-glow");
+      wheel.style.transition = `transform ${SPIN_TRANSITION_MS / 1000}s cubic-bezier(0.08, 0.82, 0.12, 1)`;
+      wheel.style.transform = `rotate(${finalDeg}deg)`;
+
+      if (audioCtx && reelBus) {
+        const bus = reelBus;
         try {
-          stopDrone = startSpinDrone(audioCtx);
+          stopTicks = scheduleSpinTicksAtSliceCrossings(audioCtx, sfx.spinTick, bus, {
+            crossingAnglesDeg: crossingAngles,
+            finalDeg,
+            durationMs: SPIN_TRANSITION_MS,
+          });
+          stopDrone = startSpinDrone(audioCtx, bus, 0.006);
         } catch {
+          stopTicks = null;
           stopDrone = null;
         }
       }
-      wheel.classList.add("is-rim-glow");
 
-      const spins = 5 + Math.floor(Math.random() * 3);
-      const jitter = Math.random() * 360;
-      const finalDeg = spins * 360 + jitter;
-      wheel.style.transition = "transform 3.15s cubic-bezier(0.1, 0.85, 0.15, 1)";
-      wheel.style.transform = `rotate(${finalDeg}deg)`;
-      await sleep(3200);
+      await sleep(SPIN_WAIT_MS);
 
       const wonId = data.prize.id;
       if (wonId) {
@@ -394,12 +640,13 @@ export function runWheelSpectacle(
       }
 
       wheel.classList.remove("is-rim-glow");
+      stopTicks?.();
       stopDrone?.();
       overlay.classList.add("is-win-burst");
 
-      if (audioCtx) {
+      if (audioCtx && reelBus) {
         try {
-          playRevealFanfare(audioCtx);
+          playRevealFanfareCombined(audioCtx, sfx, reelBus);
         } catch {
           /* ignore */
         }
