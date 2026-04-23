@@ -72,11 +72,21 @@ export function mondayOfWeek(dt: DateTime): DateTime {
   return dt.minus({ days: dt.weekday - 1 }).startOf("day");
 }
 
+/** 本週一起算，可預約之最後日曆日為「下週日」（含）之 YYYY-MM-DD */
+export function taipeiLatestBookableDateKey(): string {
+  const today = DateTime.now().setZone(TIMEZONE).startOf("day");
+  return mondayOfWeek(today).plus({ days: 13 }).toISODate()!;
+}
+
 export function assertSlotAllowed(dateKey: string, startSlot: string): DateTime {
   const day = parseDateKey(dateKey);
   const today = DateTime.now().setZone(TIMEZONE).startOf("day");
   if (day < today) {
     throw new Error("past_date");
+  }
+  const latest = mondayOfWeek(today).plus({ days: 13 });
+  if (day > latest) {
+    throw new Error("beyond_booking_window");
   }
   if (!isWeekday(day)) {
     throw new Error("not_weekday");

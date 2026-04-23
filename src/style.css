@@ -553,6 +553,21 @@ button.ghost:disabled {
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 0;
+  align-items: baseline;
+}
+
+.meta-pills-note {
+  flex: 1 0 100%;
+  margin: 2px 0 0;
+  padding: 8px 0 0;
+  border-top: 1px dashed var(--border);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.meta-pills-note code {
+  font-size: 0.88em;
 }
 
 .book-member-extras[hidden] {
@@ -563,6 +578,11 @@ button.ghost:disabled {
   display: grid;
   gap: 14px;
   margin-top: 0;
+}
+
+.wheel-rules-hint {
+  margin: 0 0 8px;
+  max-width: 52rem;
 }
 
 .book-wheel-row {

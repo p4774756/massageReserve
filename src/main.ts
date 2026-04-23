@@ -147,6 +147,56 @@ function taipeiTodayDateKey(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" });
 }
 
+const TAIPEI_LONG_WD: Record<string, number> = {
+  Monday: 1,
+  Tuesday: 2,
+  Wednesday: 3,
+  Thursday: 4,
+  Friday: 5,
+  Saturday: 6,
+  Sunday: 7,
+};
+
+function addDaysTaipeiDateKey(dateKey: string, deltaDays: number): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
+  if (!m) return dateKey;
+  const inst = new Date(`${m[1]}-${m[2]}-${m[3]}T12:00:00+08:00`);
+  inst.setTime(inst.getTime() + deltaDays * 86_400_000);
+  return inst.toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" });
+}
+
+function taipeiWeekdayNumMon1Sun7(dateKey: string): number {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
+  if (!m) return Number.NaN;
+  const inst = new Date(`${m[1]}-${m[2]}-${m[3]}T12:00:00+08:00`);
+  const long = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Taipei", weekday: "long" }).format(inst);
+  return TAIPEI_LONG_WD[long as keyof typeof TAIPEI_LONG_WD] ?? Number.NaN;
+}
+
+function taipeiMondayOfSameWeek(dateKey: string): string {
+  const wd = taipeiWeekdayNumMon1Sun7(dateKey);
+  if (!Number.isFinite(wd)) return dateKey;
+  return addDaysTaipeiDateKey(dateKey, -(wd - 1));
+}
+
+/** 與後端 `bookingLogic.taipeiLatestBookableDateKey` 一致：本週一起算，最遠可選「下週日」 */
+function taipeiLatestBookableDateKey(): string {
+  return addDaysTaipeiDateKey(taipeiMondayOfSameWeek(taipeiTodayDateKey()), 13);
+}
+
+/** 例如 2026-04-23（週三），供名額說明用 */
+function dateKeyLabelTaipeiZh(dateKey: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
+  if (!m) return dateKey;
+  try {
+    const inst = new Date(`${m[1]}-${m[2]}-${m[3]}T12:00:00+08:00`);
+    const wd = new Intl.DateTimeFormat("zh-TW", { timeZone: "Asia/Taipei", weekday: "short" }).format(inst);
+    return `${m[1]}-${m[2]}-${m[3]}（${wd}）`;
+  } catch {
+    return dateKey;
+  }
+}
+
 /** 該 dateKey + startSlot 在台北時區的開始瞬間（ms）；無效則 NaN */
 function slotStartInstantMsTaipei(dateKey: string, startSlot: string): number {
   const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
@@ -521,6 +571,7 @@ function render() {
   const nameInput = el("input", { type: "text", autocomplete: "name", maxLength: 80 });
   const dateInput = el("input", { type: "date" });
   dateInput.min = taipeiTodayDateKey();
+  dateInput.max = taipeiLatestBookableDateKey();
   const slotSelect = el("select", {}, []);
   const noteInput = el("textarea", { maxLength: 500 });
   const bookingModeSelect = el("select", {}, []);
@@ -1253,9 +1304,20 @@ function render() {
     }
 
     const minKey = taipeiTodayDateKey();
+    const maxKey = taipeiLatestBookableDateKey();
+    dateInput.min = minKey;
+    dateInput.max = maxKey;
     if (dk < minKey) {
       refillSlots(new Set(), true, "", new Map());
       scheduleStatus.textContent = "不可選擇今天以前的日期。";
+      scheduleStatus.classList.add("error");
+      dateInput.value = "";
+      return;
+    }
+
+    if (dk > maxKey) {
+      refillSlots(new Set(), true, "", new Map());
+      scheduleStatus.textContent = "僅能預約至下週日為止。";
       scheduleStatus.classList.add("error");
       dateInput.value = "";
       return;
@@ -1292,6 +1354,8 @@ function render() {
 
       setBookFooterFromCaps(data.dayCap, data.weekCap);
       refillSlots(taken, blocked, dk, blockedMap);
+      const weekMon = taipeiMondayOfSameWeek(dk);
+      const weekFri = addDaysTaipeiDateKey(weekMon, 4);
       meta.append(
         el("span", { class: "pill" }, [
           "當日已預約 ",
@@ -1302,6 +1366,17 @@ function render() {
           "本工作週已預約 ",
           el("strong", {}, [String(data.weekCount)]),
           ` / ${data.weekCap}`,
+        ]),
+        el("div", { class: "meta-pills-note" }, [
+          "「當日」＝您所選的這一天：",
+          el("strong", {}, [dateKeyLabelTaipeiZh(dk)]),
+          "。「本工作週」＝該日所屬曆週之週一至週五：",
+          el("strong", {}, [dateKeyLabelTaipeiZh(weekMon)]),
+          "～",
+          el("strong", {}, [dateKeyLabelTaipeiZh(weekFri)]),
+          "（週一與後端 ",
+          el("code", {}, ["weekStart"]),
+          " 相同，名額為該曆週內有效預約合計）。",
         ]),
       );
       if (dayFull) {
@@ -1341,6 +1416,11 @@ function render() {
     }
     if (dateKey < taipeiTodayDateKey()) {
       bookStatus.textContent = "不可預約今天以前的日期。";
+      bookStatus.classList.add("error");
+      return;
+    }
+    if (dateKey > taipeiLatestBookableDateKey()) {
+      bookStatus.textContent = "僅能預約至下週日為止。";
       bookStatus.classList.add("error");
       return;
     }
@@ -1399,8 +1479,15 @@ function render() {
   const wheelTestBtn = el("button", { class: "ghost", type: "button" }, ["預覽輪盤特效"]);
   wheelTestBtn.hidden = true;
   wheelTestBtn.title = "僅畫面預覽，不呼叫抽獎、不扣次數";
+  const wheelRulesHint = el("p", { class: "hint wheel-rules-hint" }, [
+    "輪盤規則：預約有綁定會員，且後台將該筆標為「已完成」後，可獲得 ",
+    el("strong", {}, ["1"]),
+    " 次抽獎機會（同一筆僅發一次）。每次按下「抽輪盤」消耗 ",
+    el("strong", {}, ["1"]),
+    " 次；獎項由後台依權重隨機抽出，可能為儲值金、加抽次數、銘謝惠顧或趣味文案等。須完成 Email 驗證才可抽獎。",
+  ]);
   const wheelRow = el("div", { class: "book-wheel-row" }, [spinBtn, wheelTestBtn, wheelStatus, wheelResult]);
-  memberExtrasWrap.append(emailVerifyBanner, walletStatus, myBookingsSection, wheelRow);
+  memberExtrasWrap.append(emailVerifyBanner, walletStatus, myBookingsSection, wheelRulesHint, wheelRow);
 
   const wheelSpectacleSettingsRef = doc(db, "siteSettings", "wheelSpectacle");
   onSnapshot(
@@ -1447,7 +1534,11 @@ function render() {
           "可不登入，打個暱稱即可；若已登入且帳號有設定稱呼，會自動帶入（仍可改）。",
         ]),
       ]),
-      el("label", { class: "field" }, ["日期（週一至週五）", dateInput]),
+      el("label", { class: "field" }, [
+        "日期（週一至週五）",
+        dateInput,
+        el("span", { class: "hint" }, ["最遠僅開放至本週曆之下週日（台北）；更後的日期無法選取。"]),
+      ]),
     ]),
     el("div", { class: "grid" }, [
       el("label", { class: "field" }, [

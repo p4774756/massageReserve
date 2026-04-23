@@ -18,6 +18,7 @@ import {
   parseBookingBlockWindows,
   parseDateKey,
   resolveBookingCaps,
+  TIMEZONE,
 } from "./bookingLogic";
 
 initializeApp();
@@ -154,6 +155,11 @@ export const getAvailability = onCall(publicCall, async (request) => {
   } catch {
     throw new HttpsError("invalid-argument", "日期無效");
   }
+  const todayZ = DateTime.now().setZone(TIMEZONE).startOf("day");
+  const latestBookable = mondayOfWeek(todayZ).plus({ days: 13 });
+  if (day > latestBookable) {
+    throw new HttpsError("invalid-argument", "僅能查詢至下週日為止的日期");
+  }
   if (!isWeekday(day)) {
     throw new HttpsError("invalid-argument", "僅能查詢週一到週五");
   }
@@ -237,6 +243,7 @@ export const createBooking = onCall(
       invalid_dateKey: "日期無效",
       past_date: "無法預約過去的日期",
       past_slot: "此開始時間已過，請選擇較晚的時段",
+      beyond_booking_window: "僅能預約至下週日為止。",
       not_weekday: "僅能預約週一到週五",
       invalid_slot: "開始時間不在可預約範圍",
       ends_after_1800: "此開始時間將超過 18:00 結束上限",
