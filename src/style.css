@@ -629,6 +629,26 @@ button.ghost:disabled {
   align-self: center;
 }
 
+.my-booking-reason {
+  flex: 1 1 100%;
+  margin-top: 2px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.my-booking-reason-label {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.my-booking-reason-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .my-bookings-empty {
   margin: 0;
 }
@@ -689,20 +709,27 @@ button.ghost:disabled {
 
 .admin-bookings-table th:nth-child(3),
 .admin-bookings-table td:nth-child(3) {
+  white-space: nowrap;
+  min-width: 3.25rem;
+  text-align: center;
+}
+
+.admin-bookings-table th:nth-child(4),
+.admin-bookings-table td:nth-child(4) {
   min-width: 10rem;
   max-width: 22rem;
   white-space: normal;
   word-break: break-word;
 }
 
-.admin-bookings-table th:nth-child(4),
-.admin-bookings-table td:nth-child(4) {
+.admin-bookings-table th:nth-child(5),
+.admin-bookings-table td:nth-child(5) {
   white-space: nowrap;
   min-width: 8rem;
 }
 
-.admin-bookings-table th:nth-child(5),
-.admin-bookings-table td:nth-child(5) {
+.admin-bookings-table th:nth-child(6),
+.admin-bookings-table td:nth-child(6) {
   white-space: nowrap;
   min-width: 5.5rem;
 }
@@ -839,6 +866,19 @@ tbody tr:hover td {
   margin-top: 16px;
 }
 
+.admin-hidden-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin-top: 12px;
+}
+
+.admin-hidden-pager-meta {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
 .admin-tab-panel {
   padding-bottom: 8px;
 }
@@ -951,6 +991,33 @@ tbody tr:hover td {
   font-size: 0.88rem;
   font-weight: 600;
   color: var(--muted);
+}
+
+.admin-booking-blocks-rows {
+  display: grid;
+  gap: 0;
+}
+
+.admin-booking-block-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  align-items: flex-end;
+  padding: 12px 0;
+  border-top: 1px dashed var(--border);
+}
+
+.admin-booking-block-row .bb-field-wd {
+  min-width: 108px;
+}
+
+.admin-booking-block-row .bb-field-t {
+  min-width: 132px;
+}
+
+.admin-booking-block-row .bb-field-reason {
+  flex: 1 1 200px;
+  min-width: 180px;
 }
 
 .led-speed-field .led-speed-row {

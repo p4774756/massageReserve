@@ -58,6 +58,11 @@ type Booking = {
   startSlot: string;
   status: string;
   startAt?: { seconds: number };
+  cancelReason?: string;
+  /** 後台「自列表隱藏」；不改 status，會員端仍看真實狀態 */
+  invisible?: boolean;
+  bookingMode?: BookingMode | string;
+  customerId?: string | null;
 };
 
 type BookingMode =
@@ -179,6 +184,26 @@ function bookingStatusLabel(status: string): string {
   return map[status] ?? status;
 }
 
+/** 後台預約表：是否為訪客預約（是／否） */
+function bookingGuestYesNo(b: Pick<Booking, "bookingMode" | "customerId">): string {
+  const mode = b.bookingMode;
+  if (mode === "guest_cash" || mode === "guest_beverage") return "是";
+  if (typeof mode === "string" && mode.startsWith("member_")) return "否";
+  if (typeof b.customerId === "string" && b.customerId.length > 0) return "否";
+  return "—";
+}
+
+/** 會員「我的預約」：後台取消有填原因時顯示 */
+function myBookingReasonBlock(b: Booking): HTMLElement | null {
+  if (b.status !== "cancelled") return null;
+  const cr = typeof b.cancelReason === "string" ? b.cancelReason.trim() : "";
+  if (!cr) return null;
+  return el("div", { class: "my-booking-reason" }, [
+    el("span", { class: "my-booking-reason-label" }, ["取消說明："]),
+    el("span", { class: "my-booking-reason-body" }, [cr]),
+  ]);
+}
+
 function buildBookingSummary(
   displayName: string,
   dateKey: string,
@@ -258,25 +283,32 @@ function adminSessionCallName(user: User): string {
   return "管理員";
 }
 
-/** 後台取消預約：可填原因（可留空）；null 表示關閉視窗未確認 */
-function showAdminCancelBookingModal(summaryLines: string): Promise<string | null> {
+/** 後台表單：可填說明（可留空）；null 表示關閉視窗未確認 */
+function showAdminOptionalReasonModal(args: {
+  title: string;
+  summaryLines: string;
+  reasonLabel: string;
+  placeholder: string;
+  confirmText: string;
+}): Promise<string | null> {
+  const { title, summaryLines, reasonLabel, placeholder, confirmText } = args;
   return new Promise((resolve) => {
     const overlay = el("div", { class: "modal-overlay" });
     const dialog = el("div", { class: "modal-card" });
     dialog.setAttribute("role", "dialog");
     dialog.setAttribute("aria-modal", "true");
-    dialog.setAttribute("aria-labelledby", "admin-cancel-modal-title");
-    const heading = el("h3", { id: "admin-cancel-modal-title" }, ["取消預約"]);
+    dialog.setAttribute("aria-labelledby", "admin-reason-modal-title");
+    const heading = el("h3", { id: "admin-reason-modal-title" }, [title]);
     const body = el("pre", { class: "modal-message" }, [summaryLines]);
     const reasonInput = el("textarea", {
       maxLength: 500,
       rows: 4,
-      placeholder: "取消原因（選填，可不填）",
+      placeholder,
     });
-    reasonInput.setAttribute("aria-label", "取消原因");
-    const reasonField = el("label", { class: "field modal-cancel-reason-field" }, ["取消原因", reasonInput]);
+    reasonInput.setAttribute("aria-label", reasonLabel);
+    const reasonField = el("label", { class: "field modal-cancel-reason-field" }, [reasonLabel, reasonInput]);
     const dismissBtn = el("button", { class: "ghost", type: "button" }, ["關閉"]);
-    const confirmBtn = el("button", { class: "primary", type: "button" }, ["確認取消"]);
+    const confirmBtn = el("button", { class: "primary", type: "button" }, [confirmText]);
     const actions = el("div", { class: "modal-actions" }, [dismissBtn, confirmBtn]);
     dialog.append(heading, body, reasonField, actions);
     overlay.append(dialog);
@@ -304,6 +336,16 @@ function showAdminCancelBookingModal(summaryLines: string): Promise<string | nul
 
     document.body.append(overlay);
     reasonInput.focus();
+  });
+}
+
+function showAdminCancelBookingModal(summaryLines: string): Promise<string | null> {
+  return showAdminOptionalReasonModal({
+    title: "取消預約",
+    summaryLines,
+    reasonLabel: "取消原因",
+    placeholder: "取消原因（選填，可不填）",
+    confirmText: "確認取消",
   });
 }
 
@@ -483,6 +525,11 @@ function render() {
   const submitBtn = el("button", { class: "primary", type: "button" }, ["送出預約"]);
   const bookStatus = el("div", { class: "status-line" });
   const meta = el("div", { class: "meta-pills" });
+  const bookFooterNote = el("div", { class: "footer-note" });
+  bookFooterNote.textContent = "規則：同一天最多 2 筆、同一工作週最多 4 筆；已取消的不計入名額。";
+  function setBookFooterFromCaps(dayCap: number, weekCap: number) {
+    bookFooterNote.textContent = `規則：同一天最多 ${dayCap} 筆、同一工作週最多 ${weekCap} 筆；已取消的不計入名額。`;
+  }
   const walletStatus = el("div", { class: "status-line" });
   const wheelStatus = el("div", { class: "status-line" });
   const wheelResult = el("div", { class: "pill", hidden: true });
@@ -579,6 +626,8 @@ function render() {
             actions.append(btn);
           }
           row.append(mainCol, actions);
+          const reasonEl = myBookingReasonBlock(b);
+          if (reasonEl) row.append(reasonEl);
           myBookingsList.append(row);
         }
       },
@@ -1147,7 +1196,12 @@ function render() {
     }
   });
 
-  function refillSlots(taken: Set<string>, disabled: boolean, selectedDateKey: string) {
+  function refillSlots(
+    taken: Set<string>,
+    disabled: boolean,
+    selectedDateKey: string,
+    blockedReasonBySlot: Map<string, string> = new Map(),
+  ) {
     const prev = slotSelect.value;
     slotSelect.innerHTML = "";
     slotSelect.disabled = disabled;
@@ -1156,8 +1210,12 @@ function render() {
     for (const s of allStartSlots()) {
       const takenHere = taken.has(s);
       const pastHere = isStartSlotInPastForTaipeiToday(selectedDateKey, s);
-      const o = el("option", { value: s, disabled: takenHere || pastHere }, [
-        `${s}${takenHere ? "（已佔用）" : pastHere ? "（已過）" : ""}`,
+      const blockReason = blockedReasonBySlot.get(s);
+      const blockedHere = blockReason !== undefined;
+      const blockNote =
+        blockedHere && blockReason ? `（不開放：${blockReason}）` : blockedHere ? "（不開放預約）" : "";
+      const o = el("option", { value: s, disabled: takenHere || pastHere || blockedHere }, [
+        `${s}${takenHere ? "（已佔用）" : pastHere ? "（已過）" : blockNote}`,
       ]);
       slotSelect.append(o);
     }
@@ -1168,7 +1226,7 @@ function render() {
     }
   }
 
-  refillSlots(new Set(), true, "");
+  refillSlots(new Set(), true, "", new Map());
 
   async function refreshAvailability() {
     bookStatus.textContent = "";
@@ -1176,7 +1234,7 @@ function render() {
     meta.innerHTML = "";
     const dk = dateInput.value;
     if (!dk) {
-      refillSlots(new Set(), true, "");
+      refillSlots(new Set(), true, "", new Map());
       meta.append(
         el("span", { class: "pill" }, ["先選擇日期後，會顯示可選時段與名額"]),
       );
@@ -1185,7 +1243,7 @@ function render() {
 
     const minKey = taipeiTodayDateKey();
     if (dk < minKey) {
-      refillSlots(new Set(), true, "");
+      refillSlots(new Set(), true, "", new Map());
       bookStatus.textContent = "不可選擇今天以前的日期。";
       bookStatus.classList.add("error");
       dateInput.value = "";
@@ -1193,7 +1251,7 @@ function render() {
     }
 
     if (!isDateKeyMonFri(dk)) {
-      refillSlots(new Set(), true, dk);
+      refillSlots(new Set(), true, dk, new Map());
       bookStatus.textContent = "僅能預約週一到週五。";
       bookStatus.classList.add("error");
       return;
@@ -1204,6 +1262,7 @@ function render() {
       const res = await fn({ dateKey: dk });
       const data = res.data as {
         taken: string[];
+        blockedSlots?: { startSlot: string; reason?: string }[];
         dayCount: number;
         weekCount: number;
         dayCap: number;
@@ -1213,8 +1272,15 @@ function render() {
       const dayFull = data.dayCount >= data.dayCap;
       const weekFull = data.weekCount >= data.weekCap;
       const blocked = dayFull || weekFull;
+      const blockedMap = new Map<string, string>();
+      for (const b of data.blockedSlots ?? []) {
+        if (b && typeof b.startSlot === "string") {
+          blockedMap.set(b.startSlot, typeof b.reason === "string" ? b.reason : "");
+        }
+      }
 
-      refillSlots(taken, blocked, dk);
+      setBookFooterFromCaps(data.dayCap, data.weekCap);
+      refillSlots(taken, blocked, dk, blockedMap);
       meta.append(
         el("span", { class: "pill" }, [
           "當日已預約 ",
@@ -1236,7 +1302,7 @@ function render() {
       }
     } catch (e) {
       console.error(e);
-      refillSlots(new Set(), true, dk);
+      refillSlots(new Set(), true, dk, new Map());
       bookStatus.textContent = "無法載入空檔，請稍後再試。";
       bookStatus.classList.add("error");
     }
@@ -1397,9 +1463,7 @@ function render() {
     ]),
     el("div", { class: "row-actions" }, [submitBtn]),
     bookStatus,
-    el("div", { class: "footer-note" }, [
-      "規則：同一天最多兩位、同一工作週最多四筆；已取消的不計入名額。",
-    ]),
+    bookFooterNote,
   );
 
   /** --- 管理後台 --- */
@@ -1410,6 +1474,8 @@ function render() {
   let adminMarqueeTextUnsub: (() => void) | null = null;
   let adminMarqueeLedUnsub: (() => void) | null = null;
   let adminWheelSpectacleUnsub: (() => void) | null = null;
+  let adminBookingCapsUnsub: (() => void) | null = null;
+  let adminBookingBlocksUnsub: (() => void) | null = null;
   let adminPushSettingsUnsub: (() => void) | null = null;
 
   function stopAdminListener() {
@@ -1428,6 +1494,14 @@ function render() {
     if (adminWheelSpectacleUnsub) {
       adminWheelSpectacleUnsub();
       adminWheelSpectacleUnsub = null;
+    }
+    if (adminBookingCapsUnsub) {
+      adminBookingCapsUnsub();
+      adminBookingCapsUnsub = null;
+    }
+    if (adminBookingBlocksUnsub) {
+      adminBookingBlocksUnsub();
+      adminBookingBlocksUnsub = null;
     }
     if (adminPushSettingsUnsub) {
       adminPushSettingsUnsub();
@@ -1696,6 +1770,237 @@ function render() {
       }
     });
 
+    const bookingCapsDocRef = doc(db, "siteSettings", "bookingCaps");
+    const capMaxPerDayInput = el("input", {
+      type: "number",
+      min: "1",
+      max: "50",
+      step: "1",
+      value: "2",
+    });
+    const capMaxPerWorkWeekInput = el("input", {
+      type: "number",
+      min: "1",
+      max: "50",
+      step: "1",
+      value: "4",
+    });
+    const saveBookingCapsBtn = el("button", { type: "button", class: "ghost" }, ["儲存名額上限"]);
+    const bookingCapsStatus = el("div", { class: "status-line" });
+
+    function clampBookingCapInput(n: number, fallback: number): number {
+      const r = Math.round(n);
+      if (!Number.isFinite(r) || !Number.isInteger(r)) return fallback;
+      return Math.min(50, Math.max(1, r));
+    }
+
+    adminBookingCapsUnsub = onSnapshot(
+      bookingCapsDocRef,
+      (snap) => {
+        const data = snap.data() as { maxPerDay?: unknown; maxPerWorkWeek?: unknown } | undefined;
+        const dRaw = data?.maxPerDay;
+        const wRaw = data?.maxPerWorkWeek;
+        const dNum = typeof dRaw === "number" && Number.isFinite(dRaw) ? dRaw : Number(dRaw);
+        const wNum = typeof wRaw === "number" && Number.isFinite(wRaw) ? wRaw : Number(wRaw);
+        capMaxPerDayInput.value = String(clampBookingCapInput(dNum, 2));
+        capMaxPerWorkWeekInput.value = String(clampBookingCapInput(wNum, 4));
+      },
+      () => {
+        bookingCapsStatus.textContent = "無法讀取名額上限設定。";
+        bookingCapsStatus.className = "status-line error";
+      },
+    );
+
+    saveBookingCapsBtn.addEventListener("click", async () => {
+      bookingCapsStatus.textContent = "";
+      bookingCapsStatus.className = "status-line";
+      const maxPerDay = clampBookingCapInput(Number(capMaxPerDayInput.value), 2);
+      const maxPerWorkWeek = clampBookingCapInput(Number(capMaxPerWorkWeekInput.value), 4);
+      capMaxPerDayInput.value = String(maxPerDay);
+      capMaxPerWorkWeekInput.value = String(maxPerWorkWeek);
+      saveBookingCapsBtn.setAttribute("disabled", "true");
+      bookingCapsStatus.textContent = "儲存中…";
+      try {
+        await setDoc(
+          bookingCapsDocRef,
+          { maxPerDay, maxPerWorkWeek, updatedAt: serverTimestamp() },
+          { merge: true },
+        );
+        bookingCapsStatus.textContent = "名額上限已更新（新預約立即套用）";
+        bookingCapsStatus.classList.add("ok");
+      } catch (e) {
+        bookingCapsStatus.textContent = e instanceof Error ? e.message : "儲存失敗";
+        bookingCapsStatus.classList.add("error");
+      } finally {
+        saveBookingCapsBtn.removeAttribute("disabled");
+      }
+    });
+
+    const bookingBlocksDocRef = doc(db, "siteSettings", "bookingBlocks");
+    const bookingBlocksRows = el("div", { class: "admin-booking-blocks-rows" });
+    const addBookingBlockRowBtn = el("button", { type: "button", class: "ghost" }, ["新增一筆"]);
+    const saveBookingBlocksBtn = el("button", { type: "button", class: "ghost" }, ["儲存不開放時段"]);
+    const bookingBlocksStatus = el("div", { class: "status-line" });
+
+    type BookingBlockRowModel = { weekday: number; start: string; end: string; reason: string };
+
+    function normalizeTimeForBookingBlock(v: string): string | null {
+      const m = /^(\d{1,2}):(\d{2})$/.exec(v.trim());
+      if (!m) return null;
+      const h = Number(m[1]);
+      const min = Number(m[2]);
+      if (!Number.isInteger(h) || !Number.isInteger(min) || h < 0 || h > 23 || min < 0 || min > 59) {
+        return null;
+      }
+      return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+    }
+
+    function parseBookingBlocksDoc(raw: { windows?: unknown } | undefined): BookingBlockRowModel[] {
+      if (!raw || !Array.isArray(raw.windows)) return [];
+      const out: BookingBlockRowModel[] = [];
+      for (const item of raw.windows) {
+        if (!item || typeof item !== "object") continue;
+        const o = item as Record<string, unknown>;
+        const wd = typeof o.weekday === "number" ? o.weekday : Number(o.weekday);
+        const start = typeof o.start === "string" ? o.start.trim() : "";
+        const end = typeof o.end === "string" ? o.end.trim() : "";
+        const reason = typeof o.reason === "string" ? o.reason.trim() : "";
+        if (!Number.isInteger(wd) || wd < 1 || wd > 5) continue;
+        const ns = normalizeTimeForBookingBlock(start);
+        const ne = normalizeTimeForBookingBlock(end);
+        if (!ns || !ne) continue;
+        const m0 = Number(ns.slice(0, 2)) * 60 + Number(ns.slice(3, 5));
+        const m1 = Number(ne.slice(0, 2)) * 60 + Number(ne.slice(3, 5));
+        if (m0 >= m1) continue;
+        out.push({ weekday: wd, start: ns, end: ne, reason: reason.slice(0, 200) });
+      }
+      return out;
+    }
+
+    function renderBookingBlockRow(model: BookingBlockRowModel): HTMLElement {
+      const row = el("div", { class: "admin-booking-block-row" });
+      const weekdaySel = el("select", { class: "bb-weekday", "aria-label": "星期" });
+      const dayLabels = ["一", "二", "三", "四", "五"];
+      for (let d = 1; d <= 5; d++) {
+        weekdaySel.append(el("option", { value: String(d) }, [`週${dayLabels[d - 1]}`]));
+      }
+      weekdaySel.value = String(model.weekday);
+      const startIn = el("input", {
+        type: "time",
+        class: "bb-start",
+        step: "900",
+        "aria-label": "不開放起點",
+      });
+      startIn.value = model.start;
+      const endIn = el("input", {
+        type: "time",
+        class: "bb-end",
+        step: "900",
+        "aria-label": "不開放終點（不含）",
+      });
+      endIn.value = model.end;
+      const reasonIn = el("input", {
+        type: "text",
+        class: "bb-reason",
+        maxLength: 200,
+        placeholder: "例如：師傅運動、外出",
+        autocomplete: "off",
+      });
+      reasonIn.value = model.reason;
+      const removeBtn = el("button", { type: "button", class: "ghost" }, ["刪除此列"]);
+      removeBtn.addEventListener("click", () => {
+        row.remove();
+      });
+      row.append(
+        el("label", { class: "field bb-field-wd" }, ["星期", weekdaySel]),
+        el("label", { class: "field bb-field-t" }, ["起（含）", startIn]),
+        el("label", { class: "field bb-field-t" }, ["迄（不含）", endIn]),
+        el("label", { class: "field bb-field-reason" }, ["前台顯示原因", reasonIn]),
+        removeBtn,
+      );
+      return row;
+    }
+
+    function refillBookingBlockRows(models: BookingBlockRowModel[]) {
+      bookingBlocksRows.innerHTML = "";
+      for (const m of models) {
+        bookingBlocksRows.append(renderBookingBlockRow(m));
+      }
+    }
+
+    addBookingBlockRowBtn.addEventListener("click", () => {
+      bookingBlocksRows.append(
+        renderBookingBlockRow({ weekday: 1, start: "16:30", end: "17:30", reason: "" }),
+      );
+    });
+
+    adminBookingBlocksUnsub = onSnapshot(
+      bookingBlocksDocRef,
+      (snap) => {
+        const models = parseBookingBlocksDoc(snap.data() as { windows?: unknown } | undefined);
+        refillBookingBlockRows(models);
+      },
+      () => {
+        bookingBlocksStatus.textContent = "無法讀取不開放時段設定。";
+        bookingBlocksStatus.className = "status-line error";
+      },
+    );
+
+    saveBookingBlocksBtn.addEventListener("click", async () => {
+      bookingBlocksStatus.textContent = "";
+      bookingBlocksStatus.className = "status-line";
+      const rowEls = bookingBlocksRows.querySelectorAll(".admin-booking-block-row");
+      const windows: { weekday: number; start: string; end: string; reason: string }[] = [];
+      if (rowEls.length > 40) {
+        bookingBlocksStatus.textContent = "最多 40 筆規則，請刪減後再儲存。";
+        bookingBlocksStatus.classList.add("error");
+        return;
+      }
+      for (const row of rowEls) {
+        const wd = Number((row.querySelector(".bb-weekday") as HTMLSelectElement)?.value);
+        const st = (row.querySelector(".bb-start") as HTMLInputElement)?.value ?? "";
+        const en = (row.querySelector(".bb-end") as HTMLInputElement)?.value ?? "";
+        const re = (row.querySelector(".bb-reason") as HTMLInputElement)?.value ?? "";
+        if (!Number.isInteger(wd) || wd < 1 || wd > 5) {
+          bookingBlocksStatus.textContent = "每一列的星期需為週一到週五。";
+          bookingBlocksStatus.classList.add("error");
+          return;
+        }
+        const ns = normalizeTimeForBookingBlock(st);
+        const ne = normalizeTimeForBookingBlock(en);
+        if (!ns || !ne) {
+          bookingBlocksStatus.textContent = "請確認每一列的時間格式正確。";
+          bookingBlocksStatus.classList.add("error");
+          return;
+        }
+        const m0 = Number(ns.slice(0, 2)) * 60 + Number(ns.slice(3, 5));
+        const m1 = Number(ne.slice(0, 2)) * 60 + Number(ne.slice(3, 5));
+        if (m0 >= m1) {
+          bookingBlocksStatus.textContent =
+            "每一列的「迄」需晚於「起」。區間為左閉右開：迄那一刻起已不再封鎖。";
+          bookingBlocksStatus.classList.add("error");
+          return;
+        }
+        windows.push({ weekday: wd, start: ns, end: ne, reason: re.trim().slice(0, 200) });
+      }
+      saveBookingBlocksBtn.setAttribute("disabled", "true");
+      bookingBlocksStatus.textContent = "儲存中…";
+      try {
+        await setDoc(
+          bookingBlocksDocRef,
+          { windows, updatedAt: serverTimestamp() },
+          { merge: true },
+        );
+        bookingBlocksStatus.textContent = "不開放時段已更新";
+        bookingBlocksStatus.classList.add("ok");
+      } catch (e) {
+        bookingBlocksStatus.textContent = e instanceof Error ? e.message : "儲存失敗";
+        bookingBlocksStatus.classList.add("error");
+      } finally {
+        saveBookingBlocksBtn.removeAttribute("disabled");
+      }
+    });
+
     adminMarqueeTextUnsub = onSnapshot(
       marqueeTextDocRef,
       (snap) => {
@@ -1807,6 +2112,39 @@ function render() {
       ]),
       el("div", { class: "row-actions" }, [saveWheelSpectacleBtn]),
       wheelSpectacleStatus,
+      el("h4", { class: "admin-subhead" }, ["預約名額上限"]),
+      el("p", { class: "hint" }, [
+        "控制「同一天」「同一工作週（週一至週五曆）」各最多幾筆有效預約（",
+        el("code", {}, ["pending"]),
+        "／",
+        el("code", {}, ["confirmed"]),
+        "／",
+        el("code", {}, ["done"]),
+        "）。Firestore：",
+        el("code", {}, ["siteSettings/bookingCaps"]),
+        "（",
+        el("code", {}, ["maxPerDay"]),
+        "、",
+        el("code", {}, ["maxPerWorkWeek"]),
+        "，整數 1～50；未建立文件時後端預設 2 與 4）。",
+      ]),
+      el("div", { class: "grid grid-2" }, [
+        el("label", { class: "field" }, ["同一天最多幾筆", capMaxPerDayInput]),
+        el("label", { class: "field" }, ["同一工作週最多幾筆", capMaxPerWorkWeekInput]),
+      ]),
+      el("div", { class: "row-actions" }, [saveBookingCapsBtn]),
+      bookingCapsStatus,
+      el("h4", { class: "admin-subhead" }, ["不開放預約時段"]),
+      el("p", { class: "hint" }, [
+        "依星期與當日時段關閉預約：若一次服務（約 30 分鐘）與關閉區間重疊，該開始時間無法選取。例：週一、週四 16:30–17:30 關閉，則 16:30、16:45、17:00 皆不可開始。Firestore：",
+        el("code", {}, ["siteSettings/bookingBlocks"]),
+        " 的 ",
+        el("code", {}, ["windows"]),
+        "。區間為左閉右開（「迄」該分鐘起已不封鎖）。",
+      ]),
+      bookingBlocksRows,
+      el("div", { class: "row-actions" }, [addBookingBlockRowBtn, saveBookingBlocksBtn]),
+      bookingBlocksStatus,
     );
     walletTopupSection.append(
       el("h3", {}, ["會員儲值"]),
@@ -1881,12 +2219,34 @@ function render() {
       el("tr", {}, [
         el("th", {}, ["時間"]),
         el("th", {}, ["姓名"]),
+        el("th", { title: "是否為訪客預約" }, ["訪客"]),
         el("th", {}, ["備註"]),
         el("th", {}, ["狀態"]),
         el("th", {}, ["操作"]),
       ]),
     );
     tableHolder.append(table);
+
+    const hiddenBookingsStatus = el("div", { class: "status-line" });
+    const hiddenTableHolder = el("div", { class: "table-wrap admin-bookings-table" });
+    const hiddenTable = el("table", {}, []);
+    hiddenTable.append(
+      el("tr", {}, [
+        el("th", {}, ["時間"]),
+        el("th", {}, ["姓名"]),
+        el("th", { title: "是否為訪客預約" }, ["訪客"]),
+        el("th", {}, ["備註"]),
+        el("th", {}, ["狀態"]),
+        el("th", {}, ["操作"]),
+      ]),
+    );
+    hiddenTableHolder.append(hiddenTable);
+
+    const hiddenPager = el("div", { class: "admin-hidden-pager" });
+    const hiddenPagePrev = el("button", { type: "button", class: "ghost" }, ["上一頁"]);
+    const hiddenPageInfo = el("span", { class: "hint admin-hidden-pager-meta" }, ["—"]);
+    const hiddenPageNext = el("button", { type: "button", class: "ghost" }, ["下一頁"]);
+    hiddenPager.append(hiddenPagePrev, hiddenPageInfo, hiddenPageNext);
 
     const memberListSection = el("div", { class: "admin-member-list" }, []);
     const memberListRefreshBtn = el("button", { class: "ghost", type: "button" }, ["重新載入會員清單"]);
@@ -2174,6 +2534,8 @@ function render() {
 
     const tabBookings = el("button", { type: "button", class: "admin-tab", role: "tab" }, ["預約管理"]);
     tabBookings.id = "admin-tab-trigger-bookings";
+    const tabHiddenBookings = el("button", { type: "button", class: "admin-tab", role: "tab" }, ["已隱藏"]);
+    tabHiddenBookings.id = "admin-tab-trigger-hidden";
     const tabMembers = el("button", { type: "button", class: "admin-tab", role: "tab" }, ["會員與儲值"]);
     tabMembers.id = "admin-tab-trigger-members";
     const tabAnnounce = el("button", { type: "button", class: "admin-tab", role: "tab" }, ["跑馬燈公告"]);
@@ -2182,10 +2544,25 @@ function render() {
     tabPush.id = "admin-tab-trigger-push";
 
     const adminTablist = el("div", { class: "admin-tabs", role: "tablist" });
-    adminTablist.append(tabBookings, tabMembers, tabAnnounce, tabPush);
+    adminTablist.append(tabBookings, tabHiddenBookings, tabMembers, tabAnnounce, tabPush);
 
     const panelBookingsEl = el("div", { class: "admin-tab-panel", role: "tabpanel", id: "admin-tab-panel-bookings" });
     panelBookingsEl.setAttribute("aria-labelledby", "admin-tab-trigger-bookings");
+    const panelHiddenBookingsEl = el("div", {
+      class: "admin-tab-panel",
+      role: "tabpanel",
+      id: "admin-tab-panel-hidden",
+      hidden: true,
+    });
+    panelHiddenBookingsEl.setAttribute("aria-labelledby", "admin-tab-trigger-hidden");
+    panelHiddenBookingsEl.append(
+      el("p", { class: "hint" }, [
+        "以下為自「預約管理」主列表隱藏之預約，或舊版於資料庫標記為已刪除之筆。額度與可預約時段與主列表相同，仍依預約狀態計算（僅影響後台列表是否顯示）。筆數多時每頁 10 筆，請用列表下方「上一頁／下一頁」切換。",
+      ]),
+      hiddenBookingsStatus,
+      hiddenTableHolder,
+      hiddenPager,
+    );
     const panelMembersEl = el("div", {
       class: "admin-tab-panel",
       role: "tabpanel",
@@ -2209,6 +2586,7 @@ function render() {
     panelPushEl.setAttribute("aria-labelledby", "admin-tab-trigger-push");
 
     tabBookings.setAttribute("aria-controls", "admin-tab-panel-bookings");
+    tabHiddenBookings.setAttribute("aria-controls", "admin-tab-panel-hidden");
     tabMembers.setAttribute("aria-controls", "admin-tab-panel-members");
     tabAnnounce.setAttribute("aria-controls", "admin-tab-panel-announce");
     tabPush.setAttribute("aria-controls", "admin-tab-panel-push");
@@ -2219,12 +2597,12 @@ function render() {
     panelPushEl.append(pushSettingsSection);
 
     const adminPanelsWrap = el("div", { class: "admin-tab-panels" });
-    adminPanelsWrap.append(panelBookingsEl, panelMembersEl, panelAnnounceEl, panelPushEl);
+    adminPanelsWrap.append(panelBookingsEl, panelHiddenBookingsEl, panelMembersEl, panelAnnounceEl, panelPushEl);
 
-    const adminTabButtons = [tabBookings, tabMembers, tabAnnounce, tabPush] as const;
-    const adminTabPanels = [panelBookingsEl, panelMembersEl, panelAnnounceEl, panelPushEl] as const;
+    const adminTabButtons = [tabBookings, tabHiddenBookings, tabMembers, tabAnnounce, tabPush] as const;
+    const adminTabPanels = [panelBookingsEl, panelHiddenBookingsEl, panelMembersEl, panelAnnounceEl, panelPushEl] as const;
 
-    function selectAdminTab(index: 0 | 1 | 2 | 3) {
+    function selectAdminTab(index: 0 | 1 | 2 | 3 | 4) {
       adminTabButtons.forEach((btn, i) => {
         const on = i === index;
         btn.setAttribute("aria-selected", String(on));
@@ -2238,9 +2616,10 @@ function render() {
     }
 
     tabBookings.addEventListener("click", () => selectAdminTab(0));
-    tabMembers.addEventListener("click", () => selectAdminTab(1));
-    tabAnnounce.addEventListener("click", () => selectAdminTab(2));
-    tabPush.addEventListener("click", () => selectAdminTab(3));
+    tabHiddenBookings.addEventListener("click", () => selectAdminTab(1));
+    tabMembers.addEventListener("click", () => selectAdminTab(2));
+    tabAnnounce.addEventListener("click", () => selectAdminTab(3));
+    tabPush.addEventListener("click", () => selectAdminTab(4));
 
     adminTablist.addEventListener("keydown", (ev) => {
       if (ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;
@@ -2250,7 +2629,7 @@ function render() {
       const delta = ev.key === "ArrowRight" ? 1 : -1;
       const n = adminTabButtons.length;
       const next = ((cur + delta) % n + n) % n;
-      selectAdminTab(next as 0 | 1 | 2 | 3);
+      selectAdminTab(next as 0 | 1 | 2 | 3 | 4);
       adminTabButtons[next].focus();
     });
 
@@ -2260,26 +2639,207 @@ function render() {
 
     void loadMemberList();
 
+    const HIDDEN_ADMIN_PAGE_SIZE = 10;
+    let hiddenAdminPageIndex = 0;
+    type AdminHiddenQueueItem = { kind: "deleted" | "invisible"; b: Booking };
+    const hiddenAdminQueue: AdminHiddenQueueItem[] = [];
+
+    function appendHiddenDeletedRowAdmin(b: Booking) {
+      hiddenTable.append(
+        el("tr", {}, [
+          el("td", { class: "mono" }, [formatWhen(b)]),
+          el("td", {}, [b.displayName ?? ""]),
+          el("td", {}, [bookingGuestYesNo(b)]),
+          el("td", {}, [b.note ?? ""]),
+          el("td", {}, [
+            el("span", { class: "admin-booking-status-readonly" }, ["已刪除（舊資料）"]),
+          ]),
+          el("td", {}, [el("span", { class: "hint" }, ["—"])]),
+        ]),
+      );
+    }
+
+    function appendHiddenInvisibleRowAdmin(b: Booking) {
+      const statusCell: HTMLElement =
+        b.status === "cancelled"
+          ? el("span", { class: "admin-booking-status-readonly" }, [bookingStatusLabel("cancelled")])
+          : el("select", {}, []);
+      const sel = b.status === "cancelled" ? null : (statusCell as HTMLSelectElement);
+      if (sel) {
+        for (const opt of ADMIN_STATUS_SELECT_OPTIONS) {
+          const o = el("option", { value: opt.value }, [opt.label]);
+          if (opt.value === b.status) o.setAttribute("selected", "selected");
+          sel.append(o);
+        }
+        sel.addEventListener("change", async () => {
+          const nextStatus = sel.value;
+          const prevStatus = b.status;
+          hiddenBookingsStatus.textContent = "更新中…";
+          hiddenBookingsStatus.className = "status-line";
+          try {
+            if (nextStatus === "done") {
+              const fn = completeBookingCall();
+              await fn({ bookingId: b.id });
+            } else {
+              await updateDoc(doc(db, "bookings", b.id), {
+                status: nextStatus,
+                updatedAt: serverTimestamp(),
+              });
+            }
+            hiddenBookingsStatus.textContent = "已更新";
+            hiddenBookingsStatus.classList.add("ok");
+            if (nextStatus === "done") {
+              await refreshWalletStatus();
+            }
+          } catch (e) {
+            sel.value = prevStatus;
+            hiddenBookingsStatus.textContent =
+              e instanceof Error ? e.message : "更新失敗（你是否已加入 admins 集合？）";
+            hiddenBookingsStatus.classList.add("error");
+          }
+        });
+      }
+      const cancelBtn = el("button", { class: "ghost", type: "button" }, ["取消"]);
+      const canAdminCancel = b.status !== "done" && b.status !== "cancelled";
+      cancelBtn.disabled = !canAdminCancel;
+      cancelBtn.title = !canAdminCancel
+        ? b.status === "done"
+          ? "已完成預約不可取消"
+          : "已取消"
+        : "";
+      cancelBtn.addEventListener("click", async () => {
+        if (!canAdminCancel) return;
+        const summary = [
+          "即將取消以下預約。取消原因可留空。",
+          "",
+          `姓名：${b.displayName ?? ""}`,
+          `日期：${b.dateKey ?? ""}`,
+          `開始時間：${b.startSlot ?? ""}`,
+          `備註：${(b.note ?? "").trim() || "（無）"}`,
+        ].join("\n");
+        const reason = await showAdminCancelBookingModal(summary);
+        if (reason === null) return;
+        hiddenBookingsStatus.textContent = "取消中…";
+        hiddenBookingsStatus.className = "status-line";
+        cancelBtn.setAttribute("disabled", "true");
+        try {
+          const fn = cancelBookingCall();
+          const payload: { bookingId: string; cancelReason?: string } = { bookingId: b.id };
+          if (reason.length > 0) {
+            payload.cancelReason = reason;
+          }
+          await fn(payload);
+          hiddenBookingsStatus.textContent = "已取消";
+          hiddenBookingsStatus.classList.add("ok");
+          await refreshWalletStatus();
+        } catch (e) {
+          hiddenBookingsStatus.textContent = e instanceof Error ? e.message : "取消失敗";
+          hiddenBookingsStatus.classList.add("error");
+          cancelBtn.removeAttribute("disabled");
+        }
+      });
+      const unhideBtn = el("button", { class: "ghost", type: "button" }, ["取消隱藏"]);
+      unhideBtn.addEventListener("click", async () => {
+        hiddenBookingsStatus.textContent = "處理中…";
+        hiddenBookingsStatus.className = "status-line";
+        unhideBtn.setAttribute("disabled", "true");
+        try {
+          await updateDoc(doc(db, "bookings", b.id), {
+            invisible: false,
+            updatedAt: serverTimestamp(),
+          });
+          hiddenBookingsStatus.textContent = "已恢復至預約管理列表";
+          hiddenBookingsStatus.classList.add("ok");
+        } catch (e) {
+          hiddenBookingsStatus.textContent =
+            e instanceof Error ? e.message : "還原失敗（你是否已加入 admins 集合？）";
+          hiddenBookingsStatus.classList.add("error");
+          unhideBtn.removeAttribute("disabled");
+        }
+      });
+      const actionCell = el("div", { class: "admin-booking-actions" }, [cancelBtn, unhideBtn]);
+      hiddenTable.append(
+        el("tr", {}, [
+          el("td", { class: "mono" }, [formatWhen(b)]),
+          el("td", {}, [b.displayName ?? ""]),
+          el("td", {}, [bookingGuestYesNo(b)]),
+          el("td", {}, [b.note ?? ""]),
+          el("td", {}, [statusCell]),
+          el("td", {}, [actionCell]),
+        ]),
+      );
+    }
+
+    function paintHiddenAdminPage() {
+      while (hiddenTable.rows.length > 1) {
+        hiddenTable.deleteRow(1);
+      }
+      const total = hiddenAdminQueue.length;
+      if (total === 0) {
+        hiddenTable.append(
+          el("tr", {}, [
+            el("td", { class: "hint", colSpan: 6 }, ["目前沒有自列表隱藏或舊版已刪除之預約。"]),
+          ]),
+        );
+        hiddenPagePrev.disabled = true;
+        hiddenPageNext.disabled = true;
+        hiddenPageInfo.textContent = "共 0 筆";
+        return;
+      }
+      const totalPages = Math.ceil(total / HIDDEN_ADMIN_PAGE_SIZE);
+      hiddenAdminPageIndex = Math.max(0, Math.min(hiddenAdminPageIndex, totalPages - 1));
+      const from = hiddenAdminPageIndex * HIDDEN_ADMIN_PAGE_SIZE;
+      for (const item of hiddenAdminQueue.slice(from, from + HIDDEN_ADMIN_PAGE_SIZE)) {
+        if (item.kind === "deleted") appendHiddenDeletedRowAdmin(item.b);
+        else appendHiddenInvisibleRowAdmin(item.b);
+      }
+      hiddenPagePrev.disabled = hiddenAdminPageIndex <= 0;
+      hiddenPageNext.disabled = hiddenAdminPageIndex >= totalPages - 1;
+      hiddenPageInfo.textContent = `第 ${hiddenAdminPageIndex + 1} / ${totalPages} 頁 · 共 ${total} 筆（每頁 ${HIDDEN_ADMIN_PAGE_SIZE} 筆）`;
+    }
+
+    hiddenPagePrev.addEventListener("click", () => {
+      if (hiddenAdminPageIndex <= 0) return;
+      hiddenAdminPageIndex -= 1;
+      paintHiddenAdminPage();
+    });
+    hiddenPageNext.addEventListener("click", () => {
+      const total = hiddenAdminQueue.length;
+      if (total === 0) return;
+      const totalPages = Math.ceil(total / HIDDEN_ADMIN_PAGE_SIZE);
+      if (hiddenAdminPageIndex >= totalPages - 1) return;
+      hiddenAdminPageIndex += 1;
+      paintHiddenAdminPage();
+    });
+
     const q = query(collection(db, "bookings"), orderBy("startAt", "desc"));
     adminUnsub = onSnapshot(
       q,
       (snap) => {
         adminStatus.textContent = "";
         adminStatus.className = "status-line";
-        // 保留表頭
-        table.innerHTML = "";
-        table.append(
+        hiddenBookingsStatus.textContent = "";
+        hiddenBookingsStatus.className = "status-line";
+        const bookingTableHeader = () =>
           el("tr", {}, [
             el("th", {}, ["時間"]),
             el("th", {}, ["姓名"]),
+            el("th", { title: "是否為訪客預約" }, ["訪客"]),
             el("th", {}, ["備註"]),
             el("th", {}, ["狀態"]),
             el("th", {}, ["操作"]),
-          ]),
-        );
+          ]);
+        table.innerHTML = "";
+        table.append(bookingTableHeader());
+        hiddenTable.innerHTML = "";
+        hiddenTable.append(bookingTableHeader());
+        hiddenAdminQueue.length = 0;
         for (const d of snap.docs) {
           const b = { id: d.id, ...d.data() } as Booking;
-          if (b.status === "deleted") {
+          if (b.status === "deleted" || b.invisible === true) {
+            hiddenAdminQueue.push(
+              b.status === "deleted" ? { kind: "deleted", b } : { kind: "invisible", b },
+            );
             continue;
           }
           const statusCell: HTMLElement =
@@ -2359,29 +2919,27 @@ function render() {
               cancelBtn.removeAttribute("disabled");
             }
           });
-          const deleteBtn = el("button", { class: "ghost", type: "button" }, ["刪除"]);
+          const deleteBtn = el("button", { class: "ghost", type: "button" }, ["隱藏"]);
           deleteBtn.addEventListener("click", async () => {
             const confirmed = await showConfirmModal(
-              "確認刪除（軟刪除）",
-              `確定刪除這筆預約嗎？\n\n（此操作為軟刪除，資料會保留於系統中）\n\n姓名：${b.displayName ?? ""}\n日期：${b.dateKey ?? ""}\n開始時間：${b.startSlot ?? ""}`,
-              "刪除",
+              "確認自後台隱藏",
+              `確定從後台列表隱藏這筆預約嗎？\n\n（不改變預約狀態；會員端仍顯示原狀態。額度與可預約時段仍依預約狀態計算，與主列表邏輯相同。）\n\n姓名：${b.displayName ?? ""}\n日期：${b.dateKey ?? ""}\n開始時間：${b.startSlot ?? ""}`,
+              "隱藏",
             );
             if (!confirmed) return;
-            adminStatus.textContent = "刪除中…";
+            adminStatus.textContent = "隱藏中…";
             adminStatus.className = "status-line";
             deleteBtn.setAttribute("disabled", "true");
             try {
               await updateDoc(doc(db, "bookings", b.id), {
-                status: "deleted",
-                deletedBy: userId,
-                deletedAt: serverTimestamp(),
+                invisible: true,
                 updatedAt: serverTimestamp(),
               });
-              adminStatus.textContent = "已刪除（軟刪除）";
+              adminStatus.textContent = "已自後台隱藏";
               adminStatus.classList.add("ok");
             } catch (e) {
               adminStatus.textContent =
-                e instanceof Error ? e.message : "刪除失敗（你是否已加入 admins 集合？）";
+                e instanceof Error ? e.message : "隱藏失敗（你是否已加入 admins 集合？）";
               adminStatus.classList.add("error");
               deleteBtn.removeAttribute("disabled");
             }
@@ -2391,18 +2949,23 @@ function render() {
             el("tr", {}, [
               el("td", { class: "mono" }, [formatWhen(b)]),
               el("td", {}, [b.displayName ?? ""]),
+              el("td", {}, [bookingGuestYesNo(b)]),
               el("td", {}, [b.note ?? ""]),
               el("td", {}, [statusCell]),
               el("td", {}, [actionCell]),
             ]),
           );
         }
+        paintHiddenAdminPage();
       },
       (err) => {
         console.error(err);
-        adminStatus.textContent =
+        const msg =
           "無法讀取預約（常見原因：Firestore Rules 拒絕，或尚未建立索引／admins 文件）。";
+        adminStatus.textContent = msg;
         adminStatus.classList.add("error");
+        hiddenBookingsStatus.textContent = msg;
+        hiddenBookingsStatus.classList.add("error");
       },
     );
   }

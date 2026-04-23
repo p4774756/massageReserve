@@ -5,8 +5,37 @@ export const SLOT_STEP_MINUTES = 15;
 export const BOOKING_DURATION_MINUTES = 30;
 const LUNCH_START_MINUTES = 11 * 60 + 45;
 const LUNCH_END_MINUTES = 13 * 60 + 15;
-export const MAX_PER_DAY = 2;
-export const MAX_PER_WORK_WEEK = 4;
+/** 未設定 `siteSettings/bookingCaps` 時的預設值 */
+export const DEFAULT_MAX_PER_DAY = 2;
+export const DEFAULT_MAX_PER_WORK_WEEK = 4;
+
+/** @deprecated 請以 `resolveBookingCaps` 結果為準；保留與舊程式／測試相容 */
+export const MAX_PER_DAY = DEFAULT_MAX_PER_DAY;
+/** @deprecated 請以 `resolveBookingCaps` 結果為準 */
+export const MAX_PER_WORK_WEEK = DEFAULT_MAX_PER_WORK_WEEK;
+
+const BOOKING_CAP_MIN = 1;
+const BOOKING_CAP_MAX = 50;
+
+/** 自 Firestore `siteSettings/bookingCaps` 解析每日／每工作週可預約筆數上限 */
+export function resolveBookingCaps(raw: unknown): { maxPerDay: number; maxPerWorkWeek: number } {
+  let maxPerDay = DEFAULT_MAX_PER_DAY;
+  let maxPerWorkWeek = DEFAULT_MAX_PER_WORK_WEEK;
+  if (raw && typeof raw === "object") {
+    const o = raw as Record<string, unknown>;
+    const dRaw = o.maxPerDay;
+    const wRaw = o.maxPerWorkWeek;
+    const d = typeof dRaw === "number" && Number.isFinite(dRaw) ? Math.round(dRaw) : Number(dRaw);
+    const w = typeof wRaw === "number" && Number.isFinite(wRaw) ? Math.round(wRaw) : Number(wRaw);
+    if (Number.isInteger(d) && d >= BOOKING_CAP_MIN && d <= BOOKING_CAP_MAX) {
+      maxPerDay = d;
+    }
+    if (Number.isInteger(w) && w >= BOOKING_CAP_MIN && w <= BOOKING_CAP_MAX) {
+      maxPerWorkWeek = w;
+    }
+  }
+  return { maxPerDay, maxPerWorkWeek };
+}
 
 export const ACTIVE_STATUSES = ["pending", "confirmed", "done"] as const;
 
@@ -68,4 +97,105 @@ export function assertSlotAllowed(dateKey: string, startSlot: string): DateTime 
     throw new Error("ends_after_1800");
   }
   return start;
+}
+
+/** 後台設定的「不開放預約」區間（Luxon：週一 = 1 … 週五 = 5；同一日內 HH:mm） */
+export type BookingBlockWindow = {
+  weekday: number;
+  start: string;
+  end: string;
+  reason: string;
+};
+
+function minutesFromHHmm(hhmm: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm.trim());
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (!Number.isInteger(h) || !Number.isInteger(min)) return null;
+  if (h < 0 || h > 23 || min < 0 || min > 59) return null;
+  return h * 60 + min;
+}
+
+function normalizeHHmm(hhmm: string): string {
+  const total = minutesFromHHmm(hhmm);
+  if (total === null) return hhmm.trim();
+  const h = Math.floor(total / 60);
+  const min = total % 60;
+  return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+}
+
+/** 從 Firestore `siteSettings/bookingBlocks` 讀出的原始資料解析為有效規則（無效項目略過） */
+export function parseBookingBlockWindows(raw: unknown): BookingBlockWindow[] {
+  if (!raw || typeof raw !== "object") return [];
+  const arr = (raw as { windows?: unknown }).windows;
+  if (!Array.isArray(arr)) return [];
+  const out: BookingBlockWindow[] = [];
+  for (const item of arr) {
+    if (!item || typeof item !== "object") continue;
+    const o = item as Record<string, unknown>;
+    const wdRaw = o.weekday;
+    const weekday = typeof wdRaw === "number" ? wdRaw : Number(wdRaw);
+    const start = typeof o.start === "string" ? o.start.trim() : "";
+    const end = typeof o.end === "string" ? o.end.trim() : "";
+    const reason = typeof o.reason === "string" ? o.reason.trim() : "";
+    if (!Number.isInteger(weekday) || weekday < 1 || weekday > 5) continue;
+    const b0 = minutesFromHHmm(start);
+    const b1 = minutesFromHHmm(end);
+    if (b0 === null || b1 === null || b0 >= b1) continue;
+    out.push({
+      weekday,
+      start: normalizeHHmm(start),
+      end: normalizeHHmm(end),
+      reason: reason.slice(0, 200),
+    });
+  }
+  return out;
+}
+
+/**
+ * 若該開始時間的服務時段與任一「不開放」區間重疊則回傳說明字串，否則 null。
+ * 重疊採左閉右開 [blockStart, blockEnd) 與服務 [slotStart, slotEnd) 標準區間重疊。
+ */
+export function blockedReasonForSlot(
+  dateKey: string,
+  startSlot: string,
+  windows: BookingBlockWindow[],
+): string | null {
+  if (windows.length === 0) return null;
+  let day: DateTime;
+  try {
+    day = parseDateKey(dateKey);
+  } catch {
+    return null;
+  }
+  if (!isWeekday(day)) return null;
+  const wd = day.weekday;
+  const srv0 = minutesFromHHmm(startSlot);
+  if (srv0 === null) return null;
+  const srv1 = srv0 + BOOKING_DURATION_MINUTES;
+
+  for (const w of windows) {
+    if (w.weekday !== wd) continue;
+    const b0 = minutesFromHHmm(w.start);
+    const b1 = minutesFromHHmm(w.end);
+    if (b0 === null || b1 === null || b0 >= b1) continue;
+    if (srv0 < b1 && srv1 > b0) {
+      return w.reason || "此時段不開放預約";
+    }
+  }
+  return null;
+}
+
+/** 某日所有「不可選」的開始時間（僅含 `allStartSlots()` 內的格子） */
+export function listBlockedStartSlotsForDate(
+  dateKey: string,
+  windows: BookingBlockWindow[],
+): { startSlot: string; reason: string }[] {
+  const out: { startSlot: string; reason: string }[] = [];
+  for (const s of allStartSlots()) {
+    const r = blockedReasonForSlot(dateKey, s, windows);
+    if (r) out.push({ startSlot: s, reason: r });
+  }
+  return out;
 }

@@ -5,16 +5,19 @@ import { getMessaging } from "firebase-admin/messaging";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { defineSecret, defineString } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { DateTime } from "luxon";
-import { sendNewBookingEmailToOwner } from "./resendNotify";
+import { sendMemberBookingStatusChangedEmail, sendNewBookingEmailToOwner } from "./resendNotify";
 import {
   ACTIVE_STATUSES,
-  MAX_PER_DAY,
-  MAX_PER_WORK_WEEK,
   assertSlotAllowed,
+  blockedReasonForSlot,
   isWeekday,
+  listBlockedStartSlotsForDate,
   mondayOfWeek,
+  parseBookingBlockWindows,
   parseDateKey,
+  resolveBookingCaps,
 } from "./bookingLogic";
 
 initializeApp();
@@ -157,7 +160,7 @@ export const getAvailability = onCall(publicCall, async (request) => {
 
   const weekStart = mondayOfWeek(day).toISODate()!;
 
-  const [daySnap, weekSnap] = await Promise.all([
+  const [daySnap, weekSnap, blocksSnap, capsSnap] = await Promise.all([
     db
       .collection("bookings")
       .where("dateKey", "==", dateKey)
@@ -168,15 +171,21 @@ export const getAvailability = onCall(publicCall, async (request) => {
       .where("weekStart", "==", weekStart)
       .where("status", "in", [...ACTIVE_STATUSES])
       .get(),
+    db.collection("siteSettings").doc("bookingBlocks").get(),
+    db.collection("siteSettings").doc("bookingCaps").get(),
   ]);
 
+  const caps = resolveBookingCaps(capsSnap.data());
   const taken = daySnap.docs.map((d) => d.get("startSlot") as string).filter(Boolean);
+  const blockWindows = parseBookingBlockWindows(blocksSnap.data());
+  const blockedSlots = listBlockedStartSlotsForDate(dateKey, blockWindows);
   return {
     taken,
+    blockedSlots,
     dayCount: daySnap.size,
     weekCount: weekSnap.size,
-    dayCap: MAX_PER_DAY,
-    weekCap: MAX_PER_WORK_WEEK,
+    dayCap: caps.maxPerDay,
+    weekCap: caps.maxPerWorkWeek,
   };
 });
 
@@ -235,6 +244,15 @@ export const createBooking = onCall(
     throw new HttpsError("failed-precondition", map[code] ?? "無法預約");
   }
 
+  const blocksSnap = await db.collection("siteSettings").doc("bookingBlocks").get();
+  const blockReason = blockedReasonForSlot(dateKey, startSlot, parseBookingBlockWindows(blocksSnap.data()));
+  if (blockReason) {
+    throw new HttpsError(
+      "failed-precondition",
+      blockReason === "此時段不開放預約" ? blockReason : `此時段不開放預約：${blockReason}`,
+    );
+  }
+
   const weekStart = mondayOfWeek(parseDateKey(dateKey)).toISODate()!;
   const startAt = Timestamp.fromDate(startLocal.toJSDate());
 
@@ -242,6 +260,7 @@ export const createBooking = onCall(
 
   try {
     await db.runTransaction(async (tx) => {
+      const capsRef = db.collection("siteSettings").doc("bookingCaps");
       const dayQ = db
         .collection("bookings")
         .where("dateKey", "==", dateKey)
@@ -251,13 +270,14 @@ export const createBooking = onCall(
         .where("weekStart", "==", weekStart)
         .where("status", "in", [...ACTIVE_STATUSES]);
 
-      const [daySnap, weekSnap] = await Promise.all([tx.get(dayQ), tx.get(weekQ)]);
+      const [daySnap, weekSnap, capsSnap] = await Promise.all([tx.get(dayQ), tx.get(weekQ), tx.get(capsRef)]);
+      const { maxPerDay, maxPerWorkWeek } = resolveBookingCaps(capsSnap.data());
 
-      if (daySnap.size >= MAX_PER_DAY) {
-        throw new HttpsError("resource-exhausted", "這一天已額滿（最多兩位）");
+      if (daySnap.size >= maxPerDay) {
+        throw new HttpsError("resource-exhausted", `這一天已額滿（最多 ${maxPerDay} 筆）`);
       }
-      if (weekSnap.size >= MAX_PER_WORK_WEEK) {
-        throw new HttpsError("resource-exhausted", "本工作週已達上限（最多四位）");
+      if (weekSnap.size >= maxPerWorkWeek) {
+        throw new HttpsError("resource-exhausted", `本工作週已達上限（最多 ${maxPerWorkWeek} 筆）`);
       }
 
       const sameSlot = daySnap.docs.find((d) => d.get("startSlot") === startSlot);
@@ -1016,3 +1036,68 @@ export const seedWheelPrizes = onCall(publicCall, async (request) => {
 function FieldValueOrServerTimestamp(): Timestamp {
   return Timestamp.now();
 }
+
+/** 預約 `status` 變更時寄信給會員（訪客預約略過；無 Email 則略過） */
+export const notifyMemberBookingStatusChange = onDocumentUpdated(
+  { document: "bookings/{bookingId}", region, secrets: [resendApiKey] },
+  async (event) => {
+    const change = event.data;
+    if (!change) return;
+    const before = change.before.data() as Record<string, unknown> | undefined;
+    const after = change.after.data() as Record<string, unknown> | undefined;
+    if (!before || !after) return;
+
+    const prevStatus = typeof before.status === "string" ? before.status : "pending";
+    const nextStatus = typeof after.status === "string" ? after.status : "pending";
+    if (prevStatus === nextStatus) return;
+
+    const mode = after.bookingMode;
+    if (mode === "guest_cash" || mode === "guest_beverage") return;
+    const customerId = typeof after.customerId === "string" ? after.customerId.trim() : "";
+    if (!customerId) return;
+
+    if (nextStatus === "deleted") return;
+
+    const apiKey = resendApiKey.value().trim();
+    if (!apiKey) {
+      console.warn("notifyMemberBookingStatusChange: RESEND_API_KEY empty");
+      return;
+    }
+    const from = resendFrom.value().trim() || "Massage預約 <onboarding@resend.dev>";
+
+    let to: string;
+    try {
+      const user = await getAuth().getUser(customerId);
+      to = user.email ?? "";
+    } catch (e) {
+      console.warn("notifyMemberBookingStatusChange: getUser failed", customerId, e);
+      return;
+    }
+    if (!to) return;
+
+    const displayName = typeof after.displayName === "string" ? after.displayName.trim() : "";
+    const dateKey = typeof after.dateKey === "string" ? after.dateKey : "";
+    const startSlot = typeof after.startSlot === "string" ? after.startSlot : "";
+    const cancelReasonRaw = after.cancelReason;
+    const cancelReason =
+      nextStatus === "cancelled" && typeof cancelReasonRaw === "string" ? cancelReasonRaw.trim() : undefined;
+
+    try {
+      await sendMemberBookingStatusChangedEmail({
+        apiKey,
+        from,
+        payload: {
+          to,
+          displayName: displayName || "會員",
+          dateKey,
+          startSlot,
+          previousStatus: prevStatus,
+          newStatus: nextStatus,
+          cancelReason: cancelReason && cancelReason.length > 0 ? cancelReason : undefined,
+        },
+      });
+    } catch (e) {
+      console.error("notifyMemberBookingStatusChange: send failed", e);
+    }
+  },
+);

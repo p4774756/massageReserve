@@ -23,7 +23,7 @@ service cloud.firestore {
 
       allow update: if isAdmin()
         && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['status', 'updatedAt', 'deletedAt', 'deletedBy']);
+          .hasOnly(['status', 'updatedAt', 'deletedAt', 'deletedBy', 'memberLastStatus', 'invisible']);
     }
 
     match /siteSettings/{id} {
