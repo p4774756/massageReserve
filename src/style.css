@@ -85,6 +85,18 @@ a:hover {
   overflow: hidden;
 }
 
+.app-version-footer {
+  margin: 0;
+  padding: 10px 18px 14px;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--muted);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  border-top: 1px solid var(--border);
+  background: var(--surface-muted);
+}
+
 .marquee {
   border-bottom: 1px solid var(--border);
   background: var(--surface-muted);

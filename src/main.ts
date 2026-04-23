@@ -512,6 +512,11 @@ function render() {
   );
   shell.append(announcementBox);
 
+  const appVersionFooter = el("footer", { class: "app-version-footer" }, [
+    `版號 ${__APP_VERSION__} · 最後更新 ${__APP_BUILD_DATE__}（台北）`,
+  ]);
+  shell.append(appVersionFooter);
+
   /** --- 預約表單 --- */
   const nameInput = el("input", { type: "text", autocomplete: "name", maxLength: 80 });
   const dateInput = el("input", { type: "date" });
@@ -1879,7 +1884,7 @@ function render() {
 
     function renderBookingBlockRow(model: BookingBlockRowModel): HTMLElement {
       const row = el("div", { class: "admin-booking-block-row" });
-      const weekdaySel = el("select", { class: "bb-weekday", "aria-label": "星期" });
+      const weekdaySel = el("select", { class: "bb-weekday", ariaLabel: "星期" });
       const dayLabels = ["一", "二", "三", "四", "五"];
       for (let d = 1; d <= 5; d++) {
         weekdaySel.append(el("option", { value: String(d) }, [`週${dayLabels[d - 1]}`]));
@@ -1889,14 +1894,14 @@ function render() {
         type: "time",
         class: "bb-start",
         step: "900",
-        "aria-label": "不開放起點",
+        ariaLabel: "不開放起點",
       });
       startIn.value = model.start;
       const endIn = el("input", {
         type: "time",
         class: "bb-end",
         step: "900",
-        "aria-label": "不開放終點（不含）",
+        ariaLabel: "不開放終點（不含）",
       });
       endIn.value = model.end;
       const reasonIn = el("input", {
