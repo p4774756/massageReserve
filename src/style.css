@@ -1711,6 +1711,11 @@ body.wheel-spectacle-lock {
 }
 
 /* 右下角浮動「聯絡店家」：折疊藍／展開紅 */
+/* 與 main.panel[hidden] 相同：display:flex 會蓋過部分瀏覽器對 [hidden] 的預設，後台分頁須強制隱藏 */
+.support-chat-float[hidden] {
+  display: none !important;
+}
+
 .support-chat-float {
   position: fixed;
   right: max(12px, env(safe-area-inset-right, 0px));
