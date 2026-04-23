@@ -35,5 +35,44 @@ service cloud.firestore {
     match /pushDeviceTokens/{id} {
       allow read, write: if false;
     }
+
+    /**
+     * 客服對話：文件 id = Auth UID（含匿名）。僅本人與管理員可讀；寫入以「路徑 uid == auth.uid」為主，
+     * 規則刻意保持簡單，避免 keys()/status/get 組合在評估時誤擋（含訪客匿名）。
+     */
+    match /supportThreads/{customerId} {
+      allow read: if isAdmin() || (request.auth != null && request.auth.uid == customerId);
+
+      /* 僅鎖「路徑 id == 登入 uid」；其餘欄位由 App 負責，避免規則與實際寫入欄位細微差異導致拒絕 */
+      allow create: if request.auth != null && request.auth.uid == customerId;
+
+      allow update: if isAdmin()
+        && request.resource.data.customerId == resource.data.customerId;
+
+      /* 會員更新：只鎖路徑 uid；不要求 customerId 欄位與 resource 逐字相等（部分 update 合併下易誤擋「重新開啟」） */
+      allow update: if request.auth != null && request.auth.uid == customerId;
+
+      allow delete: if false;
+
+      match /messages/{msgId} {
+        allow read: if isAdmin() || (request.auth != null && request.auth.uid == customerId);
+
+        function supportThreadDoc() {
+          return get(/databases/$(database)/documents/supportThreads/$(customerId));
+        }
+
+        allow create: if request.auth != null
+          && supportThreadDoc().exists
+          && request.resource.data.senderUid == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() >= 1
+          && (
+            (isAdmin() && request.resource.data.sender == "admin")
+            || (request.auth.uid == customerId && request.resource.data.sender == "customer")
+          );
+
+        allow update, delete: if false;
+      }
+    }
   }
 }

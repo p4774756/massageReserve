@@ -52,6 +52,9 @@ export const updateMemberNicknameAdminCall = () => httpsCallable(getFns(), "upda
 export const registerPushTokenCall = () => httpsCallable(getFns(), "registerPushToken");
 export const unregisterPushTokenCall = () => httpsCallable(getFns(), "unregisterPushToken");
 export const sendImmediatePushCall = () => httpsCallable(getFns(), "sendImmediatePush");
+export const sendSupportChatMessageCall = () => httpsCallable(getFns(), "sendSupportChatMessage");
+export const sendSupportChatAdminReplyCall = () => httpsCallable(getFns(), "sendSupportChatAdminReply");
+export const setSupportThreadStatusAdminCall = () => httpsCallable(getFns(), "setSupportThreadStatusAdmin");
 
 export function getDb() {
   return getFirestore(getFirebaseApp());

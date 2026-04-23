@@ -40,6 +40,7 @@ import {
   topupWalletCall,
 } from "./firebase";
 import { getWebPushVapidKey, registerWebPushForCurrentUser, unregisterWebPushForCurrentUser } from "./webPush";
+import { mountAdminSupportChat, mountMemberSupportChat, type SupportChatUnmount } from "./supportChat";
 import { allStartSlots } from "./slots";
 import { runWheelSpectacle } from "./wheelSpectacle";
 import {
@@ -721,6 +722,12 @@ function render() {
       headSessionStatus.className = "page-head-session";
       return;
     }
+    if (u.isAnonymous) {
+      headSessionStatus.textContent = "訪客留言模式";
+      headSessionStatus.title = "已建立匿名身分，僅用於聯絡店家";
+      headSessionStatus.className = "page-head-session page-head-session--pending";
+      return;
+    }
     if (!u.emailVerified) {
       headSessionStatus.textContent = "已登入 · 待驗證信箱";
       headSessionStatus.title = u.email ?? "尚未驗證信箱";
@@ -991,6 +998,22 @@ function render() {
         await signOut(auth);
         overlay.remove();
       });
+      if (user.isAnonymous) {
+        dialog.append(
+          el("h3", {}, ["會員中心"]),
+          el("div", { class: "hint" }, [
+            "您正以訪客身分使用「聯絡店家」。若要儲值、查看預約或抽獎，請先按「登出」再使用「會員登入／註冊」；登入會員後，此裝置上的訪客留言紀錄不會自動合併。",
+          ]),
+          el("div", { class: "hint mono" }, [`匿名身分 UID：${shortUidForDisplay(user.uid)}`]),
+          el("div", { class: "modal-actions" }, [closeBtn, logoutBtn]),
+        );
+        overlay.addEventListener("click", (ev) => {
+          if (ev.target === overlay) overlay.remove();
+        });
+        overlay.append(dialog);
+        document.body.append(overlay);
+        return;
+      }
       const modalBody: HTMLElement[] = [
         el("h3", {}, ["會員中心"]),
         el("div", { class: "hint" }, [
@@ -1116,7 +1139,9 @@ function render() {
     }
     const values = modes.map((m) => m.value);
     bookingModeSelect.value = values.includes(current) ? current : modes[0].value;
-    const loggedInUnverified = Boolean(auth.currentUser && !auth.currentUser.emailVerified);
+    const loggedInUnverified = Boolean(
+      auth.currentUser && !auth.currentUser.isAnonymous && !auth.currentUser.emailVerified,
+    );
     bookingModeHint.textContent = isMember
       ? "可選儲值扣款、會員現金（50 元），或「請師傅一杯飲料」（依現場約定）。"
       : loggedInUnverified
@@ -1129,6 +1154,21 @@ function render() {
     refillBookingModes(isVerifiedMember());
     updateMemberEntryLabel();
     if (!user) {
+      stopMyBookingsListener();
+      walletBalance = 0;
+      drawChances = 0;
+      memberExtrasWrap.hidden = true;
+      emailVerifyBanner.hidden = true;
+      walletStatus.textContent = "";
+      walletStatus.className = "status-line";
+      spinBtn.setAttribute("disabled", "true");
+      wheelStatus.textContent = "";
+      wheelStatus.className = "status-line";
+      wheelResult.hidden = true;
+      syncPageHeadSession();
+      return;
+    }
+    if (user.isAnonymous) {
       stopMyBookingsListener();
       walletBalance = 0;
       drawChances = 0;
@@ -1488,6 +1528,8 @@ function render() {
   ]);
   const wheelRow = el("div", { class: "book-wheel-row" }, [spinBtn, wheelTestBtn, wheelStatus, wheelResult]);
   memberExtrasWrap.append(emailVerifyBanner, walletStatus, myBookingsSection, wheelRulesHint, wheelRow);
+  const bookSupportChatMount = el("div", { class: "book-support-chat" });
+  mountMemberSupportChat(db, auth, bookSupportChatMount);
 
   const wheelSpectacleSettingsRef = doc(db, "siteSettings", "wheelSpectacle");
   onSnapshot(
@@ -1566,6 +1608,7 @@ function render() {
     ]),
     el("div", { class: "row-actions" }, [submitBtn]),
     bookStatus,
+    bookSupportChatMount,
     bookFooterNote,
   );
 
@@ -1580,6 +1623,7 @@ function render() {
   let adminBookingCapsUnsub: (() => void) | null = null;
   let adminBookingBlocksUnsub: (() => void) | null = null;
   let adminPushSettingsUnsub: (() => void) | null = null;
+  let adminSupportChatUnmount: SupportChatUnmount | null = null;
 
   function stopAdminListener() {
     if (adminUnsub) {
@@ -1609,6 +1653,10 @@ function render() {
     if (adminPushSettingsUnsub) {
       adminPushSettingsUnsub();
       adminPushSettingsUnsub = null;
+    }
+    if (adminSupportChatUnmount) {
+      adminSupportChatUnmount();
+      adminSupportChatUnmount = null;
     }
   }
 
@@ -2645,9 +2693,11 @@ function render() {
     tabAnnounce.id = "admin-tab-trigger-announce";
     const tabPush = el("button", { type: "button", class: "admin-tab", role: "tab" }, ["推播設定"]);
     tabPush.id = "admin-tab-trigger-push";
+    const tabSupport = el("button", { type: "button", class: "admin-tab", role: "tab" }, ["客服對話"]);
+    tabSupport.id = "admin-tab-trigger-support";
 
     const adminTablist = el("div", { class: "admin-tabs", role: "tablist" });
-    adminTablist.append(tabBookings, tabHiddenBookings, tabMembers, tabAnnounce, tabPush);
+    adminTablist.append(tabBookings, tabHiddenBookings, tabMembers, tabAnnounce, tabPush, tabSupport);
 
     const panelBookingsEl = el("div", { class: "admin-tab-panel", role: "tabpanel", id: "admin-tab-panel-bookings" });
     panelBookingsEl.setAttribute("aria-labelledby", "admin-tab-trigger-bookings");
@@ -2687,12 +2737,23 @@ function render() {
       hidden: true,
     });
     panelPushEl.setAttribute("aria-labelledby", "admin-tab-trigger-push");
+    const panelSupportEl = el("div", {
+      class: "admin-tab-panel",
+      role: "tabpanel",
+      id: "admin-tab-panel-support",
+      hidden: true,
+    });
+    panelSupportEl.setAttribute("aria-labelledby", "admin-tab-trigger-support");
+    const adminSupportChatHost = el("div", { class: "admin-support-chat-host" });
+    panelSupportEl.append(adminSupportChatHost);
+    adminSupportChatUnmount = mountAdminSupportChat(db, auth, adminSupportChatHost);
 
     tabBookings.setAttribute("aria-controls", "admin-tab-panel-bookings");
     tabHiddenBookings.setAttribute("aria-controls", "admin-tab-panel-hidden");
     tabMembers.setAttribute("aria-controls", "admin-tab-panel-members");
     tabAnnounce.setAttribute("aria-controls", "admin-tab-panel-announce");
     tabPush.setAttribute("aria-controls", "admin-tab-panel-push");
+    tabSupport.setAttribute("aria-controls", "admin-tab-panel-support");
 
     panelBookingsEl.append(adminStatus, tableHolder);
     panelMembersEl.append(accountCreateSection, walletTopupSection, memberListSection);
@@ -2700,12 +2761,26 @@ function render() {
     panelPushEl.append(pushSettingsSection);
 
     const adminPanelsWrap = el("div", { class: "admin-tab-panels" });
-    adminPanelsWrap.append(panelBookingsEl, panelHiddenBookingsEl, panelMembersEl, panelAnnounceEl, panelPushEl);
+    adminPanelsWrap.append(
+      panelBookingsEl,
+      panelHiddenBookingsEl,
+      panelMembersEl,
+      panelAnnounceEl,
+      panelPushEl,
+      panelSupportEl,
+    );
 
-    const adminTabButtons = [tabBookings, tabHiddenBookings, tabMembers, tabAnnounce, tabPush] as const;
-    const adminTabPanels = [panelBookingsEl, panelHiddenBookingsEl, panelMembersEl, panelAnnounceEl, panelPushEl] as const;
+    const adminTabButtons = [tabBookings, tabHiddenBookings, tabMembers, tabAnnounce, tabPush, tabSupport] as const;
+    const adminTabPanels = [
+      panelBookingsEl,
+      panelHiddenBookingsEl,
+      panelMembersEl,
+      panelAnnounceEl,
+      panelPushEl,
+      panelSupportEl,
+    ] as const;
 
-    function selectAdminTab(index: 0 | 1 | 2 | 3 | 4) {
+    function selectAdminTab(index: 0 | 1 | 2 | 3 | 4 | 5) {
       adminTabButtons.forEach((btn, i) => {
         const on = i === index;
         btn.setAttribute("aria-selected", String(on));
@@ -2723,6 +2798,7 @@ function render() {
     tabMembers.addEventListener("click", () => selectAdminTab(2));
     tabAnnounce.addEventListener("click", () => selectAdminTab(3));
     tabPush.addEventListener("click", () => selectAdminTab(4));
+    tabSupport.addEventListener("click", () => selectAdminTab(5));
 
     adminTablist.addEventListener("keydown", (ev) => {
       if (ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;
@@ -2732,7 +2808,7 @@ function render() {
       const delta = ev.key === "ArrowRight" ? 1 : -1;
       const n = adminTabButtons.length;
       const next = ((cur + delta) % n + n) % n;
-      selectAdminTab(next as 0 | 1 | 2 | 3 | 4);
+      selectAdminTab(next as 0 | 1 | 2 | 3 | 4 | 5);
       adminTabButtons[next].focus();
     });
 

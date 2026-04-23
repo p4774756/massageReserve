@@ -1044,6 +1044,140 @@ function FieldValueOrServerTimestamp(): Timestamp {
   return Timestamp.now();
 }
 
+const SUPPORT_CHAT_TEXT_MAX = 2000;
+const SUPPORT_CHAT_PREVIEW_MAX = 200;
+
+function supportChatPreview(text: string): string {
+  const t = text.trim().replace(/\s+/g, " ");
+  if (t.length <= SUPPORT_CHAT_PREVIEW_MAX) return t;
+  return `${t.slice(0, SUPPORT_CHAT_PREVIEW_MAX - 1)}…`;
+}
+
+/** 會員／訪客匿名：送客服訊息，或僅重新開啟對話（Admin 寫入，避開客戶端 Rules 評估問題） */
+export const sendSupportChatMessage = onCall(publicCall, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", "請先登入或按「以訪客身分開始留言」");
+  }
+  const reopen = request.data?.reopen === true;
+  if (reopen) {
+    const threadRef = db.collection("supportThreads").doc(uid);
+    const snap = await threadRef.get();
+    if (!snap.exists) {
+      throw new HttpsError("not-found", "尚無對話紀錄");
+    }
+    await threadRef.update({
+      status: "open",
+      updatedAt: FieldValueOrServerTimestamp(),
+    });
+    return { ok: true };
+  }
+  const textRaw = typeof request.data?.text === "string" ? request.data.text.trim() : "";
+  if (textRaw.length < 1) {
+    throw new HttpsError("invalid-argument", "請輸入訊息內容");
+  }
+  if (textRaw.length > SUPPORT_CHAT_TEXT_MAX) {
+    throw new HttpsError("invalid-argument", `訊息最長 ${SUPPORT_CHAT_TEXT_MAX} 字`);
+  }
+  const threadRef = db.collection("supportThreads").doc(uid);
+  const preview = supportChatPreview(textRaw);
+  const threadSnap = await threadRef.get();
+  if (!threadSnap.exists) {
+    const now = FieldValueOrServerTimestamp();
+    await threadRef.set({
+      customerId: uid,
+      status: "open",
+      createdAt: now,
+      updatedAt: now,
+      lastMessageAt: now,
+      lastMessagePreview: preview,
+    });
+  } else {
+    const st = threadSnap.get("status");
+    if (st === "closed") {
+      throw new HttpsError(
+        "failed-precondition",
+        "此對話已結束，請先按「繼續諮詢（重新開啟對話）」",
+      );
+    }
+    await threadRef.update({
+      updatedAt: FieldValueOrServerTimestamp(),
+      lastMessageAt: FieldValueOrServerTimestamp(),
+      lastMessagePreview: preview,
+    });
+  }
+  await threadRef.collection("messages").add({
+    text: textRaw,
+    sender: "customer",
+    senderUid: uid,
+    createdAt: FieldValueOrServerTimestamp(),
+  });
+  return { ok: true };
+});
+
+/** 管理員回覆客服訊息 */
+export const sendSupportChatAdminReply = onCall(publicCall, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", "請先登入");
+  }
+  await assertAdminByUid(uid);
+  const customerId = typeof request.data?.customerId === "string" ? request.data.customerId.trim() : "";
+  const textRaw = typeof request.data?.text === "string" ? request.data.text.trim() : "";
+  if (!customerId) {
+    throw new HttpsError("invalid-argument", "缺少 customerId");
+  }
+  if (textRaw.length < 1) {
+    throw new HttpsError("invalid-argument", "請輸入回覆內容");
+  }
+  if (textRaw.length > SUPPORT_CHAT_TEXT_MAX) {
+    throw new HttpsError("invalid-argument", `訊息最長 ${SUPPORT_CHAT_TEXT_MAX} 字`);
+  }
+  const threadRef = db.collection("supportThreads").doc(customerId);
+  const threadSnap = await threadRef.get();
+  if (!threadSnap.exists) {
+    throw new HttpsError("not-found", "找不到對話");
+  }
+  const preview = supportChatPreview(textRaw);
+  await threadRef.update({
+    updatedAt: FieldValueOrServerTimestamp(),
+    lastMessageAt: FieldValueOrServerTimestamp(),
+    lastMessagePreview: preview,
+  });
+  await threadRef.collection("messages").add({
+    text: textRaw,
+    sender: "admin",
+    senderUid: uid,
+    createdAt: FieldValueOrServerTimestamp(),
+  });
+  return { ok: true };
+});
+
+/** 管理員將客服對話標記為進行中／已結束 */
+export const setSupportThreadStatusAdmin = onCall(publicCall, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", "請先登入");
+  }
+  await assertAdminByUid(uid);
+  const customerId = typeof request.data?.customerId === "string" ? request.data.customerId.trim() : "";
+  const statusRaw = request.data?.status;
+  const status = statusRaw === "closed" || statusRaw === "open" ? statusRaw : "open";
+  if (!customerId) {
+    throw new HttpsError("invalid-argument", "缺少 customerId");
+  }
+  const threadRef = db.collection("supportThreads").doc(customerId);
+  const snap = await threadRef.get();
+  if (!snap.exists) {
+    throw new HttpsError("not-found", "找不到對話");
+  }
+  await threadRef.update({
+    status,
+    updatedAt: FieldValueOrServerTimestamp(),
+  });
+  return { ok: true };
+});
+
 /** 預約 `status` 變更時寄信給會員（訪客預約略過；無 Email 則略過） */
 export const notifyMemberBookingStatusChange = onDocumentUpdated(
   { document: "bookings/{bookingId}", region, secrets: [resendApiKey] },
