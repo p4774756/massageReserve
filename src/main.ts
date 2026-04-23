@@ -2433,18 +2433,211 @@ function render() {
     const memberListStatus = el("div", { class: "status-line" });
     const memberListTableWrap = el("div", { class: "table-wrap admin-member-list-table" });
     const memberListTable = el("table", {}, []);
-    memberListTable.append(
-      el("tr", {}, [
-        el("th", {}, ["Email"]),
-        el("th", {}, ["信箱驗證"]),
-        el("th", {}, ["UID"]),
-        el("th", {}, ["稱呼"]),
-        el("th", {}, ["儲值餘額"]),
-        el("th", {}, ["可抽次數"]),
-        el("th", { class: "admin-member-th-actions" }, ["操作"]),
-      ]),
-    );
     memberListTableWrap.append(memberListTable);
+
+    type AdminMemberListRow = {
+      uid: string;
+      email: string | null;
+      emailVerified: boolean;
+      nickname: string;
+      walletBalance: number;
+      drawChances: number;
+    };
+    type MemberListSortKey =
+      | "email"
+      | "emailVerified"
+      | "uid"
+      | "nickname"
+      | "walletBalance"
+      | "drawChances";
+
+    const MEMBER_LIST_PAGE_SIZE = 10;
+    let memberListCache: AdminMemberListRow[] = [];
+    let memberListPageIndex = 0;
+    let memberListSortKey: MemberListSortKey = "email";
+    let memberListSortAsc = true;
+
+    const memberListPager = el("div", { class: "admin-hidden-pager admin-member-list-pager" });
+    const memberListPagePrev = el("button", { type: "button", class: "ghost" }, ["上一頁"]);
+    const memberListPageInfo = el("span", { class: "hint admin-hidden-pager-meta" }, ["—"]);
+    const memberListPageNext = el("button", { type: "button", class: "ghost" }, ["下一頁"]);
+    memberListPager.append(memberListPagePrev, memberListPageInfo, memberListPageNext);
+
+    function compareAdminMemberRows(
+      a: AdminMemberListRow,
+      b: AdminMemberListRow,
+      key: MemberListSortKey,
+      asc: boolean,
+    ): number {
+      let cmp = 0;
+      switch (key) {
+        case "email": {
+          cmp = (a.email ?? "")
+            .toLowerCase()
+            .localeCompare((b.email ?? "").toLowerCase(), "zh-Hant", { numeric: true });
+          break;
+        }
+        case "emailVerified": {
+          const av = a.emailVerified ? 1 : 0;
+          const bv = b.emailVerified ? 1 : 0;
+          cmp = asc ? bv - av : av - bv;
+          return cmp;
+        }
+        case "uid": {
+          cmp = a.uid.localeCompare(b.uid);
+          break;
+        }
+        case "nickname": {
+          cmp = a.nickname.localeCompare(b.nickname, "zh-Hant", { numeric: true });
+          break;
+        }
+        case "walletBalance": {
+          cmp = a.walletBalance === b.walletBalance ? 0 : a.walletBalance < b.walletBalance ? -1 : 1;
+          break;
+        }
+        case "drawChances": {
+          cmp = a.drawChances === b.drawChances ? 0 : a.drawChances < b.drawChances ? -1 : 1;
+          break;
+        }
+        default:
+          break;
+      }
+      return asc ? cmp : -cmp;
+    }
+
+    function buildMemberListHeaderRow(): HTMLTableRowElement {
+      const mk = (label: string, key: MemberListSortKey) => {
+        const th = el("th", {});
+        const arrow = memberListSortKey === key ? (memberListSortAsc ? " ▲" : " ▼") : "";
+        const btn = el(
+          "button",
+          {
+            type: "button",
+            class: "ghost admin-member-sort-btn",
+            title: `依「${label}」排序；再按一次反向`,
+          },
+          [`${label}${arrow}`],
+        );
+        btn.setAttribute("data-member-sort", key);
+        th.append(btn);
+        return th;
+      };
+      return el("tr", {}, [
+        mk("Email", "email"),
+        mk("信箱驗證", "emailVerified"),
+        mk("UID", "uid"),
+        mk("稱呼", "nickname"),
+        mk("儲值餘額", "walletBalance"),
+        mk("可抽次數", "drawChances"),
+        el("th", { class: "admin-member-th-actions" }, ["操作"]),
+      ]);
+    }
+
+    function paintMemberListTable() {
+      const sorted = [...memberListCache].sort((a, b) => {
+        const c = compareAdminMemberRows(a, b, memberListSortKey, memberListSortAsc);
+        if (c !== 0) return c;
+        return a.uid.localeCompare(b.uid);
+      });
+      const total = sorted.length;
+      const totalPages = Math.max(1, Math.ceil(total / MEMBER_LIST_PAGE_SIZE));
+      memberListPageIndex = Math.max(0, Math.min(memberListPageIndex, totalPages - 1));
+      const from = memberListPageIndex * MEMBER_LIST_PAGE_SIZE;
+      const pageRows = sorted.slice(from, from + MEMBER_LIST_PAGE_SIZE);
+
+      memberListTable.replaceChildren();
+      memberListTable.append(buildMemberListHeaderRow());
+
+      if (total === 0) {
+        memberListTable.append(
+          el("tr", {}, [
+            el("td", { class: "hint", colSpan: 7 }, ["目前沒有使用者資料。請按「重新載入會員清單」。"]),
+          ]),
+        );
+        memberListPagePrev.disabled = true;
+        memberListPageNext.disabled = true;
+        memberListPageInfo.textContent = "共 0 筆";
+        return;
+      }
+
+      for (const m of pageRows) {
+        const nickInput = el("input", {
+          type: "text",
+          maxLength: 80,
+          value: m.nickname,
+          class: "admin-member-nick-input",
+          autocomplete: "off",
+        });
+        const saveBtn = el("button", { class: "ghost admin-save-nick-btn", type: "button" }, ["儲存稱呼"]);
+        saveBtn.addEventListener("click", async () => {
+          memberListStatus.textContent = "";
+          memberListStatus.className = "status-line";
+          saveBtn.setAttribute("disabled", "true");
+          try {
+            const updateFn = updateMemberNicknameAdminCall();
+            await updateFn({ customerId: m.uid, nickname: nickInput.value });
+            const cached = memberListCache.find((r) => r.uid === m.uid);
+            if (cached) cached.nickname = nickInput.value.trim();
+            memberListStatus.textContent = `已更新 ${m.email ?? m.uid} 的稱呼。`;
+            memberListStatus.classList.add("ok");
+            paintMemberListTable();
+          } catch (e) {
+            memberListStatus.textContent = e instanceof Error ? e.message : "儲存失敗";
+            memberListStatus.classList.add("error");
+          } finally {
+            saveBtn.removeAttribute("disabled");
+          }
+        });
+        const verified = m.emailVerified === true;
+        const verifyCell = el("td", { class: verified ? "admin-member-verify ok" : "admin-member-verify" }, [
+          verified ? "已驗證" : "未驗證",
+        ]);
+        memberListTable.append(
+          el("tr", {}, [
+            el("td", {}, [m.email ?? "（無 Email）"]),
+            verifyCell,
+            el("td", { class: "mono admin-member-uid" }, [m.uid]),
+            el("td", {}, [nickInput]),
+            el("td", { class: "mono" }, [String(m.walletBalance)]),
+            el("td", { class: "mono" }, [String(m.drawChances)]),
+            el("td", { class: "admin-member-td-actions" }, [saveBtn]),
+          ]),
+        );
+      }
+
+      memberListPagePrev.disabled = memberListPageIndex <= 0;
+      memberListPageNext.disabled = memberListPageIndex >= totalPages - 1;
+      memberListPageInfo.textContent = `第 ${memberListPageIndex + 1} / ${totalPages} 頁 · 共 ${total} 位（每頁 ${MEMBER_LIST_PAGE_SIZE} 筆）`;
+    }
+
+    memberListTable.addEventListener("click", (ev) => {
+      const t = ev.target as HTMLElement | null;
+      const btn = t?.closest("button[data-member-sort]");
+      if (!btn || !memberListTable.contains(btn)) return;
+      const key = btn.getAttribute("data-member-sort") as MemberListSortKey | null;
+      if (!key) return;
+      if (key === memberListSortKey) memberListSortAsc = !memberListSortAsc;
+      else {
+        memberListSortKey = key;
+        memberListSortAsc = true;
+      }
+      memberListPageIndex = 0;
+      paintMemberListTable();
+    });
+
+    memberListPagePrev.addEventListener("click", () => {
+      if (memberListPageIndex <= 0) return;
+      memberListPageIndex -= 1;
+      paintMemberListTable();
+    });
+    memberListPageNext.addEventListener("click", () => {
+      const total = memberListCache.length;
+      if (total === 0) return;
+      const totalPages = Math.ceil(total / MEMBER_LIST_PAGE_SIZE);
+      if (memberListPageIndex >= totalPages - 1) return;
+      memberListPageIndex += 1;
+      paintMemberListTable();
+    });
 
     async function loadMemberList() {
       memberListStatus.textContent = "載入會員清單中…";
@@ -2453,71 +2646,21 @@ function render() {
       try {
         const fn = listMembersAdminCall();
         const res = await fn({});
-        const data = res.data as {
-          members: {
-            uid: string;
-            email: string | null;
-            emailVerified?: boolean;
-            nickname: string;
-            walletBalance: number;
-            drawChances: number;
-          }[];
-        };
-        const members = Array.isArray(data.members) ? data.members : [];
-        memberListTable.innerHTML = "";
-        memberListTable.append(
-          el("tr", {}, [
-            el("th", {}, ["Email"]),
-            el("th", {}, ["信箱驗證"]),
-            el("th", {}, ["UID"]),
-            el("th", {}, ["稱呼"]),
-            el("th", {}, ["儲值餘額"]),
-            el("th", {}, ["可抽次數"]),
-            el("th", { class: "admin-member-th-actions" }, ["操作"]),
-          ]),
-        );
-        for (const m of members) {
-          const nickInput = el("input", {
-            type: "text",
-            maxLength: 80,
-            value: m.nickname,
-            class: "admin-member-nick-input",
-            autocomplete: "off",
-          });
-          const saveBtn = el("button", { class: "ghost admin-save-nick-btn", type: "button" }, ["儲存稱呼"]);
-          saveBtn.addEventListener("click", async () => {
-            memberListStatus.textContent = "";
-            memberListStatus.className = "status-line";
-            saveBtn.setAttribute("disabled", "true");
-            try {
-              const updateFn = updateMemberNicknameAdminCall();
-              await updateFn({ customerId: m.uid, nickname: nickInput.value });
-              memberListStatus.textContent = `已更新 ${m.email ?? m.uid} 的稱呼。`;
-              memberListStatus.classList.add("ok");
-            } catch (e) {
-              memberListStatus.textContent = e instanceof Error ? e.message : "儲存失敗";
-              memberListStatus.classList.add("error");
-            } finally {
-              saveBtn.removeAttribute("disabled");
-            }
-          });
-          const verified = m.emailVerified === true;
-          const verifyCell = el("td", { class: verified ? "admin-member-verify ok" : "admin-member-verify" }, [
-            verified ? "已驗證" : "未驗證",
-          ]);
-          memberListTable.append(
-            el("tr", {}, [
-              el("td", {}, [m.email ?? "（無 Email）"]),
-              verifyCell,
-              el("td", { class: "mono admin-member-uid" }, [m.uid]),
-              el("td", {}, [nickInput]),
-              el("td", { class: "mono" }, [String(m.walletBalance)]),
-              el("td", { class: "mono" }, [String(m.drawChances)]),
-              el("td", { class: "admin-member-td-actions" }, [saveBtn]),
-            ]),
-          );
-        }
-        memberListStatus.textContent = `已載入 ${members.length} 位使用者。`;
+        const data = res.data as { members: AdminMemberListRow[] };
+        const raw = Array.isArray(data.members) ? data.members : [];
+        memberListCache = raw.map((m) => ({
+          uid: m.uid,
+          email: m.email ?? null,
+          emailVerified: m.emailVerified === true,
+          nickname: typeof m.nickname === "string" ? m.nickname : "",
+          walletBalance: typeof m.walletBalance === "number" ? m.walletBalance : 0,
+          drawChances: typeof m.drawChances === "number" ? m.drawChances : 0,
+        }));
+        memberListPageIndex = 0;
+        memberListSortKey = "email";
+        memberListSortAsc = true;
+        paintMemberListTable();
+        memberListStatus.textContent = `已載入 ${memberListCache.length} 位使用者。`;
         memberListStatus.classList.add("ok");
       } catch (e) {
         memberListStatus.textContent = e instanceof Error ? e.message : "載入失敗";
@@ -2538,10 +2681,14 @@ function render() {
         el("code", {}, ["customers/{uid}"]),
         " 的餘額與稱呼。人數極多時載入可能較久。",
       ]),
+      el("p", { class: "hint" }, ["表頭欄位可點擊排序；清單每頁顯示 10 位。"]),
       el("div", { class: "row-actions" }, [memberListRefreshBtn]),
       memberListStatus,
       memberListTableWrap,
+      memberListPager,
     );
+
+    paintMemberListTable();
 
     function clampPushReminderMinutes(raw: unknown): number {
       const n = typeof raw === "number" && Number.isFinite(raw) ? Math.round(raw) : 60;
