@@ -1531,6 +1531,34 @@ function render() {
   const bookSupportChatMount = el("div", { class: "book-support-chat" });
   mountMemberSupportChat(db, auth, bookSupportChatMount);
 
+  const supportChatFloatPanel = el("div", {
+    class: "support-chat-float__panel",
+    id: "support-chat-float-panel",
+    hidden: true,
+  });
+  supportChatFloatPanel.append(bookSupportChatMount);
+  const supportChatFab = el("button", { type: "button", class: "support-chat-float__fab" }, ["聯絡店家"]);
+  supportChatFab.setAttribute("aria-controls", "support-chat-float-panel");
+  supportChatFab.setAttribute("aria-expanded", "false");
+  supportChatFab.setAttribute("aria-label", "開啟聯絡店家");
+  const supportChatFloat = el("div", { class: "support-chat-float" }, [supportChatFloatPanel, supportChatFab]);
+  let supportChatOpen = false;
+  function setSupportChatOpen(open: boolean) {
+    supportChatOpen = open;
+    supportChatFloat.classList.toggle("support-chat-float--open", open);
+    supportChatFloatPanel.hidden = !open;
+    supportChatFab.setAttribute("aria-expanded", String(open));
+    supportChatFab.textContent = open ? "收合" : "聯絡店家";
+    supportChatFab.setAttribute("aria-label", open ? "收合聯絡店家" : "開啟聯絡店家");
+  }
+  supportChatFab.addEventListener("click", () => setSupportChatOpen(!supportChatOpen));
+  function onSupportChatEscape(ev: KeyboardEvent) {
+    if (ev.key !== "Escape") return;
+    if (!supportChatOpen || supportChatFloat.hidden) return;
+    setSupportChatOpen(false);
+  }
+  document.addEventListener("keydown", onSupportChatEscape);
+
   const wheelSpectacleSettingsRef = doc(db, "siteSettings", "wheelSpectacle");
   onSnapshot(
     wheelSpectacleSettingsRef,
@@ -1608,9 +1636,10 @@ function render() {
     ]),
     el("div", { class: "row-actions" }, [submitBtn]),
     bookStatus,
-    bookSupportChatMount,
     bookFooterNote,
   );
+
+  root.append(supportChatFloat);
 
   /** --- 管理後台 --- */
   const adminWrap = el("div", {}, []);
@@ -3201,6 +3230,7 @@ function render() {
     panelBook.hidden = !isBook;
     panelAdmin.hidden = isBook;
     hostPortrait.hidden = !isBook;
+    supportChatFloat.hidden = !isBook;
     syncMarqueeVisibilityForTab();
     if (isBook) {
       stopAdminListener();
