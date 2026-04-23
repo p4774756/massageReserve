@@ -535,6 +535,19 @@ button.ghost:disabled {
   font-weight: 600;
 }
 
+/* 緊接在「開始時間」下方：無訊息時不佔垂直空間 */
+.schedule-status:empty {
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  line-height: 0;
+  overflow: hidden;
+}
+
+.schedule-status:not(:empty) {
+  margin-top: 4px;
+}
+
 .meta-pills {
   display: flex;
   flex-wrap: wrap;

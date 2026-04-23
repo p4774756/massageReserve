@@ -528,7 +528,13 @@ function render() {
     "訪客預約以現金 50 元結帳；儲值與抽獎請使用右上角登入。",
   ]);
   const submitBtn = el("button", { class: "primary", type: "button" }, ["送出預約"]);
-  const bookStatus = el("div", { class: "status-line" });
+  /** 選日期／載入空檔與名額相關提示，緊接在時段選擇下方，避免訊息落在頁面底部 */
+  const scheduleStatus = el("div", {
+    class: "status-line schedule-status",
+    role: "status",
+    ariaLive: "polite",
+  });
+  const bookStatus = el("div", { class: "status-line book-submit-status", role: "status", ariaLive: "polite" });
   const meta = el("div", { class: "meta-pills" });
   const bookFooterNote = el("div", { class: "footer-note" });
   bookFooterNote.textContent = "規則：同一天最多 2 筆、同一工作週最多 4 筆；已取消的不計入名額。";
@@ -1234,8 +1240,8 @@ function render() {
   refillSlots(new Set(), true, "", new Map());
 
   async function refreshAvailability() {
-    bookStatus.textContent = "";
-    bookStatus.className = "status-line";
+    scheduleStatus.textContent = "";
+    scheduleStatus.className = "status-line schedule-status";
     meta.innerHTML = "";
     const dk = dateInput.value;
     if (!dk) {
@@ -1249,16 +1255,16 @@ function render() {
     const minKey = taipeiTodayDateKey();
     if (dk < minKey) {
       refillSlots(new Set(), true, "", new Map());
-      bookStatus.textContent = "不可選擇今天以前的日期。";
-      bookStatus.classList.add("error");
+      scheduleStatus.textContent = "不可選擇今天以前的日期。";
+      scheduleStatus.classList.add("error");
       dateInput.value = "";
       return;
     }
 
     if (!isDateKeyMonFri(dk)) {
       refillSlots(new Set(), true, dk, new Map());
-      bookStatus.textContent = "僅能預約週一到週五。";
-      bookStatus.classList.add("error");
+      scheduleStatus.textContent = "僅能預約週一到週五。";
+      scheduleStatus.classList.add("error");
       return;
     }
 
@@ -1299,17 +1305,17 @@ function render() {
         ]),
       );
       if (dayFull) {
-        bookStatus.textContent = "這一天已額滿。";
-        bookStatus.classList.add("error");
+        scheduleStatus.textContent = "這一天已額滿。";
+        scheduleStatus.classList.add("error");
       } else if (weekFull) {
-        bookStatus.textContent = "本工作週已達上限。";
-        bookStatus.classList.add("error");
+        scheduleStatus.textContent = "本工作週已達上限。";
+        scheduleStatus.classList.add("error");
       }
     } catch (e) {
       console.error(e);
       refillSlots(new Set(), true, dk, new Map());
-      bookStatus.textContent = "無法載入空檔，請稍後再試。";
-      bookStatus.classList.add("error");
+      scheduleStatus.textContent = "無法載入空檔，請稍後再試。";
+      scheduleStatus.classList.add("error");
     }
   }
 
@@ -1450,6 +1456,7 @@ function render() {
         el("span", { class: "hint" }, ["開始時間為 15 分鐘一格；單次服務約15~50分鐘, 看情況."]),
       ]),
     ]),
+    scheduleStatus,
     el("div", { class: "grid" }, [
       el("label", { class: "field" }, [
         "付款方式",
