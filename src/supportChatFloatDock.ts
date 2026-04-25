@@ -2,6 +2,8 @@
  * 「聯絡店家」浮層：長按主按鈕約半秒後可拖曳整塊，放開後依中心點黏在視窗左或右下緣（距底距離會記住）。
  */
 
+import { t } from "./i18n";
+
 const DOCK_KEY = "mr_support_float_side";
 const BOTTOM_KEY = "mr_support_float_bottom";
 const LONG_PRESS_MS = 480;
@@ -144,11 +146,8 @@ export function attachSupportChatFloatDrag(floatEl: HTMLElement, fab: HTMLButton
     bottomPx = clamp(bottomPx, 8, Math.max(8, window.innerHeight - h - 8));
     persist();
     applyDockedLayout();
-    const swallowNextFabClick = (ev: MouseEvent): void => {
-      ev.preventDefault();
-      ev.stopImmediatePropagation();
-    };
-    fab.addEventListener("click", swallowNextFabClick, { capture: true, once: true });
+    // 不在此攔截「下一個 click」：多數瀏覽器在拖曳後不會對該次 pointerup 合成 click，
+    // 若仍註冊 once 的 capture listener，會誤吞使用者第一次意圖開啟面板的點擊（變成要點兩次）。
   }
 
   function beginDrag(
@@ -207,7 +206,10 @@ export function attachSupportChatFloatDrag(floatEl: HTMLElement, fab: HTMLButton
     if (!dragging) applyDockedLayout();
   }
 
-  fab.title = "短按：開啟／收合；長按約半秒：可拖曳位置，放開後靠左或靠右下緣。";
+  fab.title = t(
+    "support.fab.dragTitle",
+    "短按：開啟／收合；長按約半秒：可拖曳位置，放開後靠左或靠右下緣。",
+  );
 
   readPersist();
   applyDockedLayout();

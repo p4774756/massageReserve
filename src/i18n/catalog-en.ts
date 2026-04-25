@@ -124,11 +124,17 @@ export const EN: Record<string, string> = {
   "wheel.spinDone": "Spin complete!",
   "wheel.previewDone": "That was a visual preview only — no real spin or deduction.",
   "wheel.previewPrizeName": "【Preview】+5 wallet credit",
+  "wheel.previewPrizeC10": "+10 wallet credit",
+  "wheel.previewPrizeExtra": "One extra spin",
+  "wheel.previewPrizeThanks": "Thanks for participating",
+  "wheel.previewPrizeFun": "Fun penalty text",
 
   "support.fab.chat": "Chat",
   "support.fab.collapse": "Close",
   "support.fab.open": "Open contact",
   "support.fab.close": "Close contact",
+  "support.fab.dragTitle":
+    "Tap: open/close. Long-press ~0.5s to drag; release snaps to left or right bottom edge.",
 
   "booking.fillName": "Please enter your name.",
   "booking.pickDateSlot": "Please choose a date and start time.",
@@ -152,6 +158,7 @@ export const EN: Record<string, string> = {
   "myBookings.empty":
     "No records yet. After you submit with member wallet/cash/drink credit, they appear here.",
   "myBookings.cancel": "Cancel booking",
+  "myBookings.confirmCancelBody": "Cancel this booking?\n\n{{when}}",
   "myBookings.loadFail":
     "Could not load bookings. If you just added an index, deploy and wait for indexing.",
   "myBookings.cancelFail": "Cancel failed",
@@ -224,6 +231,7 @@ export const EN: Record<string, string> = {
   "session.guestChat": "Guest chat mode",
   "session.guestChatTitle": "Anonymous identity for contacting the shop",
   "session.verifyPending": "Signed in · email pending verification",
+  "session.verifyTitleFallback": "No email on file",
   "session.signedInPrefix": "Signed in · ",
   "session.memberFallback": "Member",
 
@@ -241,6 +249,7 @@ export const EN: Record<string, string> = {
   "admin.forbidden": "No access: this account is not an admin.",
   "admin.signOut": "Sign out",
   "admin.signedInLabel": "Signed in: {{name}} ({{uid}})",
+  "admin.signedInUidOnly": "Signed in: ({{uid}})",
   "admin.placeholder.memberId": "Member email (recommended) or UID",
   "admin.topup.notePlaceholder": "Note (optional)",
   "admin.topup.btn": "Top up",
@@ -259,28 +268,54 @@ export const EN: Record<string, string> = {
   "admin.blocks.addRow": "Add row",
   "admin.blocks.save": "Save closed booking windows",
   "admin.blocks.rowRemove": "Remove this row",
+  "admin.blocks.heading": "Closed booking windows",
   "admin.blocks.weekday": "Weekday",
   "admin.blocks.start": "Start (inclusive)",
   "admin.blocks.end": "End (exclusive)",
   "admin.blocks.reason": "Reason shown on the booking page",
   "admin.blocks.reasonPh": "e.g. therapist training, away",
+  "admin.blocks.hintA":
+    "Disable booking by weekday/time window. If a service slot (~30 min) overlaps a blocked window, that start time is unavailable. Example: Mon/Thu 16:30-17:30 blocks starts at 16:30, 16:45, 17:00. Firestore: ",
+  "admin.blocks.hintB": " field ",
+  "admin.blocks.hintC": ". Interval is [start, end).",
+  "admin.blocks.tooMany": "Maximum 40 rows. Remove some rows and save again.",
+  "admin.blocks.invalidWeekday": "Each row weekday must be Monday to Friday.",
+  "admin.blocks.invalidTime": "Please check each row time format.",
+  "admin.blocks.invalidRange":
+    "Each row end time must be later than start time. Intervals are [start, end).",
   "admin.dayLabels": "Mon,Tue,Wed,Thu,Fri",
 
   "admin.announce.heading": "Marquee announcements",
+  "admin.announce.intro":
+    "Top and bottom are configured separately in Firestore: siteSettings/marqueeText and siteSettings/marqueeLed.",
   "admin.announce.topHeading": "Top · text marquee",
   "admin.announce.topLabel": "Content",
   "admin.announce.enable": "Enable",
   "admin.announce.bottomHeading": "Bottom · LED marquee",
   "admin.announce.bottomLabel": "Content",
+  "admin.announce.speedLabel": "Scroll speed",
+  "admin.announce.speedHint":
+    "About {{min}}–{{max}} (larger number = faster, unit: pixels/second).",
   "admin.announce.wheelHeading": "Booking page · wheel preview",
   "admin.announce.wheelToggle": "Show “Preview wheel effect” on the booking page",
+  "admin.announce.wheelHintA":
+    "After enabling and saving, the booking page member area shows a “Preview wheel effect” button. It only plays animation, does not call spin API, and does not consume chances. Recommended off in production. Firestore: ",
+  "admin.announce.wheelHintB": ".",
 
   "admin.caps.heading": "Booking caps",
   "admin.caps.perDay": "Max bookings same day",
   "admin.caps.perWeek": "Max bookings same work week",
+  "admin.caps.hintA":
+    "Controls max active bookings for the same day and same work week (Mon-Fri) with statuses ",
+  "admin.caps.hintB": ". Firestore: ",
+  "admin.caps.hintC": " (",
+  "admin.caps.hintD":
+    ", integer 1-50; if doc is missing backend defaults to 2 and 4).",
 
   "admin.wallet.heading": "Member top-up",
   "admin.wallet.memberLabel": "Member (email or UID)",
+  "admin.wallet.searchHint":
+    "Type at least 2 characters to match emails, or paste a UID directly.",
   "admin.wallet.amount": "Top-up amount",
   "admin.wallet.note": "Note (optional)",
   "admin.member.createBtn": "Create member account",
@@ -293,6 +328,10 @@ export const EN: Record<string, string> = {
   "admin.member.selfRegisterHint":
     "Members can also self-register on the booking page; they must verify email before wallet and member booking.",
   "admin.member.needCreds": "Enter email and password.",
+  "admin.member.emailPh": "Member email",
+  "admin.member.passwordPh": "Initial password (min 6 characters)",
+  "admin.member.nicknamePh":
+    "e.g. Alex (optional; used as default booking name)",
   "admin.member.created": "Created successfully, UID: {{uid}} (top-up field prefilled with email)",
 
   "admin.table.when": "When",

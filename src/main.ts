@@ -603,7 +603,9 @@ function render() {
     headSessionStatus,
     memberEntryBtn,
   ]);
-  const pageHeadBody = el("div", { class: "page-head-body" }, [titleTextCol, headActions]);
+  /** 音樂列與語言／會員同一橫列（寬螢幕）；說明與訪次獨立全寬於下方 */
+  const pageHeadToolbar = el("div", { class: "page-head-toolbar" }, [musicHeadRow, headActions]);
+  const pageHeadBody = el("div", { class: "page-head-body" }, [titleTextCol]);
 
   const hostPortrait = el("figure", { class: "host-atelier" }, [
     el("div", { class: "host-atelier__frame" }, [
@@ -625,7 +627,7 @@ function render() {
   const panelAdmin = el("main", { class: "panel", hidden: true });
 
   const shell = el("div", { class: "shell" }, [
-    el("header", { class: "page-head" }, [musicHeadRow, pageHeadBody]),
+    el("header", { class: "page-head" }, [pageHeadToolbar, pageHeadBody]),
     hostPortrait,
     panelBook,
     panelAdmin,
@@ -764,20 +766,30 @@ function render() {
   const bookStatus = el("div", { class: "status-line book-submit-status", role: "status", ariaLive: "polite" });
   const meta = el("div", { class: "meta-pills" });
   const bookFooterNote = el("div", { class: "footer-note" });
-  bookFooterNote.textContent = "規則：同一天最多 2 筆、同一工作週最多 4 筆；已取消的不計入名額。";
+  bookFooterNote.textContent = t(
+    "booking.rulesFooterDefault",
+    "規則：同一天最多 2 筆、同一工作週最多 4 筆；已取消的不計入名額。",
+  );
   function setBookFooterFromCaps(dayCap: number, weekCap: number) {
-    bookFooterNote.textContent = `規則：同一天最多 ${dayCap} 筆、同一工作週最多 ${weekCap} 筆；已取消的不計入名額。`;
+    bookFooterNote.textContent = t("booking.rulesFooter", "規則：同一天最多 {{dayCap}} 筆、同一工作週最多 {{weekCap}} 筆；已取消的不計入名額。", {
+      dayCap,
+      weekCap,
+    });
   }
   const walletStatus = el("div", { class: "status-line" });
   const wheelStatus = el("div", { class: "status-line" });
   const wheelResult = el("div", { class: "pill", hidden: true });
-  const spinBtn = el("button", { class: "ghost", type: "button" }, ["抽輪盤"]);
+  const spinBtn = el("button", { class: "ghost", type: "button" }, [t("booking.spinWheel", "抽輪盤")]);
   /** 僅登入後顯示：餘額／抽輪盤（訪客預約不需此區） */
   const memberExtrasWrap = el("div", { class: "book-member-extras", hidden: true });
   const emailVerifyBanner = el("div", { class: "email-verify-banner", hidden: true });
   const emailVerifyText = el("p", { class: "hint" }, []);
-  const resendVerifyBtn = el("button", { class: "ghost", type: "button" }, ["重新寄送驗證信"]);
-  const reloadVerifyBtn = el("button", { class: "ghost", type: "button" }, ["我已驗證，重新整理狀態"]);
+  const resendVerifyBtn = el("button", { class: "ghost", type: "button" }, [
+    t("booking.resendVerify", "重新寄送驗證信"),
+  ]);
+  const reloadVerifyBtn = el("button", { class: "ghost", type: "button" }, [
+    t("booking.reloadVerify", "我已驗證，重新整理狀態"),
+  ]);
   emailVerifyBanner.append(emailVerifyText, el("div", { class: "row-actions" }, [resendVerifyBtn, reloadVerifyBtn]));
   let walletBalance = 0;
   let drawChances = 0;
@@ -788,10 +800,8 @@ function render() {
   const myBookingsHint = el("div", { class: "status-line" });
   const myBookingsList = el("div", { class: "my-bookings-list" }, []);
   myBookingsSection.append(
-    el("h3", { class: "my-bookings-heading" }, ["我的預約"]),
-    el("p", { class: "hint my-bookings-intro" }, [
-      "以下為綁定你帳號的預約（須使用會員付款方式送出）。訪客預約不會出現在此。",
-    ]),
+    el("h3", { class: "my-bookings-heading" }, [t("myBookings.title", "我的預約")]),
+    el("p", { class: "hint my-bookings-intro" }, [t("myBookings.intro", "以下為綁定你帳號的預約（須使用會員付款方式送出）。訪客預約不會出現在此。")]),
     myBookingsHint,
     myBookingsList,
   );
@@ -825,9 +835,7 @@ function render() {
         myBookingsHint.className = "status-line";
         if (snap.empty) {
           myBookingsList.append(
-            el("p", { class: "hint my-bookings-empty" }, [
-              "尚無紀錄。請用會員儲值／現金／飲料折抵送出預約後，會顯示於此。",
-            ]),
+            el("p", { class: "hint my-bookings-empty" }, [t("myBookings.empty", "尚無紀錄。請用會員儲值／現金／飲料折抵送出預約後，會顯示於此。")]),
           );
           return;
         }
@@ -842,12 +850,12 @@ function render() {
           );
           const actions = el("div", { class: "my-booking-actions" }, []);
           if (canCancel) {
-            const btn = el("button", { class: "ghost", type: "button" }, ["取消預約"]);
+            const btn = el("button", { class: "ghost", type: "button" }, [t("myBookings.cancel", "取消預約")]);
             btn.addEventListener("click", async () => {
               const ok = await showConfirmModal(
-                "取消預約",
-                `確定取消這筆預約？\n\n${formatWhen(b)}`,
-                "取消預約",
+                t("myBookings.cancel", "取消預約"),
+                t("myBookings.confirmCancelBody", "確定取消這筆預約？\n\n{{when}}", { when: formatWhen(b) }),
+                t("myBookings.cancel", "取消預約"),
               );
               if (!ok) return;
               btn.setAttribute("disabled", "true");
@@ -856,7 +864,7 @@ function render() {
                 await fn({ bookingId: b.id, ...localeApiParam() });
                 await refreshWalletStatus();
               } catch (e) {
-                myBookingsHint.textContent = e instanceof Error ? e.message : "取消失敗";
+                myBookingsHint.textContent = e instanceof Error ? e.message : t("myBookings.cancelFail", "取消失敗");
                 myBookingsHint.classList.add("error");
                 btn.removeAttribute("disabled");
               }
@@ -871,8 +879,10 @@ function render() {
       },
       (err) => {
         console.error(err);
-        myBookingsHint.textContent =
-          "無法載入我的預約。若專案剛新增索引，請執行 firebase deploy 並等待索引建立完成。";
+        myBookingsHint.textContent = t(
+          "myBookings.loadFail",
+          "無法載入我的預約。若專案剛新增索引，請執行 firebase deploy 並等待索引建立完成。",
+        );
         myBookingsHint.classList.add("error");
       },
     );
@@ -892,20 +902,20 @@ function render() {
     headSessionStatus.hidden = false;
     const u = auth.currentUser;
     if (!u) {
-      headSessionStatus.textContent = "訪客";
+      headSessionStatus.textContent = t("session.guest", "訪客");
       headSessionStatus.removeAttribute("title");
       headSessionStatus.className = "page-head-session";
       return;
     }
     if (u.isAnonymous) {
-      headSessionStatus.textContent = "訪客留言模式";
-      headSessionStatus.title = "已建立匿名身分，僅用於聯絡店家";
+      headSessionStatus.textContent = t("session.guestChat", "訪客留言模式");
+      headSessionStatus.title = t("session.guestChatTitle", "已建立匿名身分，僅用於聯絡店家");
       headSessionStatus.className = "page-head-session page-head-session--pending";
       return;
     }
     if (!u.emailVerified) {
-      headSessionStatus.textContent = "已登入 · 待驗證信箱";
-      headSessionStatus.title = u.email ?? "尚未驗證信箱";
+      headSessionStatus.textContent = t("session.verifyPending", "已登入 · 待驗證信箱");
+      headSessionStatus.title = u.email ?? t("session.verifyTitleFallback", "尚未驗證信箱");
       headSessionStatus.className = "page-head-session page-head-session--pending";
       return;
     }
@@ -919,9 +929,9 @@ function render() {
           ? fromAuthName
           : fromEmail && fromEmail.length > 0
             ? fromEmail
-            : "會員";
+            : t("session.memberFallback", "會員");
     const shown = truncateOneLine(raw, 18);
-    headSessionStatus.textContent = `已登入 · ${shown}`;
+    headSessionStatus.textContent = `${t("session.signedInPrefix", "已登入 · ")}${shown}`;
     headSessionStatus.title = shown !== raw ? raw : "";
     headSessionStatus.className = "page-head-session";
   }
@@ -937,7 +947,7 @@ function render() {
     resendVerifyBtn.setAttribute("disabled", "true");
     try {
       await sendEmailVerification(u);
-      emailVerifyText.textContent = "已再次寄出驗證信，請檢查信箱（含垃圾郵件）。";
+      emailVerifyText.textContent = t("member.verifyResent", "已再次寄出驗證信，請檢查信箱（含垃圾郵件）。");
     } catch (e) {
       emailVerifyText.textContent = errorMessage(e);
     } finally {
@@ -954,8 +964,8 @@ function render() {
       const fresh = auth.currentUser;
       await refreshWalletStatus();
       emailVerifyText.textContent = fresh?.emailVerified
-        ? "驗證完成，已可使用會員功能。"
-        : "尚未偵測到驗證完成，請確認已點擊信內連結後再試。";
+        ? t("member.verifyDone", "驗證完成，已可使用會員功能。")
+        : t("member.verifyPendingReload", "尚未偵測到驗證完成，請確認已點擊信內連結後再試。");
     } catch (e) {
       emailVerifyText.textContent = errorMessage(e);
     } finally {
@@ -972,38 +982,50 @@ function render() {
 
     const status = el("div", { class: "status-line" });
     if (!user) {
-      const modalTitle = el("h3", {}, ["會員登入／註冊"]);
+      const modalTitle = el("h3", {}, [t("auth.modal.title", "會員登入／註冊")]);
       const loginStack = el("div", { class: "member-auth-stack" });
       const registerStack = el("div", { class: "member-auth-stack", hidden: true });
       const resetStack = el("div", { class: "member-auth-stack", hidden: true });
 
-      const loginEmail = el("input", { type: "email", autocomplete: "username", placeholder: "會員 Email" });
+      const loginEmail = el("input", {
+        type: "email",
+        autocomplete: "username",
+        placeholder: t("auth.placeholder.email", "會員 Email"),
+      });
       const loginPassword = el("input", {
         type: "password",
         autocomplete: "current-password",
-        placeholder: "會員密碼",
+        placeholder: t("auth.placeholder.password", "會員密碼"),
       });
-      const loginBtn = el("button", { class: "primary", type: "button" }, ["登入"]);
-      const registerEmail = el("input", { type: "email", autocomplete: "username", placeholder: "會員 Email" });
+      const loginBtn = el("button", { class: "primary", type: "button" }, [t("auth.login", "登入")]);
+      const registerEmail = el("input", {
+        type: "email",
+        autocomplete: "username",
+        placeholder: t("auth.placeholder.email", "會員 Email"),
+      });
       const registerPassword = el("input", {
         type: "password",
         autocomplete: "new-password",
-        placeholder: "密碼（至少 6 碼）",
+        placeholder: t("auth.placeholder.newPassword", "密碼（至少 6 碼）"),
       });
       const registerPassword2 = el("input", {
         type: "password",
         autocomplete: "new-password",
-        placeholder: "再次輸入密碼",
+        placeholder: t("auth.placeholder.newPassword2", "再次輸入密碼"),
       });
-      const registerBtn = el("button", { class: "primary", type: "button" }, ["註冊並寄驗證信"]);
-      const resetSendBtn = el("button", { class: "primary", type: "button" }, ["寄送重設密碼信"]);
-      const cancelBtn = el("button", { class: "ghost", type: "button" }, ["關閉"]);
-      const switchToRegister = el("button", { class: "ghost", type: "button" }, ["還沒有帳號？註冊"]);
-      const switchToLogin = el("button", { class: "ghost", type: "button" }, ["返回登入"]);
-      const switchToForgot = el("button", { class: "ghost", type: "button" }, ["忘記密碼？"]);
-      const switchToForgotFromRegister = el("button", { class: "ghost", type: "button" }, ["忘記密碼？"]);
-      const switchToLoginFromReset = el("button", { class: "ghost", type: "button" }, ["返回登入"]);
-      const resetEmail = el("input", { type: "email", autocomplete: "username", placeholder: "註冊時使用的 Email" });
+      const registerBtn = el("button", { class: "primary", type: "button" }, [t("auth.registerSend", "註冊並寄驗證信")]);
+      const resetSendBtn = el("button", { class: "primary", type: "button" }, [t("auth.resetSend", "寄送重設密碼信")]);
+      const cancelBtn = el("button", { class: "ghost", type: "button" }, [t("modal.close", "關閉")]);
+      const switchToRegister = el("button", { class: "ghost", type: "button" }, [t("auth.switchRegister", "還沒有帳號？註冊")]);
+      const switchToLogin = el("button", { class: "ghost", type: "button" }, [t("auth.switchLogin", "返回登入")]);
+      const switchToForgot = el("button", { class: "ghost", type: "button" }, [t("auth.forgot", "忘記密碼？")]);
+      const switchToForgotFromRegister = el("button", { class: "ghost", type: "button" }, [t("auth.forgot", "忘記密碼？")]);
+      const switchToLoginFromReset = el("button", { class: "ghost", type: "button" }, [t("auth.switchLogin", "返回登入")]);
+      const resetEmail = el("input", {
+        type: "email",
+        autocomplete: "username",
+        placeholder: t("auth.placeholder.resetEmail", "註冊時使用的 Email"),
+      });
 
       function syncAuthModalPrimaryButtons() {
         loginBtn.hidden = loginStack.hidden;
@@ -1014,7 +1036,7 @@ function render() {
         loginStack.hidden = false;
         registerStack.hidden = true;
         resetStack.hidden = true;
-        modalTitle.textContent = "會員登入／註冊";
+        modalTitle.textContent = t("auth.modal.title", "會員登入／註冊");
         status.textContent = "";
         status.className = "status-line";
         syncAuthModalPrimaryButtons();
@@ -1023,7 +1045,7 @@ function render() {
         loginStack.hidden = true;
         registerStack.hidden = false;
         resetStack.hidden = true;
-        modalTitle.textContent = "會員登入／註冊";
+        modalTitle.textContent = t("auth.modal.title", "會員登入／註冊");
         status.textContent = "";
         status.className = "status-line";
         syncAuthModalPrimaryButtons();
@@ -1032,7 +1054,7 @@ function render() {
         loginStack.hidden = true;
         registerStack.hidden = true;
         resetStack.hidden = false;
-        modalTitle.textContent = "重設密碼";
+        modalTitle.textContent = t("auth.resetTitle", "重設密碼");
         status.textContent = "";
         status.className = "status-line";
         syncAuthModalPrimaryButtons();
@@ -1067,7 +1089,7 @@ function render() {
           await signInWithEmailAndPassword(auth, loginEmail.value.trim(), loginPassword.value);
           overlay.remove();
         } catch (e) {
-          status.textContent = e instanceof Error ? e.message : "登入失敗";
+          status.textContent = e instanceof Error ? e.message : t("auth.loginFail", "登入失敗");
           status.classList.add("error");
         } finally {
           loginBtn.removeAttribute("disabled");
@@ -1081,17 +1103,17 @@ function render() {
         const pw = registerPassword.value;
         const pw2 = registerPassword2.value;
         if (!em || !pw) {
-          status.textContent = "請輸入 Email 與密碼。";
+          status.textContent = t("auth.needEmailPassword", "請輸入 Email 與密碼。");
           status.classList.add("error");
           return;
         }
         if (pw.length < 6) {
-          status.textContent = "密碼至少 6 碼。";
+          status.textContent = t("auth.passwordMin", "密碼至少 6 碼。");
           status.classList.add("error");
           return;
         }
         if (pw !== pw2) {
-          status.textContent = "兩次輸入的密碼不一致。";
+          status.textContent = t("auth.passwordMismatch", "兩次輸入的密碼不一致。");
           status.classList.add("error");
           return;
         }
@@ -1099,12 +1121,14 @@ function render() {
         try {
           const cred = await createUserWithEmailAndPassword(auth, em, pw);
           await sendEmailVerification(cred.user);
-          status.textContent =
-            "註冊成功，已寄出驗證信。請至信箱點擊連結後，再按主畫面的「我已驗證，重新整理狀態」或重新登入。";
+          status.textContent = t(
+            "auth.registerSuccess",
+            "註冊成功，已寄出驗證信。請至信箱點擊連結後，再按主畫面的「我已驗證，重新整理狀態」或重新登入。",
+          );
           status.classList.add("ok");
           overlay.remove();
         } catch (e) {
-          status.textContent = e instanceof Error ? e.message : "註冊失敗";
+          status.textContent = e instanceof Error ? e.message : t("auth.registerFail", "註冊失敗");
           status.classList.add("error");
         } finally {
           registerBtn.removeAttribute("disabled");
@@ -1118,18 +1142,20 @@ function render() {
         status.className = "status-line";
         const em = resetEmail.value.trim();
         if (!em) {
-          status.textContent = "請輸入 Email。";
+          status.textContent = t("auth.needEmail", "請輸入 Email。");
           status.classList.add("error");
           return;
         }
         resetSendBtn.setAttribute("disabled", "true");
         try {
           await sendPasswordResetEmail(auth, em);
-          status.textContent =
-            "若此 Email 已註冊，您將很快收到重設密碼信（請一併查看垃圾郵件）。收到信後點連結即可設定新密碼。";
+          status.textContent = t(
+            "auth.resetHintSent",
+            "若此 Email 已註冊，您將很快收到重設密碼信（請一併查看垃圾郵件）。收到信後點連結即可設定新密碼。",
+          );
           status.classList.add("ok");
         } catch (e) {
-          status.textContent = e instanceof Error ? e.message : "寄送失敗";
+          status.textContent = e instanceof Error ? e.message : t("auth.resetSendFail", "寄送失敗");
           status.classList.add("error");
         } finally {
           resetSendBtn.removeAttribute("disabled");
@@ -1138,18 +1164,21 @@ function render() {
 
       loginStack.append(
         el("label", { class: "field" }, ["Email", loginEmail]),
-        el("label", { class: "field" }, ["密碼", wrapPasswordField(loginPassword)]),
+        el("label", { class: "field" }, [t("auth.label.password", "密碼"), wrapPasswordField(loginPassword)]),
         el("div", { class: "hint member-auth-links" }, [switchToRegister, switchToForgot]),
       );
       registerStack.append(
         el("label", { class: "field" }, ["Email", registerEmail]),
-        el("label", { class: "field" }, ["密碼", wrapPasswordField(registerPassword)]),
-        el("label", { class: "field" }, ["確認密碼", wrapPasswordField(registerPassword2)]),
+        el("label", { class: "field" }, [t("auth.label.password", "密碼"), wrapPasswordField(registerPassword)]),
+        el("label", { class: "field" }, [t("auth.label.confirmPassword", "確認密碼"), wrapPasswordField(registerPassword2)]),
         el("div", { class: "hint member-auth-links" }, [switchToLogin, switchToForgotFromRegister]),
       );
       resetStack.append(
         el("p", { class: "hint" }, [
-          "輸入註冊時使用的 Email，我們將寄出重設密碼連結。若未收到信，請確認信箱正確並檢查垃圾郵件匣。",
+          t(
+            "auth.resetHint",
+            "輸入註冊時使用的 Email，我們將寄出重設密碼連結。若未收到信，請確認信箱正確並檢查垃圾郵件匣。",
+          ),
         ]),
         el("label", { class: "field" }, ["Email", resetEmail]),
         el("div", { class: "hint" }, [switchToLoginFromReset]),
@@ -1165,8 +1194,8 @@ function render() {
       );
       syncAuthModalPrimaryButtons();
     } else {
-      const closeBtn = el("button", { class: "ghost", type: "button" }, ["關閉"]);
-      const logoutBtn = el("button", { class: "primary", type: "button" }, ["登出"]);
+      const closeBtn = el("button", { class: "ghost", type: "button" }, [t("modal.close", "關閉")]);
+      const logoutBtn = el("button", { class: "primary", type: "button" }, [t("admin.signOut", "登出")]);
       closeBtn.addEventListener("click", () => overlay.remove());
       logoutBtn.addEventListener("click", async () => {
         await signOut(auth);
@@ -1174,11 +1203,14 @@ function render() {
       });
       if (user.isAnonymous) {
         dialog.append(
-          el("h3", {}, ["會員中心"]),
+          el("h3", {}, [t("member.center", "會員中心")]),
           el("div", { class: "hint" }, [
-            "您正以訪客身分使用「聯絡店家」。若要儲值、查看預約或抽獎，請先按「登出」再使用「會員登入／註冊」；登入會員後，此裝置上的訪客留言紀錄不會自動合併。",
+            t(
+              "member.anonymousIntro",
+              "您正以訪客身分使用「聯絡店家」。若要儲值、查看預約或抽獎，請先按「登出」再使用「會員登入／註冊」；登入會員後，此裝置上的訪客留言紀錄不會自動合併。",
+            ),
           ]),
-          el("div", { class: "hint mono" }, [`匿名身分 UID：${shortUidForDisplay(user.uid)}`]),
+          el("div", { class: "hint mono" }, [`${t("member.anonymousUid", "匿名身分 UID：")}${shortUidForDisplay(user.uid)}`]),
           el("div", { class: "modal-actions" }, [closeBtn, logoutBtn]),
         );
         overlay.addEventListener("click", (ev) => {
@@ -1189,18 +1221,21 @@ function render() {
         return;
       }
       const modalBody: HTMLElement[] = [
-        el("h3", {}, ["會員中心"]),
+        el("h3", {}, [t("member.center", "會員中心")]),
         el("div", { class: "hint" }, [
-          `目前登入：${user.email ?? "（無 Email）"}（UID：${shortUidForDisplay(user.uid)}）`,
+          t("member.signedInAs", "目前登入：{{email}}（UID：{{uid}}）", {
+            email: user.email ?? t("member.noEmail", "（無 Email）"),
+            uid: shortUidForDisplay(user.uid),
+          }),
         ]),
       ];
       if (!user.emailVerified) {
         const verifyHint = el("div", { class: "status-line" }, [
-          "請至信箱點擊驗證連結後，才能使用儲值、會員預約與抽獎。",
+          t("member.verifyModalHint", "請至信箱點擊驗證連結後，才能使用儲值、會員預約與抽獎。"),
         ]);
         const modalVerifyStatus = el("div", { class: "status-line" });
-        const modalResendBtn = el("button", { class: "ghost", type: "button" }, ["重新寄送驗證信"]);
-        const modalReloadBtn = el("button", { class: "ghost", type: "button" }, ["我已驗證，重新整理"]);
+        const modalResendBtn = el("button", { class: "ghost", type: "button" }, [t("booking.resendVerify", "重新寄送驗證信")]);
+        const modalReloadBtn = el("button", { class: "ghost", type: "button" }, [t("booking.reloadVerify", "我已驗證，重新整理")]);
         modalResendBtn.addEventListener("click", async () => {
           const u = auth.currentUser;
           if (!u || u.emailVerified) return;
@@ -1209,7 +1244,7 @@ function render() {
           modalResendBtn.setAttribute("disabled", "true");
           try {
             await sendEmailVerification(u);
-            modalVerifyStatus.textContent = "已寄出驗證信。";
+            modalVerifyStatus.textContent = t("auth.verifySentShort", "已寄出驗證信。");
             modalVerifyStatus.classList.add("ok");
           } catch (e) {
             modalVerifyStatus.textContent = errorMessage(e);
@@ -1229,8 +1264,8 @@ function render() {
             await refreshWalletStatus();
             const fresh = auth.currentUser;
             modalVerifyStatus.textContent = fresh?.emailVerified
-              ? "驗證完成。"
-              : "尚未偵測到驗證完成，請確認已點擊信內連結。";
+              ? t("auth.verifyDoneShort", "驗證完成。")
+              : t("auth.verifyPendingShort", "尚未偵測到驗證完成，請確認已點擊信內連結。");
             modalVerifyStatus.classList.add(fresh?.emailVerified ? "ok" : "error");
           } catch (e) {
             modalVerifyStatus.textContent = errorMessage(e);
@@ -1263,12 +1298,12 @@ function render() {
     bookingModeSelect.innerHTML = "";
     const modes: { value: BookingMode; label: string; disabled?: boolean }[] = isMember
       ? [
-          { value: "member_wallet", label: "會員儲值（扣 50 元）" },
-          { value: "member_cash", label: "會員現金（50 元）" },
+          { value: "member_wallet", label: t("member.mode.wallet", "會員儲值（扣 50 元）") },
+          { value: "member_cash", label: t("member.mode.cash", "會員現金（50 元）") },
           { value: "member_beverage", label: beverageOptionLabel() },
         ]
       : [
-          { value: "guest_cash", label: "訪客現金（50 元）" },
+          { value: "guest_cash", label: t("booking.mode.guest_cash", "訪客現金") },
           { value: "guest_beverage", label: beverageOptionLabel() },
         ];
     for (const mode of modes) {
@@ -1281,10 +1316,13 @@ function render() {
       auth.currentUser && !auth.currentUser.isAnonymous && !auth.currentUser.emailVerified,
     );
     bookingModeHint.textContent = isMember
-      ? "可選儲值扣款、會員現金（50 元），或「請師傅一杯飲料」（依現場約定）。"
+      ? t("member.modeHint.member", "可選儲值扣款、會員現金（50 元），或「請師傅一杯飲料」（依現場約定）。")
       : loggedInUnverified
-        ? "已登入但尚未驗證信箱，暫以訪客方式預約；完成驗證後可選會員付款、儲值與抽獎。"
-        : "訪客可選現金 50 元或「請師傅一杯飲料」；儲值與抽獎請使用右上角登入。";
+        ? t(
+            "member.modeHint.unverified",
+            "已登入但尚未驗證信箱，暫以訪客方式預約；完成驗證後可選會員付款、儲值與抽獎。",
+          )
+        : t("member.modeHint.guest", "訪客可選現金 50 元或「請師傅一杯飲料」；儲值與抽獎請使用右上角登入。");
   }
 
   async function refreshWalletStatus() {
@@ -1327,12 +1365,14 @@ function render() {
       walletBalance = 0;
       drawChances = 0;
       emailVerifyBanner.hidden = false;
-      emailVerifyText.textContent =
-        "已登入，但尚未完成 Email 驗證。請至信箱點擊驗證連結；完成後請按「我已驗證，重新整理狀態」。";
+      emailVerifyText.textContent = t(
+        "member.verifyBanner",
+        "已登入，但尚未完成 Email 驗證。請至信箱點擊驗證連結；完成後請按「我已驗證，重新整理狀態」。",
+      );
       walletStatus.textContent = "";
       walletStatus.className = "status-line";
       spinBtn.setAttribute("disabled", "true");
-      wheelStatus.textContent = "完成信箱驗證後才可抽輪盤。";
+      wheelStatus.textContent = t("member.wheelNeedVerifyFirst", "完成信箱驗證後才可抽輪盤。");
       wheelStatus.className = "status-line";
       wheelResult.hidden = true;
       syncPageHeadSession();
@@ -1389,28 +1429,28 @@ function render() {
 
   /** 預覽輪盤用：固定示範獎項（不連後端），格內可立即看到文字與比例 */
   const wheelPreviewMockPrizes: { id: string; name: string; weight: number }[] = [
-    { id: "pv-c10", name: "+10 儲值金", weight: 22 },
-    { id: "pv-c5", name: "+5 儲值金", weight: 26 },
-    { id: "pv-ch", name: "再抽一次", weight: 16 },
-    { id: "pv-th", name: "銘謝惠顧", weight: 24 },
-    { id: "pv-pn", name: "小處罰文案", weight: 12 },
+    { id: "pv-c10", name: t("wheel.previewPrizeC10", "+10 儲值金"), weight: 22 },
+    { id: "pv-c5", name: t("wheel.previewPrizeName", "【預覽】+5 儲值金"), weight: 26 },
+    { id: "pv-ch", name: t("wheel.previewPrizeExtra", "再抽一次"), weight: 16 },
+    { id: "pv-th", name: t("wheel.previewPrizeThanks", "銘謝惠顧"), weight: 24 },
+    { id: "pv-pn", name: t("wheel.previewPrizeFun", "小處罰文案"), weight: 12 },
   ];
 
   spinBtn.addEventListener("click", async () => {
     wheelStatus.textContent = "";
     wheelStatus.className = "status-line";
     if (!auth.currentUser) {
-      wheelStatus.textContent = "請先登入會員。";
+      wheelStatus.textContent = t("wheel.spinNeedLogin", "請先登入會員。");
       wheelStatus.classList.add("error");
       return;
     }
     if (!auth.currentUser.emailVerified) {
-      wheelStatus.textContent = "請先完成 Email 驗證。";
+      wheelStatus.textContent = t("wheel.spinNeedVerify", "請先完成 Email 驗證。");
       wheelStatus.classList.add("error");
       return;
     }
     if (drawChances < 1) {
-      wheelStatus.textContent = "目前沒有可抽次數。";
+      wheelStatus.textContent = t("wheel.spinNoChances", "目前沒有可抽次數。");
       wheelStatus.classList.add("error");
       return;
     }
@@ -1428,9 +1468,9 @@ function render() {
         },
         { splitAnchor: wheelRow, fetchPrizeLabels: fetchWheelPrizeLabelsForSpectacle },
       );
-      wheelResult.textContent = `抽中：${data.prize.name}`;
+      wheelResult.textContent = `${t("wheel.spinWonPrefix", "抽中：")}${data.prize.name}`;
       wheelResult.hidden = false;
-      wheelStatus.textContent = "抽獎完成！";
+      wheelStatus.textContent = t("wheel.spinDone", "抽獎完成！");
       wheelStatus.classList.add("ok");
       await refreshWalletStatus();
     } catch (e) {
@@ -1449,7 +1489,7 @@ function render() {
     const prev = slotSelect.value;
     slotSelect.innerHTML = "";
     slotSelect.disabled = disabled;
-    const opt0 = el("option", { value: "" }, ["請選擇開始時間"]);
+    const opt0 = el("option", { value: "" }, [t("slot.optionPick", "請選擇開始時間")]);
     slotSelect.append(opt0);
     for (const s of allStartSlots()) {
       const takenHere = taken.has(s);
@@ -1457,9 +1497,18 @@ function render() {
       const blockReason = blockedReasonBySlot.get(s);
       const blockedHere = blockReason !== undefined;
       const blockNote =
-        blockedHere && blockReason ? `（不開放：${blockReason}）` : blockedHere ? "（不開放預約）" : "";
+        blockedHere && blockReason
+          ? t("slot.blockedWith", "（不開放：{{reason}}）", { reason: blockReason })
+          : blockedHere
+            ? t("slot.blocked", "（不開放預約）")
+            : "";
+      const suffix = takenHere
+        ? t("slot.taken", "（已佔用）")
+        : pastHere
+          ? t("slot.past", "（已過）")
+          : blockNote;
       const o = el("option", { value: s, disabled: takenHere || pastHere || blockedHere }, [
-        `${s}${takenHere ? "（已佔用）" : pastHere ? "（已過）" : blockNote}`,
+        `${s}${suffix}`,
       ]);
       slotSelect.append(o);
     }
@@ -1480,7 +1529,7 @@ function render() {
     if (!dk) {
       refillSlots(new Set(), true, "", new Map());
       meta.append(
-        el("span", { class: "pill" }, ["先選擇日期後，會顯示可選時段與名額"]),
+        el("span", { class: "pill" }, [t("booking.pickSlotFirst", "先選擇日期後，會顯示可選時段與名額")]),
       );
       return;
     }
@@ -1491,7 +1540,7 @@ function render() {
     dateInput.max = maxKey;
     if (dk < minKey) {
       refillSlots(new Set(), true, "", new Map());
-      scheduleStatus.textContent = "不可選擇今天以前的日期。";
+      scheduleStatus.textContent = t("booking.datePast", "不可選擇今天以前的日期。");
       scheduleStatus.classList.add("error");
       dateInput.value = "";
       return;
@@ -1499,7 +1548,7 @@ function render() {
 
     if (dk > maxKey) {
       refillSlots(new Set(), true, "", new Map());
-      scheduleStatus.textContent = "僅能預約至下週日為止。";
+      scheduleStatus.textContent = t("booking.dateBeyond", "僅能預約至下週日為止。");
       scheduleStatus.classList.add("error");
       dateInput.value = "";
       return;
@@ -1507,7 +1556,7 @@ function render() {
 
     if (!isDateKeyMonFri(dk)) {
       refillSlots(new Set(), true, dk, new Map());
-      scheduleStatus.textContent = "僅能預約週一到週五。";
+      scheduleStatus.textContent = t("booking.weekdayOnly", "僅能預約週一到週五。");
       scheduleStatus.classList.add("error");
       return;
     }
@@ -1540,38 +1589,38 @@ function render() {
       const weekFri = addDaysTaipeiDateKey(weekMon, 4);
       meta.append(
         el("span", { class: "pill" }, [
-          "當日已預約 ",
+          t("booking.metaDay", "當日已預約 "),
           el("strong", {}, [String(data.dayCount)]),
           ` / ${data.dayCap}`,
         ]),
         el("span", { class: "pill" }, [
-          "本工作週已預約 ",
+          t("booking.metaWeek", "本工作週已預約 "),
           el("strong", {}, [String(data.weekCount)]),
           ` / ${data.weekCap}`,
         ]),
         el("div", { class: "meta-pills-note" }, [
-          "「當日」＝您所選的這一天：",
+          t("booking.metaNoteLead", "「當日」＝您所選的這一天："),
           el("strong", {}, [dateKeyLabelTaipei(dk)]),
-          "。「本工作週」＝該日所屬曆週之週一至週五：",
+          t("booking.metaNoteMid", "。「本工作週」＝該日所屬曆週之週一至週五："),
           el("strong", {}, [dateKeyLabelTaipei(weekMon)]),
           "～",
           el("strong", {}, [dateKeyLabelTaipei(weekFri)]),
-          "（週一與後端 ",
-          el("code", {}, ["weekStart"]),
-          " 相同，名額為該曆週內有效預約合計）。",
+          t("booking.metaNoteTail", "（週一與後端 "),
+          el("code", {}, [t("booking.metaNoteCode", "weekStart")]),
+          t("booking.metaNoteEnd", " 相同，名額為該曆週內有效預約合計）。"),
         ]),
       );
       if (dayFull) {
-        scheduleStatus.textContent = "這一天已額滿。";
+        scheduleStatus.textContent = t("booking.dayFull", "這一天已額滿。");
         scheduleStatus.classList.add("error");
       } else if (weekFull) {
-        scheduleStatus.textContent = "本工作週已達上限。";
+        scheduleStatus.textContent = t("booking.weekFull", "本工作週已達上限。");
         scheduleStatus.classList.add("error");
       }
     } catch (e) {
       console.error(e);
       refillSlots(new Set(), true, dk, new Map());
-      scheduleStatus.textContent = "無法載入空檔，請稍後再試。";
+      scheduleStatus.textContent = t("booking.loadSlotsFail", "無法載入空檔，請稍後再試。");
       scheduleStatus.classList.add("error");
     }
   }
@@ -1587,32 +1636,32 @@ function render() {
     const note = noteInput.value.trim();
     const bookingMode = bookingModeSelect.value as BookingMode;
     if (!displayName) {
-      bookStatus.textContent = "請填寫姓名。";
+      bookStatus.textContent = t("booking.fillName", "請填寫姓名。");
       bookStatus.classList.add("error");
       return;
     }
     if (!dateKey || !startSlot) {
-      bookStatus.textContent = "請選擇日期與開始時間。";
+      bookStatus.textContent = t("booking.pickDateSlot", "請選擇日期與開始時間。");
       bookStatus.classList.add("error");
       return;
     }
     if (dateKey < taipeiTodayDateKey()) {
-      bookStatus.textContent = "不可預約今天以前的日期。";
+      bookStatus.textContent = t("booking.noPastDate", "不可預約今天以前的日期。");
       bookStatus.classList.add("error");
       return;
     }
     if (dateKey > taipeiLatestBookableDateKey()) {
-      bookStatus.textContent = "僅能預約至下週日為止。";
+      bookStatus.textContent = t("booking.noBeyond", "僅能預約至下週日為止。");
       bookStatus.classList.add("error");
       return;
     }
     if (isStartSlotInPastForTaipeiToday(dateKey, startSlot)) {
-      bookStatus.textContent = "此開始時間已過，請選擇較晚的時段。";
+      bookStatus.textContent = t("booking.slotPast", "此開始時間已過，請選擇較晚的時段。");
       bookStatus.classList.add("error");
       return;
     }
     if (bookingMode !== "guest_cash" && bookingMode !== "guest_beverage" && !auth.currentUser) {
-      bookStatus.textContent = "會員付款模式需先登入。";
+      bookStatus.textContent = t("booking.memberModeNeedLogin", "會員付款模式需先登入。");
       bookStatus.classList.add("error");
       return;
     }
@@ -1622,29 +1671,38 @@ function render() {
       auth.currentUser &&
       !auth.currentUser.emailVerified
     ) {
-      bookStatus.textContent = "會員付款需先完成 Email 驗證，請至信箱點擊驗證連結。";
+      bookStatus.textContent = t(
+        "booking.memberNeedVerify",
+        "會員付款需先完成 Email 驗證，請至信箱點擊驗證連結。",
+      );
       bookStatus.classList.add("error");
       return;
     }
     if (bookingMode === "member_wallet" && walletBalance < 50) {
-      bookStatus.textContent = "儲值餘額不足，請改用現金、「請師傅一杯飲料」或先儲值。";
+      bookStatus.textContent = t(
+        "booking.walletShort",
+        "儲值餘額不足，請改用現金、「請師傅一杯飲料」或先儲值。",
+      );
       bookStatus.classList.add("error");
       return;
     }
     const confirmed = await showConfirmModal(
-      "確認送出預約",
+      t("booking.confirmTitle", "確認送出預約"),
       buildBookingSummary(displayName, dateKey, startSlot, note, bookingMode),
-      "確認送出",
+      t("booking.confirmSubmit", "確認送出"),
     );
     if (!confirmed) {
-      bookStatus.textContent = "已取消送出。";
+      bookStatus.textContent = t("booking.cancelledSubmit", "已取消送出。");
       return;
     }
     submitBtn.setAttribute("disabled", "true");
     try {
       const fn = createBookingCall();
       await fn({ displayName, note, dateKey, startSlot, bookingMode, ...localeApiParam() });
-      bookStatus.textContent = "已送出！狀態為「待確認」，實際時間會依現場情況微調。";
+      bookStatus.textContent = t(
+        "booking.submitted",
+        "已送出！狀態為「待確認」，實際時間會依現場情況微調。",
+      );
       bookStatus.classList.add("ok");
       nameInput.value = "";
       noteInput.value = "";
@@ -1658,15 +1716,16 @@ function render() {
     }
   });
 
-  const wheelTestBtn = el("button", { class: "ghost", type: "button" }, ["預覽輪盤特效"]);
+  const wheelTestBtn = el("button", { class: "ghost", type: "button" }, [
+    t("wheel.previewBtn", "預覽輪盤特效"),
+  ]);
   wheelTestBtn.hidden = true;
-  wheelTestBtn.title = "僅畫面預覽，不呼叫抽獎、不扣次數";
+  wheelTestBtn.title = t("wheel.previewTitle", "僅畫面預覽，不呼叫抽獎、不扣次數");
   const wheelRulesHint = el("p", { class: "hint wheel-rules-hint" }, [
-    "輪盤規則：預約有綁定會員，且後台將該筆標為「已完成」後，可獲得 ",
-    el("strong", {}, ["1"]),
-    " 次抽獎機會（同一筆僅發一次）。每次按下「抽輪盤」消耗 ",
-    el("strong", {}, ["1"]),
-    " 次；獎項由後台依權重隨機抽出，可能為儲值金、加抽次數、銘謝惠顧或趣味文案等。須完成 Email 驗證才可抽獎。",
+    t(
+      "wheel.rules",
+      "輪盤規則：預約有綁定會員，且後台將該筆標為「已完成」後，可獲得 1 次抽獎機會（同一筆僅發一次）。每次按下「抽輪盤」消耗 1 次；獎項由後台依權重隨機抽出，可能為儲值金、加抽次數、銘謝惠顧或趣味文案等。須完成 Email 驗證才可抽獎。",
+    ),
   ]);
   const wheelRow = el("div", { class: "book-wheel-row" }, [spinBtn, wheelTestBtn, wheelStatus, wheelResult]);
   memberExtrasWrap.append(emailVerifyBanner, walletStatus, myBookingsSection, wheelRulesHint, wheelRow);
@@ -1681,11 +1740,13 @@ function render() {
   supportChatFloatPanel.append(bookSupportChatMount);
   const supportChatFab = el("button", { type: "button", class: "support-chat-float__fab" }, []);
   const supportFabGlyph = el("span", { class: "support-chat-float__fab-glyph", ariaHidden: "true" }, ["💬"]);
-  const supportFabText = el("span", { class: "support-chat-float__fab-text", ariaHidden: "true" }, ["聊"]);
+  const supportFabText = el("span", { class: "support-chat-float__fab-text", ariaHidden: "true" }, [
+    t("support.fab.chat", "聊"),
+  ]);
   supportChatFab.append(supportFabGlyph, supportFabText);
   supportChatFab.setAttribute("aria-controls", "support-chat-float-panel");
   supportChatFab.setAttribute("aria-expanded", "false");
-  supportChatFab.setAttribute("aria-label", "開啟聯絡店家");
+  supportChatFab.setAttribute("aria-label", t("support.fab.open", "開啟聯絡店家"));
   const supportChatFloat = el("div", { class: "support-chat-float" }, [supportChatFloatPanel, supportChatFab]);
   let supportChatOpen = false;
   function setSupportChatOpen(open: boolean) {
@@ -1694,8 +1755,11 @@ function render() {
     supportChatFloatPanel.hidden = !open;
     supportChatFab.setAttribute("aria-expanded", String(open));
     supportFabGlyph.textContent = open ? "✕" : "💬";
-    supportFabText.textContent = open ? "收" : "聊";
-    supportChatFab.setAttribute("aria-label", open ? "收合聯絡店家" : "開啟聯絡店家");
+    supportFabText.textContent = open ? t("support.fab.collapse", "收") : t("support.fab.chat", "聊");
+    supportChatFab.setAttribute(
+      "aria-label",
+      open ? t("support.fab.close", "收合聯絡店家") : t("support.fab.open", "開啟聯絡店家"),
+    );
   }
   supportChatFab.addEventListener("click", () => setSupportChatOpen(!supportChatOpen));
   function onSupportChatEscape(ev: KeyboardEvent) {
@@ -1724,7 +1788,12 @@ function render() {
         async () => {
           await new Promise((r) => setTimeout(r, 1200));
           return {
-            prize: { id: "pv-c5", name: "【預覽】+5 儲值金", type: "credit", value: 5 },
+            prize: {
+              id: "pv-c5",
+              name: t("wheel.previewPrizeName", "【預覽】+5 儲值金"),
+              type: "credit",
+              value: 5,
+            },
             drawChances,
             walletBalance,
           };
@@ -1734,7 +1803,10 @@ function render() {
           fetchPrizeLabels: async () => wheelPreviewMockPrizes,
         },
       );
-      wheelStatus.textContent = "以上為特效預覽，未實際抽獎、未扣除次數。";
+      wheelStatus.textContent = t(
+        "wheel.previewDone",
+        "以上為特效預覽，未實際抽獎、未扣除次數。",
+      );
       wheelStatus.className = "status-line";
     } finally {
       wheelTestBtn.removeAttribute("disabled");
@@ -1747,40 +1819,34 @@ function render() {
   panelBook.append(
     el("div", { class: "grid grid-2" }, [
       el("label", { class: "field" }, [
-        "姓名",
+        t("field.name", "姓名"),
         nameInput,
-        el("span", { class: "hint" }, [
-          "可不登入，打個暱稱即可；若已登入且帳號有設定稱呼，會自動帶入（仍可改）。",
-        ]),
+        el("span", { class: "hint" }, [t("field.nameHint", "可不登入，打個暱稱即可；若已登入且帳號有設定稱呼，會自動帶入（仍可改）。")]),
       ]),
       el("label", { class: "field" }, [
-        "日期（週一至週五）",
+        t("field.date", "日期（週一至週五）"),
         dateInput,
-        el("span", { class: "hint" }, ["最遠僅開放至本週曆之下週日（台北）；更後的日期無法選取。"]),
+        el("span", { class: "hint" }, [t("field.dateHint", "最遠僅開放至本週曆之下週日（台北）；更後的日期無法選取。")]),
       ]),
     ]),
     el("div", { class: "grid" }, [
       el("label", { class: "field" }, [
-        "開始時間（15 分鐘一格）",
+        t("field.startSlot", "開始時間（15 分鐘一格）"),
         slotSelect,
-        el("span", { class: "hint" }, ["開始時間為 15 分鐘一格；單次服務約15~50分鐘, 看情況."]),
+        el("span", { class: "hint" }, [t("field.startSlotHint", "開始時間為 15 分鐘一格；單次服務約15~50分鐘, 看情況.")]),
       ]),
     ]),
     scheduleStatus,
     el("div", { class: "grid" }, [
-      el("label", { class: "field" }, [
-        "付款方式",
-        bookingModeSelect,
-        bookingModeHint,
-      ]),
+      el("label", { class: "field" }, [t("field.payment", "付款方式"), bookingModeSelect, bookingModeHint]),
     ]),
     memberExtrasWrap,
     meta,
     el("div", { class: "grid" }, [
       el("label", { class: "field" }, [
-        "備註（選填）",
+        t("field.note", "備註（選填）"),
         noteInput,
-        el("span", { class: "hint" }, ["可填寫需求，例如：頭痛、背部痠痛、腿部需要按壓等"]),
+        el("span", { class: "hint" }, [t("field.noteHint", "可填寫需求，例如：頭痛、背部痠痛、腿部需要按壓等")]),
       ]),
     ]),
     el("div", { class: "row-actions" }, [submitBtn]),
@@ -1841,8 +1907,8 @@ function render() {
     const box = el("div", { class: "admin-login" }, []);
     const email = el("input", { type: "email", autocomplete: "username" });
     const password = el("input", { type: "password", autocomplete: "current-password" });
-    const loginBtn = el("button", { class: "primary", type: "button" }, ["登入"]);
-    const resetBtn = el("button", { class: "ghost", type: "button" }, ["寄送重設密碼信"]);
+    const loginBtn = el("button", { class: "primary", type: "button" }, [t("admin.login", "登入")]);
+    const resetBtn = el("button", { class: "ghost", type: "button" }, [t("admin.resetSend", "寄送重設密碼信")]);
     const adminStatus = el("div", { class: "status-line" });
     loginBtn.addEventListener("click", async () => {
       adminStatus.textContent = "";
@@ -1851,7 +1917,7 @@ function render() {
       try {
         await signInWithEmailAndPassword(auth, email.value.trim(), password.value);
       } catch (e) {
-        adminStatus.textContent = e instanceof Error ? e.message : "登入失敗";
+        adminStatus.textContent = e instanceof Error ? e.message : t("auth.loginFail", "登入失敗");
         adminStatus.classList.add("error");
       } finally {
         loginBtn.removeAttribute("disabled");
@@ -1862,18 +1928,20 @@ function render() {
       adminStatus.className = "status-line";
       const em = email.value.trim();
       if (!em) {
-        adminStatus.textContent = "請先輸入 Email。";
+        adminStatus.textContent = t("admin.needEmailFirst", "請先輸入 Email。");
         adminStatus.classList.add("error");
         return;
       }
       resetBtn.setAttribute("disabled", "true");
       try {
         await sendPasswordResetEmail(auth, em);
-        adminStatus.textContent =
-          "若此 Email 已註冊，您將很快收到重設密碼信（請一併查看垃圾郵件）。點信內連結即可設定新密碼。";
+        adminStatus.textContent = t(
+          "admin.resetSentLong",
+          "若此 Email 已註冊，您將很快收到重設密碼信（請一併查看垃圾郵件）。點信內連結即可設定新密碼。",
+        );
         adminStatus.classList.add("ok");
       } catch (e) {
-        adminStatus.textContent = e instanceof Error ? e.message : "寄送失敗";
+        adminStatus.textContent = e instanceof Error ? e.message : t("auth.resetSendFail", "寄送失敗");
         adminStatus.classList.add("error");
       } finally {
         resetBtn.removeAttribute("disabled");
@@ -1881,12 +1949,15 @@ function render() {
     });
     box.append(
       el("p", { class: "hint" }, [
-        "僅限管理員。請先在 Firebase Console 建立 Email/Password 帳號，並在 Firestore 新增文件 ",
-        el("code", {}, ["admins/<你的 UID>"]),
-        "（可用空物件 `{}`）。",
+        t(
+          "admin.loginHint",
+          "僅限管理員。請先在 Firebase Console 建立 Email/Password 帳號，並在 Firestore 新增文件 ",
+        ),
+        el("code", {}, [t("admin.placeholder.uidDoc", "admins/<你的 UID>")]),
+        t("admin.loginHintEnd", "（可用空物件 `{}`）。"),
       ]),
       el("label", { class: "field" }, ["Email", email]),
-      el("label", { class: "field" }, ["密碼", wrapPasswordField(password)]),
+      el("label", { class: "field" }, [t("auth.label.password", "密碼"), wrapPasswordField(password)]),
       el("div", { class: "row-actions" }, [loginBtn, resetBtn]),
       adminStatus,
     );
@@ -1898,7 +1969,7 @@ function render() {
     adminWrap.innerHTML = "";
     adminWrap.append(
       el("div", { class: "admin-login" }, [
-        el("p", { class: "status-line error" }, ["無權限：此帳號不是管理員。"]),
+        el("p", { class: "status-line error" }, [t("admin.forbidden", "無權限：此帳號不是管理員。")]),
       ]),
     );
   }
@@ -1910,10 +1981,13 @@ function render() {
     const u = auth.currentUser;
     const whoLabel =
       u != null
-        ? `已登入：${adminSessionCallName(u)}（${shortUidForDisplay(u.uid)}）`
-        : `已登入：（${shortUidForDisplay(userId)}）`;
+        ? t("admin.signedInLabel", "已登入：{{name}}（{{uid}}）", {
+            name: adminSessionCallName(u),
+            uid: shortUidForDisplay(u.uid),
+          })
+        : t("admin.signedInUidOnly", "已登入：（{{uid}}）", { uid: shortUidForDisplay(userId) });
     const who = el("span", { class: "hint" }, [whoLabel]);
-    const outBtn = el("button", { class: "ghost", type: "button" }, ["登出"]);
+    const outBtn = el("button", { class: "ghost", type: "button" }, [t("admin.signOut", "登出")]);
     outBtn.addEventListener("click", async () => {
       await signOut(auth);
     });
@@ -1924,7 +1998,7 @@ function render() {
     const accountCreateSection = el("div", { class: "admin-announce" }, []);
     const topupCustomerId = el("input", {
       type: "text",
-      placeholder: "會員 Email（建議）或 UID",
+      placeholder: t("admin.placeholder.memberId", "會員 Email（建議）或 UID"),
       autocomplete: "off",
     });
     const topupSuggestions = el("ul", {
@@ -1987,8 +2061,11 @@ function render() {
       }, 200);
     });
     const topupAmount = el("input", { type: "number", value: "100", min: "1", step: "1" });
-    const topupNote = el("input", { type: "text", placeholder: "備註（選填）" });
-    const topupBtn = el("button", { class: "ghost", type: "button" }, ["儲值"]);
+    const topupNote = el("input", {
+      type: "text",
+      placeholder: t("admin.topup.notePlaceholder", "備註（選填）"),
+    });
+    const topupBtn = el("button", { class: "ghost", type: "button" }, [t("admin.topup.btn", "儲值")]);
     const topupStatus = el("div", { class: "status-line" });
     topupBtn.addEventListener("click", async () => {
       topupStatus.textContent = "";
@@ -1997,21 +2074,21 @@ function render() {
       const amount = Number(topupAmount.value);
       const note = topupNote.value.trim();
       if (!customerId) {
-        topupStatus.textContent = "請輸入會員 Email 或 UID。";
+        topupStatus.textContent = t("admin.topup.needId", "請輸入會員 Email 或 UID。");
         topupStatus.classList.add("error");
         return;
       }
       if (!Number.isFinite(amount) || amount <= 0 || !Number.isInteger(amount)) {
-        topupStatus.textContent = "儲值金額需為正整數。";
+        topupStatus.textContent = t("admin.topup.amountInt", "儲值金額需為正整數。");
         topupStatus.classList.add("error");
         return;
       }
       topupBtn.setAttribute("disabled", "true");
-      topupStatus.textContent = "儲值中…";
+      topupStatus.textContent = t("admin.topup.processing", "儲值中…");
       try {
         const fn = topupWalletCall();
         await fn({ customerId, amount, note, ...localeApiParam() });
-        topupStatus.textContent = "儲值成功";
+        topupStatus.textContent = t("admin.topup.ok", "儲值成功");
         topupStatus.classList.add("ok");
       } catch (e) {
         topupStatus.textContent = errorMessage(e);
@@ -2026,10 +2103,10 @@ function render() {
     const marqueeTextBody = el("input", {
       type: "text",
       maxLength: 240,
-      placeholder: "頂部橫幅：例如本週三 15:00-16:00 暫停服務",
+      placeholder: t("admin.marquee.placeholderText", "頂部橫幅：例如本週三 15:00-16:00 暫停服務"),
       autocomplete: "off",
     });
-    const saveMarqueeTextBtn = el("button", { class: "ghost", type: "button" }, ["儲存頂部跑馬燈"]);
+    const saveMarqueeTextBtn = el("button", { class: "ghost", type: "button" }, [t("admin.marquee.saveText", "儲存頂部跑馬燈")]);
     const marqueeTextStatus = el("div", { class: "status-line" });
     const marqueeTextDocRef = doc(db, "siteSettings", "marqueeText");
 
@@ -2037,7 +2114,7 @@ function render() {
     const marqueeLedBody = el("input", {
       type: "text",
       maxLength: 500,
-      placeholder: "底部 LED：可較長，例如活動標語",
+      placeholder: t("admin.marquee.placeholderLed", "底部 LED：可較長，例如活動標語"),
       autocomplete: "off",
     });
     const marqueeLedSpeed = el("input", {
@@ -2052,12 +2129,12 @@ function render() {
     marqueeLedSpeed.addEventListener("input", () => {
       marqueeLedSpeedValue.textContent = marqueeLedSpeed.value;
     });
-    const saveMarqueeLedBtn = el("button", { class: "ghost", type: "button" }, ["儲存底部 LED"]);
+    const saveMarqueeLedBtn = el("button", { class: "ghost", type: "button" }, [t("admin.marquee.saveLed", "儲存底部 LED")]);
     const marqueeLedStatus = el("div", { class: "status-line" });
     const marqueeLedDocRef = doc(db, "siteSettings", "marqueeLed");
     const wheelSpectacleDocRef = doc(db, "siteSettings", "wheelSpectacle");
     const wheelSpectacleShowTest = el("input", { type: "checkbox" });
-    const saveWheelSpectacleBtn = el("button", { class: "ghost", type: "button" }, ["儲存輪盤預覽開關"]);
+    const saveWheelSpectacleBtn = el("button", { class: "ghost", type: "button" }, [t("admin.wheelSpectacle.save", "儲存輪盤預覽開關")]);
     const wheelSpectacleStatus = el("div", { class: "status-line" });
 
     adminWheelSpectacleUnsub = onSnapshot(
@@ -2067,7 +2144,7 @@ function render() {
         wheelSpectacleShowTest.checked = data?.showTestButton === true;
       },
       () => {
-        wheelSpectacleStatus.textContent = "無法讀取輪盤預覽設定。";
+        wheelSpectacleStatus.textContent = t("admin.snapshot.loadFail", "無法讀取輪盤預覽設定。");
         wheelSpectacleStatus.className = "status-line error";
       },
     );
@@ -2085,10 +2162,10 @@ function render() {
           },
           { merge: true },
         );
-        wheelSpectacleStatus.textContent = "已更新前台「預覽輪盤特效」按鈕顯示設定";
+        wheelSpectacleStatus.textContent = t("admin.status.updated", "已更新");
         wheelSpectacleStatus.classList.add("ok");
       } catch (e) {
-        wheelSpectacleStatus.textContent = e instanceof Error ? e.message : "儲存失敗";
+        wheelSpectacleStatus.textContent = e instanceof Error ? e.message : t("admin.memberList.saveFail", "儲存失敗");
         wheelSpectacleStatus.classList.add("error");
       } finally {
         saveWheelSpectacleBtn.removeAttribute("disabled");
@@ -2110,7 +2187,7 @@ function render() {
       step: "1",
       value: "4",
     });
-    const saveBookingCapsBtn = el("button", { type: "button", class: "ghost" }, ["儲存名額上限"]);
+    const saveBookingCapsBtn = el("button", { type: "button", class: "ghost" }, [t("admin.caps.save", "儲存名額上限")]);
     const bookingCapsStatus = el("div", { class: "status-line" });
 
     function clampBookingCapInput(n: number, fallback: number): number {
@@ -2131,7 +2208,7 @@ function render() {
         capMaxPerWorkWeekInput.value = String(clampBookingCapInput(wNum, 4));
       },
       () => {
-        bookingCapsStatus.textContent = "無法讀取名額上限設定。";
+        bookingCapsStatus.textContent = t("admin.snapshot.loadFail", "無法讀取名額上限設定。");
         bookingCapsStatus.className = "status-line error";
       },
     );
@@ -2144,17 +2221,17 @@ function render() {
       capMaxPerDayInput.value = String(maxPerDay);
       capMaxPerWorkWeekInput.value = String(maxPerWorkWeek);
       saveBookingCapsBtn.setAttribute("disabled", "true");
-      bookingCapsStatus.textContent = "儲存中…";
+      bookingCapsStatus.textContent = t("admin.status.processing", "處理中…");
       try {
         await setDoc(
           bookingCapsDocRef,
           { maxPerDay, maxPerWorkWeek, updatedAt: serverTimestamp() },
           { merge: true },
         );
-        bookingCapsStatus.textContent = "名額上限已更新（新預約立即套用）";
+        bookingCapsStatus.textContent = t("admin.status.updated", "已更新");
         bookingCapsStatus.classList.add("ok");
       } catch (e) {
-        bookingCapsStatus.textContent = e instanceof Error ? e.message : "儲存失敗";
+        bookingCapsStatus.textContent = e instanceof Error ? e.message : t("admin.memberList.saveFail", "儲存失敗");
         bookingCapsStatus.classList.add("error");
       } finally {
         saveBookingCapsBtn.removeAttribute("disabled");
@@ -2163,8 +2240,8 @@ function render() {
 
     const bookingBlocksDocRef = doc(db, "siteSettings", "bookingBlocks");
     const bookingBlocksRows = el("div", { class: "admin-booking-blocks-rows" });
-    const addBookingBlockRowBtn = el("button", { type: "button", class: "ghost" }, ["新增一筆"]);
-    const saveBookingBlocksBtn = el("button", { type: "button", class: "ghost" }, ["儲存不開放時段"]);
+    const addBookingBlockRowBtn = el("button", { type: "button", class: "ghost" }, [t("admin.blocks.addRow", "新增一筆")]);
+    const saveBookingBlocksBtn = el("button", { type: "button", class: "ghost" }, [t("admin.blocks.save", "儲存不開放時段")]);
     const bookingBlocksStatus = el("div", { class: "status-line" });
 
     type BookingBlockRowModel = { weekday: number; start: string; end: string; reason: string };
@@ -2204,43 +2281,43 @@ function render() {
 
     function renderBookingBlockRow(model: BookingBlockRowModel): HTMLElement {
       const row = el("div", { class: "admin-booking-block-row" });
-      const weekdaySel = el("select", { class: "bb-weekday", ariaLabel: "星期" });
-      const dayLabels = ["一", "二", "三", "四", "五"];
+      const weekdaySel = el("select", { class: "bb-weekday", ariaLabel: t("admin.blocks.weekday", "星期") });
+      const dayLabels = t("admin.dayLabels", "一,二,三,四,五").split(",");
       for (let d = 1; d <= 5; d++) {
-        weekdaySel.append(el("option", { value: String(d) }, [`週${dayLabels[d - 1]}`]));
+        weekdaySel.append(el("option", { value: String(d) }, [dayLabels[d - 1] ?? String(d)]));
       }
       weekdaySel.value = String(model.weekday);
       const startIn = el("input", {
         type: "time",
         class: "bb-start",
         step: "900",
-        ariaLabel: "不開放起點",
+        ariaLabel: t("admin.blocks.start", "起（含）"),
       });
       startIn.value = model.start;
       const endIn = el("input", {
         type: "time",
         class: "bb-end",
         step: "900",
-        ariaLabel: "不開放終點（不含）",
+        ariaLabel: t("admin.blocks.end", "迄（不含）"),
       });
       endIn.value = model.end;
       const reasonIn = el("input", {
         type: "text",
         class: "bb-reason",
         maxLength: 200,
-        placeholder: "例如：師傅運動、外出",
+        placeholder: t("admin.blocks.reasonPh", "例如：師傅運動、外出"),
         autocomplete: "off",
       });
       reasonIn.value = model.reason;
-      const removeBtn = el("button", { type: "button", class: "ghost" }, ["刪除此列"]);
+      const removeBtn = el("button", { type: "button", class: "ghost" }, [t("admin.blocks.rowRemove", "刪除此列")]);
       removeBtn.addEventListener("click", () => {
         row.remove();
       });
       row.append(
-        el("label", { class: "field bb-field-wd" }, ["星期", weekdaySel]),
-        el("label", { class: "field bb-field-t" }, ["起（含）", startIn]),
-        el("label", { class: "field bb-field-t" }, ["迄（不含）", endIn]),
-        el("label", { class: "field bb-field-reason" }, ["前台顯示原因", reasonIn]),
+        el("label", { class: "field bb-field-wd" }, [t("admin.blocks.weekday", "星期"), weekdaySel]),
+        el("label", { class: "field bb-field-t" }, [t("admin.blocks.start", "起（含）"), startIn]),
+        el("label", { class: "field bb-field-t" }, [t("admin.blocks.end", "迄（不含）"), endIn]),
+        el("label", { class: "field bb-field-reason" }, [t("admin.blocks.reason", "前台顯示原因"), reasonIn]),
         removeBtn,
       );
       return row;
@@ -2266,7 +2343,7 @@ function render() {
         refillBookingBlockRows(models);
       },
       () => {
-        bookingBlocksStatus.textContent = "無法讀取不開放時段設定。";
+        bookingBlocksStatus.textContent = t("admin.snapshot.loadFail", "無法讀取不開放時段設定。");
         bookingBlocksStatus.className = "status-line error";
       },
     );
@@ -2277,7 +2354,7 @@ function render() {
       const rowEls = bookingBlocksRows.querySelectorAll(".admin-booking-block-row");
       const windows: { weekday: number; start: string; end: string; reason: string }[] = [];
       if (rowEls.length > 40) {
-        bookingBlocksStatus.textContent = "最多 40 筆規則，請刪減後再儲存。";
+        bookingBlocksStatus.textContent = t("admin.blocks.tooMany", "最多 40 筆規則，請刪減後再儲存。");
         bookingBlocksStatus.classList.add("error");
         return;
       }
@@ -2287,39 +2364,41 @@ function render() {
         const en = (row.querySelector(".bb-end") as HTMLInputElement)?.value ?? "";
         const re = (row.querySelector(".bb-reason") as HTMLInputElement)?.value ?? "";
         if (!Number.isInteger(wd) || wd < 1 || wd > 5) {
-          bookingBlocksStatus.textContent = "每一列的星期需為週一到週五。";
+          bookingBlocksStatus.textContent = t("admin.blocks.invalidWeekday", "每一列的星期需為週一到週五。");
           bookingBlocksStatus.classList.add("error");
           return;
         }
         const ns = normalizeTimeForBookingBlock(st);
         const ne = normalizeTimeForBookingBlock(en);
         if (!ns || !ne) {
-          bookingBlocksStatus.textContent = "請確認每一列的時間格式正確。";
+          bookingBlocksStatus.textContent = t("admin.blocks.invalidTime", "請確認每一列的時間格式正確。");
           bookingBlocksStatus.classList.add("error");
           return;
         }
         const m0 = Number(ns.slice(0, 2)) * 60 + Number(ns.slice(3, 5));
         const m1 = Number(ne.slice(0, 2)) * 60 + Number(ne.slice(3, 5));
         if (m0 >= m1) {
-          bookingBlocksStatus.textContent =
-            "每一列的「迄」需晚於「起」。區間為左閉右開：迄那一刻起已不再封鎖。";
+          bookingBlocksStatus.textContent = t(
+            "admin.blocks.invalidRange",
+            "每一列的「迄」需晚於「起」。區間為左閉右開：迄那一刻起已不再封鎖。",
+          );
           bookingBlocksStatus.classList.add("error");
           return;
         }
         windows.push({ weekday: wd, start: ns, end: ne, reason: re.trim().slice(0, 200) });
       }
       saveBookingBlocksBtn.setAttribute("disabled", "true");
-      bookingBlocksStatus.textContent = "儲存中…";
+      bookingBlocksStatus.textContent = t("admin.status.processing", "處理中…");
       try {
         await setDoc(
           bookingBlocksDocRef,
           { windows, updatedAt: serverTimestamp() },
           { merge: true },
         );
-        bookingBlocksStatus.textContent = "不開放時段已更新";
+        bookingBlocksStatus.textContent = t("admin.status.updated", "已更新");
         bookingBlocksStatus.classList.add("ok");
       } catch (e) {
-        bookingBlocksStatus.textContent = e instanceof Error ? e.message : "儲存失敗";
+        bookingBlocksStatus.textContent = e instanceof Error ? e.message : t("admin.memberList.saveFail", "儲存失敗");
         bookingBlocksStatus.classList.add("error");
       } finally {
         saveBookingBlocksBtn.removeAttribute("disabled");
@@ -2334,7 +2413,7 @@ function render() {
         marqueeTextEnabled.checked = typeof data?.enabled === "boolean" ? data.enabled : false;
       },
       () => {
-        marqueeTextStatus.textContent = "無法讀取頂部跑馬燈設定。";
+        marqueeTextStatus.textContent = t("admin.snapshot.loadFail", "無法讀取頂部跑馬燈設定。");
         marqueeTextStatus.className = "status-line error";
       },
     );
@@ -2349,13 +2428,13 @@ function render() {
         marqueeLedSpeedValue.textContent = String(s);
       },
       () => {
-        marqueeLedStatus.textContent = "無法讀取底部 LED 設定。";
+        marqueeLedStatus.textContent = t("admin.snapshot.loadFail", "無法讀取底部 LED 設定。");
         marqueeLedStatus.className = "status-line error";
       },
     );
 
     saveMarqueeTextBtn.addEventListener("click", async () => {
-      marqueeTextStatus.textContent = "儲存中…";
+      marqueeTextStatus.textContent = t("admin.status.processing", "處理中…");
       marqueeTextStatus.className = "status-line";
       saveMarqueeTextBtn.setAttribute("disabled", "true");
       try {
@@ -2368,10 +2447,10 @@ function render() {
           },
           { merge: true },
         );
-        marqueeTextStatus.textContent = "頂部跑馬燈已更新";
+        marqueeTextStatus.textContent = t("admin.status.updated", "已更新");
         marqueeTextStatus.classList.add("ok");
       } catch (e) {
-        marqueeTextStatus.textContent = e instanceof Error ? e.message : "儲存失敗";
+        marqueeTextStatus.textContent = e instanceof Error ? e.message : t("admin.memberList.saveFail", "儲存失敗");
         marqueeTextStatus.classList.add("error");
       } finally {
         saveMarqueeTextBtn.removeAttribute("disabled");
@@ -2379,7 +2458,7 @@ function render() {
     });
 
     saveMarqueeLedBtn.addEventListener("click", async () => {
-      marqueeLedStatus.textContent = "儲存中…";
+      marqueeLedStatus.textContent = t("admin.status.processing", "處理中…");
       marqueeLedStatus.className = "status-line";
       saveMarqueeLedBtn.setAttribute("disabled", "true");
       try {
@@ -2393,10 +2472,10 @@ function render() {
           },
           { merge: true },
         );
-        marqueeLedStatus.textContent = "底部 LED 已更新";
+        marqueeLedStatus.textContent = t("admin.status.updated", "已更新");
         marqueeLedStatus.classList.add("ok");
       } catch (e) {
-        marqueeLedStatus.textContent = e instanceof Error ? e.message : "儲存失敗";
+        marqueeLedStatus.textContent = e instanceof Error ? e.message : t("admin.memberList.saveFail", "儲存失敗");
         marqueeLedStatus.classList.add("error");
       } finally {
         saveMarqueeLedBtn.removeAttribute("disabled");
@@ -2404,97 +2483,109 @@ function render() {
     });
 
     announcementSection.append(
-      el("h3", {}, ["跑馬燈公告"]),
+      el("h3", {}, [t("admin.announce.heading", "跑馬燈公告")]),
       el("p", { class: "hint" }, [
-        "頂部與底部分開設定：Firestore `siteSettings/marqueeText`、`siteSettings/marqueeLed`。",
+        t("admin.announce.intro", "頂部與底部分開設定：Firestore `siteSettings/marqueeText`、`siteSettings/marqueeLed`。"),
       ]),
-      el("h4", { class: "admin-subhead" }, ["頂部 · 文字跑馬燈"]),
-      el("label", { class: "field" }, ["內容", marqueeTextBody]),
-      el("label", { class: "field checkbox-field" }, [marqueeTextEnabled, el("span", {}, ["啟用"])]),
+      el("h4", { class: "admin-subhead" }, [t("admin.announce.topHeading", "頂部 · 文字跑馬燈")]),
+      el("label", { class: "field" }, [t("admin.announce.topLabel", "內容"), marqueeTextBody]),
+      el("label", { class: "field checkbox-field" }, [marqueeTextEnabled, el("span", {}, [t("admin.announce.enable", "啟用")])]),
       el("div", { class: "row-actions" }, [saveMarqueeTextBtn]),
       marqueeTextStatus,
-      el("h4", { class: "admin-subhead" }, ["底部 · LED 跑馬燈"]),
-      el("label", { class: "field" }, ["內容", marqueeLedBody]),
+      el("h4", { class: "admin-subhead" }, [t("admin.announce.bottomHeading", "底部 · LED 跑馬燈")]),
+      el("label", { class: "field" }, [t("admin.announce.bottomLabel", "內容"), marqueeLedBody]),
       el("label", { class: "field led-speed-field" }, [
-        "捲動速度",
+        t("admin.announce.speedLabel", "捲動速度"),
         el("div", { class: "led-speed-row" }, [marqueeLedSpeed, marqueeLedSpeedValue]),
         el("span", { class: "hint" }, [
-          `約 ${LED_SPEED_MIN}～${LED_SPEED_MAX}（數字愈大移動愈快，單位：像素／秒）。`,
+          t("admin.announce.speedHint", "約 {{min}}～{{max}}（數字愈大移動愈快，單位：像素／秒）。", {
+            min: LED_SPEED_MIN,
+            max: LED_SPEED_MAX,
+          }),
         ]),
       ]),
-      el("label", { class: "field checkbox-field" }, [marqueeLedEnabled, el("span", {}, ["啟用"])]),
+      el("label", { class: "field checkbox-field" }, [marqueeLedEnabled, el("span", {}, [t("admin.announce.enable", "啟用")])]),
       el("div", { class: "row-actions" }, [saveMarqueeLedBtn]),
       marqueeLedStatus,
-      el("h4", { class: "admin-subhead" }, ["前台 · 輪盤特效預覽"]),
+      el("h4", { class: "admin-subhead" }, [t("admin.announce.wheelHeading", "前台 · 輪盤特效預覽")]),
       el("p", { class: "hint" }, [
-        "勾選並儲存後，預約頁「會員區」會出現「預覽輪盤特效」按鈕；僅播放動畫，不呼叫抽獎 API、不扣次數。正式上線建議關閉。Firestore：",
+        t(
+          "admin.announce.wheelHintA",
+          "勾選並儲存後，預約頁「會員區」會出現「預覽輪盤特效」按鈕；僅播放動畫，不呼叫抽獎 API、不扣次數。正式上線建議關閉。Firestore：",
+        ),
         el("code", {}, ["siteSettings/wheelSpectacle"]),
-        "。",
+        t("admin.announce.wheelHintB", "。"),
       ]),
       el("label", { class: "field checkbox-field" }, [
         wheelSpectacleShowTest,
-        el("span", {}, ["顯示前台「預覽輪盤特效」按鈕"]),
+        el("span", {}, [t("admin.announce.wheelToggle", "顯示前台「預覽輪盤特效」按鈕")]),
       ]),
       el("div", { class: "row-actions" }, [saveWheelSpectacleBtn]),
       wheelSpectacleStatus,
-      el("h4", { class: "admin-subhead" }, ["預約名額上限"]),
+      el("h4", { class: "admin-subhead" }, [t("admin.caps.heading", "預約名額上限")]),
       el("p", { class: "hint" }, [
-        "控制「同一天」「同一工作週（週一至週五曆）」各最多幾筆有效預約（",
+        t("admin.caps.hintA", "控制「同一天」「同一工作週（週一至週五曆）」各最多幾筆有效預約（"),
         el("code", {}, ["pending"]),
-        "／",
+        " / ",
         el("code", {}, ["confirmed"]),
-        "／",
+        " / ",
         el("code", {}, ["done"]),
-        "）。Firestore：",
+        t("admin.caps.hintB", "）。Firestore："),
         el("code", {}, ["siteSettings/bookingCaps"]),
-        "（",
+        t("admin.caps.hintC", "（"),
         el("code", {}, ["maxPerDay"]),
-        "、",
+        ", ",
         el("code", {}, ["maxPerWorkWeek"]),
-        "，整數 1～50；未建立文件時後端預設 2 與 4）。",
+        t("admin.caps.hintD", "，整數 1～50；未建立文件時後端預設 2 與 4）。"),
       ]),
       el("div", { class: "grid grid-2" }, [
-        el("label", { class: "field" }, ["同一天最多幾筆", capMaxPerDayInput]),
-        el("label", { class: "field" }, ["同一工作週最多幾筆", capMaxPerWorkWeekInput]),
+        el("label", { class: "field" }, [t("admin.caps.perDay", "同一天最多幾筆"), capMaxPerDayInput]),
+        el("label", { class: "field" }, [t("admin.caps.perWeek", "同一工作週最多幾筆"), capMaxPerWorkWeekInput]),
       ]),
       el("div", { class: "row-actions" }, [saveBookingCapsBtn]),
       bookingCapsStatus,
-      el("h4", { class: "admin-subhead" }, ["不開放預約時段"]),
+      el("h4", { class: "admin-subhead" }, [t("admin.blocks.heading", "不開放預約時段")]),
       el("p", { class: "hint" }, [
-        "依星期與當日時段關閉預約：若一次服務（約 30 分鐘）與關閉區間重疊，該開始時間無法選取。例：週一、週四 16:30–17:30 關閉，則 16:30、16:45、17:00 皆不可開始。Firestore：",
+        t(
+          "admin.blocks.hintA",
+          "依星期與當日時段關閉預約：若一次服務（約 30 分鐘）與關閉區間重疊，該開始時間無法選取。例：週一、週四 16:30–17:30 關閉，則 16:30、16:45、17:00 皆不可開始。Firestore：",
+        ),
         el("code", {}, ["siteSettings/bookingBlocks"]),
-        " 的 ",
+        t("admin.blocks.hintB", " 的 "),
         el("code", {}, ["windows"]),
-        "。區間為左閉右開（「迄」該分鐘起已不封鎖）。",
+        t("admin.blocks.hintC", "。區間為左閉右開（「迄」該分鐘起已不封鎖）。"),
       ]),
       bookingBlocksRows,
       el("div", { class: "row-actions" }, [addBookingBlockRowBtn, saveBookingBlocksBtn]),
       bookingBlocksStatus,
     );
     walletTopupSection.append(
-      el("h3", {}, ["會員儲值"]),
-      el("label", { class: "field" }, ["會員（Email 或 UID）", topupTypeaheadWrap]),
-      el("div", { class: "hint" }, [
-        "輸入至少 2 個字元會顯示符合的 Email；亦可直接貼上 UID。",
-      ]),
-      el("label", { class: "field" }, ["儲值金額", topupAmount]),
-      el("label", { class: "field" }, ["備註（選填）", topupNote]),
+      el("h3", {}, [t("admin.wallet.heading", "會員儲值")]),
+      el("label", { class: "field" }, [t("admin.wallet.memberLabel", "會員（Email 或 UID）"), topupTypeaheadWrap]),
+      el("div", { class: "hint" }, [t("admin.wallet.searchHint", "輸入至少 2 個字元會顯示符合的 Email；亦可直接貼上 UID。")]),
+      el("label", { class: "field" }, [t("admin.wallet.amount", "儲值金額"), topupAmount]),
+      el("label", { class: "field" }, [t("admin.wallet.note", "備註（選填）"), topupNote]),
       el("div", { class: "row-actions" }, [topupBtn]),
       topupStatus,
     );
-    const createMemberEmail = el("input", { type: "email", placeholder: "會員 Email" });
+    const createMemberEmail = el("input", {
+      type: "email",
+      placeholder: t("admin.member.emailPh", "會員 Email"),
+    });
     const createMemberPassword = el("input", {
       type: "password",
-      placeholder: "初始密碼（至少 6 碼）",
+      placeholder: t("admin.member.passwordPh", "初始密碼（至少 6 碼）"),
       autocomplete: "new-password",
     });
     const createMemberNickname = el("input", {
       type: "text",
       maxLength: 80,
-      placeholder: "例如：小陳（選填，會寫入預約姓名預設）",
+      placeholder: t("admin.member.nicknamePh", "例如：小陳（選填，會寫入預約姓名預設）"),
       autocomplete: "off",
     });
-    const createMemberBtn = el("button", { class: "ghost", type: "button" }, ["建立會員帳號"]);
+    const createMemberBtn = el("button", { class: "ghost", type: "button" }, [
+      t("admin.member.createBtn", "建立會員帳號"),
+    ]);
     const createMemberStatus = el("div", { class: "status-line" });
     createMemberBtn.addEventListener("click", async () => {
       createMemberStatus.textContent = "";
@@ -2503,7 +2594,7 @@ function render() {
       const password = createMemberPassword.value;
       const nickname = createMemberNickname.value.trim();
       if (!email || !password) {
-        createMemberStatus.textContent = "請輸入 Email 與密碼。";
+        createMemberStatus.textContent = t("admin.member.needCreds", "請輸入 Email 與密碼。");
         createMemberStatus.classList.add("error");
         return;
       }
@@ -2512,7 +2603,9 @@ function render() {
         const fn = createMemberAccountCall();
         const res = await fn({ email, password, nickname, ...localeApiParam() });
         const data = res.data as { uid: string };
-        createMemberStatus.textContent = `建立成功，UID：${data.uid}（儲值欄已帶入 Email）`;
+        createMemberStatus.textContent = t("admin.member.created", "建立成功，UID：{{uid}}（儲值欄已帶入 Email）", {
+          uid: data.uid,
+        });
         createMemberStatus.classList.add("ok");
         createMemberPassword.value = "";
         createMemberNickname.value = "";
@@ -2525,56 +2618,49 @@ function render() {
       }
     });
     accountCreateSection.append(
-      el("h3", {}, ["建立會員帳號"]),
-      el("label", { class: "field" }, ["會員 Email", createMemberEmail]),
-      el("label", { class: "field" }, ["初始密碼", createMemberPassword]),
-      el("label", { class: "field" }, ["稱呼（選填）", createMemberNickname]),
-      el("div", { class: "hint" }, [
-        "稱呼會存進會員資料，登入預約時若姓名欄為空會自動帶入；亦會寫入 Firebase Auth 顯示名稱。",
-      ]),
-      el("div", { class: "hint" }, [
-        "會員也可於前台「會員登入／註冊」自行註冊；註冊後須完成信箱驗證才可使用儲值與會員預約。",
-      ]),
+      el("h3", {}, [t("admin.member.createTitle", "建立會員帳號")]),
+      el("label", { class: "field" }, [t("admin.member.email", "會員 Email"), createMemberEmail]),
+      el("label", { class: "field" }, [t("admin.member.password", "初始密碼"), createMemberPassword]),
+      el("label", { class: "field" }, [t("admin.member.nickname", "稱呼（選填）"), createMemberNickname]),
+      el("div", { class: "hint" }, [t("admin.member.nicknameHint", "稱呼會存進會員資料，登入預約時若姓名欄為空會自動帶入；亦會寫入 Firebase Auth 顯示名稱。")]),
+      el("div", { class: "hint" }, [t("admin.member.selfRegisterHint", "會員也可於前台「會員登入／註冊」自行註冊；註冊後須完成信箱驗證才可使用儲值與會員預約。")]),
       el("div", { class: "row-actions" }, [createMemberBtn]),
       createMemberStatus,
     );
     const tableHolder = el("div", { class: "table-wrap admin-bookings-table" });
     const table = el("table", {}, []);
-    table.append(
-      el("tr", {}, [
-        el("th", {}, ["預約時間"]),
-        el("th", {}, ["姓名"]),
-        el("th", { title: "是否為訪客預約" }, ["訪客"]),
-        el("th", {}, ["備註"]),
-        el("th", {}, ["狀態"]),
-        el("th", {}, ["操作"]),
-      ]),
-    );
+    function adminBookingsHeaderRow(): HTMLTableRowElement {
+      const guestThTitle = t("admin.table.guestTitle", "是否為訪客預約");
+      return el("tr", {}, [
+        el("th", {}, [t("admin.table.when", "預約時間")]),
+        el("th", {}, [t("admin.table.name", "姓名")]),
+        el("th", { title: guestThTitle }, [t("admin.table.guest", "訪客")]),
+        el("th", {}, [t("admin.table.note", "備註")]),
+        el("th", {}, [t("admin.table.status", "狀態")]),
+        el("th", {}, [t("admin.table.actions", "操作")]),
+      ]);
+    }
+    table.append(adminBookingsHeaderRow());
     tableHolder.append(table);
 
     const hiddenBookingsStatus = el("div", { class: "status-line" });
     const hiddenTableHolder = el("div", { class: "table-wrap admin-bookings-table" });
     const hiddenTable = el("table", {}, []);
-    hiddenTable.append(
-      el("tr", {}, [
-        el("th", {}, ["預約時間"]),
-        el("th", {}, ["姓名"]),
-        el("th", { title: "是否為訪客預約" }, ["訪客"]),
-        el("th", {}, ["備註"]),
-        el("th", {}, ["狀態"]),
-        el("th", {}, ["操作"]),
-      ]),
-    );
+    hiddenTable.append(adminBookingsHeaderRow());
     hiddenTableHolder.append(hiddenTable);
 
     const hiddenPager = el("div", { class: "admin-hidden-pager" });
-    const hiddenPagePrev = el("button", { type: "button", class: "ghost" }, ["上一頁"]);
-    const hiddenPageInfo = el("span", { class: "hint admin-hidden-pager-meta" }, ["—"]);
-    const hiddenPageNext = el("button", { type: "button", class: "ghost" }, ["下一頁"]);
+    const hiddenPagePrev = el("button", { type: "button", class: "ghost" }, [t("admin.pager.prev", "上一頁")]);
+    const hiddenPageInfo = el("span", { class: "hint admin-hidden-pager-meta" }, [
+      t("admin.pager.none", "—"),
+    ]);
+    const hiddenPageNext = el("button", { type: "button", class: "ghost" }, [t("admin.pager.next", "下一頁")]);
     hiddenPager.append(hiddenPagePrev, hiddenPageInfo, hiddenPageNext);
 
     const memberListSection = el("div", { class: "admin-member-list" }, []);
-    const memberListRefreshBtn = el("button", { class: "ghost", type: "button" }, ["重新載入會員清單"]);
+    const memberListRefreshBtn = el("button", { class: "ghost", type: "button" }, [
+      t("admin.memberList.reload", "重新載入會員清單"),
+    ]);
     const memberListStatus = el("div", { class: "status-line" });
     const memberListTableWrap = el("div", { class: "table-wrap admin-member-list-table" });
     const memberListTable = el("table", {}, []);
@@ -2603,9 +2689,11 @@ function render() {
     let memberListSortAsc = true;
 
     const memberListPager = el("div", { class: "admin-hidden-pager admin-member-list-pager" });
-    const memberListPagePrev = el("button", { type: "button", class: "ghost" }, ["上一頁"]);
-    const memberListPageInfo = el("span", { class: "hint admin-hidden-pager-meta" }, ["—"]);
-    const memberListPageNext = el("button", { type: "button", class: "ghost" }, ["下一頁"]);
+    const memberListPagePrev = el("button", { type: "button", class: "ghost" }, [t("admin.pager.prev", "上一頁")]);
+    const memberListPageInfo = el("span", { class: "hint admin-hidden-pager-meta" }, [
+      t("admin.pager.none", "—"),
+    ]);
+    const memberListPageNext = el("button", { type: "button", class: "ghost" }, [t("admin.pager.next", "下一頁")]);
     memberListPager.append(memberListPagePrev, memberListPageInfo, memberListPageNext);
 
     function compareAdminMemberRows(
@@ -2661,7 +2749,7 @@ function render() {
           {
             type: "button",
             class: "ghost admin-member-sort-btn",
-            title: `依「${label}」排序；再按一次反向`,
+            title: t("admin.memberList.sortTitle", "依「{{label}}」排序；再按一次反向", { label }),
           },
           [`${label}${arrow}`],
         );
@@ -2670,13 +2758,13 @@ function render() {
         return th;
       };
       return el("tr", {}, [
-        mk("Email", "email"),
-        mk("信箱驗證", "emailVerified"),
-        mk("UID", "uid"),
-        mk("稱呼", "nickname"),
-        mk("儲值餘額", "walletBalance"),
-        mk("可抽次數", "drawChances"),
-        el("th", { class: "admin-member-th-actions" }, ["操作"]),
+        mk(t("admin.memberList.th.email", "Email"), "email"),
+        mk(t("admin.memberList.th.verified", "信箱驗證"), "emailVerified"),
+        mk(t("admin.memberList.th.uid", "UID"), "uid"),
+        mk(t("admin.memberList.th.nickname", "稱呼"), "nickname"),
+        mk(t("admin.memberList.th.wallet", "儲值餘額"), "walletBalance"),
+        mk(t("admin.memberList.th.draws", "可抽次數"), "drawChances"),
+        el("th", { class: "admin-member-th-actions" }, [t("admin.memberList.th.actions", "操作")]),
       ]);
     }
 
@@ -2698,12 +2786,12 @@ function render() {
       if (total === 0) {
         memberListTable.append(
           el("tr", {}, [
-            el("td", { class: "hint", colSpan: 7 }, ["目前沒有使用者資料。請按「重新載入會員清單」。"]),
+            el("td", { class: "hint", colSpan: 7 }, [t("admin.memberList.empty", "目前沒有使用者資料。請按「重新載入會員清單」。")]),
           ]),
         );
         memberListPagePrev.disabled = true;
         memberListPageNext.disabled = true;
-        memberListPageInfo.textContent = "共 0 筆";
+        memberListPageInfo.textContent = t("admin.pager.total0", "共 0 筆");
         return;
       }
 
@@ -2715,7 +2803,9 @@ function render() {
           class: "admin-member-nick-input",
           autocomplete: "off",
         });
-        const saveBtn = el("button", { class: "ghost admin-save-nick-btn", type: "button" }, ["儲存稱呼"]);
+        const saveBtn = el("button", { class: "ghost admin-save-nick-btn", type: "button" }, [
+          t("admin.memberList.saveNick", "儲存稱呼"),
+        ]);
         saveBtn.addEventListener("click", async () => {
           memberListStatus.textContent = "";
           memberListStatus.className = "status-line";
@@ -2725,11 +2815,13 @@ function render() {
             await updateFn({ customerId: m.uid, nickname: nickInput.value, ...localeApiParam() });
             const cached = memberListCache.find((r) => r.uid === m.uid);
             if (cached) cached.nickname = nickInput.value.trim();
-            memberListStatus.textContent = `已更新 ${m.email ?? m.uid} 的稱呼。`;
+            memberListStatus.textContent = t("admin.memberList.nickUpdated", "已更新 {{email}} 的稱呼。", {
+              email: m.email ?? m.uid,
+            });
             memberListStatus.classList.add("ok");
             paintMemberListTable();
           } catch (e) {
-            memberListStatus.textContent = e instanceof Error ? e.message : "儲存失敗";
+            memberListStatus.textContent = e instanceof Error ? e.message : t("admin.memberList.saveFail", "儲存失敗");
             memberListStatus.classList.add("error");
           } finally {
             saveBtn.removeAttribute("disabled");
@@ -2737,11 +2829,11 @@ function render() {
         });
         const verified = m.emailVerified === true;
         const verifyCell = el("td", { class: verified ? "admin-member-verify ok" : "admin-member-verify" }, [
-          verified ? "已驗證" : "未驗證",
+          verified ? t("admin.memberList.verifiedYes", "已驗證") : t("admin.memberList.verifiedNo", "未驗證"),
         ]);
         memberListTable.append(
           el("tr", {}, [
-            el("td", {}, [m.email ?? "（無 Email）"]),
+            el("td", {}, [m.email ?? t("admin.memberList.noEmailCell", "（無 Email）")]),
             verifyCell,
             el("td", { class: "mono admin-member-uid" }, [m.uid]),
             el("td", {}, [nickInput]),
@@ -2754,7 +2846,16 @@ function render() {
 
       memberListPagePrev.disabled = memberListPageIndex <= 0;
       memberListPageNext.disabled = memberListPageIndex >= totalPages - 1;
-      memberListPageInfo.textContent = `第 ${memberListPageIndex + 1} / ${totalPages} 頁 · 共 ${total} 位（每頁 ${MEMBER_LIST_PAGE_SIZE} 筆）`;
+      memberListPageInfo.textContent = t(
+        "admin.pager.memberPage",
+        "第 {{cur}} / {{total}} 頁 · 共 {{count}} 位（每頁 {{size}} 筆）",
+        {
+          cur: memberListPageIndex + 1,
+          total: totalPages,
+          count: total,
+          size: MEMBER_LIST_PAGE_SIZE,
+        },
+      );
     }
 
     memberListTable.addEventListener("click", (ev) => {
@@ -2787,7 +2888,7 @@ function render() {
     });
 
     async function loadMemberList() {
-      memberListStatus.textContent = "載入會員清單中…";
+      memberListStatus.textContent = t("admin.memberList.loading", "載入會員清單中…");
       memberListStatus.className = "status-line";
       memberListRefreshBtn.setAttribute("disabled", "true");
       try {
@@ -2807,10 +2908,12 @@ function render() {
         memberListSortKey = "email";
         memberListSortAsc = true;
         paintMemberListTable();
-        memberListStatus.textContent = `已載入 ${memberListCache.length} 位使用者。`;
+        memberListStatus.textContent = t("admin.memberList.loaded", "已載入 {{n}} 位使用者。", {
+          n: memberListCache.length,
+        });
         memberListStatus.classList.add("ok");
       } catch (e) {
-        memberListStatus.textContent = e instanceof Error ? e.message : "載入失敗";
+        memberListStatus.textContent = e instanceof Error ? e.message : t("admin.memberList.loadFail", "載入失敗");
         memberListStatus.classList.add("error");
       } finally {
         memberListRefreshBtn.removeAttribute("disabled");
@@ -2822,13 +2925,13 @@ function render() {
     });
 
     memberListSection.append(
-      el("h3", {}, ["會員清單"]),
+      el("h3", {}, [t("admin.memberList.title", "會員清單")]),
       el("p", { class: "hint" }, [
-        "資料來自 Firebase Authentication 全部使用者，並合併 Firestore ",
+        t("admin.memberList.introA", "資料來自 Firebase Authentication 全部使用者，並合併 Firestore "),
         el("code", {}, ["customers/{uid}"]),
-        " 的餘額與稱呼。人數極多時載入可能較久。",
+        t("admin.memberList.introB", " 的餘額與稱呼。人數極多時載入可能較久。"),
       ]),
-      el("p", { class: "hint" }, ["表頭欄位可點擊排序；清單每頁顯示 10 位。"]),
+      el("p", { class: "hint" }, [t("admin.memberList.introSort", "表頭欄位可點擊排序；清單每頁顯示 10 位。")]),
       el("div", { class: "row-actions" }, [memberListRefreshBtn]),
       memberListStatus,
       memberListTableWrap,
@@ -2837,15 +2940,25 @@ function render() {
 
     paintMemberListTable();
 
-    const tabBookings = el("button", { type: "button", class: "admin-tab", role: "tab" }, ["預約管理"]);
+    const tabBookings = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
+      t("admin.tab.bookings", "預約管理"),
+    ]);
     tabBookings.id = "admin-tab-trigger-bookings";
-    const tabHiddenBookings = el("button", { type: "button", class: "admin-tab", role: "tab" }, ["已隱藏的預約"]);
+    const tabHiddenBookings = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
+      t("admin.tab.hidden", "已隱藏的預約"),
+    ]);
     tabHiddenBookings.id = "admin-tab-trigger-hidden";
-    const tabMembers = el("button", { type: "button", class: "admin-tab", role: "tab" }, ["會員與儲值"]);
+    const tabMembers = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
+      t("admin.tab.members", "會員與儲值"),
+    ]);
     tabMembers.id = "admin-tab-trigger-members";
-    const tabAnnounce = el("button", { type: "button", class: "admin-tab", role: "tab" }, ["跑馬燈公告"]);
+    const tabAnnounce = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
+      t("admin.tab.announce", "跑馬燈公告"),
+    ]);
     tabAnnounce.id = "admin-tab-trigger-announce";
-    const tabSupport = el("button", { type: "button", class: "admin-tab", role: "tab" }, ["客服對話"]);
+    const tabSupport = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
+      t("admin.tab.support", "客服對話"),
+    ]);
     tabSupport.id = "admin-tab-trigger-support";
 
     const adminTablist = el("div", { class: "admin-tabs", role: "tablist" });
@@ -2862,7 +2975,10 @@ function render() {
     panelHiddenBookingsEl.setAttribute("aria-labelledby", "admin-tab-trigger-hidden");
     panelHiddenBookingsEl.append(
       el("p", { class: "hint" }, [
-        "以下為自「預約管理」主列表隱藏之預約，或舊版於資料庫標記為已刪除之筆。額度與可預約時段與主列表相同，仍依預約狀態計算（僅影響後台列表是否顯示）。筆數多時每頁 10 筆，請用列表下方「上一頁／下一頁」切換。",
+        t(
+          "admin.hidden.intro",
+          "以下為自「預約管理」主列表隱藏之預約，或舊版於資料庫標記為已刪除之筆。額度與可預約時段與主列表相同，仍依預約狀態計算（僅影響後台列表是否顯示）。筆數多時每頁 10 筆，請用列表下方「上一頁／下一頁」切換。",
+        ),
       ]),
       hiddenBookingsStatus,
       hiddenTableHolder,
@@ -2971,9 +3087,11 @@ function render() {
           el("td", {}, [bookingGuestYesNo(b)]),
           el("td", {}, [b.note ?? ""]),
           el("td", {}, [
-            el("span", { class: "admin-booking-status-readonly" }, ["已刪除（舊資料）"]),
+            el("span", { class: "admin-booking-status-readonly" }, [
+              t("admin.hidden.deletedLabel", "已刪除（舊資料）"),
+            ]),
           ]),
-          el("td", {}, [el("span", { class: "hint" }, ["—"])]),
+          el("td", {}, [el("span", { class: "hint" }, [t("admin.hidden.dash", "—")])]),
         ]),
       );
     }
@@ -2993,7 +3111,7 @@ function render() {
         sel.addEventListener("change", async () => {
           const nextStatus = sel.value;
           const prevStatus = b.status;
-          hiddenBookingsStatus.textContent = "更新中…";
+          hiddenBookingsStatus.textContent = t("admin.status.updating", "更新中…");
           hiddenBookingsStatus.className = "status-line";
           try {
             if (nextStatus === "done") {
@@ -3005,7 +3123,7 @@ function render() {
                 updatedAt: serverTimestamp(),
               });
             }
-            hiddenBookingsStatus.textContent = "已更新";
+            hiddenBookingsStatus.textContent = t("admin.status.updated", "已更新");
             hiddenBookingsStatus.classList.add("ok");
             if (nextStatus === "done") {
               await refreshWalletStatus();
@@ -3013,32 +3131,32 @@ function render() {
           } catch (e) {
             sel.value = prevStatus;
             hiddenBookingsStatus.textContent =
-              e instanceof Error ? e.message : "更新失敗（你是否已加入 admins 集合？）";
+              e instanceof Error ? e.message : t("admin.status.updateFail", "更新失敗（你是否已加入 admins 集合？）");
             hiddenBookingsStatus.classList.add("error");
           }
         });
       }
-      const cancelBtn = el("button", { class: "ghost", type: "button" }, ["取消"]);
+      const cancelBtn = el("button", { class: "ghost", type: "button" }, [t("admin.booking.cancel", "取消")]);
       const canAdminCancel = b.status !== "done" && b.status !== "cancelled";
       cancelBtn.disabled = !canAdminCancel;
       cancelBtn.title = !canAdminCancel
         ? b.status === "done"
-          ? "已完成預約不可取消"
-          : "已取消"
+          ? t("admin.booking.hideTitleDone", "已完成預約不可取消")
+          : t("admin.booking.hideTitleCancelled", "已取消")
         : "";
       cancelBtn.addEventListener("click", async () => {
         if (!canAdminCancel) return;
         const summary = [
-          "即將取消以下預約。取消原因可留空。",
+          t("admin.hidden.cancelSummaryIntro", "即將取消以下預約。取消原因可留空。"),
           "",
-          `姓名：${b.displayName ?? ""}`,
-          `日期：${b.dateKey ?? ""}`,
-          `開始時間：${b.startSlot ?? ""}`,
-          `備註：${(b.note ?? "").trim() || "（無）"}`,
+          `${t("booking.summary.name", "姓名")}：${b.displayName ?? ""}`,
+          `${t("booking.summary.date", "日期")}：${b.dateKey ?? ""}`,
+          `${t("booking.summary.start", "開始時間")}：${b.startSlot ?? ""}`,
+          `${t("booking.summary.note", "備註")}：${(b.note ?? "").trim() || t("admin.hidden.cancelSummaryNone", "（無）")}`,
         ].join("\n");
         const reason = await showAdminCancelBookingModal(summary);
         if (reason === null) return;
-        hiddenBookingsStatus.textContent = "取消中…";
+        hiddenBookingsStatus.textContent = t("admin.status.cancelling", "取消中…");
         hiddenBookingsStatus.className = "status-line";
         cancelBtn.setAttribute("disabled", "true");
         try {
@@ -3048,18 +3166,18 @@ function render() {
             payload.cancelReason = reason;
           }
           await fn({ ...payload, ...localeApiParam() });
-          hiddenBookingsStatus.textContent = "已取消";
+          hiddenBookingsStatus.textContent = t("admin.status.cancelled", "已取消");
           hiddenBookingsStatus.classList.add("ok");
           await refreshWalletStatus();
         } catch (e) {
-          hiddenBookingsStatus.textContent = e instanceof Error ? e.message : "取消失敗";
+          hiddenBookingsStatus.textContent = e instanceof Error ? e.message : t("admin.status.cancelFail", "取消失敗");
           hiddenBookingsStatus.classList.add("error");
           cancelBtn.removeAttribute("disabled");
         }
       });
-      const unhideBtn = el("button", { class: "ghost", type: "button" }, ["取消隱藏"]);
+      const unhideBtn = el("button", { class: "ghost", type: "button" }, [t("admin.hidden.unhide", "取消隱藏")]);
       unhideBtn.addEventListener("click", async () => {
-        hiddenBookingsStatus.textContent = "處理中…";
+        hiddenBookingsStatus.textContent = t("admin.status.processing", "處理中…");
         hiddenBookingsStatus.className = "status-line";
         unhideBtn.setAttribute("disabled", "true");
         try {
@@ -3067,11 +3185,11 @@ function render() {
             invisible: false,
             updatedAt: serverTimestamp(),
           });
-          hiddenBookingsStatus.textContent = "已恢復至預約管理列表";
+          hiddenBookingsStatus.textContent = t("admin.status.unhidden", "已恢復至預約管理列表");
           hiddenBookingsStatus.classList.add("ok");
         } catch (e) {
           hiddenBookingsStatus.textContent =
-            e instanceof Error ? e.message : "還原失敗（你是否已加入 admins 集合？）";
+            e instanceof Error ? e.message : t("admin.status.unhideFail", "還原失敗（你是否已加入 admins 集合？）");
           hiddenBookingsStatus.classList.add("error");
           unhideBtn.removeAttribute("disabled");
         }
@@ -3097,12 +3215,12 @@ function render() {
       if (total === 0) {
         hiddenTable.append(
           el("tr", {}, [
-            el("td", { class: "hint", colSpan: 6 }, ["目前沒有自列表隱藏或舊版已刪除之預約。"]),
+            el("td", { class: "hint", colSpan: 6 }, [t("admin.hidden.empty", "目前沒有自列表隱藏或舊版已刪除之預約。")]),
           ]),
         );
         hiddenPagePrev.disabled = true;
         hiddenPageNext.disabled = true;
-        hiddenPageInfo.textContent = "共 0 筆";
+        hiddenPageInfo.textContent = t("admin.pager.total0", "共 0 筆");
         return;
       }
       const totalPages = Math.ceil(total / HIDDEN_ADMIN_PAGE_SIZE);
@@ -3114,7 +3232,16 @@ function render() {
       }
       hiddenPagePrev.disabled = hiddenAdminPageIndex <= 0;
       hiddenPageNext.disabled = hiddenAdminPageIndex >= totalPages - 1;
-      hiddenPageInfo.textContent = `第 ${hiddenAdminPageIndex + 1} / ${totalPages} 頁 · 共 ${total} 筆（每頁 ${HIDDEN_ADMIN_PAGE_SIZE} 筆）`;
+      hiddenPageInfo.textContent = t(
+        "admin.pager.hiddenPage",
+        "第 {{cur}} / {{total}} 頁 · 共 {{count}} 筆（每頁 {{size}} 筆）",
+        {
+          cur: hiddenAdminPageIndex + 1,
+          total: totalPages,
+          count: total,
+          size: HIDDEN_ADMIN_PAGE_SIZE,
+        },
+      );
     }
 
     hiddenPagePrev.addEventListener("click", () => {
@@ -3139,19 +3266,10 @@ function render() {
         adminStatus.className = "status-line";
         hiddenBookingsStatus.textContent = "";
         hiddenBookingsStatus.className = "status-line";
-        const bookingTableHeader = () =>
-          el("tr", {}, [
-            el("th", {}, ["預約時間"]),
-            el("th", {}, ["姓名"]),
-            el("th", { title: "是否為訪客預約" }, ["訪客"]),
-            el("th", {}, ["備註"]),
-            el("th", {}, ["狀態"]),
-            el("th", {}, ["操作"]),
-          ]);
         table.innerHTML = "";
-        table.append(bookingTableHeader());
+        table.append(adminBookingsHeaderRow());
         hiddenTable.innerHTML = "";
-        hiddenTable.append(bookingTableHeader());
+        hiddenTable.append(adminBookingsHeaderRow());
         hiddenAdminQueue.length = 0;
         for (const d of snap.docs) {
           const b = { id: d.id, ...d.data() } as Booking;
@@ -3175,7 +3293,7 @@ function render() {
             sel.addEventListener("change", async () => {
               const nextStatus = sel.value;
               const prevStatus = b.status;
-              adminStatus.textContent = "更新中…";
+              adminStatus.textContent = t("admin.status.updating", "更新中…");
               try {
                 if (nextStatus === "done") {
                   const fn = completeBookingCall();
@@ -3186,7 +3304,7 @@ function render() {
                     updatedAt: serverTimestamp(),
                   });
                 }
-                adminStatus.textContent = "已更新";
+                adminStatus.textContent = t("admin.status.updated", "已更新");
                 adminStatus.classList.add("ok");
                 if (nextStatus === "done") {
                   await refreshWalletStatus();
@@ -3194,32 +3312,32 @@ function render() {
               } catch (e) {
                 sel.value = prevStatus;
                 adminStatus.textContent =
-                  e instanceof Error ? e.message : "更新失敗（你是否已加入 admins 集合？）";
+                  e instanceof Error ? e.message : t("admin.status.updateFail", "更新失敗（你是否已加入 admins 集合？）");
                 adminStatus.classList.add("error");
               }
             });
           }
-          const cancelBtn = el("button", { class: "ghost", type: "button" }, ["取消"]);
+          const cancelBtn = el("button", { class: "ghost", type: "button" }, [t("admin.booking.cancel", "取消")]);
           const canAdminCancel = b.status !== "done" && b.status !== "cancelled";
           cancelBtn.disabled = !canAdminCancel;
           cancelBtn.title = !canAdminCancel
             ? b.status === "done"
-              ? "已完成預約不可取消"
-              : "已取消"
+              ? t("admin.booking.hideTitleDone", "已完成預約不可取消")
+              : t("admin.booking.hideTitleCancelled", "已取消")
             : "";
           cancelBtn.addEventListener("click", async () => {
             if (!canAdminCancel) return;
             const summary = [
-              "即將取消以下預約。取消原因可留空。",
+              t("admin.hidden.cancelSummaryIntro", "即將取消以下預約。取消原因可留空。"),
               "",
-              `姓名：${b.displayName ?? ""}`,
-              `日期：${b.dateKey ?? ""}`,
-              `開始時間：${b.startSlot ?? ""}`,
-              `備註：${(b.note ?? "").trim() || "（無）"}`,
+              `${t("booking.summary.name", "姓名")}：${b.displayName ?? ""}`,
+              `${t("booking.summary.date", "日期")}：${b.dateKey ?? ""}`,
+              `${t("booking.summary.start", "開始時間")}：${b.startSlot ?? ""}`,
+              `${t("booking.summary.note", "備註")}：${(b.note ?? "").trim() || t("admin.hidden.cancelSummaryNone", "（無）")}`,
             ].join("\n");
             const reason = await showAdminCancelBookingModal(summary);
             if (reason === null) return;
-            adminStatus.textContent = "取消中…";
+            adminStatus.textContent = t("admin.status.cancelling", "取消中…");
             adminStatus.className = "status-line";
             cancelBtn.setAttribute("disabled", "true");
             try {
@@ -3229,24 +3347,28 @@ function render() {
                 payload.cancelReason = reason;
               }
               await fn({ ...payload, ...localeApiParam() });
-              adminStatus.textContent = "已取消";
+              adminStatus.textContent = t("admin.status.cancelled", "已取消");
               adminStatus.classList.add("ok");
               await refreshWalletStatus();
             } catch (e) {
-              adminStatus.textContent = e instanceof Error ? e.message : "取消失敗";
+              adminStatus.textContent = e instanceof Error ? e.message : t("admin.status.cancelFail", "取消失敗");
               adminStatus.classList.add("error");
               cancelBtn.removeAttribute("disabled");
             }
           });
-          const deleteBtn = el("button", { class: "ghost", type: "button" }, ["隱藏"]);
+          const deleteBtn = el("button", { class: "ghost", type: "button" }, [t("admin.booking.hide", "隱藏")]);
           deleteBtn.addEventListener("click", async () => {
             const confirmed = await showConfirmModal(
-              "確認自後台隱藏",
-              `確定從後台列表隱藏這筆預約嗎？\n\n（不改變預約狀態；會員端仍顯示原狀態。額度與可預約時段仍依預約狀態計算，與主列表邏輯相同。）\n\n姓名：${b.displayName ?? ""}\n日期：${b.dateKey ?? ""}\n開始時間：${b.startSlot ?? ""}`,
-              "隱藏",
+              t("admin.booking.hideConfirmTitle", "確認自後台隱藏"),
+              t(
+                "admin.booking.hideConfirmBody",
+                "確定從後台列表隱藏這筆預約嗎？\n\n（不改變預約狀態；會員端仍顯示原狀態。額度與可預約時段仍依預約狀態計算，與主列表邏輯相同。）\n\n姓名：{{name}}\n日期：{{date}}\n開始時間：{{start}}",
+                { name: b.displayName ?? "", date: b.dateKey ?? "", start: b.startSlot ?? "" },
+              ),
+              t("admin.booking.hideBtn", "隱藏"),
             );
             if (!confirmed) return;
-            adminStatus.textContent = "隱藏中…";
+            adminStatus.textContent = t("admin.status.hiding", "隱藏中…");
             adminStatus.className = "status-line";
             deleteBtn.setAttribute("disabled", "true");
             try {
@@ -3254,11 +3376,11 @@ function render() {
                 invisible: true,
                 updatedAt: serverTimestamp(),
               });
-              adminStatus.textContent = "已自後台隱藏";
+              adminStatus.textContent = t("admin.status.hidden", "已自後台隱藏");
               adminStatus.classList.add("ok");
             } catch (e) {
               adminStatus.textContent =
-                e instanceof Error ? e.message : "隱藏失敗（你是否已加入 admins 集合？）";
+                e instanceof Error ? e.message : t("admin.status.hideFail", "隱藏失敗（你是否已加入 admins 集合？）");
               adminStatus.classList.add("error");
               deleteBtn.removeAttribute("disabled");
             }
@@ -3280,7 +3402,10 @@ function render() {
       (err) => {
         console.error(err);
         const msg =
-          "無法讀取預約（常見原因：Firestore Rules 拒絕，或尚未建立索引／admins 文件）。";
+          t(
+            "admin.snapshot.loadFail",
+            "無法讀取預約（常見原因：Firestore Rules 拒絕，或尚未建立索引／admins 文件）。",
+          );
         adminStatus.textContent = msg;
         adminStatus.classList.add("error");
         hiddenBookingsStatus.textContent = msg;
