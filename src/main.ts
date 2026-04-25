@@ -495,7 +495,10 @@ function render() {
       return false;
     }
   }
-  if (!tryVisitorStatsFromSession()) {
+  if (tabFromPath() === "admin") {
+    visitorStatsLine.replaceChildren();
+    visitorStatsLine.hidden = true;
+  } else if (!tryVisitorStatsFromSession()) {
     void (async () => {
       try {
         const fn = recordSiteVisitCall();
@@ -3480,6 +3483,7 @@ function render() {
     shell.classList.toggle("admin-mode", !isBook);
     memberEntryBtn.hidden = !isBook;
     titleGuestHint.hidden = !isBook;
+    visitorStatsLine.hidden = !isBook;
     titleHeading.textContent = isBook ? "辦公室按摩預約" : "管理後台";
     titleDesc.textContent = isBook
       ? "週一至週五 · 開始時間 15 分鐘一格 · 單次服務約15~50分鐘, 看情況. · 午休 11:45–13:15 不開放 · 最晚 17:30 開始、18:00 前結束"

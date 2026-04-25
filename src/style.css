@@ -311,6 +311,18 @@ figure.host-atelier {
   color: #8f1d4d;
 }
 
+/* 後台：訪次列仍留在 DOM（切回前台可再顯示），須蓋過 wretch 的 inline-flex／邊框，否則 [hidden] 仍會露粉框 */
+.shell.admin-mode .page-head .visitor-stats.visitor-stats--wretch {
+  display: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+  background: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
 .tabs {
   display: flex;
   gap: 0;
@@ -1913,6 +1925,8 @@ body.wheel-spectacle-lock {
   min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
   border-radius: 10px;
   background: linear-gradient(180deg, rgb(255 255 255 / 0.5) 0%, rgb(255 255 255 / 0) 48%);
   box-shadow:

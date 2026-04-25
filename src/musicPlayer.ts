@@ -1,5 +1,6 @@
 /**
  * 底部懸浮迷你播放器（不折疊）：上一首／播放暫停／下一首、封面、曲名、進度、音量、曲目清單。
+ * 位置：左側凸條可立即拖曳；主體區長按約半秒後可拖曳（按鈕與滑桿除外），鬆手後黏在較近的左或右下緣。
  *
  * 預設曲目為 **Kevin MacLeod**（incompetech.com）之放鬆／環境樂，授權 **CC BY 4.0**；
  * 頁面底部已附署名連結。若要改為自備音檔，請放 `public/media/` 並修改 `MUSIC_PLAYLIST`。
@@ -101,6 +102,21 @@ export function mountMusicMiniPlayer(mount: HTMLElement): MusicMiniPlayerUnmount
   let dragPointerId: number | null = null;
   let grabOffX = 0;
   let grabOffY = 0;
+  let dragCaptureEl: HTMLElement | null = null;
+
+  const LONG_PRESS_MS = 480;
+  const LONG_PRESS_CANCEL_MOVE_PX = 12;
+  type LongPressPending = {
+    pointerId: number;
+    startX: number;
+    startY: number;
+    lastX: number;
+    lastY: number;
+    pointerType: string;
+    button: number;
+  };
+  let longPressPending: LongPressPending | null = null;
+  let longPressTimer: ReturnType<typeof setTimeout> | null = null;
 
   function readDockPersist(): void {
     try {
@@ -443,7 +459,7 @@ export function mountMusicMiniPlayer(mount: HTMLElement): MusicMiniPlayerUnmount
   const dragHandle = el("div", {
     class: "music-mini-player__drag",
     tabIndex: 0,
-    title: "按住拖曳；放開後會黏在較近的一側（左或右）",
+    title: "此條可立即拖曳；其餘區域長按約半秒亦可拖曳（放開後黏左／右下緣）。",
   });
   dragHandle.setAttribute("role", "button");
   dragHandle.setAttribute("aria-label", "拖曳播放器位置");
@@ -461,11 +477,46 @@ export function mountMusicMiniPlayer(mount: HTMLElement): MusicMiniPlayerUnmount
   const rowMid = el("div", { class: "music-mini-player__row music-mini-player__row--mid" }, [prog]);
   const rowBot = el("div", { class: "music-mini-player__row music-mini-player__row--bot" }, [volWrap]);
   const rowsWrap = el("div", { class: "music-mini-player__rows" }, [rowTop, rowMeta, rowMid, rowBot]);
+  rowsWrap.title = "長按空白處約半秒可拖曳整個播放器（按鈕、進度與音量除外）；左側凸條可立即拖曳。";
 
   const shell = el("div", { class: "music-mini-player__shell" }, []);
   shell.append(audio, rowsWrap, playlistPop);
   wrap.append(shell);
   mount.append(wrap);
+
+  function isDragExcludedTarget(t: EventTarget | null): boolean {
+    if (!(t instanceof Element)) return true;
+    if (dragHandle.contains(t)) return true;
+    return Boolean(t.closest("button, input, textarea, select, a, label"));
+  }
+
+  function clearLongPressPending(): void {
+    if (longPressTimer != null) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+    if (!longPressPending) return;
+    window.removeEventListener("pointermove", onWindowMoveDuringLongPress);
+    window.removeEventListener("pointerup", onWindowUpDuringLongPress);
+    window.removeEventListener("pointercancel", onWindowUpDuringLongPress);
+    longPressPending = null;
+  }
+
+  function onWindowMoveDuringLongPress(e: PointerEvent): void {
+    if (!longPressPending || e.pointerId !== longPressPending.pointerId) return;
+    longPressPending.lastX = e.clientX;
+    longPressPending.lastY = e.clientY;
+    const dx = e.clientX - longPressPending.startX;
+    const dy = e.clientY - longPressPending.startY;
+    if (dx * dx + dy * dy > LONG_PRESS_CANCEL_MOVE_PX * LONG_PRESS_CANCEL_MOVE_PX) {
+      clearLongPressPending();
+    }
+  }
+
+  function onWindowUpDuringLongPress(e: PointerEvent): void {
+    if (!longPressPending || e.pointerId !== longPressPending.pointerId) return;
+    clearLongPressPending();
+  }
 
   function onDragMove(e: PointerEvent): void {
     if (!dragging || e.pointerId !== dragPointerId) return;
@@ -477,8 +528,10 @@ export function mountMusicMiniPlayer(mount: HTMLElement): MusicMiniPlayerUnmount
     if (!dragging || e.pointerId !== dragPointerId) return;
     dragging = false;
     dragPointerId = null;
+    const cap = dragCaptureEl;
+    dragCaptureEl = null;
     try {
-      dragHandle.releasePointerCapture(e.pointerId);
+      cap?.releasePointerCapture(e.pointerId);
     } catch {
       /* ignore */
     }
@@ -495,21 +548,68 @@ export function mountMusicMiniPlayer(mount: HTMLElement): MusicMiniPlayerUnmount
     applyDockPosition();
   }
 
-  dragHandle.addEventListener("pointerdown", (e) => {
-    if (e.pointerType === "mouse" && e.button !== 0) return;
+  function beginDragWithCoords(
+    pointerId: number,
+    clientX: number,
+    clientY: number,
+    pointerType: string,
+    button: number,
+    captureTarget: HTMLElement,
+  ): void {
+    if (dragging) return;
+    if (pointerType === "mouse" && button !== 0) return;
     dragging = true;
-    dragPointerId = e.pointerId;
+    dragPointerId = pointerId;
+    dragCaptureEl = captureTarget;
     const r = mount.getBoundingClientRect();
-    grabOffX = e.clientX - r.left;
-    grabOffY = e.clientY - r.top;
+    grabOffX = clientX - r.left;
+    grabOffY = clientY - r.top;
     try {
-      dragHandle.setPointerCapture(e.pointerId);
+      captureTarget.setPointerCapture(pointerId);
     } catch {
       /* ignore */
     }
     window.addEventListener("pointermove", onDragMove, { passive: false });
     window.addEventListener("pointerup", onDragEnd);
     window.addEventListener("pointercancel", onDragEnd);
+  }
+
+  function beginDragFromPointer(e: PointerEvent, captureTarget: HTMLElement): void {
+    beginDragWithCoords(e.pointerId, e.clientX, e.clientY, e.pointerType, e.button, captureTarget);
+  }
+
+  dragHandle.addEventListener("pointerdown", (e) => {
+    clearLongPressPending();
+    beginDragFromPointer(e, dragHandle);
+  });
+
+  rowsWrap.addEventListener("pointerdown", (e) => {
+    if (dragging) return;
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (isDragExcludedTarget(e.target)) return;
+    clearLongPressPending();
+    longPressPending = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      lastX: e.clientX,
+      lastY: e.clientY,
+      pointerType: e.pointerType,
+      button: e.button,
+    };
+    window.addEventListener("pointermove", onWindowMoveDuringLongPress);
+    window.addEventListener("pointerup", onWindowUpDuringLongPress);
+    window.addEventListener("pointercancel", onWindowUpDuringLongPress);
+    longPressTimer = window.setTimeout(() => {
+      longPressTimer = null;
+      if (!longPressPending) return;
+      const p = longPressPending;
+      window.removeEventListener("pointermove", onWindowMoveDuringLongPress);
+      window.removeEventListener("pointerup", onWindowUpDuringLongPress);
+      window.removeEventListener("pointercancel", onWindowUpDuringLongPress);
+      longPressPending = null;
+      beginDragWithCoords(p.pointerId, p.lastX, p.lastY, p.pointerType, p.button, rowsWrap);
+    }, LONG_PRESS_MS);
   });
 
   readDockPersist();
@@ -521,6 +621,7 @@ export function mountMusicMiniPlayer(mount: HTMLElement): MusicMiniPlayerUnmount
   void loadTrack(0, false);
 
   return () => {
+    clearLongPressPending();
     window.removeEventListener("resize", onResizeDock);
     window.removeEventListener("pointermove", onDragMove);
     window.removeEventListener("pointerup", onDragEnd);
