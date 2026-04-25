@@ -18,35 +18,65 @@ export type NewBookingEmailPayload = {
   memberUid: string | null;
 };
 
+export type EmailLocale = "zh-Hant" | "en";
+
+const BOOKING_MODE_LABEL_EN: Record<string, string> = {
+  guest_cash: "Guest · cash on site",
+  guest_beverage: "Guest · drink credit",
+  member_cash: "Member · cash on site",
+  member_wallet: "Member · wallet charge",
+  member_beverage: "Member · drink credit",
+};
+
 export async function sendNewBookingEmailToOwner(opts: {
   apiKey: string;
   from: string;
   to: string;
+  locale?: EmailLocale;
   payload: NewBookingEmailPayload;
 }): Promise<void> {
   const { apiKey, from, to, payload } = opts;
-  const modeLabel = BOOKING_MODE_LABEL[payload.bookingMode] ?? payload.bookingMode;
-  const lines = [
-    "有新的按摩預約。",
-    "",
-    `預約編號：${payload.id}`,
-    `姓名：${payload.displayName}`,
-    `日期：${payload.dateKey}`,
-    `開始時間：${payload.startSlot}`,
-    `付款方式：${modeLabel}`,
-  ];
+  const loc = opts.locale === "en" ? "en" : "zh-Hant";
+  const modeLabel =
+    loc === "en"
+      ? (BOOKING_MODE_LABEL_EN[payload.bookingMode] ?? payload.bookingMode)
+      : (BOOKING_MODE_LABEL[payload.bookingMode] ?? payload.bookingMode);
+  const lines =
+    loc === "en"
+      ? [
+          "There is a new massage booking.",
+          "",
+          `Booking ID: ${payload.id}`,
+          `Name: ${payload.displayName}`,
+          `Date: ${payload.dateKey}`,
+          `Start: ${payload.startSlot}`,
+          `Payment: ${modeLabel}`,
+        ]
+      : [
+          "有新的按摩預約。",
+          "",
+          `預約編號：${payload.id}`,
+          `姓名：${payload.displayName}`,
+          `日期：${payload.dateKey}`,
+          `開始時間：${payload.startSlot}`,
+          `付款方式：${modeLabel}`,
+        ];
   if (payload.memberUid) {
-    lines.push(`會員 UID：${payload.memberUid}`);
+    lines.push(loc === "en" ? `Member UID: ${payload.memberUid}` : `會員 UID：${payload.memberUid}`);
   }
   if (payload.note) {
-    lines.push(`備註：${payload.note}`);
+    lines.push(loc === "en" ? `Notes: ${payload.note}` : `備註：${payload.note}`);
   }
   const text = lines.join("\n");
   const resend = new Resend(apiKey);
+  const subject =
+    loc === "en"
+      ? `New booking: ${payload.displayName} | ${payload.dateKey} ${payload.startSlot}`
+      : `新預約：${payload.displayName}｜${payload.dateKey} ${payload.startSlot}`;
   const { error } = await resend.emails.send({
     from,
     to: [to],
-    subject: `新預約：${payload.displayName}｜${payload.dateKey} ${payload.startSlot}`,
+    subject,
     text,
   });
   if (error) {
@@ -72,34 +102,72 @@ export type MemberBookingStatusEmailPayload = {
   cancelReason?: string;
 };
 
+const STATUS_LABEL_EN: Record<string, string> = {
+  pending: "Pending",
+  confirmed: "Confirmed",
+  done: "Completed",
+  cancelled: "Cancelled",
+  deleted: "Deleted",
+};
+
 /** 會員預約狀態變更通知（訪客不寄） */
 export async function sendMemberBookingStatusChangedEmail(opts: {
   apiKey: string;
   from: string;
+  locale?: EmailLocale;
   payload: MemberBookingStatusEmailPayload;
 }): Promise<void> {
   const { apiKey, from, payload } = opts;
-  const prev = STATUS_LABEL_ZH[payload.previousStatus] ?? payload.previousStatus;
-  const next = STATUS_LABEL_ZH[payload.newStatus] ?? payload.newStatus;
-  const lines = [
-    `${payload.displayName} 您好，`,
-    "",
-    "您在按摩預約系統中的預約狀態已更新。",
-    "",
-    `日期：${payload.dateKey}`,
-    `開始時間：${payload.startSlot}`,
-    `狀態：${prev} → ${next}`,
-  ];
+  const loc = opts.locale === "en" ? "en" : "zh-Hant";
+  const prev =
+    loc === "en"
+      ? (STATUS_LABEL_EN[payload.previousStatus] ?? payload.previousStatus)
+      : (STATUS_LABEL_ZH[payload.previousStatus] ?? payload.previousStatus);
+  const next =
+    loc === "en"
+      ? (STATUS_LABEL_EN[payload.newStatus] ?? payload.newStatus)
+      : (STATUS_LABEL_ZH[payload.newStatus] ?? payload.newStatus);
+  const lines =
+    loc === "en"
+      ? [
+          `Hello ${payload.displayName},`,
+          "",
+          "Your massage booking status has been updated.",
+          "",
+          `Date: ${payload.dateKey}`,
+          `Start: ${payload.startSlot}`,
+          `Status: ${prev} → ${next}`,
+        ]
+      : [
+          `${payload.displayName} 您好，`,
+          "",
+          "您在按摩預約系統中的預約狀態已更新。",
+          "",
+          `日期：${payload.dateKey}`,
+          `開始時間：${payload.startSlot}`,
+          `狀態：${prev} → ${next}`,
+        ];
   if (payload.newStatus === "cancelled" && payload.cancelReason) {
-    lines.push("", `取消說明：${payload.cancelReason}`);
+    lines.push("", loc === "en" ? `Cancellation note: ${payload.cancelReason}` : `取消說明：${payload.cancelReason}`);
   }
-  lines.push("", "如有疑問請與店家聯繫。", "", "— 按摩預約系統（自動通知，請勿直接回覆此信）");
+  lines.push(
+    "",
+    loc === "en" ? "If you have questions, contact the shop." : "如有疑問請與店家聯繫。",
+    "",
+    loc === "en"
+      ? "— Massage booking system (automated, do not reply)"
+      : "— 按摩預約系統（自動通知，請勿直接回覆此信）",
+  );
   const text = lines.join("\n");
   const resend = new Resend(apiKey);
+  const subject =
+    loc === "en"
+      ? `Booking update: ${next} | ${payload.dateKey} ${payload.startSlot}`
+      : `預約狀態更新：${next}｜${payload.dateKey} ${payload.startSlot}`;
   const { error } = await resend.emails.send({
     from,
     to: [payload.to],
-    subject: `預約狀態更新：${next}｜${payload.dateKey} ${payload.startSlot}`,
+    subject,
     text,
   });
   if (error) {

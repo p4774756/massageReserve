@@ -357,6 +357,23 @@ figure.host-atelier {
   margin-top: 2px;
 }
 
+.locale-switch {
+  font-size: 0.72rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.locale-select {
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: inherit;
+  max-width: 9rem;
+}
+
 .page-head-session {
   font-size: 0.82rem;
   line-height: 1.35;
@@ -2608,6 +2625,9 @@ body.wheel-spectacle-lock {
   font-size: 0.85rem;
   color: var(--ink);
   line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .support-chat-thread-item-status {

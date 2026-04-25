@@ -18,6 +18,7 @@ import {
   resolveBookingCaps,
   TIMEZONE,
 } from "./bookingLogic";
+import { parseLocale, st, type ServerLocale } from "./serverI18n";
 
 initializeApp();
 const db = getFirestore();
@@ -45,36 +46,36 @@ const BOOKING_PRICE = 50;
 type BookingStatus = "pending" | "confirmed" | "done" | "cancelled" | "deleted";
 type PrizeType = "credit" | "chance" | "thanks" | "penalty_text";
 
-async function assertAdminByUid(uid: string): Promise<void> {
+async function assertAdminByUid(uid: string, locale: ServerLocale): Promise<void> {
   const adminSnap = await db.collection("admins").doc(uid).get();
   if (!adminSnap.exists) {
-    throw new HttpsError("permission-denied", "僅限管理員操作");
+    throw new HttpsError("permission-denied", st(locale, "admin.only", "僅限管理員操作"));
   }
 }
 
 /** 會員儲值／預約／抽獎等需已驗證 Email（後台建立帳號可設為已驗證） */
-async function assertMemberEmailVerified(uid: string): Promise<void> {
+async function assertMemberEmailVerified(uid: string, locale: ServerLocale): Promise<void> {
   const record = await getAuth().getUser(uid);
   if (!record.emailVerified) {
     throw new HttpsError(
       "failed-precondition",
-      "請先至信箱完成 Email 驗證後再使用會員功能。",
+      st(locale, "member.verifyEmailFirst", "請先至信箱完成 Email 驗證後再使用會員功能。"),
     );
   }
 }
 
 /** 後台儲值：可填 UID，或填會員 Email（含 @ 時改查 Auth） */
-async function resolveCustomerUidForTopup(raw: string): Promise<string> {
+async function resolveCustomerUidForTopup(raw: string, locale: ServerLocale): Promise<string> {
   const trimmed = raw.trim();
   if (!trimmed) {
-    throw new HttpsError("invalid-argument", "請填入會員識別（Email 或 UID）");
+    throw new HttpsError("invalid-argument", st(locale, "topup.needId", "請填入會員識別（Email 或 UID）"));
   }
   if (trimmed.includes("@")) {
     try {
       const userRecord = await getAuth().getUserByEmail(trimmed);
       return userRecord.uid;
     } catch {
-      throw new HttpsError("not-found", "找不到此 Email 的會員帳號");
+      throw new HttpsError("not-found", st(locale, "topup.emailNotFound", "找不到此 Email 的會員帳號"));
     }
   }
   return trimmed;
@@ -132,23 +133,27 @@ async function loadActiveWheelPrizes(): Promise<WheelPrizeRow[]> {
 }
 
 export const getAvailability = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
   const dateKey = request.data?.dateKey;
   if (typeof dateKey !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
-    throw new HttpsError("invalid-argument", "dateKey 需為 YYYY-MM-DD");
+    throw new HttpsError("invalid-argument", st(locale, "avail.badDateKey", "dateKey 需為 YYYY-MM-DD"));
   }
   let day: DateTime;
   try {
     day = parseDateKey(dateKey);
   } catch {
-    throw new HttpsError("invalid-argument", "日期無效");
+    throw new HttpsError("invalid-argument", st(locale, "avail.invalidDate", "日期無效"));
   }
   const todayZ = DateTime.now().setZone(TIMEZONE).startOf("day");
   const latestBookable = mondayOfWeek(todayZ).plus({ days: 13 });
   if (day > latestBookable) {
-    throw new HttpsError("invalid-argument", "僅能查詢至下週日為止的日期");
+    throw new HttpsError(
+      "invalid-argument",
+      st(locale, "avail.beyondWindow", "僅能查詢至下週日為止的日期"),
+    );
   }
   if (!isWeekday(day)) {
-    throw new HttpsError("invalid-argument", "僅能查詢週一到週五");
+    throw new HttpsError("invalid-argument", st(locale, "avail.weekdaysOnly", "僅能查詢週一到週五"));
   }
 
   const weekStart = mondayOfWeek(day).toISODate()!;
@@ -240,6 +245,7 @@ export const createBooking = onCall(
   { ...publicCall, secrets: [resendApiKey, ownerNotifyEmail] },
   async (request) => {
   const data = request.data as CreateBookingInput;
+  const locale = parseLocale(data);
   const displayName = typeof data.displayName === "string" ? data.displayName.trim() : "";
   const note = typeof data.note === "string" ? data.note.trim() : "";
   const dateKey = typeof data.dateKey === "string" ? data.dateKey : "";
@@ -255,24 +261,24 @@ export const createBooking = onCall(
       : "";
   const uid = request.auth?.uid;
   if (!bookingMode) {
-    throw new HttpsError("invalid-argument", "請選擇付款方式");
+    throw new HttpsError("invalid-argument", st(locale, "booking.pickPayment", "請選擇付款方式"));
   }
   const isGuestMode = bookingMode === "guest_cash" || bookingMode === "guest_beverage";
   if (!isGuestMode && !uid) {
-    throw new HttpsError("unauthenticated", "會員付款模式需先登入");
+    throw new HttpsError("unauthenticated", st(locale, "booking.memberNeedLogin", "會員付款模式需先登入"));
   }
   if (!isGuestMode && uid) {
-    await assertMemberEmailVerified(uid);
+    await assertMemberEmailVerified(uid, locale);
   }
 
   if (!displayName || displayName.length > 80) {
-    throw new HttpsError("invalid-argument", "請填寫姓名（最多 80 字）");
+    throw new HttpsError("invalid-argument", st(locale, "booking.nameRequired", "請填寫姓名（最多 80 字）"));
   }
   if (note.length > 500) {
-    throw new HttpsError("invalid-argument", "備註過長");
+    throw new HttpsError("invalid-argument", st(locale, "booking.noteTooLong", "備註過長"));
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
-    throw new HttpsError("invalid-argument", "日期格式錯誤");
+    throw new HttpsError("invalid-argument", st(locale, "booking.badDateFormat", "日期格式錯誤"));
   }
 
   let startLocal: DateTime;
@@ -281,24 +287,24 @@ export const createBooking = onCall(
   } catch (e) {
     const code = e instanceof Error ? e.message : "bad_request";
     const map: Record<string, string> = {
-      invalid_dateKey: "日期無效",
-      past_date: "無法預約過去的日期",
-      past_slot: "此開始時間已過，請選擇較晚的時段",
-      beyond_booking_window: "僅能預約至下週日為止。",
-      not_weekday: "僅能預約週一到週五",
-      invalid_slot: "開始時間不在可預約範圍",
-      ends_after_1800: "此開始時間將超過 18:00 結束上限",
+      invalid_dateKey: st(locale, "slot.invalid_dateKey", "日期無效"),
+      past_date: st(locale, "slot.past_date", "無法預約過去的日期"),
+      past_slot: st(locale, "slot.past_slot", "此開始時間已過，請選擇較晚的時段"),
+      beyond_booking_window: st(locale, "slot.beyond_booking_window", "僅能預約至下週日為止。"),
+      not_weekday: st(locale, "slot.not_weekday", "僅能預約週一到週五"),
+      invalid_slot: st(locale, "slot.invalid_slot", "開始時間不在可預約範圍"),
+      ends_after_1800: st(locale, "slot.ends_after_1800", "此開始時間將超過 18:00 結束上限"),
     };
-    throw new HttpsError("failed-precondition", map[code] ?? "無法預約");
+    throw new HttpsError("failed-precondition", map[code] ?? st(locale, "slot.generic", "無法預約"));
   }
 
   const blocksSnap = await db.collection("siteSettings").doc("bookingBlocks").get();
   const blockReason = blockedReasonForSlot(dateKey, startSlot, parseBookingBlockWindows(blocksSnap.data()));
+  const closedZh = "此時段不開放預約";
   if (blockReason) {
-    throw new HttpsError(
-      "failed-precondition",
-      blockReason === "此時段不開放預約" ? blockReason : `此時段不開放預約：${blockReason}`,
-    );
+    const prefix = st(locale, "booking.blockedPrefix", "此時段不開放預約：");
+    const generic = st(locale, "booking.blockedGeneric", closedZh);
+    throw new HttpsError("failed-precondition", blockReason === closedZh ? generic : `${prefix}${blockReason}`);
   }
 
   const weekStart = mondayOfWeek(parseDateKey(dateKey)).toISODate()!;
@@ -322,15 +328,21 @@ export const createBooking = onCall(
       const { maxPerDay, maxPerWorkWeek } = resolveBookingCaps(capsSnap.data());
 
       if (daySnap.size >= maxPerDay) {
-        throw new HttpsError("resource-exhausted", `這一天已額滿（最多 ${maxPerDay} 筆）`);
+        throw new HttpsError(
+          "resource-exhausted",
+          st(locale, "booking.dayFull", "這一天已額滿（最多 {{max}} 筆）", { max: maxPerDay }),
+        );
       }
       if (weekSnap.size >= maxPerWorkWeek) {
-        throw new HttpsError("resource-exhausted", `本工作週已達上限（最多 ${maxPerWorkWeek} 筆）`);
+        throw new HttpsError(
+          "resource-exhausted",
+          st(locale, "booking.weekFull", "本工作週已達上限（最多 {{max}} 筆）", { max: maxPerWorkWeek }),
+        );
       }
 
       const sameSlot = daySnap.docs.find((d) => d.get("startSlot") === startSlot);
       if (sameSlot) {
-        throw new HttpsError("already-exists", "此時段已被預約");
+        throw new HttpsError("already-exists", st(locale, "booking.slotTaken", "此時段已被預約"));
       }
 
       let customerId: string | null = null;
@@ -353,7 +365,7 @@ export const createBooking = onCall(
         const walletBalanceRaw = customerSnap.exists ? customerSnap.get("walletBalance") : 0;
         const walletBalance = typeof walletBalanceRaw === "number" ? walletBalanceRaw : 0;
         if (walletBalance < BOOKING_PRICE) {
-          throw new HttpsError("resource-exhausted", "儲值餘額不足，請改用現金或先儲值");
+          throw new HttpsError("resource-exhausted", st(locale, "booking.walletShort", "儲值餘額不足，請改用現金或先儲值"));
         }
         tx.set(
           customerRef,
@@ -389,6 +401,7 @@ export const createBooking = onCall(
         paidCash,
         drawGranted: false,
         status: "pending",
+        notificationLocale: locale === "en" ? "en" : "zh-Hant",
         createdAt: FieldValueOrServerTimestamp(),
         updatedAt: FieldValueOrServerTimestamp(),
       });
@@ -398,7 +411,7 @@ export const createBooking = onCall(
       throw e;
     }
     console.error(e);
-    throw new HttpsError("internal", "預約失敗，請稍後再試");
+    throw new HttpsError("internal", st(locale, "booking.createFailed", "預約失敗，請稍後再試"));
   }
 
   const key = resendApiKey.value().trim();
@@ -411,6 +424,7 @@ export const createBooking = onCall(
       apiKey: key,
       from,
       to: ownerTo,
+      locale,
       payload: {
         id: bookingRef.id,
         displayName,
@@ -428,11 +442,12 @@ export const createBooking = onCall(
 );
 
 export const getMyWallet = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
   const uid = request.auth?.uid;
   if (!uid) {
-    throw new HttpsError("unauthenticated", "請先登入");
+    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
   }
-  await assertMemberEmailVerified(uid);
+  await assertMemberEmailVerified(uid, locale);
   const snap = await db.collection("customers").doc(uid).get();
   const walletBalanceRaw = snap.exists ? snap.get("walletBalance") : 0;
   const drawChancesRaw = snap.exists ? snap.get("drawChances") : 0;
@@ -446,20 +461,21 @@ export const getMyWallet = onCall(publicCall, async (request) => {
 });
 
 export const topupWallet = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
   const uid = request.auth?.uid;
   if (!uid) {
-    throw new HttpsError("unauthenticated", "請先登入");
+    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
   }
-  await assertAdminByUid(uid);
+  await assertAdminByUid(uid, locale);
 
   const customerIdRaw = typeof request.data?.customerId === "string" ? request.data.customerId.trim() : "";
   const note = typeof request.data?.note === "string" ? request.data.note.trim() : "";
   const amount = asPositiveInteger(request.data?.amount);
   if (!amount) {
-    throw new HttpsError("invalid-argument", "儲值金額需為正整數");
+    throw new HttpsError("invalid-argument", st(locale, "topup.amountPositive", "儲值金額需為正整數"));
   }
 
-  const customerId = await resolveCustomerUidForTopup(customerIdRaw);
+  const customerId = await resolveCustomerUidForTopup(customerIdRaw, locale);
 
   const customerRef = db.collection("customers").doc(customerId);
   const walletTxRef = db.collection("walletTransactions").doc();
@@ -501,21 +517,22 @@ export const getAdminStatus = onCall(publicCall, async (request) => {
 });
 
 export const createMemberAccount = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
   const uid = request.auth?.uid;
   if (!uid) {
-    throw new HttpsError("unauthenticated", "請先登入");
+    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
   }
-  await assertAdminByUid(uid);
+  await assertAdminByUid(uid, locale);
 
   const email = typeof request.data?.email === "string" ? request.data.email.trim() : "";
   const password = typeof request.data?.password === "string" ? request.data.password : "";
   const nickname =
     typeof request.data?.nickname === "string" ? request.data.nickname.trim().slice(0, 80) : "";
   if (!email) {
-    throw new HttpsError("invalid-argument", "Email 必填");
+    throw new HttpsError("invalid-argument", st(locale, "member.emailRequired", "Email 必填"));
   }
   if (password.length < 6) {
-    throw new HttpsError("invalid-argument", "密碼至少 6 碼");
+    throw new HttpsError("invalid-argument", st(locale, "member.passwordMin", "密碼至少 6 碼"));
   }
 
   const auth = getAuth();
@@ -541,17 +558,18 @@ export const createMemberAccount = onCall(publicCall, async (request) => {
     return { ok: true, uid: userRecord.uid };
   } catch (e) {
     console.error(e);
-    throw new HttpsError("already-exists", "建立會員失敗：Email 可能已存在");
+    throw new HttpsError("already-exists", st(locale, "member.createExists", "建立會員失敗：Email 可能已存在"));
   }
 });
 
 /** 後台依 Email 前綴搜尋會員（掃描 Auth 使用者列表，適合人數不多的場景） */
 export const searchMemberUsers = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
   const uid = request.auth?.uid;
   if (!uid) {
-    throw new HttpsError("unauthenticated", "請先登入");
+    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
   }
-  await assertAdminByUid(uid);
+  await assertAdminByUid(uid, locale);
 
   const prefixRaw = typeof request.data?.prefix === "string" ? request.data.prefix.trim().toLowerCase() : "";
   if (prefixRaw.length < 2) {
@@ -592,11 +610,12 @@ type ListMembersAdminRow = {
 
 /** 後台：列出 Auth 內所有使用者並合併 Firestore `customers` 餘額與稱呼（適合人數不多的場景） */
 export const listMembersAdmin = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
   const uid = request.auth?.uid;
   if (!uid) {
-    throw new HttpsError("unauthenticated", "請先登入");
+    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
   }
-  await assertAdminByUid(uid);
+  await assertAdminByUid(uid, locale);
 
   const auth = getAuth();
   const members: ListMembersAdminRow[] = [];
@@ -633,19 +652,23 @@ export const listMembersAdmin = onCall(publicCall, async (request) => {
 
 /** 後台：更新會員稱呼（Firestore `customers.nickname` + Auth displayName） */
 export const updateMemberNicknameAdmin = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
   const uid = request.auth?.uid;
   if (!uid) {
-    throw new HttpsError("unauthenticated", "請先登入");
+    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
   }
-  await assertAdminByUid(uid);
+  await assertAdminByUid(uid, locale);
 
   const customerRaw = typeof request.data?.customerId === "string" ? request.data.customerId.trim() : "";
   const nicknameRaw = typeof request.data?.nickname === "string" ? request.data.nickname : "";
   if (!customerRaw) {
-    throw new HttpsError("invalid-argument", "customerId 必填（會員 UID 或 Email）");
+    throw new HttpsError(
+      "invalid-argument",
+      st(locale, "admin.customerIdRequired", "customerId 必填（會員 UID 或 Email）"),
+    );
   }
 
-  const targetUid = await resolveCustomerUidForTopup(customerRaw);
+  const targetUid = await resolveCustomerUidForTopup(customerRaw, locale);
   const nickname = nicknameRaw.trim().slice(0, 80);
 
   await db
@@ -672,29 +695,30 @@ export const updateMemberNicknameAdmin = onCall(publicCall, async (request) => {
 });
 
 export const completeBooking = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
   const uid = request.auth?.uid;
   if (!uid) {
-    throw new HttpsError("unauthenticated", "請先登入");
+    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
   }
-  await assertAdminByUid(uid);
+  await assertAdminByUid(uid, locale);
 
   const bookingId = typeof request.data?.bookingId === "string" ? request.data.bookingId.trim() : "";
   if (!bookingId) {
-    throw new HttpsError("invalid-argument", "bookingId 必填");
+    throw new HttpsError("invalid-argument", st(locale, "booking.idRequired", "bookingId 必填"));
   }
   const bookingRef = db.collection("bookings").doc(bookingId);
   await db.runTransaction(async (tx) => {
     const bookingSnap = await tx.get(bookingRef);
     if (!bookingSnap.exists) {
-      throw new HttpsError("not-found", "找不到預約");
+      throw new HttpsError("not-found", st(locale, "booking.notFound", "找不到預約"));
     }
     const data = bookingSnap.data() as Record<string, unknown>;
     const status = (data.status as BookingStatus | undefined) ?? "pending";
     if (status === "done") {
-      throw new HttpsError("failed-precondition", "此預約已完成");
+      throw new HttpsError("failed-precondition", st(locale, "booking.alreadyDone", "此預約已完成"));
     }
     if (!["pending", "confirmed"].includes(status)) {
-      throw new HttpsError("failed-precondition", "目前狀態不可完成");
+      throw new HttpsError("failed-precondition", st(locale, "booking.badStateComplete", "目前狀態不可完成"));
     }
 
     const customerId = typeof data.customerId === "string" ? data.customerId : null;
@@ -730,14 +754,15 @@ export const completeBooking = onCall(publicCall, async (request) => {
 });
 
 export const cancelBooking = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
   const uid = request.auth?.uid;
   if (!uid) {
-    throw new HttpsError("unauthenticated", "請先登入");
+    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
   }
 
   const bookingId = typeof request.data?.bookingId === "string" ? request.data.bookingId.trim() : "";
   if (!bookingId) {
-    throw new HttpsError("invalid-argument", "bookingId 必填");
+    throw new HttpsError("invalid-argument", st(locale, "booking.idRequired", "bookingId 必填"));
   }
   const cancelReasonRaw = request.data?.cancelReason;
   const cancelReason =
@@ -746,39 +771,39 @@ export const cancelBooking = onCall(publicCall, async (request) => {
   const adminRef = db.collection("admins").doc(uid);
   const [bookingSnapPre, adminSnapPre] = await Promise.all([bookingRef.get(), adminRef.get()]);
   if (!bookingSnapPre.exists) {
-    throw new HttpsError("not-found", "找不到預約");
+    throw new HttpsError("not-found", st(locale, "booking.notFound", "找不到預約"));
   }
   const preData = bookingSnapPre.data() as Record<string, unknown>;
   const preCustomerId = typeof preData.customerId === "string" ? preData.customerId : null;
   const preIsAdmin = adminSnapPre.exists;
   if (!preIsAdmin && preCustomerId !== uid) {
-    throw new HttpsError("permission-denied", "僅能取消自己的預約，或需具管理員權限");
+    throw new HttpsError("permission-denied", st(locale, "cancel.notYours", "僅能取消自己的預約，或需具管理員權限"));
   }
   if (!preIsAdmin && preCustomerId === uid) {
-    await assertMemberEmailVerified(uid);
+    await assertMemberEmailVerified(uid, locale);
   }
 
   await db.runTransaction(async (tx) => {
     const [bookingSnap, adminSnap] = await Promise.all([tx.get(bookingRef), tx.get(adminRef)]);
     if (!bookingSnap.exists) {
-      throw new HttpsError("not-found", "找不到預約");
+      throw new HttpsError("not-found", st(locale, "booking.notFound", "找不到預約"));
     }
     const data = bookingSnap.data() as Record<string, unknown>;
     const status = (data.status as BookingStatus | undefined) ?? "pending";
     if (status === "cancelled") {
-      throw new HttpsError("failed-precondition", "此預約已取消");
+      throw new HttpsError("failed-precondition", st(locale, "cancel.alreadyCancelled", "此預約已取消"));
     }
     if (status === "deleted") {
-      throw new HttpsError("failed-precondition", "此預約已刪除");
+      throw new HttpsError("failed-precondition", st(locale, "cancel.deleted", "此預約已刪除"));
     }
     if (status === "done") {
-      throw new HttpsError("failed-precondition", "已完成預約不可直接取消");
+      throw new HttpsError("failed-precondition", st(locale, "cancel.doneNoDirect", "已完成預約不可直接取消"));
     }
 
     const customerId = typeof data.customerId === "string" ? data.customerId : null;
     const isAdmin = adminSnap.exists;
     if (!isAdmin && customerId !== uid) {
-      throw new HttpsError("permission-denied", "僅能取消自己的預約，或需具管理員權限");
+      throw new HttpsError("permission-denied", st(locale, "cancel.notYours", "僅能取消自己的預約，或需具管理員權限"));
     }
     const walletDeductedRaw = data.walletDeducted;
     const walletDeducted = typeof walletDeductedRaw === "number" ? walletDeductedRaw : 0;
@@ -824,14 +849,15 @@ export const cancelBooking = onCall(publicCall, async (request) => {
 });
 
 export const listActiveWheelPrizes = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
   const uid = request.auth?.uid;
   if (!uid) {
-    throw new HttpsError("unauthenticated", "請先登入");
+    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
   }
-  await assertMemberEmailVerified(uid);
+  await assertMemberEmailVerified(uid, locale);
   const prizes = await loadActiveWheelPrizes();
   if (prizes.length === 0) {
-    throw new HttpsError("failed-precondition", "目前沒有可用輪盤獎項");
+    throw new HttpsError("failed-precondition", st(locale, "wheel.noPrizes", "目前沒有可用輪盤獎項"));
   }
   return {
     prizes: prizes.map((p) => ({ id: p.id, name: p.name, type: p.type, weight: p.weight })),
@@ -839,15 +865,16 @@ export const listActiveWheelPrizes = onCall(publicCall, async (request) => {
 });
 
 export const spinWheel = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
   const uid = request.auth?.uid;
   if (!uid) {
-    throw new HttpsError("unauthenticated", "請先登入");
+    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
   }
-  await assertMemberEmailVerified(uid);
+  await assertMemberEmailVerified(uid, locale);
   const prizes = await loadActiveWheelPrizes();
 
   if (prizes.length === 0) {
-    throw new HttpsError("failed-precondition", "目前沒有可用輪盤獎項");
+    throw new HttpsError("failed-precondition", st(locale, "wheel.noPrizes", "目前沒有可用輪盤獎項"));
   }
   const picked = pickWeighted(prizes);
 
@@ -862,7 +889,7 @@ export const spinWheel = onCall(publicCall, async (request) => {
     const drawChances = asNonNegativeInteger(customerSnap.exists ? customerSnap.get("drawChances") : 0);
     const walletBalance = asNonNegativeInteger(customerSnap.exists ? customerSnap.get("walletBalance") : 0);
     if (drawChances < 1) {
-      throw new HttpsError("failed-precondition", "可抽次數不足");
+      throw new HttpsError("failed-precondition", st(locale, "wheel.noChances", "可抽次數不足"));
     }
 
     let walletDelta = 0;
@@ -923,11 +950,12 @@ export const spinWheel = onCall(publicCall, async (request) => {
 });
 
 export const seedWheelPrizes = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
   const uid = request.auth?.uid;
   if (!uid) {
-    throw new HttpsError("unauthenticated", "請先登入");
+    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
   }
-  await assertAdminByUid(uid);
+  await assertAdminByUid(uid, locale);
 
   const existing = await db.collection("wheelPrizes").limit(1).get();
   if (!existing.empty) {
@@ -970,10 +998,14 @@ function supportChatPreview(text: string): string {
 
 /** 會員／訪客匿名：送客服訊息，或僅重新開啟對話（Admin 寫入，避開客戶端 Rules 評估問題） */
 export const sendSupportChatMessage = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
   const uid = request.auth?.uid;
   const authToken = request.auth?.token;
   if (!uid) {
-    throw new HttpsError("unauthenticated", "請先登入或按「以訪客身分開始留言」");
+    throw new HttpsError(
+      "unauthenticated",
+      st(locale, "support.needLoginOrGuest", "請先登入或按「以訪客身分開始留言」"),
+    );
   }
   const signInProviderRaw = (authToken?.firebase as { sign_in_provider?: unknown } | undefined)?.sign_in_provider;
   const signInProvider = typeof signInProviderRaw === "string" ? signInProviderRaw : "";
@@ -983,7 +1015,7 @@ export const sendSupportChatMessage = onCall(publicCall, async (request) => {
     const threadRef = db.collection("supportThreads").doc(uid);
     const snap = await threadRef.get();
     if (!snap.exists) {
-      throw new HttpsError("not-found", "尚無對話紀錄");
+      throw new HttpsError("not-found", st(locale, "support.noThread", "尚無對話紀錄"));
     }
     await threadRef.update({
       status: "open",
@@ -994,10 +1026,13 @@ export const sendSupportChatMessage = onCall(publicCall, async (request) => {
   }
   const textRaw = typeof request.data?.text === "string" ? request.data.text.trim() : "";
   if (textRaw.length < 1) {
-    throw new HttpsError("invalid-argument", "請輸入訊息內容");
+    throw new HttpsError("invalid-argument", st(locale, "support.needMessage", "請輸入訊息內容"));
   }
   if (textRaw.length > SUPPORT_CHAT_TEXT_MAX) {
-    throw new HttpsError("invalid-argument", `訊息最長 ${SUPPORT_CHAT_TEXT_MAX} 字`);
+    throw new HttpsError(
+      "invalid-argument",
+      st(locale, "support.messageTooLong", "訊息最長 {{max}} 字", { max: SUPPORT_CHAT_TEXT_MAX }),
+    );
   }
   const threadRef = db.collection("supportThreads").doc(uid);
   const preview = supportChatPreview(textRaw);
@@ -1014,11 +1049,11 @@ export const sendSupportChatMessage = onCall(publicCall, async (request) => {
       lastMessagePreview: preview,
     });
   } else {
-    const st = threadSnap.get("status");
-    if (st === "closed") {
+    const threadStatus = threadSnap.get("status");
+    if (threadStatus === "closed") {
       throw new HttpsError(
         "failed-precondition",
-        "此對話已結束，請先按「繼續諮詢（重新開啟對話）」",
+        st(locale, "support.threadClosed", "此對話已結束，請先按「繼續諮詢（重新開啟對話）」"),
       );
     }
     await threadRef.update({
@@ -1039,26 +1074,30 @@ export const sendSupportChatMessage = onCall(publicCall, async (request) => {
 
 /** 管理員回覆客服訊息 */
 export const sendSupportChatAdminReply = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
   const uid = request.auth?.uid;
   if (!uid) {
-    throw new HttpsError("unauthenticated", "請先登入");
+    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
   }
-  await assertAdminByUid(uid);
+  await assertAdminByUid(uid, locale);
   const customerId = typeof request.data?.customerId === "string" ? request.data.customerId.trim() : "";
   const textRaw = typeof request.data?.text === "string" ? request.data.text.trim() : "";
   if (!customerId) {
-    throw new HttpsError("invalid-argument", "缺少 customerId");
+    throw new HttpsError("invalid-argument", st(locale, "support.needCustomerId", "缺少 customerId"));
   }
   if (textRaw.length < 1) {
-    throw new HttpsError("invalid-argument", "請輸入回覆內容");
+    throw new HttpsError("invalid-argument", st(locale, "support.needReply", "請輸入回覆內容"));
   }
   if (textRaw.length > SUPPORT_CHAT_TEXT_MAX) {
-    throw new HttpsError("invalid-argument", `訊息最長 ${SUPPORT_CHAT_TEXT_MAX} 字`);
+    throw new HttpsError(
+      "invalid-argument",
+      st(locale, "support.messageTooLong", "訊息最長 {{max}} 字", { max: SUPPORT_CHAT_TEXT_MAX }),
+    );
   }
   const threadRef = db.collection("supportThreads").doc(customerId);
   const threadSnap = await threadRef.get();
   if (!threadSnap.exists) {
-    throw new HttpsError("not-found", "找不到對話");
+    throw new HttpsError("not-found", st(locale, "support.threadMissing", "找不到對話"));
   }
   const preview = supportChatPreview(textRaw);
   await threadRef.update({
@@ -1077,21 +1116,22 @@ export const sendSupportChatAdminReply = onCall(publicCall, async (request) => {
 
 /** 管理員將客服對話標記為進行中／已結束 */
 export const setSupportThreadStatusAdmin = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
   const uid = request.auth?.uid;
   if (!uid) {
-    throw new HttpsError("unauthenticated", "請先登入");
+    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
   }
-  await assertAdminByUid(uid);
+  await assertAdminByUid(uid, locale);
   const customerId = typeof request.data?.customerId === "string" ? request.data.customerId.trim() : "";
   const statusRaw = request.data?.status;
   const status = statusRaw === "closed" || statusRaw === "open" ? statusRaw : "open";
   if (!customerId) {
-    throw new HttpsError("invalid-argument", "缺少 customerId");
+    throw new HttpsError("invalid-argument", st(locale, "support.needCustomerId", "缺少 customerId"));
   }
   const threadRef = db.collection("supportThreads").doc(customerId);
   const snap = await threadRef.get();
   if (!snap.exists) {
-    throw new HttpsError("not-found", "找不到對話");
+    throw new HttpsError("not-found", st(locale, "support.threadMissing", "找不到對話"));
   }
   await threadRef.update({
     status,
@@ -1145,13 +1185,15 @@ export const notifyMemberBookingStatusChange = onDocumentUpdated(
     const cancelReason =
       nextStatus === "cancelled" && typeof cancelReasonRaw === "string" ? cancelReasonRaw.trim() : undefined;
 
+    const mailLocale = after.notificationLocale === "en" ? "en" : "zh-Hant";
     try {
       await sendMemberBookingStatusChangedEmail({
         apiKey,
         from,
+        locale: mailLocale,
         payload: {
           to,
-          displayName: displayName || "會員",
+          displayName: displayName || (mailLocale === "en" ? "Member" : "會員"),
           dateKey,
           startSlot,
           previousStatus: prevStatus,

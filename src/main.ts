@@ -52,6 +52,7 @@ import {
   LED_SPEED_MIN,
   type LedMarqueeHandle,
 } from "./ledMarquee";
+import { getLocale, initI18n, intlLocaleTag, localeApiParam, setLocale, t } from "./i18n";
 
 type Booking = {
   id: string;
@@ -75,22 +76,29 @@ type BookingMode =
   | "member_wallet"
   | "member_beverage";
 
-const BEVERAGE_OPTION_LABEL = "請師傅一杯飲料";
+function beverageOptionLabel(): string {
+  return t("booking.beverageOption", "請師傅一杯飲料");
+}
 
-const BOOKING_MODE_LABEL: Record<BookingMode, string> = {
-  guest_cash: "訪客現金",
-  guest_beverage: BEVERAGE_OPTION_LABEL,
-  member_cash: "會員現金",
-  member_wallet: "會員儲值",
-  member_beverage: BEVERAGE_OPTION_LABEL,
-};
+function bookingModeLabel(mode: BookingMode): string {
+  const labels: Record<BookingMode, string> = {
+    guest_cash: t("booking.mode.guest_cash", "訪客現金"),
+    guest_beverage: beverageOptionLabel(),
+    member_cash: t("booking.mode.member_cash", "會員現金"),
+    member_wallet: t("booking.mode.member_wallet", "會員儲值"),
+    member_beverage: beverageOptionLabel(),
+  };
+  return labels[mode];
+}
 
 /** 後台狀態下拉：不含「已取消」（改由「取消」按鈕呼叫 cancelBooking） */
-const ADMIN_STATUS_SELECT_OPTIONS: { value: string; label: string }[] = [
-  { value: "pending", label: "待確認" },
-  { value: "confirmed", label: "已確認" },
-  { value: "done", label: "已完成" },
-];
+function getAdminStatusSelectOptions(): { value: string; label: string }[] {
+  return [
+    { value: "pending", label: t("status.pending", "待確認") },
+    { value: "confirmed", label: t("status.confirmed", "已確認") },
+    { value: "done", label: t("status.done", "已完成") },
+  ];
+}
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -112,20 +120,20 @@ function errorMessage(e: unknown): string {
     const m = (e as { message?: unknown }).message;
     if (typeof m === "string" && m.length > 0) return m;
   }
-  return "發生錯誤";
+  return t("errors.generic", "發生錯誤");
 }
 
 /** 密碼輸入框右側「顯示／隱藏」切換（不改變 input 的 value） */
 function wrapPasswordField(input: HTMLInputElement): HTMLElement {
   const row = el("div", { class: "field-password-row" });
-  const btn = el("button", { type: "button", class: "ghost password-reveal-btn" }, ["顯示"]);
-  btn.setAttribute("aria-label", "顯示密碼");
+  const btn = el("button", { type: "button", class: "ghost password-reveal-btn" }, [t("pwd.show", "顯示")]);
+  btn.setAttribute("aria-label", t("pwd.ariaShow", "顯示密碼"));
   btn.setAttribute("aria-pressed", "false");
   btn.addEventListener("click", () => {
     const show = input.type === "password";
     input.type = show ? "text" : "password";
-    btn.textContent = show ? "隱藏" : "顯示";
-    btn.setAttribute("aria-label", show ? "隱藏密碼" : "顯示密碼");
+    btn.textContent = show ? t("pwd.hide", "隱藏") : t("pwd.show", "顯示");
+    btn.setAttribute("aria-label", show ? t("pwd.ariaHide", "隱藏密碼") : t("pwd.ariaShow", "顯示密碼"));
     btn.setAttribute("aria-pressed", String(show));
   });
   row.append(input, btn);
@@ -188,12 +196,14 @@ function taipeiLatestBookableDateKey(): string {
 }
 
 /** 例如 2026-04-23（週三），供名額說明用 */
-function dateKeyLabelTaipeiZh(dateKey: string): string {
+function dateKeyLabelTaipei(dateKey: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
   if (!m) return dateKey;
   try {
     const inst = new Date(`${m[1]}-${m[2]}-${m[3]}T12:00:00+08:00`);
-    const wd = new Intl.DateTimeFormat("zh-TW", { timeZone: "Asia/Taipei", weekday: "short" }).format(inst);
+    const wd = new Intl.DateTimeFormat(intlLocaleTag(), { timeZone: "Asia/Taipei", weekday: "short" }).format(
+      inst,
+    );
     return `${m[1]}-${m[2]}-${m[3]}（${wd}）`;
   } catch {
     return dateKey;
@@ -222,18 +232,18 @@ function isStartSlotInPastForTaipeiToday(dateKey: string, startSlot: string): bo
 function formatWhen(b: Booking): string {
   if (b.startAt?.seconds) {
     const d = new Date(b.startAt.seconds * 1000);
-    return d.toLocaleString("zh-TW", { timeZone: "Asia/Taipei" });
+    return d.toLocaleString(intlLocaleTag(), { timeZone: "Asia/Taipei" });
   }
   return `${b.dateKey} ${b.startSlot}`;
 }
 
 function bookingStatusLabel(status: string): string {
   const map: Record<string, string> = {
-    pending: "待確認",
-    confirmed: "已確認",
-    done: "已完成",
-    cancelled: "已取消",
-    deleted: "已刪除",
+    pending: t("status.pending", "待確認"),
+    confirmed: t("status.confirmed", "已確認"),
+    done: t("status.done", "已完成"),
+    cancelled: t("status.cancelled", "已取消"),
+    deleted: t("status.deleted", "已刪除"),
   };
   return map[status] ?? status;
 }
@@ -241,10 +251,10 @@ function bookingStatusLabel(status: string): string {
 /** 後台預約表：是否為訪客預約（是／否） */
 function bookingGuestYesNo(b: Pick<Booking, "bookingMode" | "customerId">): string {
   const mode = b.bookingMode;
-  if (mode === "guest_cash" || mode === "guest_beverage") return "是";
-  if (typeof mode === "string" && mode.startsWith("member_")) return "否";
-  if (typeof b.customerId === "string" && b.customerId.length > 0) return "否";
-  return "—";
+  if (mode === "guest_cash" || mode === "guest_beverage") return t("guest.yes", "是");
+  if (typeof mode === "string" && mode.startsWith("member_")) return t("guest.no", "否");
+  if (typeof b.customerId === "string" && b.customerId.length > 0) return t("guest.no", "否");
+  return t("guest.dash", "—");
 }
 
 /** 會員「我的預約」：後台取消有填原因時顯示 */
@@ -253,7 +263,7 @@ function myBookingReasonBlock(b: Booking): HTMLElement | null {
   const cr = typeof b.cancelReason === "string" ? b.cancelReason.trim() : "";
   if (!cr) return null;
   return el("div", { class: "my-booking-reason" }, [
-    el("span", { class: "my-booking-reason-label" }, ["取消說明："]),
+    el("span", { class: "my-booking-reason-label" }, [t("myBooking.cancelReasonLabel", "取消說明：")]),
     el("span", { class: "my-booking-reason-body" }, [cr]),
   ]);
 }
@@ -265,20 +275,24 @@ function buildBookingSummary(
   note: string,
   bookingMode: BookingMode,
 ): string {
-  const noteSummary = note || "（未填寫）";
+  const noteSummary = note || t("booking.summary.noteEmpty", "（未填寫）");
   return [
-    "請確認以下預約資訊：",
-    `姓名：${displayName}`,
-    `日期：${dateKey}`,
-    `開始時間：${startSlot}`,
-    `付款方式：${BOOKING_MODE_LABEL[bookingMode]}`,
-    `備註：${noteSummary}`,
+    t("booking.summary.intro", "請確認以下預約資訊："),
+    `${t("booking.summary.name", "姓名")}：${displayName}`,
+    `${t("booking.summary.date", "日期")}：${dateKey}`,
+    `${t("booking.summary.start", "開始時間")}：${startSlot}`,
+    `${t("booking.summary.mode", "付款方式")}：${bookingModeLabel(bookingMode)}`,
+    `${t("booking.summary.note", "備註")}：${noteSummary}`,
     "",
-    "確認無誤後按「確定」送出。",
+    t("booking.summary.footer", "確認無誤後按「確定」送出。"),
   ].join("\n");
 }
 
-function showConfirmModal(title: string, message: string, confirmText = "確定"): Promise<boolean> {
+function showConfirmModal(
+  title: string,
+  message: string,
+  confirmText = t("modal.confirmDefault", "確定"),
+): Promise<boolean> {
   return new Promise((resolve) => {
     const overlay = el("div", { class: "modal-overlay" });
     const dialog = el("div", { class: "modal-card" });
@@ -287,7 +301,7 @@ function showConfirmModal(title: string, message: string, confirmText = "確定"
     dialog.setAttribute("aria-labelledby", "confirm-modal-title");
     const heading = el("h3", { id: "confirm-modal-title" }, [title]);
     const body = el("pre", { class: "modal-message" }, [message]);
-    const cancelBtn = el("button", { class: "ghost", type: "button" }, ["取消"]);
+    const cancelBtn = el("button", { class: "ghost", type: "button" }, [t("modal.cancel", "取消")]);
     const confirmBtn = el("button", { class: "primary", type: "button" }, [confirmText]);
     const actions = el("div", { class: "modal-actions" }, [cancelBtn, confirmBtn]);
     dialog.append(heading, body, actions);
@@ -334,7 +348,7 @@ function adminSessionCallName(user: User): string {
     const local = at > 0 ? email.slice(0, at).trim() : email;
     if (local) return local;
   }
-  return "管理員";
+  return t("adminSession.fallbackName", "管理員");
 }
 
 /** 後台表單：可填說明（可留空）；null 表示關閉視窗未確認 */
@@ -361,7 +375,7 @@ function showAdminOptionalReasonModal(args: {
     });
     reasonInput.setAttribute("aria-label", reasonLabel);
     const reasonField = el("label", { class: "field modal-cancel-reason-field" }, [reasonLabel, reasonInput]);
-    const dismissBtn = el("button", { class: "ghost", type: "button" }, ["關閉"]);
+    const dismissBtn = el("button", { class: "ghost", type: "button" }, [t("modal.close", "關閉")]);
     const confirmBtn = el("button", { class: "primary", type: "button" }, [confirmText]);
     const actions = el("div", { class: "modal-actions" }, [dismissBtn, confirmBtn]);
     dialog.append(heading, body, reasonField, actions);
@@ -395,15 +409,16 @@ function showAdminOptionalReasonModal(args: {
 
 function showAdminCancelBookingModal(summaryLines: string): Promise<string | null> {
   return showAdminOptionalReasonModal({
-    title: "取消預約",
+    title: t("admin.cancelBooking.title", "取消預約"),
     summaryLines,
-    reasonLabel: "取消原因",
-    placeholder: "取消原因（選填，可不填）",
-    confirmText: "確認取消",
+    reasonLabel: t("admin.cancelBooking.reasonLabel", "取消原因"),
+    placeholder: t("admin.cancelBooking.reasonPlaceholder", "取消原因（選填，可不填）"),
+    confirmText: t("admin.cancelBooking.confirm", "確認取消"),
   });
 }
 
 function render() {
+  initI18n();
   const root = document.querySelector<HTMLDivElement>("#app")!;
   root.innerHTML = "";
   root.className = "";
@@ -411,7 +426,10 @@ function render() {
   if (!isFirebaseConfigured()) {
     root.append(
       el("div", { class: "banner" }, [
-        "尚未設定 Firebase：請複製 `.env.example` 為 `.env`，填入專案設定後執行 `npm run dev`。",
+        t(
+          "errors.firebaseConfig",
+          "尚未設定 Firebase：請複製 `.env.example` 為 `.env`，填入專案設定後執行 `npm run dev`。",
+        ),
       ]),
     );
     return;
@@ -422,17 +440,28 @@ function render() {
 
   let tab: "book" | "admin" = "book";
 
-  const titleHeading = el("h1", {}, ["辦公室按摩預約"]);
-  const titleDesc = el("p", {}, ["週一至週五 · 開始時間 15 分鐘一格 · 單次服務約15~50分鐘, 看情況. · 午休 11:45–13:15 不開放 · 最晚 17:30 開始、18:00 前結束"]);
+  const titleHeading = el("h1", {}, [t("home.title", "辦公室按摩預約")]);
+  const titleDesc = el("p", {}, [
+    t(
+      "home.subtitle",
+      "週一至週五 · 開始時間 15 分鐘一格 · 單次服務約15~50分鐘, 看情況. · 午休 11:45–13:15 不開放 · 最晚 17:30 開始、18:00 前結束",
+    ),
+  ]);
   const titleGuestHint = el("p", { class: "page-head-guest-hint" }, [
-    "免事先註冊也可預約，選「訪客」付款方式即可；註冊會員則可儲值與抽獎。",
+    t(
+      "home.guestHint",
+      "免事先註冊也可預約，選「訪客」付款方式即可；註冊會員則可儲值與抽獎。",
+    ),
   ]);
   const visitorStatsLine = el("p", {
     class: "visitor-stats visitor-stats--wretch",
     role: "status",
     ariaLive: "polite",
-    title: "每個瀏覽器分頁連線期間計一次；重新整理不會重複累加。以台北時區換日與換週（週一至週日）。",
-  }, ["訪次統計載入中…"]);
+    title: t(
+      "visitor.title",
+      "每個瀏覽器分頁連線期間計一次；重新整理不會重複累加。以台北時區換日與換週（週一至週日）。",
+    ),
+  }, [t("visitor.loading", "訪次統計載入中…")]);
   const musicMiniRoot = el("div", { class: "music-mini-player-root", id: "music-mini-player-root" });
   const musicHeadRow = el("div", { class: "page-head-music-row" }, [musicMiniRoot]);
   const titleTextCol = el("div", { class: "page-head-text" }, [
@@ -444,7 +473,7 @@ function render() {
 
   const VISIT_SESSION_KEY = "mr_siteVisitSession";
   function formatVisitCount(n: number): string {
-    return n.toLocaleString("zh-TW");
+    return n.toLocaleString(intlLocaleTag());
   }
   function applyVisitorStatsPayload(data: {
     yourVisitNumberToday: number;
@@ -458,14 +487,18 @@ function render() {
     visitorStatsLine.replaceChildren(
       rail("l"),
       el("span", { class: "visitor-stats__main" }, [
-        "今日 ",
+        t("visitor.line.today", "今日 "),
         num(data.dayVisits),
-        " 人次 · 本週 ",
+        t("visitor.line.visits", " 人次 · 本週 "),
         num(data.weekVisits),
-        " · 累計 ",
+        t("visitor.line.total", " · 累計 "),
         num(data.totalVisits),
         " · ",
-        el("strong", { class: "visitor-stats__em" }, [`您是今日第 ${formatVisitCount(data.yourVisitNumberToday)} 位訪客`]),
+        el("strong", { class: "visitor-stats__em" }, [
+          t("visitor.line.youPrefix", "您是今日第 "),
+          formatVisitCount(data.yourVisitNumberToday),
+          t("visitor.line.youSuffix", " 位訪客"),
+        ]),
       ]),
       rail("r"),
     );
@@ -510,7 +543,7 @@ function render() {
     void (async () => {
       try {
         const fn = recordSiteVisitCall();
-        const res = await fn();
+        const res = await fn({ ...localeApiParam() });
         const data = res.data as {
           yourVisitNumberToday?: unknown;
           dayVisits?: unknown;
@@ -523,7 +556,7 @@ function render() {
           typeof data.weekVisits !== "number" ||
           typeof data.totalVisits !== "number"
         ) {
-          visitorStatsLine.textContent = "訪次統計格式異常。";
+          visitorStatsLine.textContent = t("visitor.badFormat", "訪次統計格式異常。");
           return;
         }
         const payload = {
@@ -535,18 +568,41 @@ function render() {
         sessionStorage.setItem(VISIT_SESSION_KEY, JSON.stringify(payload));
         applyVisitorStatsPayload(payload);
       } catch {
-        visitorStatsLine.textContent = "訪次統計暫時無法載入（請確認已部署 Cloud Functions：recordSiteVisit）。";
+        visitorStatsLine.textContent = t(
+          "visitor.cfFail",
+          "訪次統計暫時無法載入（請確認已部署 Cloud Functions：recordSiteVisit）。",
+        );
       }
     })();
   }
 
-  const memberEntryBtn = el("button", { class: "ghost member-entry", type: "button" }, ["會員登入"]);
+  const memberEntryBtn = el("button", { class: "ghost member-entry", type: "button" }, [
+    t("member.entryLogin", "會員登入"),
+  ]);
   const headSessionStatus = el("span", {
     class: "page-head-session",
     role: "status",
     ariaLive: "polite",
   });
-  const headActions = el("div", { class: "head-actions" }, [headSessionStatus, memberEntryBtn]);
+  const localeField = el("label", { class: "locale-switch", htmlFor: "site-locale-select" }, [
+    t("locale.fieldLabel", "介面語言"),
+  ]);
+  const localeSelect = el("select", { id: "site-locale-select", class: "locale-select" });
+  localeSelect.append(
+    el("option", { value: "zh-Hant" }, [t("locale.option.zh", "繁體中文")]),
+    el("option", { value: "en" }, [t("locale.option.en", "English")]),
+  );
+  localeSelect.value = getLocale();
+  localeSelect.addEventListener("change", () => {
+    const v = localeSelect.value === "en" ? "en" : "zh-Hant";
+    setLocale(v);
+  });
+  const headActions = el("div", { class: "head-actions" }, [
+    localeField,
+    localeSelect,
+    headSessionStatus,
+    memberEntryBtn,
+  ]);
   const pageHeadBody = el("div", { class: "page-head-body" }, [titleTextCol, headActions]);
 
   const hostPortrait = el("figure", { class: "host-atelier" }, [
@@ -554,14 +610,15 @@ function render() {
       el("img", {
         class: "host-atelier__img",
         src: "/host-portrait.png",
-        alt: "主理人肖像：由凝視、伏案書寫與窗邊沉思三幅畫面組成的直式影像。",
+        alt: t(
+          "home.hostAlt",
+          "主理人肖像：由凝視、伏案書寫與窗邊沉思三幅畫面組成的直式影像。",
+        ),
         loading: "lazy",
         decoding: "async",
       }),
     ]),
-    el("figcaption", { class: "host-atelier__cap" }, [
-      "片刻的暗影與光，也是留給身體的空白。",
-    ]),
+    el("figcaption", { class: "host-atelier__cap" }, [t("home.hostCaption", "片刻的暗影與光，也是留給身體的空白。")]),
   ]);
 
   const panelBook = el("main", { class: "panel" });
@@ -679,9 +736,11 @@ function render() {
   );
   shell.append(announcementBox);
 
-  const appVersionFooter = el("footer", { class: "app-version-footer" }, [
-    `版號 ${__APP_VERSION__} · 最後更新 ${__APP_BUILD_DATE__}（台北）`,
-  ]);
+  const appVersionFooter = el("footer", { class: "app-version-footer" }, []);
+  appVersionFooter.textContent = t("footer.version", "版號 {{ver}} · 最後更新 {{date}}（台北）", {
+    ver: __APP_VERSION__,
+    date: __APP_BUILD_DATE__,
+  });
   shell.append(appVersionFooter);
 
   /** --- 預約表單 --- */
@@ -693,9 +752,9 @@ function render() {
   const noteInput = el("textarea", { maxLength: 500 });
   const bookingModeSelect = el("select", {}, []);
   const bookingModeHint = el("span", { class: "hint" }, [
-    "訪客預約以現金 50 元結帳；儲值與抽獎請使用右上角登入。",
+    t("booking.modeHintGuest", "訪客預約以現金 50 元結帳；儲值與抽獎請使用右上角登入。"),
   ]);
-  const submitBtn = el("button", { class: "primary", type: "button" }, ["送出預約"]);
+  const submitBtn = el("button", { class: "primary", type: "button" }, [t("booking.submit", "送出預約")]);
   /** 選日期／載入空檔與名額相關提示，緊接在時段選擇下方，避免訊息落在頁面底部 */
   const scheduleStatus = el("div", {
     class: "status-line schedule-status",
@@ -794,7 +853,7 @@ function render() {
               btn.setAttribute("disabled", "true");
               try {
                 const fn = cancelBookingCall();
-                await fn({ bookingId: b.id });
+                await fn({ bookingId: b.id, ...localeApiParam() });
                 await refreshWalletStatus();
               } catch (e) {
                 myBookingsHint.textContent = e instanceof Error ? e.message : "取消失敗";
@@ -821,7 +880,7 @@ function render() {
 
   function updateMemberEntryLabel() {
     const user = auth.currentUser;
-    memberEntryBtn.textContent = user ? "會員中心" : "會員登入";
+    memberEntryBtn.textContent = user ? t("member.entryCenter", "會員中心") : t("member.entryLogin", "會員登入");
   }
 
   /** 預約頁右上角：訪客／登入與驗證狀態／稱呼（長字省略，信箱完整字串放 title 提示） */
@@ -1206,11 +1265,11 @@ function render() {
       ? [
           { value: "member_wallet", label: "會員儲值（扣 50 元）" },
           { value: "member_cash", label: "會員現金（50 元）" },
-          { value: "member_beverage", label: BEVERAGE_OPTION_LABEL },
+          { value: "member_beverage", label: beverageOptionLabel() },
         ]
       : [
           { value: "guest_cash", label: "訪客現金（50 元）" },
-          { value: "guest_beverage", label: BEVERAGE_OPTION_LABEL },
+          { value: "guest_beverage", label: beverageOptionLabel() },
         ];
     for (const mode of modes) {
       const opt = el("option", { value: mode.value, disabled: mode.disabled }, [mode.label]);
@@ -1281,12 +1340,12 @@ function render() {
     }
     emailVerifyBanner.hidden = true;
     ensureMyBookingsListener(user.uid);
-    walletStatus.textContent = "讀取會員餘額中…";
+    walletStatus.textContent = t("member.walletLoading", "讀取會員餘額中…");
     walletStatus.className = "status-line";
     syncPageHeadSession(user.displayName?.trim() || user.email?.trim());
     try {
       const fn = getMyWalletCall();
-      const res = await fn();
+      const res = await fn({ ...localeApiParam() });
       const data = res.data as { walletBalance: number; drawChances: number; nickname?: string };
       walletBalance = typeof data.walletBalance === "number" ? data.walletBalance : 0;
       drawChances = typeof data.drawChances === "number" ? data.drawChances : 0;
@@ -1297,9 +1356,13 @@ function render() {
       if (profileNick && !nameInput.value.trim()) {
         nameInput.value = profileNick.slice(0, 80);
       }
-      walletStatus.textContent = `會員已登入：儲值餘額 ${walletBalance} 元，可抽次數 ${drawChances}。`;
+      walletStatus.textContent = t("member.walletLine", "會員已登入：儲值餘額 {{balance}} 元，可抽次數 {{chances}}。", {
+        balance: walletBalance,
+        chances: drawChances,
+      });
       walletStatus.className = "status-line ok";
-      wheelStatus.textContent = drawChances > 0 ? "可抽輪盤，祝你好運！" : "目前無可抽次數。";
+      wheelStatus.textContent =
+        drawChances > 0 ? t("member.wheelLuck", "可抽輪盤，祝你好運！") : t("member.wheelNone", "目前無可抽次數。");
       wheelStatus.className = "status-line";
       if (drawChances > 0) spinBtn.removeAttribute("disabled");
       else spinBtn.setAttribute("disabled", "true");
@@ -1311,7 +1374,7 @@ function render() {
       walletStatus.textContent = errorMessage(e);
       walletStatus.className = "status-line error";
       spinBtn.setAttribute("disabled", "true");
-      wheelStatus.textContent = "無法讀取抽獎狀態。";
+      wheelStatus.textContent = t("member.wheelStateFail", "無法讀取抽獎狀態。");
       wheelStatus.className = "status-line error";
       syncPageHeadSession();
     }
@@ -1319,7 +1382,7 @@ function render() {
 
   async function fetchWheelPrizeLabelsForSpectacle() {
     const fn = listActiveWheelPrizesCall();
-    const res = await fn();
+    const res = await fn({ ...localeApiParam() });
     const data = res.data as { prizes: { id: string; name: string; weight: number }[] };
     return data.prizes;
   }
@@ -1356,7 +1419,7 @@ function render() {
       const data = await runWheelSpectacle(
         async () => {
           const fn = spinWheelCall();
-          const res = await fn();
+          const res = await fn({ ...localeApiParam() });
           return res.data as {
             prize: { name: string; type: string; value: number };
             drawChances: number;
@@ -1451,7 +1514,7 @@ function render() {
 
     try {
       const fn = getAvailabilityCall();
-      const res = await fn({ dateKey: dk });
+      const res = await fn({ dateKey: dk, ...localeApiParam() });
       const data = res.data as {
         taken: string[];
         blockedSlots?: { startSlot: string; reason?: string }[];
@@ -1488,11 +1551,11 @@ function render() {
         ]),
         el("div", { class: "meta-pills-note" }, [
           "「當日」＝您所選的這一天：",
-          el("strong", {}, [dateKeyLabelTaipeiZh(dk)]),
+          el("strong", {}, [dateKeyLabelTaipei(dk)]),
           "。「本工作週」＝該日所屬曆週之週一至週五：",
-          el("strong", {}, [dateKeyLabelTaipeiZh(weekMon)]),
+          el("strong", {}, [dateKeyLabelTaipei(weekMon)]),
           "～",
-          el("strong", {}, [dateKeyLabelTaipeiZh(weekFri)]),
+          el("strong", {}, [dateKeyLabelTaipei(weekFri)]),
           "（週一與後端 ",
           el("code", {}, ["weekStart"]),
           " 相同，名額為該曆週內有效預約合計）。",
@@ -1580,7 +1643,7 @@ function render() {
     submitBtn.setAttribute("disabled", "true");
     try {
       const fn = createBookingCall();
-      await fn({ displayName, note, dateKey, startSlot, bookingMode });
+      await fn({ displayName, note, dateKey, startSlot, bookingMode, ...localeApiParam() });
       bookStatus.textContent = "已送出！狀態為「待確認」，實際時間會依現場情況微調。";
       bookStatus.classList.add("ok");
       nameInput.value = "";
@@ -1882,7 +1945,7 @@ function render() {
       }
       try {
         const fn = searchMemberUsersCall();
-        const res = await fn({ prefix: q });
+        const res = await fn({ prefix: q, ...localeApiParam() });
         const users = (res.data as { users?: { uid: string; email: string }[] }).users ?? [];
         topupSuggestions.innerHTML = "";
         if (users.length === 0) {
@@ -1947,7 +2010,7 @@ function render() {
       topupStatus.textContent = "儲值中…";
       try {
         const fn = topupWalletCall();
-        await fn({ customerId, amount, note });
+        await fn({ customerId, amount, note, ...localeApiParam() });
         topupStatus.textContent = "儲值成功";
         topupStatus.classList.add("ok");
       } catch (e) {
@@ -2447,7 +2510,7 @@ function render() {
       createMemberBtn.setAttribute("disabled", "true");
       try {
         const fn = createMemberAccountCall();
-        const res = await fn({ email, password, nickname });
+        const res = await fn({ email, password, nickname, ...localeApiParam() });
         const data = res.data as { uid: string };
         createMemberStatus.textContent = `建立成功，UID：${data.uid}（儲值欄已帶入 Email）`;
         createMemberStatus.classList.add("ok");
@@ -2556,7 +2619,9 @@ function render() {
         case "email": {
           cmp = (a.email ?? "")
             .toLowerCase()
-            .localeCompare((b.email ?? "").toLowerCase(), "zh-Hant", { numeric: true });
+            .localeCompare((b.email ?? "").toLowerCase(), getLocale() === "en" ? "en" : "zh-Hant", {
+              numeric: true,
+            });
           break;
         }
         case "emailVerified": {
@@ -2570,7 +2635,7 @@ function render() {
           break;
         }
         case "nickname": {
-          cmp = a.nickname.localeCompare(b.nickname, "zh-Hant", { numeric: true });
+          cmp = a.nickname.localeCompare(b.nickname, getLocale() === "en" ? "en" : "zh-Hant", { numeric: true });
           break;
         }
         case "walletBalance": {
@@ -2657,7 +2722,7 @@ function render() {
           saveBtn.setAttribute("disabled", "true");
           try {
             const updateFn = updateMemberNicknameAdminCall();
-            await updateFn({ customerId: m.uid, nickname: nickInput.value });
+            await updateFn({ customerId: m.uid, nickname: nickInput.value, ...localeApiParam() });
             const cached = memberListCache.find((r) => r.uid === m.uid);
             if (cached) cached.nickname = nickInput.value.trim();
             memberListStatus.textContent = `已更新 ${m.email ?? m.uid} 的稱呼。`;
@@ -2727,7 +2792,7 @@ function render() {
       memberListRefreshBtn.setAttribute("disabled", "true");
       try {
         const fn = listMembersAdminCall();
-        const res = await fn({});
+        const res = await fn({ ...localeApiParam() });
         const data = res.data as { members: AdminMemberListRow[] };
         const raw = Array.isArray(data.members) ? data.members : [];
         memberListCache = raw.map((m) => ({
@@ -2774,7 +2839,7 @@ function render() {
 
     const tabBookings = el("button", { type: "button", class: "admin-tab", role: "tab" }, ["預約管理"]);
     tabBookings.id = "admin-tab-trigger-bookings";
-    const tabHiddenBookings = el("button", { type: "button", class: "admin-tab", role: "tab" }, ["已隱藏"]);
+    const tabHiddenBookings = el("button", { type: "button", class: "admin-tab", role: "tab" }, ["已隱藏的預約"]);
     tabHiddenBookings.id = "admin-tab-trigger-hidden";
     const tabMembers = el("button", { type: "button", class: "admin-tab", role: "tab" }, ["會員與儲值"]);
     tabMembers.id = "admin-tab-trigger-members";
@@ -2920,7 +2985,7 @@ function render() {
           : el("select", {}, []);
       const sel = b.status === "cancelled" ? null : (statusCell as HTMLSelectElement);
       if (sel) {
-        for (const opt of ADMIN_STATUS_SELECT_OPTIONS) {
+        for (const opt of getAdminStatusSelectOptions()) {
           const o = el("option", { value: opt.value }, [opt.label]);
           if (opt.value === b.status) o.setAttribute("selected", "selected");
           sel.append(o);
@@ -2933,7 +2998,7 @@ function render() {
           try {
             if (nextStatus === "done") {
               const fn = completeBookingCall();
-              await fn({ bookingId: b.id });
+              await fn({ bookingId: b.id, ...localeApiParam() });
             } else {
               await updateDoc(doc(db, "bookings", b.id), {
                 status: nextStatus,
@@ -2982,7 +3047,7 @@ function render() {
           if (reason.length > 0) {
             payload.cancelReason = reason;
           }
-          await fn(payload);
+          await fn({ ...payload, ...localeApiParam() });
           hiddenBookingsStatus.textContent = "已取消";
           hiddenBookingsStatus.classList.add("ok");
           await refreshWalletStatus();
@@ -3102,7 +3167,7 @@ function render() {
               : el("select", {}, []);
           const sel = b.status === "cancelled" ? null : (statusCell as HTMLSelectElement);
           if (sel) {
-            for (const opt of ADMIN_STATUS_SELECT_OPTIONS) {
+            for (const opt of getAdminStatusSelectOptions()) {
               const o = el("option", { value: opt.value }, [opt.label]);
               if (opt.value === b.status) o.setAttribute("selected", "selected");
               sel.append(o);
@@ -3114,7 +3179,7 @@ function render() {
               try {
                 if (nextStatus === "done") {
                   const fn = completeBookingCall();
-                  await fn({ bookingId: b.id });
+                  await fn({ bookingId: b.id, ...localeApiParam() });
                 } else {
                   await updateDoc(doc(db, "bookings", b.id), {
                     status: nextStatus,
@@ -3163,7 +3228,7 @@ function render() {
               if (reason.length > 0) {
                 payload.cancelReason = reason;
               }
-              await fn(payload);
+              await fn({ ...payload, ...localeApiParam() });
               adminStatus.textContent = "已取消";
               adminStatus.classList.add("ok");
               await refreshWalletStatus();
@@ -3229,7 +3294,7 @@ function render() {
     if (!user) return false;
     try {
       const fn = getAdminStatusCall();
-      const res = await fn();
+      const res = await fn({ ...localeApiParam() });
       const data = res.data as { isAdmin?: boolean };
       return data.isAdmin === true;
     } catch {
@@ -3270,10 +3335,17 @@ function render() {
     memberEntryBtn.hidden = !isBook;
     titleGuestHint.hidden = !isBook;
     visitorStatsLine.hidden = !isBook;
-    titleHeading.textContent = isBook ? "辦公室按摩預約" : "管理後台";
+    titleHeading.textContent = isBook ? t("home.title", "辦公室按摩預約") : t("admin.backTitle", "管理後台");
     titleDesc.textContent = isBook
-      ? "週一至週五 · 開始時間 15 分鐘一格 · 單次服務約15~50分鐘, 看情況. · 午休 11:45–13:15 不開放 · 最晚 17:30 開始、18:00 前結束"
-      : "以分頁切換：預約管理、會員與儲值、跑馬燈公告、推播設定。";
+      ? t(
+          "home.subtitle",
+          "週一至週五 · 開始時間 15 分鐘一格 · 單次服務約15~50分鐘, 看情況. · 午休 11:45–13:15 不開放 · 最晚 17:30 開始、18:00 前結束",
+        )
+      : t(
+          "admin.backSubtitle",
+          "以分頁切換：預約管理、已隱藏的預約、會員與儲值、跑馬燈公告、客服對話。",
+        );
+    document.title = isBook ? t("meta.docTitle", "辦公室按摩預約") : t("admin.backTitle", "管理後台");
     panelBook.hidden = !isBook;
     panelAdmin.hidden = isBook;
     hostPortrait.hidden = !isBook;

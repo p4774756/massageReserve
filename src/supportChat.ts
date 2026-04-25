@@ -15,6 +15,7 @@ import {
   sendSupportChatMessageCall,
   setSupportThreadStatusAdminCall,
 } from "./firebase";
+import { intlLocaleTag, localeApiParam, t } from "./i18n";
 
 const THREADS = "supportThreads";
 const MAX_MSG = 2000;
@@ -41,7 +42,13 @@ function el<K extends keyof HTMLElementTagNameMap>(
 function formatMsgTime(ts: { seconds?: number } | undefined): string {
   if (!ts?.seconds) return "";
   const d = new Date(ts.seconds * 1000);
-  return d.toLocaleString("zh-TW", { timeZone: "Asia/Taipei", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleString(intlLocaleTag(), {
+    timeZone: "Asia/Taipei",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function firestorePermissionHint(err: unknown, context: string): string {
@@ -58,27 +65,25 @@ function firestorePermissionHint(err: unknown, context: string): string {
 /** 前台：單一對話串（文件 id = Auth uid，含匿名訪客），即時訊息 */
 export function mountMemberSupportChat(db: Firestore, auth: Auth, mount: HTMLElement): SupportChatUnmount {
   const wrap = el("section", { class: "support-chat support-chat--member" }, []);
-  const head = el("h4", { class: "admin-subhead" }, ["聯絡店家"]);
+  const head = el("h4", { class: "admin-subhead" }, [t("supportUi.contactTitle", "聯絡店家")]);
   const hint = el("p", { class: "hint" }, []);
   const statusLine = el("div", { class: "status-line" });
   const guestGate = el("div", { class: "support-chat-guest-gate" });
-  const guestGateHint = el("p", { class: "hint" }, [
-    "不需註冊即可留言：按下後會在此裝置建立匿名身分（僅用於客服對話）。若要儲值或管理預約，請使用右上角「會員登入」。",
-  ]);
-  const guestStartBtn = el("button", { type: "button", class: "primary" }, ["以訪客身分開始留言"]);
+  const guestGateHint = el("p", { class: "hint" }, [t("supportUi.guestHint", "不需註冊即可留言：按下後會在此裝置建立匿名身分（僅用於客服對話）。若要儲值或管理預約，請使用右上角「會員登入」。")]);
+  const guestStartBtn = el("button", { type: "button", class: "primary" }, [t("supportUi.guestBtn", "以訪客身分開始留言")]);
   guestGate.append(guestGateHint, guestStartBtn);
   const log = el("div", { class: "support-chat-log", tabIndex: 0 });
   const reopenRow = el("div", { class: "row-actions support-chat-reopen" });
-  const reopenBtn = el("button", { type: "button", class: "ghost" }, ["繼續諮詢（重新開啟對話）"]);
+  const reopenBtn = el("button", { type: "button", class: "ghost" }, [t("supportUi.reopen", "繼續諮詢（重新開啟對話）")]);
   reopenRow.append(reopenBtn);
   const inputRow = el("div", { class: "support-chat-input-row" });
   const ta = el("textarea", {
     class: "support-chat-input",
     rows: 2,
     maxLength: MAX_MSG,
-    placeholder: "輸入訊息…",
+    placeholder: t("supportUi.inputPh", "輸入訊息…"),
   });
-  const sendBtn = el("button", { type: "button", class: "primary" }, ["送出"]);
+  const sendBtn = el("button", { type: "button", class: "primary" }, [t("supportUi.send", "送出")]);
   inputRow.append(ta, sendBtn);
   wrap.append(head, hint, statusLine, guestGate, log, reopenRow, inputRow);
   mount.append(wrap);
@@ -101,7 +106,7 @@ export function mountMemberSupportChat(db: Firestore, auth: Auth, mount: HTMLEle
     log.replaceChildren();
     for (const m of snapList) {
       const text = typeof m.text === "string" ? m.text : "";
-      const who = m.sender === "admin" ? "店家" : "我";
+      const who = m.sender === "admin" ? t("supportUi.whoShop", "店家") : t("supportUi.whoMe", "我");
       const bubble = el("div", { class: `support-chat-bubble support-chat-bubble--${m.sender === "admin" ? "them" : "me"}` }, [
         el("div", { class: "support-chat-bubble-meta" }, [`${who} · ${formatMsgTime(m.createdAt)}`]),
         el("div", { class: "support-chat-bubble-text" }, [text]),
@@ -114,18 +119,19 @@ export function mountMemberSupportChat(db: Firestore, auth: Auth, mount: HTMLEle
   function setHintForUser(u: User | null) {
     hint.replaceChildren();
     if (!u) {
-      hint.append(
-        "已登入會員可在此聯絡店家；未登入者請先按下方按鈕以訪客身分開始。送出後店家會於後台回覆。",
-      );
+      hint.append(t("supportUi.hintNone", "已登入會員可在此聯絡店家；未登入者請先按下方按鈕以訪客身分開始。送出後店家會於後台回覆。"));
       return;
     }
     if (u.isAnonymous) {
       hint.append(
-        "您正以訪客身分留言；紀錄綁在此瀏覽器與裝置。若清除網站資料或換裝置，可能無法延續同一對話。登入會員後可使用儲值與預約紀錄（訪客對話不會自動合併）。",
+        t(
+          "supportUi.hintGuest",
+          "您正以訪客身分留言；紀錄綁在此瀏覽器與裝置。若清除網站資料或換裝置，可能無法延續同一對話。登入會員後可使用儲值與預約紀錄（訪客對話不會自動合併）。",
+        ),
       );
       return;
     }
-    hint.append("已使用會員帳號登入；留言後店家會於後台看到並回覆。");
+    hint.append(t("supportUi.hintMember", "已使用會員帳號登入；留言後店家會於後台看到並回覆。"));
   }
 
   function syncThreadUi() {
@@ -141,17 +147,17 @@ export function mountMemberSupportChat(db: Firestore, auth: Auth, mount: HTMLEle
     statusLine.className = "status-line";
     const text = ta.value.trim();
     if (!text) {
-      statusLine.textContent = "請輸入內容。";
+      statusLine.textContent = t("supportUi.emptyContent", "請輸入內容。");
       statusLine.classList.add("error");
       return;
     }
     sendBtn.setAttribute("disabled", "true");
     try {
       const fn = sendSupportChatMessageCall();
-      await fn({ text });
+      await fn({ text, ...localeApiParam() });
       ta.value = "";
     } catch (e) {
-      statusLine.textContent = firestorePermissionHint(e, "送出失敗");
+      statusLine.textContent = firestorePermissionHint(e, t("supportUi.failSend", "送出失敗"));
       statusLine.classList.add("error");
     } finally {
       sendBtn.removeAttribute("disabled");
@@ -165,9 +171,9 @@ export function mountMemberSupportChat(db: Firestore, auth: Auth, mount: HTMLEle
     reopenBtn.setAttribute("disabled", "true");
     try {
       const fn = sendSupportChatMessageCall();
-      await fn({ reopen: true });
+      await fn({ reopen: true, ...localeApiParam() });
     } catch (e) {
-      statusLine.textContent = firestorePermissionHint(e, "無法重新開啟");
+      statusLine.textContent = firestorePermissionHint(e, t("supportUi.failReopen", "無法重新開啟"));
       statusLine.classList.add("error");
     } finally {
       reopenBtn.removeAttribute("disabled");
@@ -181,10 +187,13 @@ export function mountMemberSupportChat(db: Firestore, auth: Auth, mount: HTMLEle
     try {
       await signInAnonymously(auth);
     } catch (e) {
-      const raw = e instanceof Error ? e.message : "無法開始訪客留言";
+      const raw = e instanceof Error ? e.message : t("supportUi.failStartGuest", "無法開始訪客留言");
       statusLine.textContent =
         raw.includes("OPERATION_NOT_ALLOWED") || raw.includes("admin-restricted-operation")
-          ? "專案尚未啟用「匿名登入」：請至 Firebase Console → Authentication → Sign-in method 開啟 Anonymous。"
+          ? t(
+              "supportUi.anonDisabled",
+              "專案尚未啟用「匿名登入」：請至 Firebase Console → Authentication → Sign-in method 開啟 Anonymous。",
+            )
           : raw;
       statusLine.classList.add("error");
     } finally {
@@ -221,7 +230,7 @@ export function mountMemberSupportChat(db: Firestore, auth: Auth, mount: HTMLEle
         syncThreadUi();
       },
       (err) => {
-        statusLine.textContent = firestorePermissionHint(err, "無法載入對話狀態");
+        statusLine.textContent = firestorePermissionHint(err, t("supportUi.failThread", "無法載入對話狀態"));
         statusLine.className = "status-line error";
       },
     );
@@ -238,7 +247,7 @@ export function mountMemberSupportChat(db: Firestore, auth: Auth, mount: HTMLEle
         renderMessages(list);
       },
       (err) => {
-        statusLine.textContent = firestorePermissionHint(err, "無法載入訊息");
+        statusLine.textContent = firestorePermissionHint(err, t("supportUi.failMsgs", "無法載入訊息"));
         statusLine.className = "status-line error";
       },
     );
@@ -274,13 +283,16 @@ export function mountMemberSupportChat(db: Firestore, auth: Auth, mount: HTMLEle
 /** 後台：對話列表 + 回覆 */
 export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElement): SupportChatUnmount {
   const wrap = el("div", { class: "support-chat support-chat--admin" }, []);
-  const head = el("h3", {}, ["客服對話"]);
+  const head = el("h3", {}, [t("supportUi.adminTitle", "客服對話")]);
   const hint = el("p", { class: "hint" }, [
-    "左側為會員對話列表（進行中優先、各組內依最近更新排序）；點選後於右側回覆。Firestore：",
+    t(
+      "supportUi.adminIntroA",
+      "左側為會員對話列表（進行中優先、各組內依最近更新排序）；點選後於右側回覆。Firestore：",
+    ),
     el("code", {}, [`${THREADS}/{會員UID}`]),
-    " 與子集合 ",
+    t("supportUi.adminIntroB", " 與子集合 "),
     el("code", {}, ["messages"]),
-    "。",
+    t("supportUi.adminIntroC", "。"),
   ]);
   const statusLine = el("div", { class: "status-line" });
   const split = el("div", { class: "support-chat-admin-split" });
@@ -289,13 +301,13 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
   split.append(listCol, detailCol);
 
   const listScroll = el("div", { class: "support-chat-admin-list-scroll" });
-  listCol.append(el("h4", { class: "admin-subhead" }, ["對話列表"]), listScroll);
+  listCol.append(el("h4", { class: "admin-subhead" }, [t("supportUi.threadList", "對話列表")]), listScroll);
 
-  const detailPlaceholder = el("p", { class: "hint" }, ["請由左側選擇一則對話。"]);
+  const detailPlaceholder = el("p", { class: "hint" }, [t("supportUi.pickThread", "請由左側選擇一則對話。")]);
   const detailHead = el("div", { class: "support-chat-admin-detail-head" });
   const closeRow = el("div", { class: "row-actions" });
-  const closeBtn = el("button", { type: "button", class: "ghost" }, ["標記為已結束"]);
-  const reopenAdminBtn = el("button", { type: "button", class: "ghost" }, ["重新開啟"]);
+  const closeBtn = el("button", { type: "button", class: "ghost" }, [t("supportUi.markClosed", "標記為已結束")]);
+  const reopenAdminBtn = el("button", { type: "button", class: "ghost" }, [t("supportUi.reopenAdmin", "重新開啟")]);
   closeRow.append(closeBtn, reopenAdminBtn);
   const log = el("div", { class: "support-chat-log" });
   const inputRow = el("div", { class: "support-chat-input-row" });
@@ -303,9 +315,9 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
     class: "support-chat-input",
     rows: 2,
     maxLength: MAX_MSG,
-    placeholder: "回覆會員…",
+    placeholder: t("supportUi.replyPh", "回覆會員…"),
   });
-  const sendBtn = el("button", { type: "button", class: "primary" }, ["回覆"]);
+  const sendBtn = el("button", { type: "button", class: "primary" }, [t("supportUi.replyBtn", "回覆")]);
   inputRow.append(ta, sendBtn);
   detailCol.append(detailPlaceholder, detailHead, closeRow, log, inputRow);
   detailHead.hidden = true;
@@ -330,7 +342,7 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
     memberDirectoryReady = true;
     try {
       const fn = listMembersAdminCall();
-      const res = await fn({});
+      const res = await fn({ ...localeApiParam() });
       const rows = Array.isArray((res.data as { members?: unknown }).members)
         ? ((res.data as { members: unknown[] }).members ?? [])
         : [];
@@ -359,10 +371,10 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
   function inferIdentityFromKnownData(customerId: string, data?: Record<string, unknown>): { kind: CustomerKind; label: string } {
     const fromMember = memberDirectory.get(customerId);
     if (fromMember) {
-      if (!fromMember.email || !fromMember.emailVerified) return { kind: "guest", label: "訪客" };
-      return { kind: "member", label: fromMember.nickname || "會員" };
+      if (!fromMember.email || !fromMember.emailVerified) return { kind: "guest", label: t("supportUi.guestLabel", "訪客") };
+      return { kind: "member", label: fromMember.nickname || t("supportUi.memberLabel", "會員") };
     }
-    return threadIdentityHint(data) ?? { kind: "guest", label: "訪客" };
+    return threadIdentityHint(data) ?? { kind: "guest", label: t("supportUi.guestLabel", "訪客") };
   }
 
 
@@ -378,9 +390,9 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
     const labelRaw = typeof data.customerLabel === "string" ? data.customerLabel.trim() : "";
     const typeRaw = typeof data.customerType === "string" ? data.customerType.trim() : "";
     const isAnonymous = data.isAnonymous === true;
-    if (typeRaw === "guest" || isAnonymous) return { kind: "guest", label: "訪客" };
+    if (typeRaw === "guest" || isAnonymous) return { kind: "guest", label: t("supportUi.guestLabel", "訪客") };
     if (labelRaw) return { kind: "member", label: labelRaw };
-    if (typeRaw === "member") return { kind: "member", label: "會員" };
+    if (typeRaw === "member") return { kind: "member", label: t("supportUi.memberLabel", "會員") };
     return null;
   }
 
@@ -391,7 +403,7 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
     const member = memberDirectory.get(customerId);
     if (member) {
       if (!member.email || !member.emailVerified) {
-        const guest = { kind: "guest" as const, label: "訪客" };
+        const guest = { kind: "guest" as const, label: t("supportUi.guestLabel", "訪客") };
         identityByCustomer.set(customerId, guest);
         return guest;
       }
@@ -408,27 +420,32 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
     try {
       const snap = await getDoc(doc(db, "customers", customerId));
       if (!snap.exists()) {
-        const guest = { kind: "guest" as const, label: "訪客" };
+        const guest = { kind: "guest" as const, label: t("supportUi.guestLabel", "訪客") };
         identityByCustomer.set(customerId, guest);
         return guest;
       }
       const data = snap.data();
       const nickname = typeof data?.nickname === "string" ? data.nickname.trim() : "";
-      const member = { kind: "member" as const, label: nickname || "會員" };
+      const member = { kind: "member" as const, label: nickname || t("supportUi.memberLabel", "會員") };
       identityByCustomer.set(customerId, member);
       return member;
     } catch {
-      const fallback = { kind: "member" as const, label: "會員" };
+      const fallback = { kind: "member" as const, label: t("supportUi.memberLabel", "會員") };
       identityByCustomer.set(customerId, fallback);
       return fallback;
     }
   }
 
   function renderDetailHead(customerId: string, identity?: { kind: CustomerKind; label: string }) {
-    const name = identity?.label || "辨識中…";
-    const role = identity ? (identity.kind === "member" ? "會員" : "") : "";
+    const name = identity?.label || t("supportUi.resolving", "辨識中…");
+    const role = identity ? (identity.kind === "member" ? t("supportUi.roleMember", "會員") : "") : "";
     detailHead.replaceChildren(
-      el("div", { class: "support-chat-admin-detail-title" }, [`對象 ${name}${role ? `（${role}）` : ""}`]),
+      el("div", { class: "support-chat-admin-detail-title" }, [
+        t("supportUi.threadFor", "對象 {{name}}{{role}}", {
+          name,
+          role: role ? `（${role}）` : "",
+        }),
+      ]),
       el("code", { class: "mono support-chat-admin-uid" }, [`UID ${customerId}`]),
     );
   }
@@ -457,7 +474,7 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
         for (const d of snap.docs) {
           const m = d.data() as { text?: string; sender?: string; createdAt?: { seconds: number } };
           const text = typeof m.text === "string" ? m.text : "";
-          const who = m.sender === "admin" ? "店家" : "會員";
+          const who = m.sender === "admin" ? t("supportUi.whoShop", "店家") : t("supportUi.whoMember", "會員");
           const bubble = el("div", { class: `support-chat-bubble support-chat-bubble--${m.sender === "admin" ? "me" : "them"}` }, [
             el("div", { class: "support-chat-bubble-meta" }, [`${who} · ${formatMsgTime(m.createdAt)}`]),
             el("div", { class: "support-chat-bubble-text" }, [text]),
@@ -467,7 +484,7 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
         log.scrollTop = log.scrollHeight;
       },
       () => {
-        statusLine.textContent = "無法載入訊息。";
+        statusLine.textContent = t("supportUi.failMsgsAdmin", "無法載入訊息。");
         statusLine.className = "status-line error";
       },
     );
@@ -514,8 +531,9 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
       threadDataByCustomer.set(id, data);
       const identity = inferIdentityFromKnownData(id, data);
       identityByCustomer.set(id, identity);
-      const preview = typeof data.lastMessagePreview === "string" ? data.lastMessagePreview : "（尚無預覽）";
-      const st = data.status === "closed" ? "已結束" : "進行中";
+      const preview =
+        typeof data.lastMessagePreview === "string" ? data.lastMessagePreview : t("supportUi.previewNone", "（尚無預覽）");
+      const st = data.status === "closed" ? t("supportUi.statusClosed", "已結束") : t("supportUi.statusOpen", "進行中");
       const btn = el("button", { type: "button", class: "support-chat-thread-item" }, []);
       btn.classList.toggle("is-active", id === selectedCustomerId);
       btn.append(
@@ -554,7 +572,7 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
       }
     },
     (e) => {
-      statusLine.textContent = e instanceof Error ? e.message : "無法載入列表";
+      statusLine.textContent = e instanceof Error ? e.message : t("supportUi.failList", "無法載入列表");
       statusLine.className = "status-line error";
     },
   );
@@ -565,7 +583,7 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
     statusLine.className = "status-line";
     const text = ta.value.trim();
     if (!text) {
-      statusLine.textContent = "請輸入回覆內容。";
+      statusLine.textContent = t("supportUi.replyEmpty", "請輸入回覆內容。");
       statusLine.classList.add("error");
       return;
     }
@@ -573,10 +591,10 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
     sendBtn.setAttribute("disabled", "true");
     try {
       const fn = sendSupportChatAdminReplyCall();
-      await fn({ customerId: cid, text });
+      await fn({ customerId: cid, text, ...localeApiParam() });
       ta.value = "";
     } catch (e) {
-      statusLine.textContent = firestorePermissionHint(e, "送出失敗");
+      statusLine.textContent = firestorePermissionHint(e, t("supportUi.failSend", "送出失敗"));
       statusLine.classList.add("error");
     } finally {
       sendBtn.removeAttribute("disabled");
@@ -596,14 +614,14 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
     closeBtn.setAttribute("disabled", "true");
     try {
       const fn = setSupportThreadStatusAdminCall();
-      await fn({ customerId: selectedCustomerId, status: "closed" });
+      await fn({ customerId: selectedCustomerId, status: "closed", ...localeApiParam() });
       selectedStatus = "closed";
       ta.disabled = true;
       sendBtn.disabled = true;
       closeBtn.hidden = true;
       reopenAdminBtn.hidden = false;
     } catch (e) {
-      statusLine.textContent = e instanceof Error ? e.message : "更新失敗";
+      statusLine.textContent = e instanceof Error ? e.message : t("supportUi.updateFail", "更新失敗");
       statusLine.className = "status-line error";
     } finally {
       closeBtn.removeAttribute("disabled");
@@ -615,14 +633,14 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
     reopenAdminBtn.setAttribute("disabled", "true");
     try {
       const fn = setSupportThreadStatusAdminCall();
-      await fn({ customerId: selectedCustomerId, status: "open" });
+      await fn({ customerId: selectedCustomerId, status: "open", ...localeApiParam() });
       selectedStatus = "open";
       ta.disabled = false;
       sendBtn.disabled = false;
       closeBtn.hidden = false;
       reopenAdminBtn.hidden = true;
     } catch (e) {
-      statusLine.textContent = e instanceof Error ? e.message : "更新失敗";
+      statusLine.textContent = e instanceof Error ? e.message : t("supportUi.updateFail", "更新失敗");
       statusLine.className = "status-line error";
     } finally {
       reopenAdminBtn.removeAttribute("disabled");
