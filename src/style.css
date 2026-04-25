@@ -66,6 +66,9 @@ a:hover {
   max-width: 720px;
   margin: 0 auto;
   padding: 32px 20px 56px;
+  /* 頁首三欄改以容器寬度判斷（#app 最寬 720px），避免僅視窗小於 900px 時永遠顯示窄版 */
+  container-type: inline-size;
+  container-name: app;
 }
 
 .banner {
@@ -159,7 +162,7 @@ header.page-head {
   background: var(--surface);
 }
 
-/* 預設（窄螢幕）：音樂列在上，語言／會員列在其下；寬螢幕改為同一橫列 */
+/* 預設（窄 #app）：音樂在上，語言與登入列於其下；#app 足夠寬時：左音樂、右側語言疊在登入上方（見 @container app） */
 .page-head-toolbar {
   display: flex;
   flex-direction: column;
@@ -181,32 +184,8 @@ header.page-head {
   min-width: 0;
 }
 
-@media (min-width: 900px) {
-  .page-head-toolbar {
-    flex-direction: row;
-    align-items: center;
-    gap: 16px 20px;
-    flex-wrap: nowrap;
-  }
-
-  .page-head-music-row {
-    flex: 1 1 auto;
-    margin: 0;
-  }
-
-  .head-actions {
-    margin-top: 0;
-  }
-
-  /* 說明區不再被側欄壓成窄欄，與下方主內容同寬 */
-  .page-head p,
-  .page-head .page-head-guest-hint {
-    max-width: none;
-  }
-}
-
-/* 預約頁且訪客提示可見時：主說明與訪客提示並排，訪次仍全寬 */
-@media (min-width: 1080px) {
+/* 主說明與訪客提示並排：須依「#app 實際寬度」，勿依視窗 ≥1080px（大螢幕 + 窄卡片會右半邊空一大塊） */
+@container app (min-width: 900px) {
   .page-head-text:has(.page-head-guest-hint:not([hidden])) {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -238,8 +217,8 @@ header.page-head {
 
 /* 預約頁：主理人肖像帶（與頁面其餘淺色區形成對比，呼應影像的明暗與質感） */
 figure.host-atelier {
-  margin: 0;
-  padding: 22px 22px 24px;
+  margin: 0 clamp(12px, 2.6vw, 24px);
+  padding: 24px clamp(20px, 5vw, 40px) 28px;
   text-align: center;
   background: linear-gradient(168deg, #0c0f14 0%, #151a24 52%, #0f1218 100%);
   border-bottom: 1px solid rgb(0 0 0 / 0.4);
@@ -406,7 +385,7 @@ figure.host-atelier {
   border-bottom: 1px solid var(--border);
 }
 
-.head-actions {
+.head-toolbar-aside {
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -416,6 +395,71 @@ figure.host-atelier {
   flex: 0 1 auto;
   min-width: 0;
   margin-top: 2px;
+}
+
+.head-locale {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.head-session {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* 須放在 .head-toolbar-aside 預設 row 之後，否則 column 會被覆寫 */
+@container app (min-width: 480px) {
+  .page-head-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: clamp(16px, 2.2vw, 28px);
+    row-gap: 12px;
+    flex-direction: unset;
+    flex-wrap: unset;
+  }
+
+  .page-head-music-row {
+    grid-column: 1;
+    margin: 0;
+    min-width: 0;
+  }
+
+  .head-toolbar-aside {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 8px;
+    grid-column: 2;
+    justify-self: end;
+    align-self: center;
+    flex: 0 0 auto;
+    min-width: 0;
+    margin-top: 0;
+  }
+
+  .head-session {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+
+  .music-mini-player--bar .music-bar__main {
+    flex-wrap: nowrap;
+  }
+
+  .page-head p,
+  .page-head .page-head-guest-hint {
+    max-width: none;
+  }
 }
 
 .locale-switch {
@@ -475,7 +519,15 @@ figure.host-atelier {
 }
 
 .shell.admin-mode .page-head-toolbar {
+  display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.shell.admin-mode .head-toolbar-aside {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
 }
 
 .shell.admin-mode main.panel {
@@ -1431,13 +1483,17 @@ label.field.checkbox-field {
     display: none;
   }
 
-  .head-actions {
-    width: 100%;
-    flex: 1 1 100%;
-    flex-direction: row;
-    align-items: center;
-    justify-content: flex-end;
-    margin-top: 0;
+  /* 勿在此設 flex-direction: row，否則與 @container app（寬 #app 時直向堆語言／登入）衝突；
+     窄 #app 時由預設 .head-toolbar-aside 的 row 即可 */
+  @container app (max-width: 479px) {
+    .head-toolbar-aside {
+      width: 100%;
+      flex: 1 1 100%;
+      flex-direction: row;
+      align-items: center;
+      justify-content: flex-end;
+      margin-top: 0;
+    }
   }
 
   .page-head-session {
@@ -1445,7 +1501,7 @@ label.field.checkbox-field {
   }
 
   .member-entry,
-  .head-actions > button.ghost {
+  .head-toolbar-aside button.ghost {
     min-height: 44px;
   }
 
@@ -1998,6 +2054,8 @@ body.wheel-spectacle-lock {
   gap: 10px 14px;
   min-width: 0;
   flex-wrap: wrap;
+  /* 窄欄時避免音量列撐出播放器外（playlist 在 barInner 外，不受此限） */
+  overflow: hidden;
 }
 
 .music-bar__meta {
@@ -2020,8 +2078,9 @@ body.wheel-spectacle-lock {
   align-items: center;
   gap: 8px;
   flex: 1 1 120px;
-  min-width: 72px;
+  min-width: 0;
   max-width: 200px;
+  overflow: hidden;
 }
 
 .music-mini-player--bar .music-mini-player__art {
@@ -2172,6 +2231,8 @@ body.wheel-spectacle-lock {
 .music-mini-player--bar .music-mini-player__vol {
   flex: 1 1 auto;
   min-width: 0;
+  width: 100%;
+  max-width: 100%;
   height: 5px;
   accent-color: #8c7a85;
   cursor: pointer;

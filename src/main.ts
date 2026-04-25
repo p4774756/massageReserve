@@ -597,14 +597,11 @@ function render() {
     const v = localeSelect.value === "en" ? "en" : "zh-Hant";
     setLocale(v);
   });
-  const headActions = el("div", { class: "head-actions" }, [
-    localeField,
-    localeSelect,
-    headSessionStatus,
-    memberEntryBtn,
-  ]);
-  /** 音樂列與語言／會員同一橫列（寬螢幕）；說明與訪次獨立全寬於下方 */
-  const pageHeadToolbar = el("div", { class: "page-head-toolbar" }, [musicHeadRow, headActions]);
+  const headLocale = el("div", { class: "head-locale" }, [localeField, localeSelect]);
+  const headSession = el("div", { class: "head-session" }, [headSessionStatus, memberEntryBtn]);
+  const headToolbarAside = el("div", { class: "head-toolbar-aside" }, [headLocale, headSession]);
+  /** 寬版面：左音樂、右側介面語言疊在登入區上方；窄版面：音樂在上，語言與登入橫列於其下 */
+  const pageHeadToolbar = el("div", { class: "page-head-toolbar" }, [musicHeadRow, headToolbarAside]);
   const pageHeadBody = el("div", { class: "page-head-body" }, [titleTextCol]);
 
   const hostPortrait = el("figure", { class: "host-atelier" }, [
