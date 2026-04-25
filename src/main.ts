@@ -38,8 +38,11 @@ import {
   spinWheelCall,
   listActiveWheelPrizesCall,
   topupWalletCall,
+  recordSiteVisitCall,
 } from "./firebase";
 import { getWebPushVapidKey, registerWebPushForCurrentUser, unregisterWebPushForCurrentUser } from "./webPush";
+import { mountGuestbook } from "./guestbook";
+import { mountMusicMiniPlayer } from "./musicPlayer";
 import { mountAdminSupportChat, mountMemberSupportChat, type SupportChatUnmount } from "./supportChat";
 import { allStartSlots } from "./slots";
 import { runWheelSpectacle } from "./wheelSpectacle";
@@ -424,7 +427,107 @@ function render() {
   const titleGuestHint = el("p", { class: "page-head-guest-hint" }, [
     "免事先註冊也可預約，選「訪客」付款方式即可；註冊會員則可儲值與抽獎。",
   ]);
-  const titleBlock = el("div", { class: "page-head-main" }, [titleHeading, titleDesc, titleGuestHint]);
+  const visitorStatsLine = el("p", {
+    class: "visitor-stats visitor-stats--wretch",
+    role: "status",
+    ariaLive: "polite",
+    title: "每個瀏覽器分頁連線期間計一次；重新整理不會重複累加。以台北時區換日與換週（週一至週日）。",
+  }, ["訪次統計載入中…"]);
+  const titleBlock = el("div", { class: "page-head-main" }, [
+    titleHeading,
+    titleDesc,
+    titleGuestHint,
+    visitorStatsLine,
+  ]);
+
+  const VISIT_SESSION_KEY = "mr_siteVisitSession";
+  function formatVisitCount(n: number): string {
+    return n.toLocaleString("zh-TW");
+  }
+  function applyVisitorStatsPayload(data: {
+    yourVisitNumberToday: number;
+    dayVisits: number;
+    weekVisits: number;
+    totalVisits: number;
+  }) {
+    const rail = (side: "l" | "r") =>
+      el("span", { class: `visitor-stats__rail visitor-stats__rail--${side}`, ariaHidden: "true" }, [side === "l" ? "♡ " : " ♡"]);
+    const num = (v: number) => el("span", { class: "visitor-stats__num" }, [formatVisitCount(v)]);
+    visitorStatsLine.replaceChildren(
+      rail("l"),
+      el("span", { class: "visitor-stats__main" }, [
+        "今日 ",
+        num(data.dayVisits),
+        " 人次 · 本週 ",
+        num(data.weekVisits),
+        " · 累計 ",
+        num(data.totalVisits),
+        " · ",
+        el("strong", { class: "visitor-stats__em" }, [`您是今日第 ${formatVisitCount(data.yourVisitNumberToday)} 位訪客`]),
+      ]),
+      rail("r"),
+    );
+  }
+  function tryVisitorStatsFromSession(): boolean {
+    try {
+      const raw = sessionStorage.getItem(VISIT_SESSION_KEY);
+      if (!raw) return false;
+      const data = JSON.parse(raw) as {
+        yourVisitNumberToday?: unknown;
+        dayVisits?: unknown;
+        weekVisits?: unknown;
+        totalVisits?: unknown;
+      };
+      const ok =
+        typeof data.yourVisitNumberToday === "number" &&
+        typeof data.dayVisits === "number" &&
+        typeof data.weekVisits === "number" &&
+        typeof data.totalVisits === "number";
+      if (!ok) return false;
+      applyVisitorStatsPayload({
+        yourVisitNumberToday: data.yourVisitNumberToday,
+        dayVisits: data.dayVisits,
+        weekVisits: data.weekVisits,
+        totalVisits: data.totalVisits,
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  if (!tryVisitorStatsFromSession()) {
+    void (async () => {
+      try {
+        const fn = recordSiteVisitCall();
+        const res = await fn();
+        const data = res.data as {
+          yourVisitNumberToday?: unknown;
+          dayVisits?: unknown;
+          weekVisits?: unknown;
+          totalVisits?: unknown;
+        };
+        if (
+          typeof data.yourVisitNumberToday !== "number" ||
+          typeof data.dayVisits !== "number" ||
+          typeof data.weekVisits !== "number" ||
+          typeof data.totalVisits !== "number"
+        ) {
+          visitorStatsLine.textContent = "訪次統計格式異常。";
+          return;
+        }
+        const payload = {
+          yourVisitNumberToday: data.yourVisitNumberToday,
+          dayVisits: data.dayVisits,
+          weekVisits: data.weekVisits,
+          totalVisits: data.totalVisits,
+        };
+        sessionStorage.setItem(VISIT_SESSION_KEY, JSON.stringify(payload));
+        applyVisitorStatsPayload(payload);
+      } catch {
+        visitorStatsLine.textContent = "訪次統計暫時無法載入（請確認已部署 Cloud Functions：recordSiteVisit）。";
+      }
+    })();
+  }
 
   const memberEntryBtn = el("button", { class: "ghost member-entry", type: "button" }, ["會員登入"]);
   const headSessionStatus = el("span", {
@@ -1595,6 +1698,12 @@ function render() {
     }
   });
 
+  const guestbookMount = el("div", { class: "guestbook-mount" });
+  mountGuestbook(db, auth, guestbookMount);
+
+  const musicMiniRoot = el("div", { class: "music-mini-player-root", id: "music-mini-player-root" });
+  mountMusicMiniPlayer(musicMiniRoot);
+
   panelBook.append(
     el("div", { class: "grid grid-2" }, [
       el("label", { class: "field" }, [
@@ -1637,9 +1746,10 @@ function render() {
     el("div", { class: "row-actions" }, [submitBtn]),
     bookStatus,
     bookFooterNote,
+    guestbookMount,
   );
 
-  root.append(supportChatFloat);
+  root.append(musicMiniRoot, supportChatFloat);
 
   /** --- 管理後台 --- */
   const adminWrap = el("div", {}, []);
@@ -3377,7 +3487,12 @@ function render() {
     panelBook.hidden = !isBook;
     panelAdmin.hidden = isBook;
     hostPortrait.hidden = !isBook;
+    musicMiniRoot.hidden = !isBook;
+    root.classList.toggle("has-music-mini", isBook);
     supportChatFloat.hidden = !isBook;
+    if (!isBook) {
+      setSupportChatOpen(false);
+    }
     syncMarqueeVisibilityForTab();
     if (isBook) {
       stopAdminListener();

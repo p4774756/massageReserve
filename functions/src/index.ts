@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getMessaging } from "firebase-admin/messaging";
-import { getFirestore, Timestamp } from "firebase-admin/firestore";
+import { FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
 import { defineSecret, defineString } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
@@ -193,6 +193,60 @@ export const getAvailability = onCall(publicCall, async (request) => {
     dayCap: caps.maxPerDay,
     weekCap: caps.maxPerWorkWeek,
   };
+});
+
+/**
+ * 網站訪次統計（台北日曆日／週一至週日為一週）：以 Firestore 交易累加。
+ * 前端應每個瀏覽器分頁工作階段最多呼叫一次，避免重新整理重複計次。
+ */
+export const recordSiteVisit = onCall(publicCall, async () => {
+  const ref = db.collection("siteStats").doc("visitorCounters");
+  return db.runTransaction(async (trx) => {
+    const snap = await trx.get(ref);
+    const todayStart = DateTime.now().setZone(TIMEZONE).startOf("day");
+    const todayKey = todayStart.toISODate()!;
+    const weekStartKey = mondayOfWeek(todayStart).toISODate()!;
+
+    const data = snap.exists ? (snap.data() as Record<string, unknown>) : {};
+    let storedDayKey = typeof data.dayKey === "string" ? data.dayKey : "";
+    let dayVisits = asNonNegativeInteger(data.dayVisits);
+    let storedWeekStart = typeof data.weekStartKey === "string" ? data.weekStartKey : "";
+    let weekVisits = asNonNegativeInteger(data.weekVisits);
+    let totalVisits = asNonNegativeInteger(data.totalVisits);
+
+    if (storedDayKey !== todayKey) {
+      storedDayKey = todayKey;
+      dayVisits = 0;
+    }
+    if (storedWeekStart !== weekStartKey) {
+      storedWeekStart = weekStartKey;
+      weekVisits = 0;
+    }
+
+    dayVisits += 1;
+    weekVisits += 1;
+    totalVisits += 1;
+
+    trx.set(
+      ref,
+      {
+        dayKey: todayKey,
+        dayVisits,
+        weekStartKey,
+        weekVisits,
+        totalVisits,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    return {
+      yourVisitNumberToday: dayVisits,
+      dayVisits,
+      weekVisits,
+      totalVisits,
+    };
+  });
 });
 
 export const createBooking = onCall(

@@ -55,6 +55,7 @@ export const sendImmediatePushCall = () => httpsCallable(getFns(), "sendImmediat
 export const sendSupportChatMessageCall = () => httpsCallable(getFns(), "sendSupportChatMessage");
 export const sendSupportChatAdminReplyCall = () => httpsCallable(getFns(), "sendSupportChatAdminReply");
 export const setSupportThreadStatusAdminCall = () => httpsCallable(getFns(), "setSupportThreadStatusAdmin");
+export const recordSiteVisitCall = () => httpsCallable(getFns(), "recordSiteVisit");
 
 export function getDb() {
   return getFirestore(getFirebaseApp());

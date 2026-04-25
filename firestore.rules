@@ -31,6 +31,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    /** 訪次累計：僅 Cloud Functions（Admin SDK）寫入；任何人可讀（可選用於即時看板） */
+    match /siteStats/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     /** FCM 裝置 token：僅 Cloud Functions（Admin SDK）讀寫，客戶端不透過 Rules 存取 */
     match /pushDeviceTokens/{id} {
       allow read, write: if false;
@@ -73,6 +79,29 @@ service cloud.firestore {
 
         allow update, delete: if false;
       }
+    }
+
+    /**
+     * 預約頁底部「心得與評價」：所有人可讀；已登入（含匿名）可新增自己的一筆。
+     * 不開放修改／刪除（管理員可於 Console 手動處理）。
+     */
+    match /guestbookPosts/{id} {
+      allow read: if true;
+
+      allow create: if request.auth != null
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() >= 1
+        && request.resource.data.displayName.size() <= 48
+        && request.resource.data.text is string
+        && request.resource.data.text.size() >= 1
+        && request.resource.data.text.size() <= 800
+        && request.resource.data.rating is int
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5
+        && request.resource.data.keys().hasOnly(["authorUid", "displayName", "text", "rating", "createdAt"]);
+
+      allow update, delete: if false;
     }
   }
 }

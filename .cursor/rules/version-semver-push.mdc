@@ -1,0 +1,36 @@
+---
+description: 語意化版號與 git 推送前打版（依變更類型）
+alwaysApply: true
+---
+
+# 版號與推送（massage-reserve）
+
+## 單一來源
+
+- 前端／專案版號以根目錄 **`package.json` 的 `version`** 為準（目前未另建 `CHANGELOG` 時亦同）。
+- 變更版號後一併提交 **`package-lock.json`**（若有變動）。
+
+## 何時要升版（依「情況」）
+
+在 **準備推送**、且本次將進入主線／可視為「一輪可辨識的迭代」時，依變更性質選 **patch / minor / major**（[SemVer 2.0](https://semver.org/lang/zh-TW/)）：
+
+| 類型 | 範例 | 指令 |
+|------|------|------|
+| **patch** `x.y.(z+1)` | 錯字、小樣式、單檔 bugfix、依賴小修、不影響使用方式的調整 | `npm run bump:patch` |
+| **minor** `x.(y+1).0` | 新功能（留言板、播放器、新欄位）、向後相容的行為擴充 | `npm run bump:minor` |
+| **major** `(x+1).0.0` | 破壞相容（移除公開流程、Firestore 欄位語意變更且舊客戶端必壞、URL／路由契約改掉） | `npm run bump:major` |
+
+## 工作流程（Agent／人類皆適用）
+
+1. 完成實作與 `npm run build`（及相關測試）通過。
+2. 依上表執行 **`npm run bump:patch|minor|major`**（只改檔、不自動打 git tag）。
+3. `git add package.json package-lock.json`（與其餘變更），用清楚訊息提交，例如：`chore: bump version to 1.0.1` 或併入功能 commit 亦可，但版號變更須在**同一輪推送可見**。
+4. 再 **`git push`**。
+
+## 可略過打版的情況
+
+- 純 WIP、試錯、或僅同步遠端／無使用者可見差異的極小調整，可**不**升版號；勿為「每次 push」機械式升版。
+
+## 與 Cloud Functions
+
+- `functions/package.json` 若無 `version` 欄位，不必與根目錄強制同步；**僅在** Cloud 層有獨立發佈語意時再為 functions 補 `version` 並納入同一套規則。
