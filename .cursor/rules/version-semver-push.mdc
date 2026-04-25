@@ -27,6 +27,15 @@ alwaysApply: true
 3. `git add package.json package-lock.json`（與其餘變更），用清楚訊息提交，例如：`chore: bump version to 1.0.1` 或併入功能 commit 亦可，但版號變更須在**同一輪推送可見**。
 4. 再 **`git push`**。
 
+## 使用者快捷口令（本專案）
+
+- 當使用者明確說「**更新版號**」時，Agent 視為授權一次完成以下動作：  
+  1) 依變更性質執行 `npm run bump:patch|minor|major`  
+  2) `git add` 相關檔案（至少含 `package.json`、`package-lock.json`）  
+  3) 直接 `git commit`  
+  4) 直接 `git push`
+- 上述情境的 **commit message 一律使用中文**（精簡描述本輪變更與升版）。
+
 ## 可略過打版的情況
 
 - 純 WIP、試錯、或僅同步遠端／無使用者可見差異的極小調整，可**不**升版號；勿為「每次 push」機械式升版。

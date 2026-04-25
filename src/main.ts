@@ -44,6 +44,7 @@ import { getWebPushVapidKey, registerWebPushForCurrentUser, unregisterWebPushFor
 import { mountGuestbook } from "./guestbook";
 import { mountMusicMiniPlayer } from "./musicPlayer";
 import { mountAdminSupportChat, mountMemberSupportChat, type SupportChatUnmount } from "./supportChat";
+import { attachSupportChatFloatDrag } from "./supportChatFloatDock";
 import { allStartSlots } from "./slots";
 import { runWheelSpectacle } from "./wheelSpectacle";
 import {
@@ -433,7 +434,9 @@ function render() {
     ariaLive: "polite",
     title: "每個瀏覽器分頁連線期間計一次；重新整理不會重複累加。以台北時區換日與換週（週一至週日）。",
   }, ["訪次統計載入中…"]);
-  const titleBlock = el("div", { class: "page-head-main" }, [
+  const musicMiniRoot = el("div", { class: "music-mini-player-root", id: "music-mini-player-root" });
+  const musicHeadRow = el("div", { class: "page-head-music-row" }, [musicMiniRoot]);
+  const titleTextCol = el("div", { class: "page-head-text" }, [
     titleHeading,
     titleDesc,
     titleGuestHint,
@@ -539,6 +542,7 @@ function render() {
     ariaLive: "polite",
   });
   const headActions = el("div", { class: "head-actions" }, [headSessionStatus, memberEntryBtn]);
+  const pageHeadBody = el("div", { class: "page-head-body" }, [titleTextCol, headActions]);
 
   const hostPortrait = el("figure", { class: "host-atelier" }, [
     el("div", { class: "host-atelier__frame" }, [
@@ -559,13 +563,14 @@ function render() {
   const panelAdmin = el("main", { class: "panel", hidden: true });
 
   const shell = el("div", { class: "shell" }, [
-    el("header", { class: "page-head" }, [titleBlock, headActions]),
+    el("header", { class: "page-head" }, [musicHeadRow, pageHeadBody]),
     hostPortrait,
     panelBook,
     panelAdmin,
   ]);
 
   root.append(shell);
+  mountMusicMiniPlayer(musicMiniRoot);
 
   /** 頂部：一般文字跑馬燈（與底部 LED 同一則公告） */
   const announcementTextStrip = el("div", {
@@ -1643,7 +1648,10 @@ function render() {
     hidden: true,
   });
   supportChatFloatPanel.append(bookSupportChatMount);
-  const supportChatFab = el("button", { type: "button", class: "support-chat-float__fab" }, ["聯絡店家"]);
+  const supportChatFab = el("button", { type: "button", class: "support-chat-float__fab" }, []);
+  const supportFabGlyph = el("span", { class: "support-chat-float__fab-glyph", ariaHidden: "true" }, ["💬"]);
+  const supportFabText = el("span", { class: "support-chat-float__fab-text", ariaHidden: "true" }, ["聊"]);
+  supportChatFab.append(supportFabGlyph, supportFabText);
   supportChatFab.setAttribute("aria-controls", "support-chat-float-panel");
   supportChatFab.setAttribute("aria-expanded", "false");
   supportChatFab.setAttribute("aria-label", "開啟聯絡店家");
@@ -1654,7 +1662,8 @@ function render() {
     supportChatFloat.classList.toggle("support-chat-float--open", open);
     supportChatFloatPanel.hidden = !open;
     supportChatFab.setAttribute("aria-expanded", String(open));
-    supportChatFab.textContent = open ? "收合" : "聯絡店家";
+    supportFabGlyph.textContent = open ? "✕" : "💬";
+    supportFabText.textContent = open ? "收" : "聊";
     supportChatFab.setAttribute("aria-label", open ? "收合聯絡店家" : "開啟聯絡店家");
   }
   supportChatFab.addEventListener("click", () => setSupportChatOpen(!supportChatOpen));
@@ -1704,9 +1713,6 @@ function render() {
   const guestbookMount = el("div", { class: "guestbook-mount" });
   mountGuestbook(db, auth, guestbookMount);
 
-  const musicMiniRoot = el("div", { class: "music-mini-player-root", id: "music-mini-player-root" });
-  mountMusicMiniPlayer(musicMiniRoot);
-
   panelBook.append(
     el("div", { class: "grid grid-2" }, [
       el("label", { class: "field" }, [
@@ -1752,7 +1758,8 @@ function render() {
     guestbookMount,
   );
 
-  root.append(musicMiniRoot, supportChatFloat);
+  root.append(supportChatFloat);
+  const supportChatFloatDock = attachSupportChatFloatDrag(supportChatFloat, supportChatFab);
 
   /** --- 管理後台 --- */
   const adminWrap = el("div", {}, []);
@@ -3491,9 +3498,11 @@ function render() {
     panelBook.hidden = !isBook;
     panelAdmin.hidden = isBook;
     hostPortrait.hidden = !isBook;
-    musicMiniRoot.hidden = !isBook;
-    root.classList.toggle("has-music-mini", isBook);
+    musicHeadRow.hidden = !isBook;
     supportChatFloat.hidden = !isBook;
+    if (isBook) {
+      supportChatFloatDock.relayout();
+    }
     if (!isBook) {
       setSupportChatOpen(false);
     }

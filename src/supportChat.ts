@@ -10,6 +10,7 @@ import {
   query,
 } from "firebase/firestore";
 import {
+  listMembersAdminCall,
   sendSupportChatAdminReplyCall,
   sendSupportChatMessageCall,
   setSupportThreadStatusAdminCall,
@@ -18,6 +19,7 @@ import {
 const THREADS = "supportThreads";
 const MAX_MSG = 2000;
 type ThreadStatus = "open" | "closed";
+type CustomerKind = "member" | "guest";
 
 export type SupportChatUnmount = () => void;
 
@@ -274,7 +276,7 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
   const wrap = el("div", { class: "support-chat support-chat--admin" }, []);
   const head = el("h3", {}, ["客服對話"]);
   const hint = el("p", { class: "hint" }, [
-    "左側為會員對話列表（依最近更新排序）；點選後於右側回覆。Firestore：",
+    "左側為會員對話列表（進行中優先、各組內依最近更新排序）；點選後於右側回覆。Firestore：",
     el("code", {}, [`${THREADS}/{會員UID}`]),
     " 與子集合 ",
     el("code", {}, ["messages"]),
@@ -318,12 +320,117 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
   let msgsUnsub: (() => void) | null = null;
   let selectedCustomerId: string | null = null;
   let selectedStatus: ThreadStatus = "open";
+  const threadDataByCustomer = new Map<string, Record<string, unknown>>();
+  const identityByCustomer = new Map<string, { kind: CustomerKind; label: string }>();
+  const memberDirectory = new Map<string, { nickname: string; email: string; emailVerified: boolean }>();
+  let memberDirectoryReady = false;
+  let latestThreadDocs: { id: string; data: () => Record<string, unknown> }[] = [];
+  async function ensureMemberDirectoryLoaded() {
+    if (memberDirectoryReady) return;
+    memberDirectoryReady = true;
+    try {
+      const fn = listMembersAdminCall();
+      const res = await fn({});
+      const rows = Array.isArray((res.data as { members?: unknown }).members)
+        ? ((res.data as { members: unknown[] }).members ?? [])
+        : [];
+      for (const row of rows) {
+        if (!row || typeof row !== "object") continue;
+        const uid = typeof (row as { uid?: unknown }).uid === "string" ? (row as { uid: string }).uid : "";
+        if (!uid) continue;
+        memberDirectory.set(uid, {
+          nickname:
+            typeof (row as { nickname?: unknown }).nickname === "string"
+              ? (row as { nickname: string }).nickname.trim()
+              : "",
+          email:
+            typeof (row as { email?: unknown }).email === "string" ? (row as { email: string }).email.trim() : "",
+          emailVerified: (row as { emailVerified?: unknown }).emailVerified === true,
+        });
+      }
+      if (latestThreadDocs.length > 0) {
+        renderThreadList(latestThreadDocs);
+      }
+    } catch {
+      // 會員資料載入失敗時，仍可回退到 thread/customers 判斷，不阻斷客服功能。
+    }
+  }
+
+  function inferIdentityFromKnownData(customerId: string, data?: Record<string, unknown>): { kind: CustomerKind; label: string } {
+    const fromMember = memberDirectory.get(customerId);
+    if (fromMember) {
+      if (!fromMember.email || !fromMember.emailVerified) return { kind: "guest", label: "訪客" };
+      return { kind: "member", label: fromMember.nickname || "會員" };
+    }
+    return threadIdentityHint(data) ?? { kind: "guest", label: "訪客" };
+  }
+
 
   const threadBtnByCustomer = new Map<string, HTMLButtonElement>();
 
   function clearDetailListeners() {
     msgsUnsub?.();
     msgsUnsub = null;
+  }
+
+  function threadIdentityHint(data: Record<string, unknown> | undefined): { kind: CustomerKind; label: string } | null {
+    if (!data) return null;
+    const labelRaw = typeof data.customerLabel === "string" ? data.customerLabel.trim() : "";
+    const typeRaw = typeof data.customerType === "string" ? data.customerType.trim() : "";
+    const isAnonymous = data.isAnonymous === true;
+    if (typeRaw === "guest" || isAnonymous) return { kind: "guest", label: "訪客" };
+    if (labelRaw) return { kind: "member", label: labelRaw };
+    if (typeRaw === "member") return { kind: "member", label: "會員" };
+    return null;
+  }
+
+  async function resolveCustomerIdentity(customerId: string): Promise<{ kind: CustomerKind; label: string }> {
+    const cached = identityByCustomer.get(customerId);
+    if (cached) return cached;
+    await ensureMemberDirectoryLoaded();
+    const member = memberDirectory.get(customerId);
+    if (member) {
+      if (!member.email || !member.emailVerified) {
+        const guest = { kind: "guest" as const, label: "訪客" };
+        identityByCustomer.set(customerId, guest);
+        return guest;
+      }
+      const display = member.nickname || "會員";
+      const identity = { kind: "member" as const, label: display };
+      identityByCustomer.set(customerId, identity);
+      return identity;
+    }
+    const hinted = threadIdentityHint(threadDataByCustomer.get(customerId));
+    if (hinted) {
+      identityByCustomer.set(customerId, hinted);
+      return hinted;
+    }
+    try {
+      const snap = await getDoc(doc(db, "customers", customerId));
+      if (!snap.exists()) {
+        const guest = { kind: "guest" as const, label: "訪客" };
+        identityByCustomer.set(customerId, guest);
+        return guest;
+      }
+      const data = snap.data();
+      const nickname = typeof data?.nickname === "string" ? data.nickname.trim() : "";
+      const member = { kind: "member" as const, label: nickname || "會員" };
+      identityByCustomer.set(customerId, member);
+      return member;
+    } catch {
+      const fallback = { kind: "member" as const, label: "會員" };
+      identityByCustomer.set(customerId, fallback);
+      return fallback;
+    }
+  }
+
+  function renderDetailHead(customerId: string, identity?: { kind: CustomerKind; label: string }) {
+    const name = identity?.label || "辨識中…";
+    const role = identity ? (identity.kind === "member" ? "會員" : "") : "";
+    detailHead.replaceChildren(
+      el("div", { class: "support-chat-admin-detail-title" }, [`對象 ${name}${role ? `（${role}）` : ""}`]),
+      el("code", { class: "mono support-chat-admin-uid" }, [`UID ${customerId}`]),
+    );
   }
 
   function selectCustomer(customerId: string) {
@@ -336,10 +443,11 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
     closeRow.hidden = false;
     log.hidden = false;
     inputRow.hidden = false;
-    detailHead.replaceChildren(
-      el("div", { class: "support-chat-admin-detail-title" }, [`會員 UID`]),
-      el("code", { class: "mono support-chat-admin-uid" }, [customerId]),
-    );
+    renderDetailHead(customerId, identityByCustomer.get(customerId));
+    void resolveCustomerIdentity(customerId).then((identity) => {
+      if (selectedCustomerId !== customerId) return;
+      renderDetailHead(customerId, identity);
+    });
     clearDetailListeners();
     const q = query(collection(db, THREADS, customerId, "messages"), orderBy("createdAt", "asc"), limit(300));
     msgsUnsub = onSnapshot(
@@ -378,14 +486,41 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
   ) {
     listScroll.replaceChildren();
     threadBtnByCustomer.clear();
-    for (const d of docs) {
+    const sortedDocs = [...docs].sort((a, b) => {
+      const aData = a.data();
+      const bData = b.data();
+      const aClosed = aData.status === "closed";
+      const bClosed = bData.status === "closed";
+      if (aClosed !== bClosed) return aClosed ? 1 : -1;
+      const aUpdated =
+        typeof aData.updatedAt === "object" &&
+        aData.updatedAt !== null &&
+        "seconds" in aData.updatedAt &&
+        typeof (aData.updatedAt as { seconds?: unknown }).seconds === "number"
+          ? ((aData.updatedAt as { seconds: number }).seconds ?? 0)
+          : 0;
+      const bUpdated =
+        typeof bData.updatedAt === "object" &&
+        bData.updatedAt !== null &&
+        "seconds" in bData.updatedAt &&
+        typeof (bData.updatedAt as { seconds?: unknown }).seconds === "number"
+          ? ((bData.updatedAt as { seconds: number }).seconds ?? 0)
+          : 0;
+      return bUpdated - aUpdated;
+    });
+    for (const d of sortedDocs) {
       const id = d.id;
       const data = d.data();
+      threadDataByCustomer.set(id, data);
+      const identity = inferIdentityFromKnownData(id, data);
+      identityByCustomer.set(id, identity);
       const preview = typeof data.lastMessagePreview === "string" ? data.lastMessagePreview : "（尚無預覽）";
       const st = data.status === "closed" ? "已結束" : "進行中";
       const btn = el("button", { type: "button", class: "support-chat-thread-item" }, []);
+      btn.classList.toggle("is-active", id === selectedCustomerId);
       btn.append(
-        el("div", { class: "support-chat-thread-item-id mono" }, [truncateUid(id)]),
+        el("div", { class: "support-chat-thread-item-id" }, [identity.label]),
+        el("div", { class: "support-chat-thread-item-uid mono" }, [`UID ${truncateUid(id)}`]),
         el("div", { class: "support-chat-thread-item-preview" }, [preview]),
         el("div", { class: "support-chat-thread-item-status" }, [st]),
       );
@@ -405,6 +540,8 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
     (snap) => {
       statusLine.textContent = "";
       statusLine.className = "status-line";
+      latestThreadDocs = snap.docs;
+      void ensureMemberDirectoryLoaded();
       renderThreadList(snap.docs);
       if (selectedCustomerId && !snap.docs.some((x) => x.id === selectedCustomerId)) {
         selectedCustomerId = null;

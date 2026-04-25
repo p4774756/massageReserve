@@ -23,6 +23,7 @@
   --radius-lg: 8px;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.05);
   --shadow-sm: 0 1px 1px rgb(0 0 0 / 0.04);
+  --shadow-lg: 0 4px 16px rgb(0 0 0 / 0.08), 0 1px 3px rgb(0 0 0 / 0.06);
   --ease: ease;
   --font: "Noto Sans TC", system-ui, -apple-system, "Segoe UI", sans-serif;
   --section-gap: 24px;
@@ -152,11 +153,26 @@ header.page-head {
   padding: 24px 22px 20px;
   border-bottom: 1px solid var(--border);
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  background: var(--surface);
+}
+
+.page-head-music-row {
+  width: 100%;
+  margin: 0 0 14px;
+}
+
+.page-head-body {
+  display: flex;
+  flex-direction: row;
   align-items: flex-start;
   justify-content: space-between;
   gap: 20px;
   flex-wrap: nowrap;
-  background: var(--surface);
+  width: 100%;
+  min-width: 0;
 }
 
 /* 預約頁：主理人肖像帶（與頁面其餘淺色區形成對比，呼應影像的明暗與質感） */
@@ -220,7 +236,7 @@ figure.host-atelier {
   color: rgb(215 220 230 / 0.58);
 }
 
-.page-head-main {
+.page-head-text {
   flex: 1 1 0;
   min-width: 0;
 }
@@ -251,11 +267,10 @@ figure.host-atelier {
   opacity: 0.95;
 }
 
-/* 訪次統計：向早期個人網頁（無名小站年代）常見的粉彩訪客條致敬，非官方重現 */
+/* 訪次統計：粉彩帶一點懷舊，色調與全站淺色底和諧（避免過飽和） */
 .page-head .visitor-stats.visitor-stats--wretch {
-  --wretch-pink: #ff7eb3;
-  --wretch-ink: #6b2f45;
-  --wretch-accent: #c71560;
+  --wretch-ink: #4d3b44;
+  --wretch-accent: #7a5c68;
   display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
@@ -270,23 +285,22 @@ figure.host-atelier {
   line-height: 1.5;
   letter-spacing: 0.03em;
   color: var(--wretch-ink);
-  background: linear-gradient(165deg, #fffafd 0%, #ffecf4 45%, #ffd8ea 100%);
-  border: 2px solid var(--wretch-pink);
+  background: linear-gradient(165deg, #fcfafb 0%, #f5eef2 50%, #efe6ea 100%);
+  border: 1px solid rgb(180 150 160 / 0.45);
   border-radius: 12px;
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.95),
-    inset 0 -2px 6px rgb(255 160 200 / 0.22),
-    0 2px 0 #ffc4dc,
-    0 5px 16px rgb(200 70 120 / 0.16);
+    inset 0 1px 0 rgb(255 255 255 / 0.9),
+    0 1px 0 rgb(0 0 0 / 0.04),
+    0 4px 14px rgb(60 40 50 / 0.07);
 }
 
 .page-head .visitor-stats--wretch .visitor-stats__rail {
   flex-shrink: 0;
-  color: #ff5c9a;
+  color: #a88896;
   font-size: 0.92em;
   line-height: 1;
-  opacity: 0.92;
-  text-shadow: 0 0 8px rgb(255 120 180 / 0.35);
+  opacity: 0.9;
+  text-shadow: none;
 }
 
 .page-head .visitor-stats--wretch .visitor-stats__main {
@@ -302,13 +316,13 @@ figure.host-atelier {
   padding: 0 4px;
   margin: 0 1px;
   border-radius: 5px;
-  background: linear-gradient(180deg, #ffffff 0%, #ffeef7 100%);
-  box-shadow: 0 0 0 1px rgb(255 140 185 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.9);
+  background: linear-gradient(180deg, #ffffff 0%, #f7f0f2 100%);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.06), inset 0 1px 0 rgb(255 255 255 / 0.95);
 }
 
 .page-head .visitor-stats--wretch .visitor-stats__em {
   font-weight: 700;
-  color: #8f1d4d;
+  color: #5c4550;
 }
 
 /* 後台：訪次列仍留在 DOM（切回前台可再顯示），須蓋過 wretch 的 inline-flex／邊框，否則 [hidden] 仍會露粉框 */
@@ -1310,9 +1324,17 @@ label.field.checkbox-field {
     gap: 14px;
   }
 
-  .page-head-main {
+  .page-head-body {
+    flex-wrap: wrap;
+    gap: 14px;
+  }
+
+  .page-head-text {
     flex: 1 1 100%;
-    min-width: 0;
+  }
+
+  .page-head-music-row {
+    margin-bottom: 12px;
   }
 
   .page-head h1 {
@@ -1805,48 +1827,34 @@ body.wheel-spectacle-lock {
   padding-right: 28px;
 }
 
-/* 預約頁：底部迷你播放器騰出空間，避免內容被遮住 */
-#app.has-music-mini {
-  padding-bottom: 118px;
-}
-
-/* --- 舒壓配樂：精簡迷你列（可拖曳，鬆手靠左／右；位置見 JS inline style） --- */
+/* --- 舒壓配樂：置頂橫向播放器（參考橫條式控制列） --- */
 .music-mini-player-root[hidden] {
   display: none !important;
 }
 
 .music-mini-player-root {
-  position: fixed;
-  z-index: 1185;
+  position: relative;
+  z-index: 2;
   box-sizing: border-box;
-  width: max-content;
-  max-width: min(232px, calc(100vw - 16px));
+  width: 100%;
+  max-width: none;
 }
 
-/* 外殼：無名小站年代常見的粉彩「凸起」小方塊（多層內光 + 外陰影） */
-.music-mini-player {
-  --mp-ink: #6f2a4a;
-  --mp-ink-soft: #8f4568;
-  --mp-line: #ff7eb8;
-  border-radius: 14px;
+.music-mini-player--bar {
+  --mp-ink: #3d3338;
+  --bar-fg: var(--ink);
+  --bar-fg-soft: var(--muted);
   font-family: "Zen Maru Gothic", "Noto Sans TC", sans-serif;
-  color: var(--mp-ink);
-  background: linear-gradient(155deg, #fffefe 0%, #fff2f9 22%, #ffe0f0 52%, #ffcce3 100%);
-  border: 2px solid var(--mp-line);
-  /* 不可 hidden：曲目清單彈層在 shell 上方 (bottom:100%)，會被裁切而像按鈕壞掉 */
+  border-radius: 10px;
   overflow: visible;
   min-width: 0;
+  color: var(--bar-fg);
+  background: linear-gradient(180deg, #faf9f7 0%, #f1eeea 50%, #e9e4df 100%);
+  border: 1px solid rgb(0 0 0 / 0.08);
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.98),
-    inset 0 -18px 32px -14px rgb(255 200 225 / 0.45),
-    inset 2px 2px 5px rgb(255 255 255 / 0.55),
-    inset -2px -3px 8px rgb(190 70 120 / 0.1),
-    0 3px 0 #ffc4e2,
-    0 10px 26px rgb(120 40 80 / 0.22);
-}
-
-.music-mini-player--compact .music-mini-player__artist {
-  display: none;
+    inset 0 1px 0 rgb(255 255 255 / 0.9),
+    0 1px 0 rgb(0 0 0 / 0.04),
+    0 6px 18px rgb(0 0 0 / 0.07);
 }
 
 .music-mini-player__shell {
@@ -1858,18 +1866,18 @@ body.wheel-spectacle-lock {
   padding: 8px 12px 10px;
   font-size: 0.65rem;
   line-height: 1.45;
-  color: #8a4a68;
-  border-top: 1px solid rgb(255 170 205 / 0.45);
+  color: #6b5a62;
+  border-top: 1px solid rgb(0 0 0 / 0.08);
 }
 
 .music-mini-player__attr-link {
-  color: #b03078;
+  color: #6d5a68;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
 .music-mini-player__attr-link:hover {
-  color: #7a1a50;
+  color: #4a3d44;
 }
 
 .music-mini-player__audio-el {
@@ -1880,225 +1888,87 @@ body.wheel-spectacle-lock {
   pointer-events: none;
 }
 
-.music-mini-player__drag {
-  flex: 0 0 auto;
-  width: 22px;
-  align-self: center;
-  min-height: 36px;
-  margin: 0 0 0 -2px;
-  border-radius: 8px;
-  cursor: grab;
-  touch-action: none;
+.music-bar__inner {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  color: var(--mp-ink-soft);
-  user-select: none;
+  gap: 4px;
+  padding: 8px 12px 10px;
   -webkit-user-select: none;
+  user-select: none;
 }
 
-.music-mini-player__drag::before,
-.music-mini-player__drag::after {
-  content: "";
+.music-bar__seek-wrap {
+  width: 100%;
+  padding: 0 2px;
+}
+
+.music-mini-player--bar .music-mini-player__seek {
   display: block;
-  width: 3px;
-  height: 14px;
-  border-left: 2px solid rgb(255 255 255 / 0.75);
-  border-right: 2px solid rgb(190 70 120 / 0.22);
-  box-sizing: border-box;
-}
-
-.music-mini-player__drag:active {
-  cursor: grabbing;
-  background: rgb(255 255 255 / 0.35);
-  box-shadow: inset 0 2px 6px rgb(180 60 100 / 0.12);
-}
-
-.music-mini-player__rows {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  padding: 9px 9px 11px 7px;
-  margin: 3px 4px 4px;
-  min-width: 0;
-  max-width: 100%;
-  box-sizing: border-box;
-  user-select: none;
-  -webkit-user-select: none;
-  border-radius: 10px;
-  background: linear-gradient(180deg, rgb(255 255 255 / 0.5) 0%, rgb(255 255 255 / 0) 48%);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.85),
-    inset 0 -1px 0 rgb(220 90 140 / 0.12);
-}
-
-.music-mini-player__row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  max-width: 100%;
-}
-
-.music-mini-player__row--top {
-  flex-wrap: nowrap;
-}
-
-.music-mini-player__row--top > .music-mini-player__icon-btn--sm {
-  margin-left: auto;
-  flex-shrink: 0;
-}
-
-.music-mini-player__row--meta {
-  padding: 0 2px 0 4px;
-}
-
-.music-mini-player__row--meta .music-mini-player__meta {
-  flex: 1 1 auto;
   width: 100%;
-  max-width: 100%;
-  min-width: 0;
-}
-
-.music-mini-player__row--meta .music-mini-player__text {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.music-mini-player__row--mid {
-  padding-left: 2px;
-}
-
-.music-mini-player__row--mid .music-mini-player__prog {
-  flex: 1 1 auto;
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-}
-
-.music-mini-player__row--bot {
-  padding-left: 2px;
-}
-
-.music-mini-player__row--bot .music-mini-player__vol-wrap {
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-}
-
-.music-mini-player__left {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  flex-shrink: 0;
-}
-
-.music-mini-player--compact .music-mini-player__icon-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-}
-
-.music-mini-player__icon-btn {
+  height: 5px;
   margin: 0;
-  padding: 0;
-  width: 36px;
-  height: 36px;
-  border: 1px solid rgb(255 175 210 / 0.95);
-  border-radius: 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(180deg, #ffffff 0%, #fff4fa 42%, #ffe0f0 100%);
-  color: #9b2160;
+  accent-color: #8c7a85;
   cursor: pointer;
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.95),
-    inset 0 -2px 5px rgb(220 90 140 / 0.1),
-    0 2px 0 rgb(255 210 232 / 0.95),
-    0 3px 7px rgb(90 20 50 / 0.08);
-  transition: filter 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease;
 }
 
-.music-mini-player__icon-btn:hover {
-  filter: brightness(1.04);
+.music-bar__times {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 4px 1px;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: var(--bar-fg-soft);
+  text-shadow: none;
 }
 
-.music-mini-player__icon-btn:active {
-  transform: scale(0.96);
-  box-shadow:
-    inset 0 2px 6px rgb(170 60 100 / 0.12),
-    0 1px 0 rgb(255 255 255 / 0.7);
+.music-bar__main {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px 14px;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
-.music-mini-player__icon-btn:focus-visible {
-  outline: 2px solid #ff5ca8;
-  outline-offset: 2px;
-}
-
-.music-mini-player--compact .music-mini-player__icon-btn--primary {
-  width: 30px;
-  height: 30px;
-}
-
-.music-mini-player__icon-btn--primary {
-  width: 40px;
-  height: 40px;
-  border-radius: 999px;
-  border: 1px solid #ff9ed0;
-  background: linear-gradient(175deg, #ffffff 0%, #ffd0ec 38%, #ff9ed0 100%);
-  color: #6a1a40;
-  box-shadow:
-    inset 0 2px 0 rgb(255 255 255 / 0.85),
-    inset 0 -4px 10px rgb(230 80 130 / 0.12),
-    0 3px 0 #ffb8de,
-    0 6px 14px rgb(100 30 60 / 0.12);
-}
-
-.music-mini-player--compact .music-mini-player__icon-btn--sm {
-  width: 26px;
-  height: 26px;
-}
-
-.music-mini-player__icon-btn--sm {
-  width: 34px;
-  height: 34px;
-}
-
-.music-mini-player__svg {
-  display: block;
-}
-
-.music-mini-player__meta {
+.music-bar__meta {
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex: 1 1 0;
+  gap: 10px;
+  flex: 1 1 14rem;
   min-width: 0;
-  max-width: none;
 }
 
-.music-mini-player--compact .music-mini-player__art {
-  width: 30px;
-  height: 30px;
-  border-radius: 4px;
+.music-bar__ctrl {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.music-bar__vol {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 120px;
+  min-width: 72px;
+  max-width: 200px;
+}
+
+.music-mini-player--bar .music-mini-player__art {
+  width: 38px;
+  height: 38px;
+  border-radius: 6px;
+  border: 1px solid rgb(0 0 0 / 0.1);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.6);
+  background: linear-gradient(145deg, #ffffff 0%, #f2edef 100%);
 }
 
 .music-mini-player__art {
-  width: 44px;
-  height: 44px;
-  border-radius: 8px;
   overflow: hidden;
   flex-shrink: 0;
-  background: linear-gradient(145deg, #fffafc 0%, #ffe4f2 100%);
   position: relative;
-  border: 2px solid rgb(255 255 255 / 0.95);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.9),
-    0 2px 0 rgb(255 170 205 / 0.75),
-    0 4px 8px rgb(100 30 55 / 0.1);
 }
 
 .music-mini-player__art-img {
@@ -2108,8 +1978,9 @@ body.wheel-spectacle-lock {
   display: block;
 }
 
-.music-mini-player--compact .music-mini-player__art-ph {
-  font-size: 0.95rem;
+.music-mini-player--bar .music-mini-player__art-ph {
+  font-size: 1rem;
+  color: rgb(90 80 86 / 0.45);
 }
 
 .music-mini-player__art-ph {
@@ -2118,160 +1989,144 @@ body.wheel-spectacle-lock {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.35rem;
-  color: rgb(200 80 130 / 0.38);
 }
 
 .music-mini-player__text {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
-.music-mini-player--compact .music-mini-player__title {
-  font-size: 0.78rem;
+.music-mini-player--bar .music-mini-player__title {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--bar-fg);
+  text-shadow: none;
 }
 
 .music-mini-player__title {
-  font-size: 0.88rem;
-  font-weight: 700;
   line-height: 1.25;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: var(--mp-ink);
-  text-shadow: 0 1px 0 rgb(255 255 255 / 0.7);
 }
 
-.music-mini-player--compact .music-mini-player__track-ix {
-  font-size: 0.65rem;
+.music-mini-player--bar .music-mini-player__track-ix {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--bar-fg-soft);
+  text-shadow: none;
 }
 
 .music-mini-player__track-ix {
-  font-size: 0.7rem;
-  font-weight: 600;
   line-height: 1.2;
   letter-spacing: 0.02em;
-  color: #a05078;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-shadow: 0 1px 0 rgb(255 255 255 / 0.65);
+}
+
+.music-mini-player--bar .music-mini-player__artist {
+  display: none;
 }
 
 .music-mini-player__artist {
   font-size: 0.75rem;
-  color: var(--mp-ink-soft);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  color: var(--bar-fg-soft);
 }
 
-.music-mini-player--compact .music-mini-player__row--mid .music-mini-player__prog {
-  gap: 6px;
-}
-
-.music-mini-player__prog {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
+.music-mini-player__icon-btn {
+  margin: 0;
+  padding: 0;
+  border-radius: 999px;
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-}
-
-.music-mini-player--compact .music-mini-player__row--mid .music-mini-player__seek {
-  flex: 1 1 auto;
-  min-width: 0;
-  max-width: none;
-}
-
-.music-mini-player__seek {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 4px;
-  accent-color: #e8489a;
+  justify-content: center;
   cursor: pointer;
+  transition: filter 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease;
 }
 
-.music-mini-player--compact .music-mini-player__time {
-  font-size: 0.62rem;
+.music-mini-player--bar .music-mini-player__icon-btn {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, #ffffff 0%, #f3f0ed 100%);
+  color: var(--ink);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9);
 }
 
-.music-mini-player__time {
-  font-size: 0.75rem;
-  font-variant-numeric: tabular-nums;
-  color: #8a4a6c;
-  flex-shrink: 0;
-  white-space: nowrap;
-  text-shadow: 0 1px 0 rgb(255 255 255 / 0.5);
+.music-mini-player--bar .music-mini-player__icon-btn:hover {
+  filter: brightness(1.02);
+  border-color: var(--border-strong);
 }
 
-.music-mini-player--compact .music-mini-player__vol-wrap {
-  gap: 8px;
+.music-mini-player--bar .music-mini-player__icon-btn:active {
+  transform: scale(0.96);
 }
 
-.music-mini-player__vol-wrap {
+.music-mini-player--bar .music-mini-player__icon-btn:focus-visible {
+  outline: 2px solid rgb(100 90 95 / 0.35);
+  outline-offset: 2px;
+}
+
+.music-mini-player--bar .music-mini-player__icon-btn--primary {
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgb(160 130 140 / 0.45);
+  background: linear-gradient(180deg, #fff9fb 0%, #f0e4e8 100%);
+  color: #4a3b42;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.95);
+}
+
+.music-mini-player--bar .music-mini-player__icon-btn--sm {
+  width: 30px;
+  height: 30px;
+}
+
+.music-mini-player__svg {
+  display: block;
+}
+
+.music-mini-player--bar .music-mini-player__vol-icon {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.music-mini-player__vol-icon {
-  display: flex;
-  color: #b84888;
+  color: var(--bar-fg);
   flex-shrink: 0;
-  filter: drop-shadow(0 1px 0 rgb(255 255 255 / 0.6));
-}
-
-.music-mini-player--compact .music-mini-player__vol-icon .music-mini-player__svg {
-  width: 14px;
-  height: 14px;
+  filter: none;
+  opacity: 0.75;
 }
 
 .music-mini-player__vol-icon .music-mini-player__svg {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
 }
 
-.music-mini-player--compact .music-mini-player__vol {
+.music-mini-player--bar .music-mini-player__vol {
   flex: 1 1 auto;
-  width: auto;
   min-width: 0;
-  max-width: 100%;
-}
-
-.music-mini-player__vol {
-  flex: 1 1 auto;
-  width: auto;
-  min-width: 0;
-  max-width: 100%;
-  height: 4px;
-  accent-color: #e8489a;
+  height: 5px;
+  accent-color: #8c7a85;
   cursor: pointer;
 }
 
 .music-mini-player__playlist-pop {
   position: absolute;
   left: 0;
-  right: 0;
-  bottom: calc(100% + 8px);
-  z-index: 4;
+  right: auto;
+  top: calc(100% + 8px);
+  bottom: auto;
+  min-width: min(300px, calc(100vw - 32px));
+  max-width: min(360px, calc(100vw - 24px));
+  z-index: 6;
   max-height: min(240px, 40vh);
   overflow: auto;
   padding: 8px 0;
   border-radius: 12px;
   font-family: "Zen Maru Gothic", "Noto Sans TC", sans-serif;
   color: var(--mp-ink);
-  background: linear-gradient(180deg, #fffafd 0%, #ffe8f4 55%, #ffd8ec 100%);
-  border: 2px solid #ff8ec4;
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.92),
-    inset 0 -6px 14px rgb(255 190 220 / 0.35),
-    0 4px 0 #ffc4e0,
-    0 12px 28px rgb(120 40 75 / 0.2);
+  background: linear-gradient(180deg, #fffcfe 0%, #f7f0f3 100%);
+  border: 1px solid rgb(0 0 0 / 0.1);
+  box-shadow: var(--shadow-lg);
 }
 
 .music-mini-player__playlist-head {
@@ -2280,7 +2135,7 @@ body.wheel-spectacle-lock {
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #a84878;
+  color: #7a6a72;
 }
 
 .music-mini-player__pl-item {
@@ -2304,14 +2159,8 @@ body.wheel-spectacle-lock {
 }
 
 .music-mini-player__pl-artist {
-  color: #a06082;
+  color: #7a6a72;
   font-weight: 400;
-}
-
-@media (max-width: 640px) {
-  #app.has-music-mini {
-    padding-bottom: 122px;
-  }
 }
 
 /* --- 心得留言板（Firestore guestbookPosts） --- */
@@ -2479,7 +2328,7 @@ body.wheel-spectacle-lock {
   border-top: 1px solid var(--border);
 }
 
-/* 右下角浮動「聯絡店家」：折疊藍／展開紅；立體凸起按鈕 */
+/* 右下角浮動「聯絡店家」：霧面青灰系／展開時柔玫瑰；與全站淺色底協調 */
 /* 與 main.panel[hidden] 相同：display:flex 會蓋過部分瀏覽器對 [hidden] 的預設，後台分頁須強制隱藏 */
 .support-chat-float[hidden] {
   display: none !important;
@@ -2487,8 +2336,10 @@ body.wheel-spectacle-lock {
 
 .support-chat-float {
   position: fixed;
-  right: max(12px, env(safe-area-inset-right, 0px));
-  bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  left: auto;
+  right: auto;
+  top: auto;
+  bottom: auto;
   z-index: 1200;
   display: flex;
   flex-direction: column;
@@ -2498,26 +2349,37 @@ body.wheel-spectacle-lock {
   box-sizing: border-box;
 }
 
+.support-chat-float--dock-left {
+  align-items: flex-start;
+}
+
+.support-chat-float--dock-right {
+  align-items: flex-end;
+}
+
 .support-chat-float__fab {
   flex-shrink: 0;
   margin: 0;
-  border: 2px solid #1d4ed8;
-  border-radius: 999px;
-  padding: 11px 17px;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border: 1px solid rgb(110 120 130 / 0.45);
+  border-radius: 50%;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
   font-family: "Zen Maru Gothic", "Noto Sans TC", inherit;
   font-weight: 700;
-  font-size: 0.92rem;
-  letter-spacing: 0.04em;
   cursor: pointer;
-  color: #f8fafc;
-  background: linear-gradient(165deg, #4f8dff 0%, #2563eb 42%, #1d4ed8 100%);
+  touch-action: none;
+  color: #2c3238;
+  background: linear-gradient(165deg, #e8eef4 0%, #c9d4e0 55%, #aebcca 100%);
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.38),
-    inset 0 -12px 20px -14px rgb(15 40 110 / 0.42),
-    inset 1px 2px 4px rgb(255 255 255 / 0.12),
-    0 2px 0 #1e40af,
-    0 8px 22px rgb(30 64 175 / 0.38);
-  text-shadow: 0 1px 0 rgb(0 30 90 / 0.35);
+    inset 0 1px 0 rgb(255 255 255 / 0.7),
+    0 1px 0 rgb(0 0 0 / 0.05),
+    0 6px 16px rgb(50 60 70 / 0.12);
   transition:
     background 0.18s ease,
     border-color 0.18s ease,
@@ -2526,74 +2388,80 @@ body.wheel-spectacle-lock {
     filter 0.15s ease;
 }
 
+.support-chat-float__fab-glyph {
+  font-size: 1.35rem;
+  line-height: 1;
+  text-shadow: 0 1px 0 rgb(255 255 255 / 0.4);
+}
+
+.support-chat-float__fab-text {
+  margin-top: 1px;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-shadow: 0 1px 0 rgb(255 255 255 / 0.4);
+}
+
 .support-chat-float__fab:hover {
-  filter: brightness(1.05);
+  filter: brightness(1.03);
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.48),
-    inset 0 -10px 18px -12px rgb(15 40 110 / 0.32),
-    inset 1px 2px 4px rgb(255 255 255 / 0.18),
-    0 3px 0 #1e40af,
-    0 11px 26px rgb(30 64 175 / 0.42);
+    inset 0 1px 0 rgb(255 255 255 / 0.85),
+    0 1px 0 rgb(0 0 0 / 0.04),
+    0 8px 20px rgb(50 60 70 / 0.14);
   transform: translateY(-1px);
 }
 
 .support-chat-float__fab:active {
-  filter: brightness(0.97);
-  transform: translateY(1px) scale(0.99);
+  filter: brightness(0.99);
+  transform: translateY(1px) scale(0.985);
   box-shadow:
-    inset 0 2px 8px rgb(0 20 80 / 0.28),
-    inset 0 -1px 0 rgb(255 255 255 / 0.12),
-    0 1px 0 #1e40af,
-    0 4px 14px rgb(30 64 175 / 0.28);
+    inset 0 2px 6px rgb(0 0 0 / 0.08),
+    0 1px 0 rgb(0 0 0 / 0.04);
 }
 
 .support-chat-float__fab:focus-visible {
   outline: none;
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.38),
-    inset 0 -12px 20px -14px rgb(15 40 110 / 0.42),
-    0 2px 0 #1e40af,
-    0 8px 22px rgb(30 64 175 / 0.38),
-    0 0 0 3px rgb(147 197 253 / 0.95);
+    inset 0 1px 0 rgb(255 255 255 / 0.7),
+    0 1px 0 rgb(0 0 0 / 0.05),
+    0 6px 16px rgb(50 60 70 / 0.12),
+    0 0 0 3px rgb(150 160 175 / 0.45);
 }
 
 .support-chat-float--open .support-chat-float__fab {
-  border-color: #991b1b;
-  color: #fff7f7;
-  background: linear-gradient(165deg, #f87171 0%, #dc2626 45%, #b91c1c 100%);
+  border-color: rgb(150 100 100 / 0.45);
+  color: #3d3434;
+  background: linear-gradient(165deg, #f4e0dc 0%, #d9b8b2 50%, #c4a099 100%);
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.32),
-    inset 0 -12px 20px -14px rgb(60 10 10 / 0.45),
-    inset 1px 2px 4px rgb(255 255 255 / 0.1),
-    0 2px 0 #7f1d1d,
-    0 8px 22px rgb(127 29 29 / 0.42);
-  text-shadow: 0 1px 0 rgb(60 0 0 / 0.4);
+    inset 0 1px 0 rgb(255 255 255 / 0.65),
+    0 1px 0 rgb(0 0 0 / 0.05),
+    0 6px 16px rgb(80 50 50 / 0.12);
+}
+
+.support-chat-float--open .support-chat-float__fab-glyph,
+.support-chat-float--open .support-chat-float__fab-text {
+  text-shadow: 0 1px 0 rgb(255 255 255 / 0.35);
 }
 
 .support-chat-float--open .support-chat-float__fab:hover {
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.42),
-    inset 0 -10px 18px -12px rgb(60 10 10 / 0.35),
-    inset 1px 2px 4px rgb(255 255 255 / 0.14),
-    0 3px 0 #7f1d1d,
-    0 11px 26px rgb(127 29 29 / 0.48);
+    inset 0 1px 0 rgb(255 255 255 / 0.8),
+    0 1px 0 rgb(0 0 0 / 0.04),
+    0 8px 20px rgb(80 50 50 / 0.14);
 }
 
 .support-chat-float--open .support-chat-float__fab:active {
   box-shadow:
-    inset 0 2px 8px rgb(40 0 0 / 0.35),
-    inset 0 -1px 0 rgb(255 255 255 / 0.1),
-    0 1px 0 #7f1d1d,
-    0 4px 14px rgb(127 29 29 / 0.32);
+    inset 0 2px 6px rgb(0 0 0 / 0.1),
+    0 1px 0 rgb(0 0 0 / 0.04);
 }
 
 .support-chat-float--open .support-chat-float__fab:focus-visible {
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.32),
-    inset 0 -12px 20px -14px rgb(60 10 10 / 0.45),
-    0 2px 0 #7f1d1d,
-    0 8px 22px rgb(127 29 29 / 0.42),
-    0 0 0 3px rgb(252 165 165 / 0.95);
+    inset 0 1px 0 rgb(255 255 255 / 0.65),
+    0 1px 0 rgb(0 0 0 / 0.05),
+    0 6px 16px rgb(80 50 50 / 0.12),
+    0 0 0 3px rgb(180 150 150 / 0.45);
 }
 
 .support-chat-float__panel {
@@ -2603,9 +2471,8 @@ body.wheel-spectacle-lock {
   padding: 10px 12px 12px;
   border-radius: var(--radius);
   background: var(--surface);
-  border: 2px solid #b91c1c;
+  border: 1px solid var(--border);
   box-shadow: var(--shadow-lg);
-  -webkit-overflow-scrolling: touch;
 }
 
 .support-chat-float__panel .book-support-chat {
@@ -2741,7 +2608,14 @@ body.wheel-spectacle-lock {
 }
 
 .support-chat-thread-item-id {
-  font-size: 0.78rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.support-chat-thread-item-uid {
+  font-size: 0.72rem;
+  color: var(--muted);
   margin-bottom: 4px;
 }
 

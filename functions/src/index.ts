@@ -1110,9 +1110,13 @@ function supportChatPreview(text: string): string {
 /** 會員／訪客匿名：送客服訊息，或僅重新開啟對話（Admin 寫入，避開客戶端 Rules 評估問題） */
 export const sendSupportChatMessage = onCall(publicCall, async (request) => {
   const uid = request.auth?.uid;
+  const authToken = request.auth?.token;
   if (!uid) {
     throw new HttpsError("unauthenticated", "請先登入或按「以訪客身分開始留言」");
   }
+  const signInProviderRaw = (authToken?.firebase as { sign_in_provider?: unknown } | undefined)?.sign_in_provider;
+  const signInProvider = typeof signInProviderRaw === "string" ? signInProviderRaw : "";
+  const customerType = signInProvider === "anonymous" ? "guest" : "member";
   const reopen = request.data?.reopen === true;
   if (reopen) {
     const threadRef = db.collection("supportThreads").doc(uid);
@@ -1122,6 +1126,7 @@ export const sendSupportChatMessage = onCall(publicCall, async (request) => {
     }
     await threadRef.update({
       status: "open",
+      customerType,
       updatedAt: FieldValueOrServerTimestamp(),
     });
     return { ok: true };
@@ -1140,6 +1145,7 @@ export const sendSupportChatMessage = onCall(publicCall, async (request) => {
     const now = FieldValueOrServerTimestamp();
     await threadRef.set({
       customerId: uid,
+      customerType,
       status: "open",
       createdAt: now,
       updatedAt: now,
@@ -1155,6 +1161,7 @@ export const sendSupportChatMessage = onCall(publicCall, async (request) => {
       );
     }
     await threadRef.update({
+      customerType,
       updatedAt: FieldValueOrServerTimestamp(),
       lastMessageAt: FieldValueOrServerTimestamp(),
       lastMessagePreview: preview,
