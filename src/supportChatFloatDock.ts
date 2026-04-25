@@ -35,7 +35,8 @@ export function attachSupportChatFloatDrag(floatEl: HTMLElement, fab: HTMLButton
   let grabOffX = 0;
   let grabOffY = 0;
   let longPressPending: LongPressPending | null = null;
-  let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 瀏覽器 `setTimeout` 回傳 `number`；避免與 Node 型別合併後的 `Timeout` 混淆 */
+  let longPressTimer: number | null = null;
 
   function readPersist(): void {
     try {

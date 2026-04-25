@@ -49,9 +49,6 @@ export const createMemberAccountCall = () => httpsCallable(getFns(), "createMemb
 export const searchMemberUsersCall = () => httpsCallable(getFns(), "searchMemberUsers");
 export const listMembersAdminCall = () => httpsCallable(getFns(), "listMembersAdmin");
 export const updateMemberNicknameAdminCall = () => httpsCallable(getFns(), "updateMemberNicknameAdmin");
-export const registerPushTokenCall = () => httpsCallable(getFns(), "registerPushToken");
-export const unregisterPushTokenCall = () => httpsCallable(getFns(), "unregisterPushToken");
-export const sendImmediatePushCall = () => httpsCallable(getFns(), "sendImmediatePush");
 export const sendSupportChatMessageCall = () => httpsCallable(getFns(), "sendSupportChatMessage");
 export const sendSupportChatAdminReplyCall = () => httpsCallable(getFns(), "sendSupportChatAdminReply");
 export const setSupportThreadStatusAdminCall = () => httpsCallable(getFns(), "setSupportThreadStatusAdmin");

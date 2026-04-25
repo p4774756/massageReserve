@@ -34,13 +34,11 @@ import {
   searchMemberUsersCall,
   listMembersAdminCall,
   updateMemberNicknameAdminCall,
-  sendImmediatePushCall,
   spinWheelCall,
   listActiveWheelPrizesCall,
   topupWalletCall,
   recordSiteVisitCall,
 } from "./firebase";
-import { getWebPushVapidKey, registerWebPushForCurrentUser, unregisterWebPushForCurrentUser } from "./webPush";
 import { mountGuestbook } from "./guestbook";
 import { mountMusicMiniPlayer } from "./musicPlayer";
 import { mountAdminSupportChat, mountMemberSupportChat, type SupportChatUnmount } from "./supportChat";
@@ -222,10 +220,11 @@ function isStartSlotInPastForTaipeiToday(dateKey: string, startSlot: string): bo
 }
 
 function formatWhen(b: Booking): string {
-  const base = `${b.dateKey} ${b.startSlot}`;
-  if (!b.startAt?.seconds) return base;
-  const d = new Date(b.startAt.seconds * 1000);
-  return `${base}（${d.toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}）`;
+  if (b.startAt?.seconds) {
+    const d = new Date(b.startAt.seconds * 1000);
+    return d.toLocaleString("zh-TW", { timeZone: "Asia/Taipei" });
+  }
+  return `${b.dateKey} ${b.startSlot}`;
 }
 
 function bookingStatusLabel(status: string): string {
@@ -481,17 +480,23 @@ function render() {
         weekVisits?: unknown;
         totalVisits?: unknown;
       };
-      const ok =
-        typeof data.yourVisitNumberToday === "number" &&
-        typeof data.dayVisits === "number" &&
-        typeof data.weekVisits === "number" &&
-        typeof data.totalVisits === "number";
-      if (!ok) return false;
+      const yourVisitNumberToday = data.yourVisitNumberToday;
+      const dayVisits = data.dayVisits;
+      const weekVisits = data.weekVisits;
+      const totalVisits = data.totalVisits;
+      if (
+        typeof yourVisitNumberToday !== "number" ||
+        typeof dayVisits !== "number" ||
+        typeof weekVisits !== "number" ||
+        typeof totalVisits !== "number"
+      ) {
+        return false;
+      }
       applyVisitorStatsPayload({
-        yourVisitNumberToday: data.yourVisitNumberToday,
-        dayVisits: data.dayVisits,
-        weekVisits: data.weekVisits,
-        totalVisits: data.totalVisits,
+        yourVisitNumberToday,
+        dayVisits,
+        weekVisits,
+        totalVisits,
       });
       return true;
     } catch {
@@ -1105,7 +1110,6 @@ function render() {
       const logoutBtn = el("button", { class: "primary", type: "button" }, ["登出"]);
       closeBtn.addEventListener("click", () => overlay.remove());
       logoutBtn.addEventListener("click", async () => {
-        await unregisterWebPushForCurrentUser();
         await signOut(auth);
         overlay.remove();
       });
@@ -1182,42 +1186,6 @@ function render() {
           el("div", { class: "modal-actions" }, [modalResendBtn, modalReloadBtn]),
         );
       }
-      const pushSubscribeBtn = el("button", { class: "ghost", type: "button" }, ["訂閱推播通知"]);
-      const pushSubscribeStatus = el("div", { class: "status-line" });
-      if (!getWebPushVapidKey()) {
-        pushSubscribeBtn.setAttribute("disabled", "true");
-        pushSubscribeStatus.textContent =
-          "尚未設定 VAPID 金鑰，無法訂閱（請於 .env 設定 VITE_FIREBASE_VAPID_KEY 後重新建置）。";
-        pushSubscribeStatus.className = "status-line error";
-      }
-      pushSubscribeBtn.addEventListener("click", async () => {
-        pushSubscribeStatus.textContent = "";
-        pushSubscribeStatus.className = "status-line";
-        pushSubscribeBtn.setAttribute("disabled", "true");
-        try {
-          const r = await registerWebPushForCurrentUser();
-          if (r.ok) {
-            pushSubscribeStatus.textContent = "已訂閱此裝置，可請管理員從後台發送立即推播。";
-            pushSubscribeStatus.classList.add("ok");
-          } else {
-            pushSubscribeStatus.textContent = r.message;
-            pushSubscribeStatus.classList.add("error");
-          }
-        } catch (e) {
-          pushSubscribeStatus.textContent = errorMessage(e);
-          pushSubscribeStatus.classList.add("error");
-        } finally {
-          pushSubscribeBtn.removeAttribute("disabled");
-        }
-      });
-      modalBody.push(
-        el("h4", { class: "admin-subhead" }, ["推播通知"]),
-        el("p", { class: "hint" }, [
-          "訂閱後可接收後台「立即推播」（瀏覽器須允許通知；背景時仍可能收到系統通知）。",
-        ]),
-        pushSubscribeStatus,
-        el("div", { class: "row-actions" }, [pushSubscribeBtn]),
-      );
       modalBody.push(walletStatus.cloneNode(true) as HTMLElement);
       modalBody.push(el("div", { class: "modal-actions" }, [closeBtn, logoutBtn]));
       dialog.append(...modalBody);
@@ -1771,7 +1739,6 @@ function render() {
   let adminWheelSpectacleUnsub: (() => void) | null = null;
   let adminBookingCapsUnsub: (() => void) | null = null;
   let adminBookingBlocksUnsub: (() => void) | null = null;
-  let adminPushSettingsUnsub: (() => void) | null = null;
   let adminSupportChatUnmount: SupportChatUnmount | null = null;
 
   function stopAdminListener() {
@@ -1798,10 +1765,6 @@ function render() {
     if (adminBookingBlocksUnsub) {
       adminBookingBlocksUnsub();
       adminBookingBlocksUnsub = null;
-    }
-    if (adminPushSettingsUnsub) {
-      adminPushSettingsUnsub();
-      adminPushSettingsUnsub = null;
     }
     if (adminSupportChatUnmount) {
       adminSupportChatUnmount();
@@ -1889,7 +1852,6 @@ function render() {
     const who = el("span", { class: "hint" }, [whoLabel]);
     const outBtn = el("button", { class: "ghost", type: "button" }, ["登出"]);
     outBtn.addEventListener("click", async () => {
-      await unregisterWebPushForCurrentUser();
       await signOut(auth);
     });
     top.append(who, outBtn);
@@ -2517,7 +2479,7 @@ function render() {
     const table = el("table", {}, []);
     table.append(
       el("tr", {}, [
-        el("th", {}, ["時間"]),
+        el("th", {}, ["預約時間"]),
         el("th", {}, ["姓名"]),
         el("th", { title: "是否為訪客預約" }, ["訪客"]),
         el("th", {}, ["備註"]),
@@ -2532,7 +2494,7 @@ function render() {
     const hiddenTable = el("table", {}, []);
     hiddenTable.append(
       el("tr", {}, [
-        el("th", {}, ["時間"]),
+        el("th", {}, ["預約時間"]),
         el("th", {}, ["姓名"]),
         el("th", { title: "是否為訪客預約" }, ["訪客"]),
         el("th", {}, ["備註"]),
@@ -2810,175 +2772,6 @@ function render() {
 
     paintMemberListTable();
 
-    function clampPushReminderMinutes(raw: unknown): number {
-      const n = typeof raw === "number" && Number.isFinite(raw) ? Math.round(raw) : 60;
-      return Math.min(24 * 60, Math.max(5, n));
-    }
-
-    const pushSettingsSection = el("div", { class: "admin-announce" }, []);
-    const pushDocRef = doc(db, "siteSettings", "pushNotifications");
-    const bookingReminderEnabled = el("input", { type: "checkbox" });
-    const bookingReminderMinutesBefore = el("input", {
-      type: "number",
-      min: "5",
-      max: "1440",
-      step: "5",
-      value: "60",
-    });
-    const bookingReminderTitle = el("input", {
-      type: "text",
-      maxLength: 80,
-      placeholder: "留空則由發送端使用預設標題（例如：按摩預約提醒）",
-      autocomplete: "off",
-    });
-    const savePushSettingsBtn = el("button", { class: "ghost", type: "button" }, ["儲存推播設定"]);
-    const pushSettingsStatus = el("div", { class: "status-line" });
-
-    adminPushSettingsUnsub = onSnapshot(
-      pushDocRef,
-      (snap) => {
-        const data = snap.data() as
-          | {
-              bookingReminderEnabled?: unknown;
-              bookingReminderMinutesBefore?: unknown;
-              bookingReminderTitle?: unknown;
-            }
-          | undefined;
-        bookingReminderEnabled.checked =
-          typeof data?.bookingReminderEnabled === "boolean" ? data.bookingReminderEnabled : false;
-        bookingReminderMinutesBefore.value = String(clampPushReminderMinutes(data?.bookingReminderMinutesBefore));
-        bookingReminderTitle.value =
-          typeof data?.bookingReminderTitle === "string" ? data.bookingReminderTitle : "";
-      },
-      () => {
-        pushSettingsStatus.textContent = "無法讀取推播設定。";
-        pushSettingsStatus.className = "status-line error";
-      },
-    );
-
-    savePushSettingsBtn.addEventListener("click", async () => {
-      pushSettingsStatus.textContent = "";
-      pushSettingsStatus.className = "status-line";
-      const minutes = clampPushReminderMinutes(Number(bookingReminderMinutesBefore.value));
-      bookingReminderMinutesBefore.value = String(minutes);
-      savePushSettingsBtn.setAttribute("disabled", "true");
-      pushSettingsStatus.textContent = "儲存中…";
-      try {
-        await setDoc(
-          pushDocRef,
-          {
-            bookingReminderEnabled: bookingReminderEnabled.checked,
-            bookingReminderMinutesBefore: minutes,
-            bookingReminderTitle: bookingReminderTitle.value.trim(),
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true },
-        );
-        pushSettingsStatus.textContent = "推播設定已更新";
-        pushSettingsStatus.classList.add("ok");
-      } catch (e) {
-        pushSettingsStatus.textContent = e instanceof Error ? e.message : "儲存失敗";
-        pushSettingsStatus.classList.add("error");
-      } finally {
-        savePushSettingsBtn.removeAttribute("disabled");
-      }
-    });
-
-    const immediateTitle = el("input", {
-      type: "text",
-      maxLength: 50,
-      placeholder: "推播標題（必填，最多 50 字）",
-      autocomplete: "off",
-    });
-    const immediateBody = el("textarea", {
-      rows: 3,
-      maxLength: 500,
-      placeholder: "內文（選填，最多 500 字）",
-    });
-    const scopeSelf = el("input", { type: "radio", name: "admin-immediate-push-scope", value: "self" });
-    scopeSelf.checked = true;
-    const scopeAll = el("input", { type: "radio", name: "admin-immediate-push-scope", value: "all" });
-    const sendImmediatePushBtn = el("button", { class: "primary", type: "button" }, ["立即送出推播"]);
-    const immediatePushStatus = el("div", { class: "status-line" });
-    sendImmediatePushBtn.addEventListener("click", async () => {
-      immediatePushStatus.textContent = "";
-      immediatePushStatus.className = "status-line";
-      const title = immediateTitle.value.trim();
-      const body = immediateBody.value.trim();
-      if (title.length < 1) {
-        immediatePushStatus.textContent = "請填寫標題。";
-        immediatePushStatus.classList.add("error");
-        return;
-      }
-      sendImmediatePushBtn.setAttribute("disabled", "true");
-      immediatePushStatus.textContent = "送出中…";
-      try {
-        const fn = sendImmediatePushCall();
-        const scope = scopeAll.checked ? "all" : "self";
-        const res = await fn({ title, body, scope });
-        const data = res.data as {
-          successCount?: unknown;
-          failureCount?: unknown;
-          attempted?: unknown;
-          message?: unknown;
-          failureDetails?: unknown;
-        };
-        const msg = typeof data.message === "string" ? data.message : "已處理。";
-        const details = Array.isArray(data.failureDetails)
-          ? data.failureDetails.filter((x): x is string => typeof x === "string" && x.length > 0)
-          : [];
-        const extra = details.length > 0 ? ` 詳情：${details.join("；")}` : "";
-        immediatePushStatus.textContent = msg + extra;
-        const okN = typeof data.successCount === "number" ? data.successCount : 0;
-        const failN = typeof data.failureCount === "number" ? data.failureCount : 0;
-        immediatePushStatus.classList.add(failN > 0 && okN === 0 ? "error" : "ok");
-      } catch (e) {
-        immediatePushStatus.textContent = errorMessage(e);
-        immediatePushStatus.classList.add("error");
-      } finally {
-        sendImmediatePushBtn.removeAttribute("disabled");
-      }
-    });
-
-    pushSettingsSection.append(
-      el("h3", {}, ["推播設定"]),
-      el("p", { class: "hint" }, [
-        "「預約提醒」參數存在 Firestore ",
-        el("code", {}, ["siteSettings/pushNotifications"]),
-        "，供日後排程＋ FCM 使用。「立即推播」則由 Cloud Function ",
-        el("code", {}, ["sendImmediatePush"]),
-        " 透過 FCM 發送；會員須於前台「會員中心」按「訂閱推播通知」並允許通知。",
-      ]),
-      el("label", { class: "field checkbox-field" }, [
-        bookingReminderEnabled,
-        el("span", {}, ["啟用「預約開始前」提醒（總開關）"]),
-      ]),
-      el("label", { class: "field" }, [
-        "於預約開始前（分鐘）",
-        bookingReminderMinutesBefore,
-        el("span", { class: "hint" }, ["範圍 5～1440（24 小時），常用值：60。"]),
-      ]),
-      el("label", { class: "field" }, ["提醒推播標題（選填）", bookingReminderTitle]),
-      el("div", { class: "row-actions" }, [savePushSettingsBtn]),
-      pushSettingsStatus,
-      el("h4", { class: "admin-subhead" }, ["立即推播"]),
-      el("p", { class: "hint" }, [
-        "「僅發給自己」會只送到目前管理員帳號在本機已訂閱的瀏覽器，適合自測；「發給全部」會送到所有已訂閱裝置，請謹慎使用。",
-      ]),
-      el("label", { class: "field" }, ["標題", immediateTitle]),
-      el("label", { class: "field" }, ["內文", immediateBody]),
-      el("fieldset", { class: "admin-push-scope-fieldset" }, [
-        el("legend", {}, ["發送對象"]),
-        el("label", { class: "field checkbox-field" }, [
-          scopeSelf,
-          el("span", {}, ["僅發給自己（測試）"]),
-        ]),
-        el("label", { class: "field checkbox-field" }, [scopeAll, el("span", {}, ["發給所有已訂閱裝置"])]),
-      ]),
-      el("div", { class: "row-actions" }, [sendImmediatePushBtn]),
-      immediatePushStatus,
-    );
-
     const tabBookings = el("button", { type: "button", class: "admin-tab", role: "tab" }, ["預約管理"]);
     tabBookings.id = "admin-tab-trigger-bookings";
     const tabHiddenBookings = el("button", { type: "button", class: "admin-tab", role: "tab" }, ["已隱藏"]);
@@ -2987,13 +2780,11 @@ function render() {
     tabMembers.id = "admin-tab-trigger-members";
     const tabAnnounce = el("button", { type: "button", class: "admin-tab", role: "tab" }, ["跑馬燈公告"]);
     tabAnnounce.id = "admin-tab-trigger-announce";
-    const tabPush = el("button", { type: "button", class: "admin-tab", role: "tab" }, ["推播設定"]);
-    tabPush.id = "admin-tab-trigger-push";
     const tabSupport = el("button", { type: "button", class: "admin-tab", role: "tab" }, ["客服對話"]);
     tabSupport.id = "admin-tab-trigger-support";
 
     const adminTablist = el("div", { class: "admin-tabs", role: "tablist" });
-    adminTablist.append(tabBookings, tabHiddenBookings, tabMembers, tabAnnounce, tabPush, tabSupport);
+    adminTablist.append(tabBookings, tabHiddenBookings, tabMembers, tabAnnounce, tabSupport);
 
     const panelBookingsEl = el("div", { class: "admin-tab-panel", role: "tabpanel", id: "admin-tab-panel-bookings" });
     panelBookingsEl.setAttribute("aria-labelledby", "admin-tab-trigger-bookings");
@@ -3026,13 +2817,6 @@ function render() {
       hidden: true,
     });
     panelAnnounceEl.setAttribute("aria-labelledby", "admin-tab-trigger-announce");
-    const panelPushEl = el("div", {
-      class: "admin-tab-panel",
-      role: "tabpanel",
-      id: "admin-tab-panel-push",
-      hidden: true,
-    });
-    panelPushEl.setAttribute("aria-labelledby", "admin-tab-trigger-push");
     const panelSupportEl = el("div", {
       class: "admin-tab-panel",
       role: "tabpanel",
@@ -3048,13 +2832,11 @@ function render() {
     tabHiddenBookings.setAttribute("aria-controls", "admin-tab-panel-hidden");
     tabMembers.setAttribute("aria-controls", "admin-tab-panel-members");
     tabAnnounce.setAttribute("aria-controls", "admin-tab-panel-announce");
-    tabPush.setAttribute("aria-controls", "admin-tab-panel-push");
     tabSupport.setAttribute("aria-controls", "admin-tab-panel-support");
 
     panelBookingsEl.append(adminStatus, tableHolder);
     panelMembersEl.append(accountCreateSection, walletTopupSection, memberListSection);
     panelAnnounceEl.append(announcementSection);
-    panelPushEl.append(pushSettingsSection);
 
     const adminPanelsWrap = el("div", { class: "admin-tab-panels" });
     adminPanelsWrap.append(
@@ -3062,21 +2844,19 @@ function render() {
       panelHiddenBookingsEl,
       panelMembersEl,
       panelAnnounceEl,
-      panelPushEl,
       panelSupportEl,
     );
 
-    const adminTabButtons = [tabBookings, tabHiddenBookings, tabMembers, tabAnnounce, tabPush, tabSupport] as const;
+    const adminTabButtons = [tabBookings, tabHiddenBookings, tabMembers, tabAnnounce, tabSupport] as const;
     const adminTabPanels = [
       panelBookingsEl,
       panelHiddenBookingsEl,
       panelMembersEl,
       panelAnnounceEl,
-      panelPushEl,
       panelSupportEl,
     ] as const;
 
-    function selectAdminTab(index: 0 | 1 | 2 | 3 | 4 | 5) {
+    function selectAdminTab(index: 0 | 1 | 2 | 3 | 4) {
       adminTabButtons.forEach((btn, i) => {
         const on = i === index;
         btn.setAttribute("aria-selected", String(on));
@@ -3093,8 +2873,7 @@ function render() {
     tabHiddenBookings.addEventListener("click", () => selectAdminTab(1));
     tabMembers.addEventListener("click", () => selectAdminTab(2));
     tabAnnounce.addEventListener("click", () => selectAdminTab(3));
-    tabPush.addEventListener("click", () => selectAdminTab(4));
-    tabSupport.addEventListener("click", () => selectAdminTab(5));
+    tabSupport.addEventListener("click", () => selectAdminTab(4));
 
     adminTablist.addEventListener("keydown", (ev) => {
       if (ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;
@@ -3104,7 +2883,7 @@ function render() {
       const delta = ev.key === "ArrowRight" ? 1 : -1;
       const n = adminTabButtons.length;
       const next = ((cur + delta) % n + n) % n;
-      selectAdminTab(next as 0 | 1 | 2 | 3 | 4 | 5);
+      selectAdminTab(next as 0 | 1 | 2 | 3 | 4);
       adminTabButtons[next].focus();
     });
 
@@ -3297,7 +3076,7 @@ function render() {
         hiddenBookingsStatus.className = "status-line";
         const bookingTableHeader = () =>
           el("tr", {}, [
-            el("th", {}, ["時間"]),
+            el("th", {}, ["預約時間"]),
             el("th", {}, ["姓名"]),
             el("th", { title: "是否為訪客預約" }, ["訪客"]),
             el("th", {}, ["備註"]),

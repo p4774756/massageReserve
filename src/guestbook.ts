@@ -88,7 +88,7 @@ export function mountGuestbook(db: Firestore, auth: Auth, mount: HTMLElement): G
   const nameInput = el("input", {
     type: "text",
     maxLength: MAX_NAME,
-    autocomplete: "nickname",
+    autocomplete: "name",
     placeholder: "例如：王小明",
   });
   nameLabel.append(nameInput);

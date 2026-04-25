@@ -43,8 +43,9 @@ flowchart LR
 | 路徑 | 用途 |
 |------|------|
 | `src/` | 預約表單、跑馬燈、會員登入、輪盤 UI、管理後台 UI |
-| `functions/src/index.ts` | 所有 Callable 與預約／錢包／輪盤邏輯 |
+| `functions/src/index.ts` | 所有 Callable、Firestore 觸發器（預約狀態變更寄信） |
 | `functions/src/bookingLogic.ts` | 時段、容量、週曆規則（與前端 `src/slots.ts` 對齊概念） |
+| `functions/src/resendNotify.ts` | Resend：新預約通知擁有者、會員預約狀態變更信（由 `createBooking`／觸發器呼叫） |
 | `scripts/seed-wheel-prizes.mjs` | 本機／CI 呼叫 `seedWheelPrizes` 初始化獎項 |
 | `.github/workflows/deploy-firebase.yml` | 推送 `main` 時建置並部署（需 `FIREBASE_TOKEN`） |
 
@@ -63,6 +64,8 @@ flowchart LR
 | `wheelSpins` | 每次抽獎結果與 `prizeSnapshot` |
 | `admins` | 管理員白名單（文件 ID = Auth UID） |
 | `siteSettings` | 網站公告／跑馬燈等（規則：公開讀、管理員寫） |
+| `siteStats` | 訪次聚合（如 `visitorCounters`；由 `recordSiteVisit` 以交易累加） |
+| `supportThreads` | 客服對話主檔；子集合 `messages` 為往來訊息 |
 
 **預約狀態**（後台可選）：`pending` → `confirmed` → `done`；另有 `cancelled`、`deleted`（軟刪相關欄位依規則與實作）。
 
@@ -77,7 +80,8 @@ flowchart LR
 | 函式 | 誰可呼叫 | 用途摘要 |
 |------|-----------|----------|
 | `getAvailability` | 公開 | 依 `dateKey` 回傳可預約時段（已佔用時段由後端計算） |
-| `createBooking` | 公開（會員模式需登入） | 建立預約、名額檢查、會員錢包扣款等 |
+| `recordSiteVisit` | 公開 | 訪次統計（`siteStats/visitorCounters`，台北日曆日／週）；前端每瀏覽器分頁工作階段建議最多呼叫一次 |
+| `createBooking` | 公開（會員模式需登入） | 建立預約、名額檢查、會員錢包扣款等；可搭配 Resend 通知擁有者 |
 | `getMyWallet` | 已登入 | 讀取自己的餘額、可抽次數、暱稱 |
 | `getAdminStatus` | 已登入 | 是否為管理員 |
 | `completeBooking` | 管理員 | 將預約標為完成；符合條件時 **顧客 `drawChances + 1`** |
@@ -85,8 +89,14 @@ flowchart LR
 | `topupWallet` | 管理員 | 後台儲值 |
 | `createMemberAccount` | 管理員 | 建立 Auth 使用者 + `customers` 初始文件 |
 | `searchMemberUsers` / `listMembersAdmin` / `updateMemberNicknameAdmin` | 管理員 | 會員搜尋、列表、暱稱 |
-| `spinWheel` | 已登入 | 消耗可抽次數、加權隨機獎項、更新餘額與紀錄 |
+| `listActiveWheelPrizes` | 已登入且 **Email 已驗證** | 列出啟用中獎項（供輪盤 UI） |
+| `spinWheel` | 已登入且 **Email 已驗證** | 消耗可抽次數、加權隨機獎項、更新餘額與紀錄 |
 | `seedWheelPrizes` | 需已登入且為 **admin** | 若 `wheelPrizes` 為空則寫入預設獎項 |
+| `sendSupportChatMessage` | 已登入（會員或 **匿名**） | 顧客送客服訊息或重新開啟對話（`supportThreads` / `messages`） |
+| `sendSupportChatAdminReply` | 管理員 | 管理員回覆客服訊息 |
+| `setSupportThreadStatusAdmin` | 管理員 | 將客服對話標為 `open` / `closed` |
+
+**非 Callable（觸發器）**：`notifyMemberBookingStatusChange` 為 Firestore **`onDocumentUpdated("bookings/{bookingId}")`**。當預約 **`status`** 變更、且為會員預約（非訪客模式、有 `customerId`）時，透過 **Resend** 寄信給該會員；實際寄送邏輯見 `functions/src/resendNotify.ts`，需設定 Functions 的 `RESEND_API_KEY`（等）與相關 secret。
 
 ---
 
@@ -194,8 +204,10 @@ sequenceDiagram
 ## 7. 前端畫面分工（概念）
 
 - **預約**：呼叫 `getAvailability`、`createBooking`；訪客／會員付款選項見 `BookingMode`。
+- **訪次**：首載可呼叫一次 `recordSiteVisit`（每分頁工作階段建議不重複）。
 - **登入／會員**：Auth 狀態變化時刷新 `getMyWallet`、啟用或停用輪盤按鈕。
-- **輪盤**：`spinWheel` 成功後顯示獎項名稱並再次刷新錢包狀態。
+- **輪盤**：先 `listActiveWheelPrizes`（已驗證會員）再抽；`spinWheel` 成功後顯示獎項並刷新錢包狀態。
+- **客服**：會員或匿名訪客透過 `sendSupportChatMessage`；後台以 `sendSupportChatAdminReply`、`setSupportThreadStatusAdmin` 回覆與結案。
 - **管理**：`onSnapshot` 訂閱 `bookings`（僅管理員可讀規則允許之資料）；狀態更新透過 `updateDoc` 與規則允許之欄位，或使用 Callable（依實作）— **完成／取消** 以 **`completeBooking` / `cancelBooking`** 為準（與發放次數、退款一致）。
 
 ---

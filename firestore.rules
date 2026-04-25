@@ -37,11 +37,6 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    /** FCM 裝置 token：僅 Cloud Functions（Admin SDK）讀寫，客戶端不透過 Rules 存取 */
-    match /pushDeviceTokens/{id} {
-      allow read, write: if false;
-    }
-
     /**
      * 客服對話：文件 id = Auth UID（含匿名）。僅本人與管理員可讀；寫入以「路徑 uid == auth.uid」為主，
      * 規則刻意保持簡單，避免 keys()/status/get 組合在評估時誤擋（含訪客匿名）。
