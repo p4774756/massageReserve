@@ -21,6 +21,11 @@ export const EN: Record<string, string> = {
   "booking.mode.member_wallet": "Member · wallet (deduct NT$50)",
   "booking.mode.member_beverage": "Member · drink credit",
 
+  "book.tabsAria": "Booking, reviews, and my bookings (third tab when signed in)",
+  "book.tab.booking": "Book",
+  "book.tab.guestbook": "Reviews",
+  "book.tab.myBookings": "My bookings",
+
   "status.pending": "Pending",
   "status.confirmed": "Confirmed",
   "status.done": "Completed",
@@ -139,10 +144,21 @@ export const EN: Record<string, string> = {
   "music.player.region":
     "Ambient music mini player; use the top bar to drag it to another corner.",
 
-  "music.float.dragHandle": "Move player: drag the top bar",
+  "music.player.regionCollapsed":
+    "Ambient music mini player (collapsed); drag the left grip to move, tap right to expand.",
+
+  "music.float.dragHandle": "Move player: drag the left grip on the top bar",
 
   "music.float.dragHandleHint":
     "Press and drag to reposition; on release it snaps to the bottom-left or bottom-right corner.",
+
+  "music.float.collapse": "Collapse player",
+
+  "music.float.collapseHint": "Hide track list, progress, and volume; top bar stays for dragging.",
+
+  "music.float.expand": "Expand player",
+
+  "music.float.expandHint": "Show track info, progress, and controls again.",
 
   "booking.fillName": "Please enter your name.",
   "booking.pickDateSlot": "Please choose a date and start time.",
@@ -159,12 +175,19 @@ export const EN: Record<string, string> = {
   "booking.cancelledSubmit": "Submission cancelled.",
   "booking.submitted":
     "Submitted! Status is “pending”; actual timing may be adjusted on site.",
+  "booking.submittedMyBookingsHint":
+    "Open the “My bookings” tab above to check your booking status.",
 
   "myBookings.title": "My bookings",
+  "myBookings.tabsAria": "My bookings categories",
+  "myBookings.tab.upcoming": "Upcoming",
+  "myBookings.tab.ended": "Ended",
   "myBookings.intro":
-    "Bookings tied to your account (member payment methods). Guest bookings do not appear here.",
-  "myBookings.empty":
-    "No records yet. After you submit with member wallet/cash/drink credit, they appear here.",
+    "Bookings tied to your account (member payment methods). Guest bookings do not appear here. “Upcoming” lists pending/confirmed bookings before their start time; everything else is under “Ended”.",
+  "myBookings.emptyUpcoming":
+    "No upcoming bookings. After you submit with member wallet/cash/drink credit, pending or confirmed bookings before their start time appear here.",
+  "myBookings.emptyEnded":
+    "No ended records yet (completed, cancelled, deleted, or start time has passed).",
   "myBookings.cancel": "Cancel booking",
   "myBookings.confirmCancelBody": "Cancel this booking?\n\n{{when}}",
   "myBookings.loadFail":

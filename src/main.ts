@@ -238,6 +238,20 @@ function formatWhen(b: Booking): string {
   return `${b.dateKey} ${b.startSlot}`;
 }
 
+function bookingStartMs(b: Booking): number {
+  if (b.startAt?.seconds) return b.startAt.seconds * 1000;
+  const t = slotStartInstantMsTaipei(b.dateKey, b.startSlot);
+  return Number.isFinite(t) ? t : 0;
+}
+
+/** 「尚未開始」分頁：待確認／已確認，且預約開始時刻尚未到 */
+function isMyBookingUpcomingTab(b: Booking): boolean {
+  if (b.status !== "pending" && b.status !== "confirmed") return false;
+  const start = bookingStartMs(b);
+  if (!Number.isFinite(start) || start <= 0) return false;
+  return start > Date.now();
+}
+
 function bookingStatusLabel(status: string): string {
   const map: Record<string, string> = {
     pending: t("status.pending", "待確認"),
@@ -492,9 +506,10 @@ function render() {
   const headLocale = el("div", { class: "head-locale" }, [localeField, localeSelect]);
   const headSession = el("div", { class: "head-session" }, [headSessionStatus, memberEntryBtn]);
   const headToolbarAside = el("div", { class: "head-toolbar-aside" }, [headLocale, headSession]);
-  /** 標題與語系／會員同一列（窄欄時換行） */
-  const pageHeadTopRow = el("div", { class: "page-head-top-row" }, [titleHeading, headToolbarAside]);
-  const pageHeadBody = el("div", { class: "page-head-body" }, [pageHeadTopRow, titleTextCol]);
+  /** 標題獨立一整列；語系／會員為下一列（登入狀態可換行顯示全文） */
+  const pageHeadTitleRow = el("div", { class: "page-head-title-row" }, [titleHeading]);
+  const pageHeadControlsRow = el("div", { class: "page-head-controls-row" }, [headToolbarAside]);
+  const pageHeadBody = el("div", { class: "page-head-body" }, [pageHeadTitleRow, pageHeadControlsRow, titleTextCol]);
 
   const hostPortrait = el("figure", { class: "host-atelier" }, [
     el("div", { class: "host-atelier__frame" }, [
@@ -524,8 +539,11 @@ function render() {
 
   root.append(shell);
   root.append(musicMiniRoot);
-  const musicPlayerHandle = mountMusicMiniPlayer(musicMiniRoot);
-  const musicFloatDock = attachMusicMiniPlayerFloatDrag(musicMiniRoot, musicPlayerHandle.floatDragTarget);
+  let musicFloatDock: ReturnType<typeof attachMusicMiniPlayerFloatDrag> | null = null;
+  const musicPlayerHandle = mountMusicMiniPlayer(musicMiniRoot, {
+    onBoundsChange: () => musicFloatDock?.relayout(),
+  });
+  musicFloatDock = attachMusicMiniPlayerFloatDrag(musicMiniRoot, musicPlayerHandle.floatDragTarget);
 
   /** 頂部：一般文字跑馬燈（與底部 LED 同一則公告） */
   const announcementTextStrip = el("div", {
@@ -689,13 +707,101 @@ function render() {
   let myBookingsListenerUid: string | null = null;
   const myBookingsSection = el("div", { class: "my-bookings" }, []);
   const myBookingsHint = el("div", { class: "status-line" });
-  const myBookingsList = el("div", { class: "my-bookings-list" }, []);
-  myBookingsSection.append(
-    el("h3", { class: "my-bookings-heading" }, [t("myBookings.title", "我的預約")]),
-    el("p", { class: "hint my-bookings-intro" }, [t("myBookings.intro", "以下為綁定你帳號的預約（須使用會員付款方式送出）。訪客預約不會出現在此。")]),
-    myBookingsHint,
-    myBookingsList,
+  const myBookingsTabList = el("div", { class: "book-tabs my-bookings-tabs", role: "tablist" }, []);
+  myBookingsTabList.setAttribute("aria-label", t("myBookings.tabsAria", "我的預約分類"));
+  const myBookingsTabUpcoming = el(
+    "button",
+    { type: "button", class: "tab book-tab", role: "tab", id: "my-bookings-tab-upcoming" },
+    [t("myBookings.tab.upcoming", "尚未開始")],
   );
+  const myBookingsTabEnded = el(
+    "button",
+    { type: "button", class: "tab book-tab", role: "tab", id: "my-bookings-tab-ended" },
+    [t("myBookings.tab.ended", "已結束")],
+  );
+  myBookingsTabUpcoming.setAttribute("aria-controls", "my-bookings-panel-upcoming");
+  myBookingsTabEnded.setAttribute("aria-controls", "my-bookings-panel-ended");
+  myBookingsTabList.append(myBookingsTabUpcoming, myBookingsTabEnded);
+
+  const myBookingsPanelUpcoming = el("div", {
+    class: "book-tab-panel my-bookings-tab-panel",
+    id: "my-bookings-panel-upcoming",
+  });
+  const myBookingsPanelEnded = el("div", {
+    class: "book-tab-panel my-bookings-tab-panel",
+    id: "my-bookings-panel-ended",
+  });
+  myBookingsPanelUpcoming.setAttribute("aria-labelledby", "my-bookings-tab-upcoming");
+  myBookingsPanelEnded.setAttribute("aria-labelledby", "my-bookings-tab-ended");
+
+  const myBookingsListUpcoming = el("div", { class: "my-bookings-list" }, []);
+  const myBookingsListEnded = el("div", { class: "my-bookings-list" }, []);
+  myBookingsPanelUpcoming.append(myBookingsListUpcoming);
+  myBookingsPanelEnded.append(myBookingsListEnded);
+  myBookingsPanelEnded.hidden = true;
+
+  function setMyBookingsSubTab(which: "upcoming" | "ended") {
+    const isUpcoming = which === "upcoming";
+    myBookingsTabUpcoming.setAttribute("aria-selected", String(isUpcoming));
+    myBookingsTabEnded.setAttribute("aria-selected", String(!isUpcoming));
+    myBookingsTabUpcoming.tabIndex = isUpcoming ? 0 : -1;
+    myBookingsTabEnded.tabIndex = isUpcoming ? -1 : 0;
+    myBookingsPanelUpcoming.hidden = !isUpcoming;
+    myBookingsPanelEnded.hidden = isUpcoming;
+  }
+  myBookingsTabUpcoming.addEventListener("click", () => setMyBookingsSubTab("upcoming"));
+  myBookingsTabEnded.addEventListener("click", () => setMyBookingsSubTab("ended"));
+  setMyBookingsSubTab("upcoming");
+
+  myBookingsSection.append(
+    el("p", { class: "hint my-bookings-intro" }, [
+      t(
+        "myBookings.intro",
+        "以下為綁定你帳號的預約（須使用會員付款方式送出）。訪客預約不會出現在此。「尚未開始」僅含待確認／已確認且尚未到開始時間；其餘在「已結束」。",
+      ),
+    ]),
+    myBookingsTabList,
+    myBookingsHint,
+    myBookingsPanelUpcoming,
+    myBookingsPanelEnded,
+  );
+
+  function appendMyBookingRow(list: HTMLElement, b: Booking) {
+    const canCancel = b.status === "pending" || b.status === "confirmed";
+    const row = el("div", { class: "my-booking-row" }, []);
+    const mainCol = el("div", { class: "my-booking-main" }, []);
+    mainCol.append(
+      el("div", { class: "mono my-booking-when" }, [formatWhen(b)]),
+      el("div", { class: "my-booking-status" }, [bookingStatusLabel(b.status)]),
+    );
+    const actions = el("div", { class: "my-booking-actions" }, []);
+    if (canCancel) {
+      const btn = el("button", { class: "ghost", type: "button" }, [t("myBookings.cancel", "取消預約")]);
+      btn.addEventListener("click", async () => {
+        const ok = await showConfirmModal(
+          t("myBookings.cancel", "取消預約"),
+          t("myBookings.confirmCancelBody", "確定取消這筆預約？\n\n{{when}}", { when: formatWhen(b) }),
+          t("myBookings.cancel", "取消預約"),
+        );
+        if (!ok) return;
+        btn.setAttribute("disabled", "true");
+        try {
+          const fn = cancelBookingCall();
+          await fn({ bookingId: b.id, ...localeApiParam() });
+          await refreshWalletStatus();
+        } catch (e) {
+          myBookingsHint.textContent = e instanceof Error ? e.message : t("myBookings.cancelFail", "取消失敗");
+          myBookingsHint.classList.add("error");
+          btn.removeAttribute("disabled");
+        }
+      });
+      actions.append(btn);
+    }
+    row.append(mainCol, actions);
+    const reasonEl = myBookingReasonBlock(b);
+    if (reasonEl) row.append(reasonEl);
+    list.append(row);
+  }
 
   function stopMyBookingsListener() {
     if (myBookingsUnsub) {
@@ -703,7 +809,8 @@ function render() {
       myBookingsUnsub = null;
     }
     myBookingsListenerUid = null;
-    myBookingsList.innerHTML = "";
+    myBookingsListUpcoming.innerHTML = "";
+    myBookingsListEnded.innerHTML = "";
     myBookingsHint.textContent = "";
     myBookingsHint.className = "status-line";
   }
@@ -721,51 +828,51 @@ function render() {
     myBookingsUnsub = onSnapshot(
       q,
       (snap) => {
-        myBookingsList.innerHTML = "";
+        myBookingsListUpcoming.innerHTML = "";
+        myBookingsListEnded.innerHTML = "";
         myBookingsHint.textContent = "";
         myBookingsHint.className = "status-line";
         if (snap.empty) {
-          myBookingsList.append(
-            el("p", { class: "hint my-bookings-empty" }, [t("myBookings.empty", "尚無紀錄。請用會員儲值／現金／飲料折抵送出預約後，會顯示於此。")]),
+          myBookingsListUpcoming.append(
+            el("p", { class: "hint my-bookings-empty" }, [
+              t(
+                "myBookings.emptyUpcoming",
+                "尚無進行中的預約。請用會員儲值／現金／飲料折抵送出預約後，待確認或已確認且尚未到開始時間的會顯示於此。",
+              ),
+            ]),
+          );
+          myBookingsListEnded.append(
+            el("p", { class: "hint my-bookings-empty" }, [
+              t("myBookings.emptyEnded", "尚無已結束的紀錄（已完成、已取消、已刪除或已過開始時間）。"),
+            ]),
           );
           return;
         }
-        for (const d of snap.docs) {
-          const b = { id: d.id, ...d.data() } as Booking;
-          const canCancel = b.status === "pending" || b.status === "confirmed";
-          const row = el("div", { class: "my-booking-row" }, []);
-          const mainCol = el("div", { class: "my-booking-main" }, []);
-          mainCol.append(
-            el("div", { class: "mono my-booking-when" }, [formatWhen(b)]),
-            el("div", { class: "my-booking-status" }, [bookingStatusLabel(b.status)]),
+        const all = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Booking));
+        const upcoming = all.filter(isMyBookingUpcomingTab).sort((a, b) => bookingStartMs(a) - bookingStartMs(b));
+        const ended = all.filter((b) => !isMyBookingUpcomingTab(b)).sort((a, b) => bookingStartMs(b) - bookingStartMs(a));
+
+        if (upcoming.length === 0) {
+          myBookingsListUpcoming.append(
+            el("p", { class: "hint my-bookings-empty" }, [
+              t(
+                "myBookings.emptyUpcoming",
+                "尚無進行中的預約。請用會員儲值／現金／飲料折抵送出預約後，待確認或已確認且尚未到開始時間的會顯示於此。",
+              ),
+            ]),
           );
-          const actions = el("div", { class: "my-booking-actions" }, []);
-          if (canCancel) {
-            const btn = el("button", { class: "ghost", type: "button" }, [t("myBookings.cancel", "取消預約")]);
-            btn.addEventListener("click", async () => {
-              const ok = await showConfirmModal(
-                t("myBookings.cancel", "取消預約"),
-                t("myBookings.confirmCancelBody", "確定取消這筆預約？\n\n{{when}}", { when: formatWhen(b) }),
-                t("myBookings.cancel", "取消預約"),
-              );
-              if (!ok) return;
-              btn.setAttribute("disabled", "true");
-              try {
-                const fn = cancelBookingCall();
-                await fn({ bookingId: b.id, ...localeApiParam() });
-                await refreshWalletStatus();
-              } catch (e) {
-                myBookingsHint.textContent = e instanceof Error ? e.message : t("myBookings.cancelFail", "取消失敗");
-                myBookingsHint.classList.add("error");
-                btn.removeAttribute("disabled");
-              }
-            });
-            actions.append(btn);
-          }
-          row.append(mainCol, actions);
-          const reasonEl = myBookingReasonBlock(b);
-          if (reasonEl) row.append(reasonEl);
-          myBookingsList.append(row);
+        } else {
+          for (const b of upcoming) appendMyBookingRow(myBookingsListUpcoming, b);
+        }
+
+        if (ended.length === 0) {
+          myBookingsListEnded.append(
+            el("p", { class: "hint my-bookings-empty" }, [
+              t("myBookings.emptyEnded", "尚無已結束的紀錄（已完成、已取消、已刪除或已過開始時間）。"),
+            ]),
+          );
+        } else {
+          for (const b of ended) appendMyBookingRow(myBookingsListEnded, b);
         }
       },
       (err) => {
@@ -1227,98 +1334,105 @@ function render() {
         : t("member.modeHint.guest", "訪客可選現金 50 元或「請師傅一杯飲料」；儲值與抽獎請使用右上角登入。");
   }
 
+  /** 與下方 `setBookSubTab` 一併指派：會員區隱藏時關閉「我的預約」分頁並切回預約表單 */
+  let syncBookMyBookingsTabVisibility: () => void = () => {};
+
   async function refreshWalletStatus() {
-    const user = auth.currentUser;
-    refillBookingModes(isVerifiedMember());
-    updateMemberEntryLabel();
-    if (!user) {
-      stopMyBookingsListener();
-      walletBalance = 0;
-      drawChances = 0;
-      memberExtrasWrap.hidden = true;
-      emailVerifyBanner.hidden = true;
-      walletStatus.textContent = "";
-      walletStatus.className = "status-line";
-      spinBtn.setAttribute("disabled", "true");
-      wheelStatus.textContent = "";
-      wheelStatus.className = "status-line";
-      wheelResult.hidden = true;
-      syncPageHeadSession();
-      return;
-    }
-    if (user.isAnonymous) {
-      stopMyBookingsListener();
-      walletBalance = 0;
-      drawChances = 0;
-      memberExtrasWrap.hidden = true;
-      emailVerifyBanner.hidden = true;
-      walletStatus.textContent = "";
-      walletStatus.className = "status-line";
-      spinBtn.setAttribute("disabled", "true");
-      wheelStatus.textContent = "";
-      wheelStatus.className = "status-line";
-      wheelResult.hidden = true;
-      syncPageHeadSession();
-      return;
-    }
-    memberExtrasWrap.hidden = false;
-    if (!user.emailVerified) {
-      stopMyBookingsListener();
-      walletBalance = 0;
-      drawChances = 0;
-      emailVerifyBanner.hidden = false;
-      emailVerifyText.textContent = t(
-        "member.verifyBanner",
-        "已登入，但尚未完成 Email 驗證。請至信箱點擊驗證連結；完成後請按「我已驗證，重新整理狀態」。",
-      );
-      walletStatus.textContent = "";
-      walletStatus.className = "status-line";
-      spinBtn.setAttribute("disabled", "true");
-      wheelStatus.textContent = t("member.wheelNeedVerifyFirst", "完成信箱驗證後才可抽輪盤。");
-      wheelStatus.className = "status-line";
-      wheelResult.hidden = true;
-      syncPageHeadSession();
-      return;
-    }
-    emailVerifyBanner.hidden = true;
-    ensureMyBookingsListener(user.uid);
-    walletStatus.textContent = t("member.walletLoading", "讀取會員餘額中…");
-    walletStatus.className = "status-line";
-    syncPageHeadSession(user.displayName?.trim() || user.email?.trim());
     try {
-      const fn = getMyWalletCall();
-      const res = await fn({ ...localeApiParam() });
-      const data = res.data as { walletBalance: number; drawChances: number; nickname?: string };
-      walletBalance = typeof data.walletBalance === "number" ? data.walletBalance : 0;
-      drawChances = typeof data.drawChances === "number" ? data.drawChances : 0;
-      const nickFromDb =
-        typeof data.nickname === "string" && data.nickname.trim() ? data.nickname.trim() : "";
-      const nickFromAuth = user.displayName?.trim() ?? "";
-      const profileNick = nickFromDb || nickFromAuth;
-      if (profileNick && !nameInput.value.trim()) {
-        nameInput.value = profileNick.slice(0, 80);
+      const user = auth.currentUser;
+      refillBookingModes(isVerifiedMember());
+      updateMemberEntryLabel();
+      if (!user) {
+        stopMyBookingsListener();
+        walletBalance = 0;
+        drawChances = 0;
+        memberExtrasWrap.hidden = true;
+        emailVerifyBanner.hidden = true;
+        walletStatus.textContent = "";
+        walletStatus.className = "status-line";
+        spinBtn.setAttribute("disabled", "true");
+        wheelStatus.textContent = "";
+        wheelStatus.className = "status-line";
+        wheelResult.hidden = true;
+        syncPageHeadSession();
+        return;
       }
-      walletStatus.textContent = t("member.walletLine", "會員已登入：儲值餘額 {{balance}} 元，可抽次數 {{chances}}。", {
-        balance: walletBalance,
-        chances: drawChances,
-      });
-      walletStatus.className = "status-line ok";
-      wheelStatus.textContent =
-        drawChances > 0 ? t("member.wheelLuck", "可抽輪盤，祝你好運！") : t("member.wheelNone", "目前無可抽次數。");
-      wheelStatus.className = "status-line";
-      if (drawChances > 0) spinBtn.removeAttribute("disabled");
-      else spinBtn.setAttribute("disabled", "true");
-      syncPageHeadSession(profileNick);
-    } catch (e) {
-      walletBalance = 0;
-      drawChances = 0;
+      if (user.isAnonymous) {
+        stopMyBookingsListener();
+        walletBalance = 0;
+        drawChances = 0;
+        memberExtrasWrap.hidden = true;
+        emailVerifyBanner.hidden = true;
+        walletStatus.textContent = "";
+        walletStatus.className = "status-line";
+        spinBtn.setAttribute("disabled", "true");
+        wheelStatus.textContent = "";
+        wheelStatus.className = "status-line";
+        wheelResult.hidden = true;
+        syncPageHeadSession();
+        return;
+      }
       memberExtrasWrap.hidden = false;
-      walletStatus.textContent = errorMessage(e);
-      walletStatus.className = "status-line error";
-      spinBtn.setAttribute("disabled", "true");
-      wheelStatus.textContent = t("member.wheelStateFail", "無法讀取抽獎狀態。");
-      wheelStatus.className = "status-line error";
-      syncPageHeadSession();
+      if (!user.emailVerified) {
+        stopMyBookingsListener();
+        walletBalance = 0;
+        drawChances = 0;
+        emailVerifyBanner.hidden = false;
+        emailVerifyText.textContent = t(
+          "member.verifyBanner",
+          "已登入，但尚未完成 Email 驗證。請至信箱點擊驗證連結；完成後請按「我已驗證，重新整理狀態」。",
+        );
+        walletStatus.textContent = "";
+        walletStatus.className = "status-line";
+        spinBtn.setAttribute("disabled", "true");
+        wheelStatus.textContent = t("member.wheelNeedVerifyFirst", "完成信箱驗證後才可抽輪盤。");
+        wheelStatus.className = "status-line";
+        wheelResult.hidden = true;
+        syncPageHeadSession();
+        return;
+      }
+      emailVerifyBanner.hidden = true;
+      ensureMyBookingsListener(user.uid);
+      walletStatus.textContent = t("member.walletLoading", "讀取會員餘額中…");
+      walletStatus.className = "status-line";
+      syncPageHeadSession(user.displayName?.trim() || user.email?.trim());
+      try {
+        const fn = getMyWalletCall();
+        const res = await fn({ ...localeApiParam() });
+        const data = res.data as { walletBalance: number; drawChances: number; nickname?: string };
+        walletBalance = typeof data.walletBalance === "number" ? data.walletBalance : 0;
+        drawChances = typeof data.drawChances === "number" ? data.drawChances : 0;
+        const nickFromDb =
+          typeof data.nickname === "string" && data.nickname.trim() ? data.nickname.trim() : "";
+        const nickFromAuth = user.displayName?.trim() ?? "";
+        const profileNick = nickFromDb || nickFromAuth;
+        if (profileNick && !nameInput.value.trim()) {
+          nameInput.value = profileNick.slice(0, 80);
+        }
+        walletStatus.textContent = t("member.walletLine", "會員已登入：儲值餘額 {{balance}} 元，可抽次數 {{chances}}。", {
+          balance: walletBalance,
+          chances: drawChances,
+        });
+        walletStatus.className = "status-line ok";
+        wheelStatus.textContent =
+          drawChances > 0 ? t("member.wheelLuck", "可抽輪盤，祝你好運！") : t("member.wheelNone", "目前無可抽次數。");
+        wheelStatus.className = "status-line";
+        if (drawChances > 0) spinBtn.removeAttribute("disabled");
+        else spinBtn.setAttribute("disabled", "true");
+        syncPageHeadSession(profileNick);
+      } catch (e) {
+        walletBalance = 0;
+        drawChances = 0;
+        memberExtrasWrap.hidden = false;
+        walletStatus.textContent = errorMessage(e);
+        walletStatus.className = "status-line error";
+        spinBtn.setAttribute("disabled", "true");
+        wheelStatus.textContent = t("member.wheelStateFail", "無法讀取抽獎狀態。");
+        wheelStatus.className = "status-line error";
+        syncPageHeadSession();
+      }
+    } finally {
+      syncBookMyBookingsTabVisibility();
     }
   }
 
@@ -1601,10 +1715,18 @@ function render() {
     try {
       const fn = createBookingCall();
       await fn({ displayName, note, dateKey, startSlot, bookingMode, ...localeApiParam() });
-      bookStatus.textContent = t(
+      const memberBooking =
+        bookingMode === "member_wallet" ||
+        bookingMode === "member_cash" ||
+        bookingMode === "member_beverage";
+      const submittedLine = t(
         "booking.submitted",
         "已送出！狀態為「待確認」，實際時間會依現場情況微調。",
       );
+      const myBookingsHint = memberBooking
+        ? t("booking.submittedMyBookingsHint", "可到上方「我的預約」分頁查看預約狀態。")
+        : "";
+      bookStatus.textContent = myBookingsHint ? `${submittedLine} ${myBookingsHint}` : submittedLine;
       bookStatus.classList.add("ok");
       nameInput.value = "";
       noteInput.value = "";
@@ -1630,7 +1752,7 @@ function render() {
     ),
   ]);
   const wheelRow = el("div", { class: "book-wheel-row" }, [spinBtn, wheelTestBtn, wheelStatus, wheelResult]);
-  memberExtrasWrap.append(emailVerifyBanner, walletStatus, myBookingsSection, wheelRulesHint, wheelRow);
+  memberExtrasWrap.append(emailVerifyBanner, walletStatus, wheelRulesHint, wheelRow);
   const bookSupportChatMount = el("div", { class: "book-support-chat" });
   mountMemberSupportChat(db, auth, bookSupportChatMount);
 
@@ -1722,7 +1844,41 @@ function render() {
   const guestbookMount = el("div", { class: "guestbook-mount" });
   mountGuestbook(db, auth, guestbookMount);
 
-  panelBook.append(
+  let bookSubTab: "book" | "guestbook" | "mybookings" = "book";
+
+  const bookTabList = el("div", { class: "book-tabs", role: "tablist" });
+  bookTabList.setAttribute(
+    "aria-label",
+    t("book.tabsAria", "預約、心得與評價、我的預約（登入會員後顯示第三項）"),
+  );
+  const tabBook = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-book" }, [
+    t("book.tab.booking", "預約"),
+  ]);
+  const tabGuestbook = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-guestbook" }, [
+    t("book.tab.guestbook", "心得與評價"),
+  ]);
+  const tabMyBookings = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-my-bookings" }, [
+    t("book.tab.myBookings", "我的預約"),
+  ]);
+  tabBook.setAttribute("aria-controls", "book-tab-panel-book");
+  tabGuestbook.setAttribute("aria-controls", "book-tab-panel-guestbook");
+  tabMyBookings.setAttribute("aria-controls", "book-tab-panel-my-bookings");
+  tabBook.setAttribute("aria-selected", "true");
+  tabGuestbook.setAttribute("aria-selected", "false");
+  tabMyBookings.setAttribute("aria-selected", "false");
+  tabBook.tabIndex = 0;
+  tabGuestbook.tabIndex = -1;
+  tabMyBookings.tabIndex = -1;
+  tabMyBookings.hidden = memberExtrasWrap.hidden;
+  bookTabList.append(tabBook, tabGuestbook, tabMyBookings);
+
+  const bookPanelBook = el("div", {
+    class: "book-tab-panel",
+    id: "book-tab-panel-book",
+    role: "tabpanel",
+  });
+  bookPanelBook.setAttribute("aria-labelledby", "book-tab-book");
+  bookPanelBook.append(
     el("div", { class: "grid grid-2" }, [
       el("label", { class: "field" }, [
         t("field.name", "姓名"),
@@ -1758,8 +1914,52 @@ function render() {
     el("div", { class: "row-actions" }, [submitBtn]),
     bookStatus,
     bookFooterNote,
-    guestbookMount,
   );
+
+  const bookPanelGuestbook = el("div", {
+    class: "book-tab-panel book-tab-panel--guestbook",
+    id: "book-tab-panel-guestbook",
+    role: "tabpanel",
+    hidden: true,
+  });
+  bookPanelGuestbook.setAttribute("aria-labelledby", "book-tab-guestbook");
+  bookPanelGuestbook.append(guestbookMount);
+
+  const bookPanelMyBookings = el("div", {
+    class: "book-tab-panel book-tab-panel--my-bookings",
+    id: "book-tab-panel-my-bookings",
+    role: "tabpanel",
+    hidden: true,
+  });
+  bookPanelMyBookings.setAttribute("aria-labelledby", "book-tab-my-bookings");
+  bookPanelMyBookings.append(myBookingsSection);
+
+  function setBookSubTab(which: "book" | "guestbook" | "mybookings") {
+    bookSubTab = which;
+    tabBook.setAttribute("aria-selected", String(which === "book"));
+    tabGuestbook.setAttribute("aria-selected", String(which === "guestbook"));
+    tabMyBookings.setAttribute("aria-selected", String(which === "mybookings"));
+    tabBook.tabIndex = which === "book" ? 0 : -1;
+    tabGuestbook.tabIndex = which === "guestbook" ? 0 : -1;
+    tabMyBookings.tabIndex = which === "mybookings" ? 0 : -1;
+    bookPanelBook.hidden = which !== "book";
+    bookPanelGuestbook.hidden = which !== "guestbook";
+    bookPanelMyBookings.hidden = which !== "mybookings";
+  }
+  tabBook.addEventListener("click", () => setBookSubTab("book"));
+  tabGuestbook.addEventListener("click", () => setBookSubTab("guestbook"));
+  tabMyBookings.addEventListener("click", () => setBookSubTab("mybookings"));
+
+  syncBookMyBookingsTabVisibility = () => {
+    const show = !memberExtrasWrap.hidden;
+    tabMyBookings.hidden = !show;
+    if (!show && bookSubTab === "mybookings") {
+      setBookSubTab("book");
+    }
+  };
+  syncBookMyBookingsTabVisibility();
+
+  panelBook.append(bookTabList, bookPanelBook, bookPanelGuestbook, bookPanelMyBookings);
 
   root.append(supportChatFloat);
   const supportChatFloatDock = attachSupportChatFloatDrag(supportChatFloat, supportChatFab);
@@ -3386,7 +3586,7 @@ function render() {
     supportChatFloat.hidden = !isBook;
     if (isBook) {
       supportChatFloatDock.relayout();
-      musicFloatDock.relayout();
+      musicFloatDock?.relayout();
     }
     if (!isBook) {
       setSupportChatOpen(false);

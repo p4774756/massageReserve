@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-test.describe("頁首標題列（標題與語言／會員）", () => {
-  test("視窗寬 720px 時標題與工具列同一 flex 橫列", async ({ page }) => {
+test.describe("頁首標題與工具列", () => {
+  test("標題獨立一列、語系／會員在下一列", async ({ page }) => {
     await page.setViewportSize({ width: 720, height: 800 });
     await page.goto("/");
 
@@ -9,29 +9,19 @@ test.describe("頁首標題列（標題與語言／會員）", () => {
       test.skip(true, "未載入預約頁（例如尚未設定 Firebase）");
     }
 
-    const topRow = page.locator(".page-head-top-row");
-    await expect(topRow).toBeVisible();
-    const display = await topRow.evaluate((el) => getComputedStyle(el).display);
-    const flexDir = await topRow.evaluate((el) => getComputedStyle(el).flexDirection);
-    expect(display).toBe("flex");
-    expect(flexDir).toBe("row");
+    const titleRow = page.locator(".page-head-title-row");
+    const controlsRow = page.locator(".page-head-controls-row");
+    await expect(titleRow).toBeVisible();
+    await expect(controlsRow).toBeVisible();
+    const titleDisplay = await titleRow.evaluate((el) => getComputedStyle(el).display);
+    const controlsDisplay = await controlsRow.evaluate((el) => getComputedStyle(el).display);
+    expect(titleDisplay).toBe("block");
+    expect(controlsDisplay).toBe("flex");
+    await expect(titleRow.locator("h1")).toBeVisible();
+    await expect(controlsRow.locator(".head-toolbar-aside")).toBeVisible();
   });
 
-  test("視窗 620px 時語系／會員區仍為橫向（與標題同列設計）", async ({ page }) => {
-    await page.setViewportSize({ width: 620, height: 800 });
-    await page.goto("/");
-
-    if ((await page.locator("header.page-head").count()) === 0) {
-      test.skip(true, "未載入預約頁（例如尚未設定 Firebase）");
-    }
-
-    const aside = page.locator(".page-head-top-row .head-toolbar-aside");
-    await expect(aside).toBeVisible();
-    const asideDir = await aside.evaluate((el) => getComputedStyle(el).flexDirection);
-    expect(asideDir).toBe("row");
-  });
-
-  test("視窗寬 400px 時標題列可換行且仍為 flex", async ({ page }) => {
+  test("語系／會員區窄寬仍單列（flex-wrap: nowrap）", async ({ page }) => {
     await page.setViewportSize({ width: 400, height: 800 });
     await page.goto("/");
 
@@ -39,11 +29,25 @@ test.describe("頁首標題列（標題與語言／會員）", () => {
       test.skip(true, "未載入預約頁（例如尚未設定 Firebase）");
     }
 
-    const topRow = page.locator(".page-head-top-row");
-    await expect(topRow).toBeVisible();
-    const display = await topRow.evaluate((el) => getComputedStyle(el).display);
-    const flexWrap = await topRow.evaluate((el) => getComputedStyle(el).flexWrap);
-    expect(display).toBe("flex");
-    expect(flexWrap).toBe("wrap");
+    const aside = page.locator(".page-head-controls-row .head-toolbar-aside");
+    await expect(aside).toBeVisible();
+    const asideDir = await aside.evaluate((el) => getComputedStyle(el).flexDirection);
+    const asideWrap = await aside.evaluate((el) => getComputedStyle(el).flexWrap);
+    expect(asideDir).toBe("row");
+    expect(asideWrap).toBe("nowrap");
+  });
+
+  test("登入狀態字串可換行（非單行省略）", async ({ page }) => {
+    await page.setViewportSize({ width: 400, height: 800 });
+    await page.goto("/");
+
+    if ((await page.locator("header.page-head").count()) === 0) {
+      test.skip(true, "未載入預約頁（例如尚未設定 Firebase）");
+    }
+
+    const line = page.locator(".page-head-controls-row .page-head-session__line").first();
+    await expect(line).toBeVisible();
+    const ws = await line.evaluate((el) => getComputedStyle(el).whiteSpace);
+    expect(ws).not.toBe("nowrap");
   });
 });

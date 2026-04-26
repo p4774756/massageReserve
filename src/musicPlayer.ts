@@ -2,6 +2,7 @@ import { t } from "./i18n";
 
 /**
  * 舒壓配樂浮動播放器：進度條、時間、曲名與序號、播放控制、曲目清單、音量。
+ * 頂列左為拖曳握把、右為摺疊／展開（`mr_music_collapsed`）；摺疊時隱藏主面板，仍可拖移。
  * 由 `main.ts` 掛在 `#app` 內之固定浮層根節點（版面見 `style.css` 之 `--float`）。
  *
  * 預設曲目為 **Kevin MacLeod**（incompetech.com）之放鬆／環境樂，授權 **CC BY 4.0**；
@@ -83,13 +84,23 @@ function iconSvg(pathD: string, size: 16 | 22 = 22): string {
   return `<svg class="music-mini-player__svg" viewBox="0 0 24 24" width="${wh}" height="${wh}" aria-hidden="true"><path fill="currentColor" d="${pathD}"/></svg>`;
 }
 
+export type MusicMiniPlayerMountOptions = {
+  /** 摺疊／展開後呼叫，讓浮層依新高度重新貼邊 */
+  onBoundsChange?: () => void;
+};
+
 export type MusicMiniPlayerMountHandle = {
   dispose: () => void;
   /** 長按此區塊可拖曳整個浮層（與客服浮窗相同機制） */
   floatDragTarget: HTMLElement;
 };
 
-export function mountMusicMiniPlayer(mount: HTMLElement): MusicMiniPlayerMountHandle {
+const MUSIC_COLLAPSED_KEY = "mr_music_collapsed";
+
+export function mountMusicMiniPlayer(
+  mount: HTMLElement,
+  opts?: MusicMiniPlayerMountOptions,
+): MusicMiniPlayerMountHandle {
   const wrap = el("div", {
     class: "music-mini-player music-mini-player--bar music-mini-player--float",
     role: "region",
@@ -107,6 +118,12 @@ export function mountMusicMiniPlayer(mount: HTMLElement): MusicMiniPlayerMountHa
   let currentIndex = 0;
   let seekDragging = false;
   let playlistOpen = false;
+  let shellCollapsed = false;
+  try {
+    shellCollapsed = localStorage.getItem(MUSIC_COLLAPSED_KEY) === "1";
+  } catch {
+    /* ignore */
+  }
 
   const btnPrev = el("button", { type: "button", class: "music-mini-player__icon-btn" }, []);
   btnPrev.setAttribute("aria-label", "上一首");
@@ -392,7 +409,7 @@ export function mountMusicMiniPlayer(mount: HTMLElement): MusicMiniPlayerMountHa
   const dragHandle = el("button", { type: "button", class: "music-float__drag-handle" }, []);
   dragHandle.setAttribute(
     "aria-label",
-    t("music.float.dragHandle", "拖移播放器：按住頂端橫條拖曳"),
+    t("music.float.dragHandle", "拖移播放器：按住頂端左側握把拖曳"),
   );
   dragHandle.title = t(
     "music.float.dragHandleHint",
@@ -402,10 +419,61 @@ export function mountMusicMiniPlayer(mount: HTMLElement): MusicMiniPlayerMountHa
     el("span", { class: "music-float__drag-handle__grip", ariaHidden: "true" }, []),
   );
 
-  const shell = el("div", { class: "music-mini-player__shell" }, []);
+  const btnCollapse = el("button", { type: "button", class: "music-float__collapse-toggle" }, []);
+  btnCollapse.setAttribute("aria-controls", "music-mini-player-shell-panel");
+
+  const topBar = el("div", { class: "music-float__top-bar" }, [dragHandle, btnCollapse]);
+
+  const shell = el("div", { class: "music-mini-player__shell", id: "music-mini-player-shell-panel" }, []);
   shell.append(audio, barInner, playlistPop);
-  wrap.append(dragHandle, shell);
+  wrap.append(topBar, shell);
   mount.append(wrap);
+
+  function applyShellCollapseUi() {
+    shell.hidden = shellCollapsed;
+    wrap.classList.toggle("music-mini-player--collapsed", shellCollapsed);
+    btnCollapse.setAttribute("aria-expanded", String(!shellCollapsed));
+    btnCollapse.setAttribute(
+      "aria-label",
+      shellCollapsed
+        ? t("music.float.expand", "展開播放器")
+        : t("music.float.collapse", "摺疊播放器"),
+    );
+    btnCollapse.title = shellCollapsed
+      ? t("music.float.expandHint", "顯示曲目、進度與音量")
+      : t("music.float.collapseHint", "隱藏主面板，僅保留頂列（仍可拖移）");
+    btnCollapse.innerHTML = shellCollapsed
+      ? iconSvg("M7 10l5 5 5-5z", 16)
+      : iconSvg("M7 14l5-5 5 5z", 16);
+    wrap.setAttribute(
+      "aria-label",
+      shellCollapsed
+        ? t(
+            "music.player.regionCollapsed",
+            "舒壓配樂浮動播放器（已摺疊）；左側可拖移位置，右側可展開。",
+          )
+        : t("music.player.region", "舒壓配樂浮動播放器；頂端橫條可拖移位置。"),
+    );
+  }
+
+  function setShellCollapsed(next: boolean) {
+    if (next) setPlaylistOpen(false);
+    shellCollapsed = next;
+    try {
+      localStorage.setItem(MUSIC_COLLAPSED_KEY, shellCollapsed ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+    applyShellCollapseUi();
+    opts?.onBoundsChange?.();
+  }
+
+  btnCollapse.addEventListener("click", (e) => {
+    e.stopPropagation();
+    setShellCollapsed(!shellCollapsed);
+  });
+
+  applyShellCollapseUi();
 
   rebuildPlaylistButtons();
   audio.volume = Number(vol.value);
