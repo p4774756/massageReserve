@@ -231,6 +231,8 @@ export const EN: Record<string, string> = {
   "session.guestChat": "Guest chat mode",
   "session.guestChatTitle": "Anonymous identity for contacting the shop",
   "session.verifyPending": "Signed in · email pending verification",
+  "session.signInLine1": "Signed in ·",
+  "session.verifyPendingLine2": "Email pending verification",
   "session.verifyTitleFallback": "No email on file",
   "session.signedInPrefix": "Signed in · ",
   "session.memberFallback": "Member",
@@ -361,7 +363,8 @@ export const EN: Record<string, string> = {
   "admin.memberList.title": "Member list",
   "admin.memberList.introA": "All Firebase Authentication users merged with Firestore ",
   "admin.memberList.introB": " wallet balance and display name. Large directories may load slowly.",
-  "admin.memberList.introSort": "Click column headers to sort; 10 rows per page.",
+  "admin.memberList.introSort":
+    "Click column headers to sort. Verified email is listed first by default; 10 rows per page.",
   "admin.memberList.reload": "Reload member list",
   "admin.memberList.loading": "Loading member list…",
   "admin.memberList.loaded": "Loaded {{n}} users.",

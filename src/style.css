@@ -449,7 +449,7 @@ figure.host-atelier {
 
   .head-session {
     flex: 0 0 auto;
-    min-width: 0;
+    min-width: min-content;
   }
 
   .music-mini-player--bar .music-bar__main {
@@ -459,6 +459,28 @@ figure.host-atelier {
   .page-head p,
   .page-head .page-head-guest-hint {
     max-width: none;
+  }
+}
+
+/* 極窄 #app：語系列與「登入狀態＋按鈕」橫排易把狀態壓成數十字寬；換行讓狀態列獨佔下一整行（依 #app 寬，勿綁 viewport≤640） */
+@container app (max-width: 479px) {
+  .head-toolbar-aside {
+    width: 100%;
+    flex: 1 1 100%;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    margin-top: 0;
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .head-session {
+    flex: 1 1 100%;
+    flex-basis: 100%;
+    max-width: 100%;
+    justify-content: flex-end;
+    min-width: 0;
   }
 }
 
@@ -485,17 +507,31 @@ figure.host-atelier {
 }
 
 .page-head-session {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
   font-size: 0.82rem;
-  line-height: 1.35;
+  line-height: 1.3;
   color: var(--muted);
   text-align: right;
   flex: 1 1 auto;
-  min-width: 0;
+  /* 勿用 min-width:0：在 flex/grid 內會讓 min-content 變 0，搭配 overflow:hidden 把「已登入·稱呼」壓成數十字寬 */
+  min-width: min-content;
   /* 與語系、會員按鈕並列時由 flex 分配空間，勿再硬性 cap 成 15rem 導致只剩數十字寬 */
   max-width: none;
+}
+
+.page-head-session__line {
+  display: block;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.page-head-session__line[hidden] {
+  display: none !important;
 }
 
 .page-head-session--pending {
@@ -1481,23 +1517,6 @@ label.field.checkbox-field {
 
   .page-head .visitor-stats--wretch .visitor-stats__rail {
     display: none;
-  }
-
-  /* 勿在此設 flex-direction: row，否則與 @container app（寬 #app 時直向堆語言／登入）衝突；
-     窄 #app 時由預設 .head-toolbar-aside 的 row 即可 */
-  @container app (max-width: 479px) {
-    .head-toolbar-aside {
-      width: 100%;
-      flex: 1 1 100%;
-      flex-direction: row;
-      align-items: center;
-      justify-content: flex-end;
-      margin-top: 0;
-    }
-  }
-
-  .page-head-session {
-    max-width: min(70vw, 18rem);
   }
 
   .member-entry,

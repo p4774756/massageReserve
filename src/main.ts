@@ -467,11 +467,17 @@ function render() {
   const memberEntryBtn = el("button", { class: "ghost member-entry", type: "button" }, [
     t("member.entryLogin", "會員登入"),
   ]);
-  const headSessionStatus = el("span", {
-    class: "page-head-session",
-    role: "status",
-    ariaLive: "polite",
-  });
+  const headSessionLine1 = el("span", { class: "page-head-session__line" });
+  const headSessionLine2 = el("span", { class: "page-head-session__line" });
+  const headSessionStatus = el(
+    "span",
+    {
+      class: "page-head-session",
+      role: "status",
+      ariaLive: "polite",
+    },
+    [headSessionLine1, headSessionLine2],
+  );
   const localeField = el("label", { class: "locale-switch", htmlFor: "site-locale-select" }, [
     t("locale.fieldLabel", "介面語言"),
   ]);
@@ -778,28 +784,41 @@ function render() {
     memberEntryBtn.textContent = user ? t("member.entryCenter", "會員中心") : t("member.entryLogin", "會員登入");
   }
 
-  /** 預約頁右上角：訪客／登入與驗證狀態／稱呼（長字省略，信箱完整字串放 title 提示） */
+  /** 預約頁右上角：訪客／登入與驗證狀態／稱呼（已登入時兩行：狀態列 + 稱呼；長字省略，完整字串放 title） */
   function syncPageHeadSession(profileLabel?: string) {
     if (tab !== "book") {
       headSessionStatus.hidden = true;
       return;
     }
     headSessionStatus.hidden = false;
+    const setLines = (line1: string, line2: string | null) => {
+      headSessionLine1.textContent = line1;
+      if (line2 == null || line2 === "") {
+        headSessionLine2.textContent = "";
+        headSessionLine2.setAttribute("hidden", "");
+      } else {
+        headSessionLine2.textContent = line2;
+        headSessionLine2.removeAttribute("hidden");
+      }
+    };
     const u = auth.currentUser;
     if (!u) {
-      headSessionStatus.textContent = t("session.guest", "訪客");
+      setLines(t("session.guest", "訪客"), null);
       headSessionStatus.removeAttribute("title");
       headSessionStatus.className = "page-head-session";
       return;
     }
     if (u.isAnonymous) {
-      headSessionStatus.textContent = t("session.guestChat", "訪客留言模式");
+      setLines(t("session.guestChat", "訪客留言模式"), null);
       headSessionStatus.title = t("session.guestChatTitle", "已建立匿名身分，僅用於聯絡店家");
       headSessionStatus.className = "page-head-session page-head-session--pending";
       return;
     }
     if (!u.emailVerified) {
-      headSessionStatus.textContent = t("session.verifyPending", "已登入 · 待驗證信箱");
+      setLines(
+        t("session.signInLine1", "已登入 ·"),
+        t("session.verifyPendingLine2", "待驗證信箱"),
+      );
       headSessionStatus.title = u.email ?? t("session.verifyTitleFallback", "尚未驗證信箱");
       headSessionStatus.className = "page-head-session page-head-session--pending";
       return;
@@ -816,7 +835,7 @@ function render() {
             ? fromEmail
             : t("session.memberFallback", "會員");
     const shown = truncateOneLine(raw, 18);
-    headSessionStatus.textContent = `${t("session.signedInPrefix", "已登入 · ")}${shown}`;
+    setLines(t("session.signInLine1", "已登入 ·"), shown);
     headSessionStatus.title = shown !== raw ? raw : "";
     headSessionStatus.className = "page-head-session";
   }
@@ -2570,7 +2589,7 @@ function render() {
     const MEMBER_LIST_PAGE_SIZE = 10;
     let memberListCache: AdminMemberListRow[] = [];
     let memberListPageIndex = 0;
-    let memberListSortKey: MemberListSortKey = "email";
+    let memberListSortKey: MemberListSortKey = "emailVerified";
     let memberListSortAsc = true;
 
     const memberListPager = el("div", { class: "admin-hidden-pager admin-member-list-pager" });
@@ -2790,7 +2809,7 @@ function render() {
           drawChances: typeof m.drawChances === "number" ? m.drawChances : 0,
         }));
         memberListPageIndex = 0;
-        memberListSortKey = "email";
+        memberListSortKey = "emailVerified";
         memberListSortAsc = true;
         paintMemberListTable();
         memberListStatus.textContent = t("admin.memberList.loaded", "已載入 {{n}} 位使用者。", {
@@ -2816,7 +2835,9 @@ function render() {
         el("code", {}, ["customers/{uid}"]),
         t("admin.memberList.introB", " 的餘額與稱呼。人數極多時載入可能較久。"),
       ]),
-      el("p", { class: "hint" }, [t("admin.memberList.introSort", "表頭欄位可點擊排序；清單每頁顯示 10 位。")]),
+      el("p", { class: "hint" }, [
+        t("admin.memberList.introSort", "表頭欄位可點擊排序；預設已驗證信箱在前。清單每頁顯示 10 位。"),
+      ]),
       el("div", { class: "row-actions" }, [memberListRefreshBtn]),
       memberListStatus,
       memberListTableWrap,
