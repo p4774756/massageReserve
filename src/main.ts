@@ -1649,6 +1649,10 @@ function render() {
   supportChatFab.setAttribute("aria-controls", "support-chat-float-panel");
   supportChatFab.setAttribute("aria-expanded", "false");
   supportChatFab.setAttribute("aria-label", t("support.fab.open", "開啟聯絡店家"));
+  supportChatFab.title = t(
+    "support.fab.hint",
+    "短按：開啟或收合。按住後略為移動即可拖曳；放開貼左或右下緣。",
+  );
   const supportChatFloat = el("div", { class: "support-chat-float" }, [supportChatFloatPanel, supportChatFab]);
   let supportChatOpen = false;
   function setSupportChatOpen(open: boolean) {

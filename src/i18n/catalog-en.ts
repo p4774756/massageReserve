@@ -133,8 +133,8 @@ export const EN: Record<string, string> = {
   "support.fab.collapse": "Close",
   "support.fab.open": "Open contact",
   "support.fab.close": "Close contact",
-  "support.fab.dragTitle":
-    "Tap: open/close. Long-press ~0.5s to drag; release snaps to left or right bottom edge.",
+  "support.fab.hint":
+    "Tap: open or close. Press and move slightly (~10px) to drag; release snaps to the bottom-left or bottom-right corner.",
 
   "music.player.region":
     "Ambient music mini player; use the top bar to drag it to another corner.",

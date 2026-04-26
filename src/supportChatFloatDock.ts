@@ -1,24 +1,21 @@
 /**
- * 「聯絡店家」浮層：長按主按鈕約半秒後可拖曳整塊，放開後依中心點黏在視窗左或右下緣（距底距離會記住）。
+ * 「聯絡店家」浮層：在主按鈕（FAB）上按住後，略為移動超過閾值即拖曳整塊；單純短按仍為開啟／收合。
+ * 放開後依中心點黏在視窗左或右下緣（距底會記住）。
  */
-
-import { t } from "./i18n";
 
 const DOCK_KEY = "mr_support_float_side";
 const BOTTOM_KEY = "mr_support_float_bottom";
-const LONG_PRESS_MS = 480;
-const LONG_PRESS_CANCEL_MOVE_PX = 12;
+/** 與「點擊」區隔：超過此位移（px）才視為拖曳 */
+const DRAG_THRESHOLD_PX = 10;
 
 function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
 }
 
-type LongPressPending = {
+type PendingDrag = {
   pointerId: number;
   startX: number;
   startY: number;
-  lastX: number;
-  lastY: number;
   pointerType: string;
   button: number;
 };
@@ -36,9 +33,7 @@ export function attachSupportChatFloatDrag(floatEl: HTMLElement, fab: HTMLButton
   let dragPointerId: number | null = null;
   let grabOffX = 0;
   let grabOffY = 0;
-  let longPressPending: LongPressPending | null = null;
-  /** 瀏覽器 `setTimeout` 回傳 `number`；避免與 Node 型別合併後的 `Timeout` 混淆 */
-  let longPressTimer: number | null = null;
+  let pending: PendingDrag | null = null;
 
   function readPersist(): void {
     try {
@@ -92,38 +87,43 @@ export function attachSupportChatFloatDrag(floatEl: HTMLElement, fab: HTMLButton
     floatEl.style.bottom = "auto";
   }
 
-  function clearLongPressPending(): void {
-    if (longPressTimer != null) {
-      clearTimeout(longPressTimer);
-      longPressTimer = null;
-    }
-    if (!longPressPending) return;
-    window.removeEventListener("pointermove", onWindowMoveDuringLongPress);
-    window.removeEventListener("pointerup", onWindowUpDuringLongPress);
-    window.removeEventListener("pointercancel", onWindowUpDuringLongPress);
-    longPressPending = null;
+  function clearPendingWindowListeners(): void {
+    window.removeEventListener("pointermove", onPendingMove);
+    window.removeEventListener("pointerup", onPendingUp);
+    window.removeEventListener("pointercancel", onPendingUp);
   }
 
-  function onWindowMoveDuringLongPress(e: PointerEvent): void {
-    if (!longPressPending || e.pointerId !== longPressPending.pointerId) return;
-    longPressPending.lastX = e.clientX;
-    longPressPending.lastY = e.clientY;
-    const dx = e.clientX - longPressPending.startX;
-    const dy = e.clientY - longPressPending.startY;
-    if (dx * dx + dy * dy > LONG_PRESS_CANCEL_MOVE_PX * LONG_PRESS_CANCEL_MOVE_PX) {
-      clearLongPressPending();
-    }
+  function onPendingMove(e: PointerEvent): void {
+    if (!pending || e.pointerId !== pending.pointerId) return;
+    const dx = e.clientX - pending.startX;
+    const dy = e.clientY - pending.startY;
+    if (dx * dx + dy * dy < DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) return;
+    const p = pending;
+    pending = null;
+    clearPendingWindowListeners();
+    e.preventDefault();
+    beginDrag(e.pointerId, e.clientX, e.clientY, p.pointerType, p.button);
   }
 
-  function onWindowUpDuringLongPress(e: PointerEvent): void {
-    if (!longPressPending || e.pointerId !== longPressPending.pointerId) return;
-    clearLongPressPending();
+  function onPendingUp(e: PointerEvent): void {
+    if (!pending || e.pointerId !== pending.pointerId) return;
+    pending = null;
+    clearPendingWindowListeners();
   }
 
   function onDragMove(e: PointerEvent): void {
     if (!dragging || e.pointerId !== dragPointerId) return;
     e.preventDefault();
     applyFreePosition(e.clientX - grabOffX, e.clientY - grabOffY);
+  }
+
+  function blockAccidentalClickAfterDrag(): void {
+    const block = (ev: Event) => {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      fab.removeEventListener("click", block, true);
+    };
+    fab.addEventListener("click", block, true);
   }
 
   function onDragEnd(e: PointerEvent): void {
@@ -138,6 +138,7 @@ export function attachSupportChatFloatDrag(floatEl: HTMLElement, fab: HTMLButton
     window.removeEventListener("pointermove", onDragMove);
     window.removeEventListener("pointerup", onDragEnd);
     window.removeEventListener("pointercancel", onDragEnd);
+    blockAccidentalClickAfterDrag();
     const r = floatEl.getBoundingClientRect();
     const cx = r.left + r.width / 2;
     dockSide = cx < window.innerWidth / 2 ? "left" : "right";
@@ -146,8 +147,6 @@ export function attachSupportChatFloatDrag(floatEl: HTMLElement, fab: HTMLButton
     bottomPx = clamp(bottomPx, 8, Math.max(8, window.innerHeight - h - 8));
     persist();
     applyDockedLayout();
-    // 不在此攔截「下一個 click」：多數瀏覽器在拖曳後不會對該次 pointerup 合成 click，
-    // 若仍註冊 once 的 capture listener，會誤吞使用者第一次意圖開啟面板的點擊（變成要點兩次）。
   }
 
   function beginDrag(
@@ -177,39 +176,21 @@ export function attachSupportChatFloatDrag(floatEl: HTMLElement, fab: HTMLButton
   function onFabPointerDown(e: PointerEvent): void {
     if (dragging) return;
     if (e.pointerType === "mouse" && e.button !== 0) return;
-    clearLongPressPending();
-    longPressPending = {
+    pending = {
       pointerId: e.pointerId,
       startX: e.clientX,
       startY: e.clientY,
-      lastX: e.clientX,
-      lastY: e.clientY,
       pointerType: e.pointerType,
       button: e.button,
     };
-    window.addEventListener("pointermove", onWindowMoveDuringLongPress);
-    window.addEventListener("pointerup", onWindowUpDuringLongPress);
-    window.addEventListener("pointercancel", onWindowUpDuringLongPress);
-    longPressTimer = window.setTimeout(() => {
-      longPressTimer = null;
-      if (!longPressPending) return;
-      const p = longPressPending;
-      window.removeEventListener("pointermove", onWindowMoveDuringLongPress);
-      window.removeEventListener("pointerup", onWindowUpDuringLongPress);
-      window.removeEventListener("pointercancel", onWindowUpDuringLongPress);
-      longPressPending = null;
-      beginDrag(p.pointerId, p.lastX, p.lastY, p.pointerType, p.button);
-    }, LONG_PRESS_MS);
+    window.addEventListener("pointermove", onPendingMove);
+    window.addEventListener("pointerup", onPendingUp);
+    window.addEventListener("pointercancel", onPendingUp);
   }
 
   function onResize(): void {
     if (!dragging) applyDockedLayout();
   }
-
-  fab.title = t(
-    "support.fab.dragTitle",
-    "短按：開啟／收合；長按約半秒：可拖曳位置，放開後靠左或靠右下緣。",
-  );
 
   readPersist();
   applyDockedLayout();
@@ -225,7 +206,8 @@ export function attachSupportChatFloatDrag(floatEl: HTMLElement, fab: HTMLButton
   }
 
   function dispose(): void {
-    clearLongPressPending();
+    pending = null;
+    clearPendingWindowListeners();
     window.removeEventListener("resize", onResize);
     fab.removeEventListener("pointerdown", onFabPointerDown);
     window.removeEventListener("pointermove", onDragMove);
