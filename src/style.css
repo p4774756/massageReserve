@@ -153,33 +153,53 @@ a:hover {
 }
 
 header.page-head {
-  padding: 24px 22px 20px;
+  padding: 20px 22px 22px;
   border-bottom: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 18px;
+  gap: 16px;
   background: var(--surface);
 }
 
-/* 預設（窄 #app）：音樂在上，語言與登入列於其下；#app 足夠寬時：左音樂、右側語言疊在登入上方（見 @container app） */
-.page-head-toolbar {
+/* 標題 h1 與語系／會員工具列同一列；窄 #app 時換行（見 @container app） */
+.page-head-top-row {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 12px;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
   width: 100%;
   min-width: 0;
 }
 
-.page-head-music-row {
-  width: 100%;
+.page-head-top-row h1 {
+  flex: 1 1 auto;
+  min-width: 0;
   margin: 0;
+}
+
+.page-head-top-row .head-toolbar-aside {
+  flex: 0 1 auto;
+  margin-left: auto;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px 12px;
+  min-width: 0;
+}
+
+.page-head-top-row .head-session {
+  flex: 0 1 auto;
   min-width: 0;
 }
 
 .page-head-body {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   width: 100%;
   min-width: 0;
 }
@@ -190,28 +210,23 @@ header.page-head {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     column-gap: clamp(20px, 3vw, 40px);
-    row-gap: 0;
+    row-gap: 12px;
     align-items: start;
-  }
-
-  .page-head-text:has(.page-head-guest-hint:not([hidden])) > h1 {
-    grid-column: 1 / -1;
-    margin-bottom: 6px;
   }
 
   .page-head-text:has(.page-head-guest-hint:not([hidden])) > p:not(.visitor-stats):not(.page-head-guest-hint) {
     grid-column: 1;
-    margin-top: 0;
+    margin: 0;
   }
 
   .page-head-text:has(.page-head-guest-hint:not([hidden])) > .page-head-guest-hint {
     grid-column: 2;
-    margin-top: 0;
+    margin: 0;
   }
 
   .page-head-text:has(.page-head-guest-hint:not([hidden])) > .visitor-stats {
     grid-column: 1 / -1;
-    margin-top: 16px;
+    margin: 0;
   }
 }
 
@@ -279,10 +294,13 @@ figure.host-atelier {
 .page-head-text {
   flex: 1 1 0;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
 }
 
 .page-head h1 {
-  margin: 0;
   font-size: 1.35rem;
   font-weight: 600;
   letter-spacing: -0.02em;
@@ -291,7 +309,7 @@ figure.host-atelier {
 }
 
 .page-head p {
-  margin: 12px 0 0;
+  margin: 0;
   max-width: 52ch;
   color: var(--muted);
   font-size: 0.94rem;
@@ -299,7 +317,7 @@ figure.host-atelier {
 }
 
 .page-head .page-head-guest-hint {
-  margin-top: 8px;
+  margin: 0;
   max-width: 56ch;
   font-size: 0.88rem;
   line-height: 1.55;
@@ -315,7 +333,8 @@ figure.host-atelier {
   align-items: center;
   flex-wrap: wrap;
   gap: 4px 8px;
-  margin: 14px 0 0;
+  margin: 0;
+  align-self: flex-start;
   max-width: 100%;
   padding: 9px 12px 11px;
   box-sizing: border-box;
@@ -394,7 +413,7 @@ figure.host-atelier {
   gap: 10px 12px;
   flex: 0 1 auto;
   min-width: 0;
-  margin-top: 2px;
+  margin-top: 0;
 }
 
 .head-locale {
@@ -415,44 +434,13 @@ figure.host-atelier {
   min-width: 0;
 }
 
-/* 須放在 .head-toolbar-aside 預設 row 之後，否則 column 會被覆寫 */
 @container app (min-width: 480px) {
-  .page-head-toolbar {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    column-gap: clamp(16px, 2.2vw, 28px);
-    row-gap: 12px;
-    flex-direction: unset;
-    flex-wrap: unset;
-  }
-
-  .page-head-music-row {
-    grid-column: 1;
-    margin: 0;
-    min-width: 0;
-  }
-
-  .head-toolbar-aside {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    justify-content: center;
-    gap: 8px;
-    grid-column: 2;
-    justify-self: end;
-    align-self: center;
-    flex: 0 0 auto;
-    min-width: 0;
-    margin-top: 0;
-  }
-
   .head-session {
     flex: 0 0 auto;
     min-width: min-content;
   }
 
-  .music-mini-player--bar .music-bar__main {
+  .music-mini-player--bar:not(.music-mini-player--float) .music-bar__main {
     flex-wrap: nowrap;
   }
 
@@ -462,25 +450,25 @@ figure.host-atelier {
   }
 }
 
-/* 極窄 #app：語系列與「登入狀態＋按鈕」橫排易把狀態壓成數十字寬；換行讓狀態列獨佔下一整行（依 #app 寬，勿綁 viewport≤640） */
+/* 極窄 #app：標題列換行後，語系／會員整條靠右佔滿下一行 */
 @container app (max-width: 479px) {
-  .head-toolbar-aside {
+  .page-head-top-row .head-toolbar-aside {
+    flex-basis: 100%;
     width: 100%;
-    flex: 1 1 100%;
-    flex-direction: row;
-    align-items: center;
+    margin-left: 0;
     justify-content: flex-end;
-    margin-top: 0;
+  }
+
+  .head-toolbar-aside {
     flex-wrap: wrap;
     row-gap: 8px;
   }
 
   .head-session {
-    flex: 1 1 100%;
-    flex-basis: 100%;
+    flex: 1 1 auto;
+    min-width: 0;
     max-width: 100%;
     justify-content: flex-end;
-    min-width: 0;
   }
 }
 
@@ -508,9 +496,11 @@ figure.host-atelier {
 
 .page-head-session {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 1px;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0;
   font-size: 0.82rem;
   line-height: 1.3;
   color: var(--muted);
@@ -528,6 +518,10 @@ figure.host-atelier {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.page-head-session__line:first-of-type {
+  min-width: 0;
 }
 
 .page-head-session__line[hidden] {
@@ -554,10 +548,8 @@ figure.host-atelier {
   border-bottom-color: var(--border);
 }
 
-.shell.admin-mode .page-head-toolbar {
-  display: flex;
-  justify-content: flex-end;
-  flex-wrap: wrap;
+.shell.admin-mode .page-head-top-row {
+  justify-content: space-between;
 }
 
 .shell.admin-mode .head-toolbar-aside {
@@ -1485,14 +1477,6 @@ label.field.checkbox-field {
     gap: 14px;
   }
 
-  .page-head-toolbar {
-    gap: 12px;
-  }
-
-  .page-head-music-row {
-    margin: 0;
-  }
-
   .page-head h1 {
     font-size: 1.4rem;
   }
@@ -1970,17 +1954,25 @@ body.wheel-spectacle-lock {
   padding-right: 28px;
 }
 
-/* --- 舒壓配樂：置頂橫向播放器（參考橫條式控制列） --- */
+/* --- 舒壓配樂：浮動小播放器（頂端握把拖曳，見 musicMiniPlayerFloatDock） --- */
 .music-mini-player-root[hidden] {
   display: none !important;
 }
 
-.music-mini-player-root {
+.music-mini-player-root:not(.music-mini-player-root--float) {
   position: relative;
   z-index: 2;
   box-sizing: border-box;
   width: 100%;
   max-width: none;
+}
+
+.music-mini-player-root--float {
+  position: fixed;
+  z-index: 1180;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(144px, calc(100vw - 20px));
 }
 
 .music-mini-player--bar {
@@ -1998,6 +1990,157 @@ body.wheel-spectacle-lock {
     inset 0 1px 0 rgb(255 255 255 / 0.9),
     0 1px 0 rgb(0 0 0 / 0.04),
     0 6px 18px rgb(0 0 0 / 0.07);
+}
+
+.music-mini-player.music-mini-player--float {
+  display: flex;
+  flex-direction: column;
+  width: min(144px, calc(100vw - 20px));
+  border-radius: 12px;
+  overflow: visible;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.9),
+    0 2px 0 rgb(0 0 0 / 0.04),
+    0 8px 22px rgb(0 0 0 / 0.09);
+}
+
+.music-float__drag-handle {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin: 0;
+  padding: 3px 6px 4px;
+  border: none;
+  border-bottom: 1px solid rgb(0 0 0 / 0.07);
+  border-radius: 12px 12px 0 0;
+  cursor: grab;
+  touch-action: none;
+  color: rgb(90 80 86 / 0.55);
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.55) 0%, rgb(245 242 239 / 0.4) 100%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.75);
+}
+
+.music-float__drag-handle:hover {
+  color: rgb(70 62 68 / 0.75);
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.75) 0%, rgb(248 244 241 / 0.65) 100%);
+}
+
+.music-float__drag-handle:active {
+  cursor: grabbing;
+}
+
+.music-float__drag-handle:focus-visible {
+  outline: 2px solid rgb(100 90 95 / 0.35);
+  outline-offset: -1px;
+}
+
+.music-float__drag-handle__grip {
+  display: block;
+  width: 22px;
+  height: 9px;
+  opacity: 0.85;
+  background:
+    radial-gradient(circle at 20% 50%, currentColor 1.1px, transparent 1.2px),
+    radial-gradient(circle at 40% 50%, currentColor 1.1px, transparent 1.2px),
+    radial-gradient(circle at 60% 50%, currentColor 1.1px, transparent 1.2px),
+    radial-gradient(circle at 80% 50%, currentColor 1.1px, transparent 1.2px),
+    radial-gradient(circle at 30% 15%, currentColor 1.1px, transparent 1.2px),
+    radial-gradient(circle at 50% 15%, currentColor 1.1px, transparent 1.2px),
+    radial-gradient(circle at 70% 15%, currentColor 1.1px, transparent 1.2px);
+}
+
+.music-mini-player--float .music-mini-player__shell {
+  flex: 1 1 auto;
+  min-width: 0;
+  border-radius: 0 0 12px 12px;
+}
+
+.music-mini-player--float .music-bar__inner {
+  gap: 3px;
+  padding: 5px 7px 7px;
+}
+
+.music-mini-player--float .music-bar__main {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  flex-wrap: nowrap;
+  overflow: visible;
+}
+
+.music-mini-player--float .music-bar__meta {
+  flex: 0 0 auto;
+  width: 100%;
+  gap: 6px;
+}
+
+.music-mini-player--float .music-bar__ctrl {
+  justify-content: center;
+  width: 100%;
+  gap: 4px;
+}
+
+.music-mini-player--float .music-bar__vol {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: none;
+  padding: 0;
+}
+
+.music-mini-player--float .music-bar__times {
+  padding: 0 2px 0;
+  font-size: 0.62rem;
+}
+
+.music-mini-player--float.music-mini-player--bar .music-mini-player__seek {
+  height: 4px;
+}
+
+.music-mini-player--float.music-mini-player--bar .music-mini-player__art {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+}
+
+.music-mini-player--float.music-mini-player--bar .music-mini-player__title {
+  font-size: 0.68rem;
+  line-height: 1.18;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.music-mini-player--float.music-mini-player--bar .music-mini-player__track-ix {
+  font-size: 0.56rem;
+  line-height: 1.12;
+}
+
+.music-mini-player--float.music-mini-player--bar .music-mini-player__icon-btn {
+  width: 26px;
+  height: 26px;
+}
+
+.music-mini-player--float.music-mini-player--bar .music-mini-player__icon-btn--primary {
+  width: 32px;
+  height: 32px;
+}
+
+.music-mini-player--float.music-mini-player--bar .music-mini-player__icon-btn--sm {
+  width: 24px;
+  height: 24px;
+}
+
+.music-mini-player--float.music-mini-player--bar .music-mini-player__svg {
+  transform: scale(0.88);
+  transform-origin: center;
+}
+
+.music-mini-player--float.music-mini-player--bar .music-mini-player__vol-icon .music-mini-player__svg {
+  transform: scale(0.85);
 }
 
 .music-mini-player__shell {
@@ -2275,6 +2418,24 @@ body.wheel-spectacle-lock {
   background: linear-gradient(180deg, #fffcfe 0%, #f7f0f3 100%);
   border: 1px solid rgb(0 0 0 / 0.1);
   box-shadow: var(--shadow-lg);
+}
+
+/* 浮層貼底時改向上展開，避免選單落出螢幕外 */
+.music-mini-player-root--float .music-mini-player__playlist-pop {
+  top: auto;
+  bottom: calc(100% + 8px);
+  min-width: min(280px, calc(100vw - 32px));
+  max-width: min(320px, calc(100vw - 24px));
+}
+
+.music-mini-player-root--dock-right .music-mini-player__playlist-pop {
+  left: auto;
+  right: 0;
+}
+
+.music-mini-player-root--dock-left .music-mini-player__playlist-pop {
+  left: 0;
+  right: auto;
 }
 
 .music-mini-player__playlist-head {

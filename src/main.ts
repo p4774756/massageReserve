@@ -40,6 +40,7 @@ import {
 } from "./firebase";
 import { mountGuestbook } from "./guestbook";
 import { mountMusicMiniPlayer } from "./musicPlayer";
+import { attachMusicMiniPlayerFloatDrag } from "./musicMiniPlayerFloatDock";
 import { mountAdminSupportChat, mountMemberSupportChat, type SupportChatUnmount } from "./supportChat";
 import { attachSupportChatFloatDrag } from "./supportChatFloatDock";
 import { createVisitorStatsLine } from "./visitorStats";
@@ -455,14 +456,11 @@ function render() {
   ]);
   const visitorStats = createVisitorStatsLine(tabFromPath() !== "admin");
   const visitorStatsLine = visitorStats.element;
-  const musicMiniRoot = el("div", { class: "music-mini-player-root", id: "music-mini-player-root" });
-  const musicHeadRow = el("div", { class: "page-head-music-row" }, [musicMiniRoot]);
-  const titleTextCol = el("div", { class: "page-head-text" }, [
-    titleHeading,
-    titleDesc,
-    titleGuestHint,
-    visitorStatsLine,
-  ]);
+  const musicMiniRoot = el("div", {
+    class: "music-mini-player-root music-mini-player-root--float",
+    id: "music-mini-player-root",
+  });
+  const titleTextCol = el("div", { class: "page-head-text" }, [titleDesc, titleGuestHint, visitorStatsLine]);
 
   const memberEntryBtn = el("button", { class: "ghost member-entry", type: "button" }, [
     t("member.entryLogin", "會員登入"),
@@ -494,9 +492,9 @@ function render() {
   const headLocale = el("div", { class: "head-locale" }, [localeField, localeSelect]);
   const headSession = el("div", { class: "head-session" }, [headSessionStatus, memberEntryBtn]);
   const headToolbarAside = el("div", { class: "head-toolbar-aside" }, [headLocale, headSession]);
-  /** 寬版面：左音樂、右側介面語言疊在登入區上方；窄版面：音樂在上，語言與登入橫列於其下 */
-  const pageHeadToolbar = el("div", { class: "page-head-toolbar" }, [musicHeadRow, headToolbarAside]);
-  const pageHeadBody = el("div", { class: "page-head-body" }, [titleTextCol]);
+  /** 標題與語系／會員同一列（窄欄時換行） */
+  const pageHeadTopRow = el("div", { class: "page-head-top-row" }, [titleHeading, headToolbarAside]);
+  const pageHeadBody = el("div", { class: "page-head-body" }, [pageHeadTopRow, titleTextCol]);
 
   const hostPortrait = el("figure", { class: "host-atelier" }, [
     el("div", { class: "host-atelier__frame" }, [
@@ -518,14 +516,16 @@ function render() {
   const panelAdmin = el("main", { class: "panel", hidden: true });
 
   const shell = el("div", { class: "shell" }, [
-    el("header", { class: "page-head" }, [pageHeadToolbar, pageHeadBody]),
+    el("header", { class: "page-head" }, [pageHeadBody]),
     hostPortrait,
     panelBook,
     panelAdmin,
   ]);
 
   root.append(shell);
-  mountMusicMiniPlayer(musicMiniRoot);
+  root.append(musicMiniRoot);
+  const musicPlayerHandle = mountMusicMiniPlayer(musicMiniRoot);
+  const musicFloatDock = attachMusicMiniPlayerFloatDrag(musicMiniRoot, musicPlayerHandle.floatDragTarget);
 
   /** 頂部：一般文字跑馬燈（與底部 LED 同一則公告） */
   const announcementTextStrip = el("div", {
@@ -784,7 +784,7 @@ function render() {
     memberEntryBtn.textContent = user ? t("member.entryCenter", "會員中心") : t("member.entryLogin", "會員登入");
   }
 
-  /** 預約頁右上角：訪客／登入與驗證狀態／稱呼（已登入時兩行：狀態列 + 稱呼；長字省略，完整字串放 title） */
+  /** 預約頁右上角：訪客／登入與驗證狀態／稱呼（單行；過長省略，完整字串放 title） */
   function syncPageHeadSession(profileLabel?: string) {
     if (tab !== "book") {
       headSessionStatus.hidden = true;
@@ -792,14 +792,10 @@ function render() {
     }
     headSessionStatus.hidden = false;
     const setLines = (line1: string, line2: string | null) => {
-      headSessionLine1.textContent = line1;
-      if (line2 == null || line2 === "") {
-        headSessionLine2.textContent = "";
-        headSessionLine2.setAttribute("hidden", "");
-      } else {
-        headSessionLine2.textContent = line2;
-        headSessionLine2.removeAttribute("hidden");
-      }
+      const text = line2 == null || line2 === "" ? line1 : `${line1}${line2}`;
+      headSessionLine1.textContent = text;
+      headSessionLine2.textContent = "";
+      headSessionLine2.setAttribute("hidden", "");
     };
     const u = auth.currentUser;
     if (!u) {
@@ -834,9 +830,11 @@ function render() {
           : fromEmail && fromEmail.length > 0
             ? fromEmail
             : t("session.memberFallback", "會員");
-    const shown = truncateOneLine(raw, 18);
-    setLines(t("session.signInLine1", "已登入 ·"), shown);
-    headSessionStatus.title = shown !== raw ? raw : "";
+    const prefix = t("session.signInLine1", "已登入 ·");
+    const combinedFull = `${prefix}${raw}`;
+    const displayed = truncateOneLine(combinedFull, 28);
+    setLines(displayed, null);
+    headSessionStatus.title = displayed !== combinedFull ? combinedFull : "";
     headSessionStatus.className = "page-head-session";
   }
 
@@ -3380,10 +3378,11 @@ function render() {
     panelBook.hidden = !isBook;
     panelAdmin.hidden = isBook;
     hostPortrait.hidden = !isBook;
-    musicHeadRow.hidden = !isBook;
+    musicMiniRoot.hidden = !isBook;
     supportChatFloat.hidden = !isBook;
     if (isBook) {
       supportChatFloatDock.relayout();
+      musicFloatDock.relayout();
     }
     if (!isBook) {
       setSupportChatOpen(false);

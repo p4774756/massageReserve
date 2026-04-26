@@ -1,6 +1,8 @@
+import { t } from "./i18n";
+
 /**
- * 置頂橫向播放器：頂緣進度條、已播／剩餘時間、曲名與序號、播放控制、曲目清單、音量。
- * 由 `main.ts` 置於 `header.page-head` 最上方全寬列，非 fixed 浮窗。
+ * 舒壓配樂浮動播放器：進度條、時間、曲名與序號、播放控制、曲目清單、音量。
+ * 由 `main.ts` 掛在 `#app` 內之固定浮層根節點（版面見 `style.css` 之 `--float`）。
  *
  * 預設曲目為 **Kevin MacLeod**（incompetech.com）之放鬆／環境樂，授權 **CC BY 4.0**；
  * 頁面底部已附署名連結。若要改為自備音檔，請放 `public/media/` 並修改 `MUSIC_PLAYLIST`。
@@ -81,13 +83,20 @@ function iconSvg(pathD: string, size: 16 | 22 = 22): string {
   return `<svg class="music-mini-player__svg" viewBox="0 0 24 24" width="${wh}" height="${wh}" aria-hidden="true"><path fill="currentColor" d="${pathD}"/></svg>`;
 }
 
-export type MusicMiniPlayerUnmount = () => void;
+export type MusicMiniPlayerMountHandle = {
+  dispose: () => void;
+  /** 長按此區塊可拖曳整個浮層（與客服浮窗相同機制） */
+  floatDragTarget: HTMLElement;
+};
 
-export function mountMusicMiniPlayer(mount: HTMLElement): MusicMiniPlayerUnmount {
+export function mountMusicMiniPlayer(mount: HTMLElement): MusicMiniPlayerMountHandle {
   const wrap = el("div", {
-    class: "music-mini-player music-mini-player--bar",
+    class: "music-mini-player music-mini-player--bar music-mini-player--float",
     role: "region",
-    ariaLabel: "舒壓配樂置頂播放器",
+    ariaLabel: t(
+      "music.player.region",
+      "舒壓配樂浮動播放器；頂端橫條可拖移位置。",
+    ),
   });
 
   const audio = el("audio", {
@@ -116,6 +125,7 @@ export function mountMusicMiniPlayer(mount: HTMLElement): MusicMiniPlayerUnmount
     class: "music-mini-player__art-img",
     alt: "",
     decoding: "async",
+    draggable: false,
   });
   artImg.hidden = true;
   const artPh = el("div", { class: "music-mini-player__art-ph", ariaHidden: "true" }, ["♪"]);
@@ -379,21 +389,36 @@ export function mountMusicMiniPlayer(mount: HTMLElement): MusicMiniPlayerUnmount
   const mainRow = el("div", { class: "music-bar__main" }, [meta, ctrl, volWrap]);
   const barInner = el("div", { class: "music-bar__inner" }, [seekWrap, timesRow, mainRow]);
 
+  const dragHandle = el("button", { type: "button", class: "music-float__drag-handle" }, []);
+  dragHandle.setAttribute(
+    "aria-label",
+    t("music.float.dragHandle", "拖移播放器：按住頂端橫條拖曳"),
+  );
+  dragHandle.title = t(
+    "music.float.dragHandleHint",
+    "按住並拖曳可改變位置；放開後貼在螢幕左或右下角。",
+  );
+  dragHandle.append(
+    el("span", { class: "music-float__drag-handle__grip", ariaHidden: "true" }, []),
+  );
+
   const shell = el("div", { class: "music-mini-player__shell" }, []);
   shell.append(audio, barInner, playlistPop);
-  wrap.append(shell);
+  wrap.append(dragHandle, shell);
   mount.append(wrap);
 
   rebuildPlaylistButtons();
   audio.volume = Number(vol.value);
   void loadTrack(0, false);
 
-  return () => {
+  function dispose(): void {
     document.removeEventListener("click", onDocClick);
     document.removeEventListener("keydown", onPlaylistEscape);
     audio.pause();
     audio.removeAttribute("src");
     audio.load();
     mount.replaceChildren();
-  };
+  }
+
+  return { dispose, floatDragTarget: dragHandle };
 }

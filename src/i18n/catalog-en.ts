@@ -136,6 +136,14 @@ export const EN: Record<string, string> = {
   "support.fab.dragTitle":
     "Tap: open/close. Long-press ~0.5s to drag; release snaps to left or right bottom edge.",
 
+  "music.player.region":
+    "Ambient music mini player; use the top bar to drag it to another corner.",
+
+  "music.float.dragHandle": "Move player: drag the top bar",
+
+  "music.float.dragHandleHint":
+    "Press and drag to reposition; on release it snaps to the bottom-left or bottom-right corner.",
+
   "booking.fillName": "Please enter your name.",
   "booking.pickDateSlot": "Please choose a date and start time.",
   "booking.noPastDate": "Cannot book dates before today.",
