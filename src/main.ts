@@ -37,12 +37,12 @@ import {
   spinWheelCall,
   listActiveWheelPrizesCall,
   topupWalletCall,
-  recordSiteVisitCall,
 } from "./firebase";
 import { mountGuestbook } from "./guestbook";
 import { mountMusicMiniPlayer } from "./musicPlayer";
 import { mountAdminSupportChat, mountMemberSupportChat, type SupportChatUnmount } from "./supportChat";
 import { attachSupportChatFloatDrag } from "./supportChatFloatDock";
+import { createVisitorStatsLine } from "./visitorStats";
 import { allStartSlots } from "./slots";
 import { runWheelSpectacle } from "./wheelSpectacle";
 import {
@@ -453,15 +453,8 @@ function render() {
       "免事先註冊也可預約，選「訪客」付款方式即可；註冊會員則可儲值與抽獎。",
     ),
   ]);
-  const visitorStatsLine = el("p", {
-    class: "visitor-stats visitor-stats--wretch",
-    role: "status",
-    ariaLive: "polite",
-    title: t(
-      "visitor.title",
-      "每個瀏覽器分頁連線期間計一次；重新整理不會重複累加。以台北時區換日與換週（週一至週日）。",
-    ),
-  }, [t("visitor.loading", "訪次統計載入中…")]);
+  const visitorStats = createVisitorStatsLine(tabFromPath() !== "admin");
+  const visitorStatsLine = visitorStats.element;
   const musicMiniRoot = el("div", { class: "music-mini-player-root", id: "music-mini-player-root" });
   const musicHeadRow = el("div", { class: "page-head-music-row" }, [musicMiniRoot]);
   const titleTextCol = el("div", { class: "page-head-text" }, [
@@ -470,111 +463,6 @@ function render() {
     titleGuestHint,
     visitorStatsLine,
   ]);
-
-  const VISIT_SESSION_KEY = "mr_siteVisitSession";
-  function formatVisitCount(n: number): string {
-    return n.toLocaleString(intlLocaleTag());
-  }
-  function applyVisitorStatsPayload(data: {
-    yourVisitNumberToday: number;
-    dayVisits: number;
-    weekVisits: number;
-    totalVisits: number;
-  }) {
-    const rail = (side: "l" | "r") =>
-      el("span", { class: `visitor-stats__rail visitor-stats__rail--${side}`, ariaHidden: "true" }, [side === "l" ? "♡ " : " ♡"]);
-    const num = (v: number) => el("span", { class: "visitor-stats__num" }, [formatVisitCount(v)]);
-    visitorStatsLine.replaceChildren(
-      rail("l"),
-      el("span", { class: "visitor-stats__main" }, [
-        t("visitor.line.today", "今日 "),
-        num(data.dayVisits),
-        t("visitor.line.visits", " 人次 · 本週 "),
-        num(data.weekVisits),
-        t("visitor.line.total", " · 累計 "),
-        num(data.totalVisits),
-        " · ",
-        el("strong", { class: "visitor-stats__em" }, [
-          t("visitor.line.youPrefix", "您是今日第 "),
-          formatVisitCount(data.yourVisitNumberToday),
-          t("visitor.line.youSuffix", " 位訪客"),
-        ]),
-      ]),
-      rail("r"),
-    );
-  }
-  function tryVisitorStatsFromSession(): boolean {
-    try {
-      const raw = sessionStorage.getItem(VISIT_SESSION_KEY);
-      if (!raw) return false;
-      const data = JSON.parse(raw) as {
-        yourVisitNumberToday?: unknown;
-        dayVisits?: unknown;
-        weekVisits?: unknown;
-        totalVisits?: unknown;
-      };
-      const yourVisitNumberToday = data.yourVisitNumberToday;
-      const dayVisits = data.dayVisits;
-      const weekVisits = data.weekVisits;
-      const totalVisits = data.totalVisits;
-      if (
-        typeof yourVisitNumberToday !== "number" ||
-        typeof dayVisits !== "number" ||
-        typeof weekVisits !== "number" ||
-        typeof totalVisits !== "number"
-      ) {
-        return false;
-      }
-      applyVisitorStatsPayload({
-        yourVisitNumberToday,
-        dayVisits,
-        weekVisits,
-        totalVisits,
-      });
-      return true;
-    } catch {
-      return false;
-    }
-  }
-  if (tabFromPath() === "admin") {
-    visitorStatsLine.replaceChildren();
-    visitorStatsLine.hidden = true;
-  } else if (!tryVisitorStatsFromSession()) {
-    void (async () => {
-      try {
-        const fn = recordSiteVisitCall();
-        const res = await fn({ ...localeApiParam() });
-        const data = res.data as {
-          yourVisitNumberToday?: unknown;
-          dayVisits?: unknown;
-          weekVisits?: unknown;
-          totalVisits?: unknown;
-        };
-        if (
-          typeof data.yourVisitNumberToday !== "number" ||
-          typeof data.dayVisits !== "number" ||
-          typeof data.weekVisits !== "number" ||
-          typeof data.totalVisits !== "number"
-        ) {
-          visitorStatsLine.textContent = t("visitor.badFormat", "訪次統計格式異常。");
-          return;
-        }
-        const payload = {
-          yourVisitNumberToday: data.yourVisitNumberToday,
-          dayVisits: data.dayVisits,
-          weekVisits: data.weekVisits,
-          totalVisits: data.totalVisits,
-        };
-        sessionStorage.setItem(VISIT_SESSION_KEY, JSON.stringify(payload));
-        applyVisitorStatsPayload(payload);
-      } catch {
-        visitorStatsLine.textContent = t(
-          "visitor.cfFail",
-          "訪次統計暫時無法載入（請確認已部署 Cloud Functions：recordSiteVisit）。",
-        );
-      }
-    })();
-  }
 
   const memberEntryBtn = el("button", { class: "ghost member-entry", type: "button" }, [
     t("member.entryLogin", "會員登入"),
@@ -3456,7 +3344,7 @@ function render() {
     shell.classList.toggle("admin-mode", !isBook);
     memberEntryBtn.hidden = !isBook;
     titleGuestHint.hidden = !isBook;
-    visitorStatsLine.hidden = !isBook;
+    visitorStats.setVisible(isBook);
     titleHeading.textContent = isBook ? t("home.title", "辦公室按摩預約") : t("admin.backTitle", "管理後台");
     titleDesc.textContent = isBook
       ? t(
