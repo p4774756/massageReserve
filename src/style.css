@@ -1942,6 +1942,135 @@ tbody tr:hover td {
   display: none !important;
 }
 
+/* --- 管理後台：報表 --- */
+.admin-reports {
+  max-width: 880px;
+}
+
+.admin-reports__toolbar {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.admin-reports__updated {
+  margin: 0;
+}
+
+.admin-reports__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.admin-report-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  background: var(--surface-muted);
+  min-height: 72px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+
+.admin-report-card__label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  line-height: 1.25;
+}
+
+.admin-report-card__value {
+  font-size: 1.35rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.admin-reports__flash {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.admin-reports__donut-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  align-items: stretch;
+}
+
+.admin-reports__bar-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+  align-items: stretch;
+}
+
+.admin-reports__polar-wrap {
+  min-width: 0;
+}
+
+.admin-report-chart-card {
+  position: relative;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 16px 16px 12px;
+  background: linear-gradient(165deg, var(--surface) 0%, var(--surface-muted) 55%, var(--surface) 100%);
+  box-shadow: var(--shadow), 0 0 0 1px rgb(255 255 255 / 0.65) inset;
+  overflow: hidden;
+}
+
+.admin-report-chart-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(120% 80% at 10% -20%, rgb(99 102 241 / 0.09), transparent 55%),
+    radial-gradient(90% 70% at 100% 100%, rgb(236 72 153 / 0.07), transparent 50%);
+  z-index: 0;
+}
+
+.admin-report-chart-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.admin-report-chart-card__title {
+  margin: 0 0 12px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.admin-report-chart-card__body {
+  position: relative;
+  min-height: 200px;
+}
+
+.admin-report-chart-card__canvas {
+  display: block;
+  width: 100% !important;
+  height: 220px !important;
+  max-height: 48vh;
+}
+
+.admin-report-chart-card__canvas--polar {
+  height: 280px !important;
+}
+
+.admin-report-chart-card__empty {
+  margin: 0;
+  padding: 24px 0;
+  text-align: center;
+}
+
 .admin-member-list {
   margin: 0 0 22px;
   padding: 18px 20px;

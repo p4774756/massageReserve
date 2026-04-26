@@ -20,6 +20,7 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
+import { mountAdminReportsPanel } from "./adminReports";
 import {
   cancelBookingCall,
   completeBookingCall,
@@ -65,6 +66,8 @@ type Booking = {
   status: string;
   startAt?: { seconds: number };
   cancelReason?: string;
+  /** 與後端一致：該預約曆日所屬週的週一 dateKey */
+  weekStart?: string;
   /** 後台「自列表隱藏」；不改 status，會員端仍看真實狀態 */
   invisible?: boolean;
   bookingMode?: BookingMode | string;
@@ -2134,6 +2137,7 @@ function render() {
   function renderAdminTable(userId: string) {
     stopAdminListener();
     adminWrap.innerHTML = "";
+    let adminBookingsReportCache: Booking[] = [];
     const top = el("div", { class: "row-actions" }, []);
     const u = auth.currentUser;
     const whoLabel =
@@ -3119,9 +3123,13 @@ function render() {
       t("admin.tab.support", "客服對話"),
     ]);
     tabSupport.id = "admin-tab-trigger-support";
+    const tabReports = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
+      t("admin.tab.reports", "報表"),
+    ]);
+    tabReports.id = "admin-tab-trigger-reports";
 
     const adminTablist = el("div", { class: "admin-tabs", role: "tablist" });
-    adminTablist.append(tabBookings, tabHiddenBookings, tabMembers, tabAnnounce, tabSupport);
+    adminTablist.append(tabBookings, tabHiddenBookings, tabMembers, tabAnnounce, tabSupport, tabReports);
 
     const panelBookingsEl = el("div", { class: "admin-tab-panel", role: "tabpanel", id: "admin-tab-panel-bookings" });
     panelBookingsEl.setAttribute("aria-labelledby", "admin-tab-trigger-bookings");
@@ -3168,11 +3176,22 @@ function render() {
     panelSupportEl.append(adminSupportChatHost);
     adminSupportChatUnmount = mountAdminSupportChat(db, auth, adminSupportChatHost);
 
+    const panelReportsEl = el("div", {
+      class: "admin-tab-panel",
+      role: "tabpanel",
+      id: "admin-tab-panel-reports",
+      hidden: true,
+    });
+    panelReportsEl.setAttribute("aria-labelledby", "admin-tab-trigger-reports");
+    const { root: adminReportsInner, refresh: refreshAdminReports } = mountAdminReportsPanel(db, () => adminBookingsReportCache);
+    panelReportsEl.append(adminReportsInner);
+
     tabBookings.setAttribute("aria-controls", "admin-tab-panel-bookings");
     tabHiddenBookings.setAttribute("aria-controls", "admin-tab-panel-hidden");
     tabMembers.setAttribute("aria-controls", "admin-tab-panel-members");
     tabAnnounce.setAttribute("aria-controls", "admin-tab-panel-announce");
     tabSupport.setAttribute("aria-controls", "admin-tab-panel-support");
+    tabReports.setAttribute("aria-controls", "admin-tab-panel-reports");
 
     panelBookingsEl.append(adminStatus, tableHolder);
     panelMembersEl.append(accountCreateSection, walletTopupSection, memberListSection);
@@ -3185,18 +3204,20 @@ function render() {
       panelMembersEl,
       panelAnnounceEl,
       panelSupportEl,
+      panelReportsEl,
     );
 
-    const adminTabButtons = [tabBookings, tabHiddenBookings, tabMembers, tabAnnounce, tabSupport] as const;
+    const adminTabButtons = [tabBookings, tabHiddenBookings, tabMembers, tabAnnounce, tabSupport, tabReports] as const;
     const adminTabPanels = [
       panelBookingsEl,
       panelHiddenBookingsEl,
       panelMembersEl,
       panelAnnounceEl,
       panelSupportEl,
+      panelReportsEl,
     ] as const;
 
-    function selectAdminTab(index: 0 | 1 | 2 | 3 | 4) {
+    function selectAdminTab(index: 0 | 1 | 2 | 3 | 4 | 5) {
       adminTabButtons.forEach((btn, i) => {
         const on = i === index;
         btn.setAttribute("aria-selected", String(on));
@@ -3207,6 +3228,7 @@ function render() {
         panel.hidden = i !== index;
         panel.classList.toggle("is-active", i === index);
       });
+      if (index === 5) void refreshAdminReports();
     }
 
     tabBookings.addEventListener("click", () => selectAdminTab(0));
@@ -3214,6 +3236,7 @@ function render() {
     tabMembers.addEventListener("click", () => selectAdminTab(2));
     tabAnnounce.addEventListener("click", () => selectAdminTab(3));
     tabSupport.addEventListener("click", () => selectAdminTab(4));
+    tabReports.addEventListener("click", () => selectAdminTab(5));
 
     adminTablist.addEventListener("keydown", (ev) => {
       if (ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;
@@ -3223,7 +3246,7 @@ function render() {
       const delta = ev.key === "ArrowRight" ? 1 : -1;
       const n = adminTabButtons.length;
       const next = ((cur + delta) % n + n) % n;
-      selectAdminTab(next as 0 | 1 | 2 | 3 | 4);
+      selectAdminTab(next as 0 | 1 | 2 | 3 | 4 | 5);
       adminTabButtons[next].focus();
     });
 
@@ -3421,6 +3444,7 @@ function render() {
     adminUnsub = onSnapshot(
       q,
       (snap) => {
+        adminBookingsReportCache = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Booking));
         adminStatus.textContent = "";
         adminStatus.className = "status-line";
         hiddenBookingsStatus.textContent = "";
@@ -3627,7 +3651,7 @@ function render() {
         )
       : t(
           "admin.backSubtitle",
-          "以分頁切換：預約管理、已隱藏的預約、會員與儲值、跑馬燈公告、客服對話。",
+          "以分頁切換：預約管理、已隱藏的預約、會員與儲值、跑馬燈公告、客服對話、報表。",
         );
     document.title = isBook ? t("meta.docTitle", "辦公室按摩預約") : t("admin.backTitle", "管理後台");
     panelBook.hidden = !isBook;
