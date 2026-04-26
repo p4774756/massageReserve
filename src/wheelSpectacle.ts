@@ -27,6 +27,11 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/** 上下幕板推開／闔上（與 `.wheel-spectacle-shard` transition 同步） */
+const CURTAIN_MOVE_MS = 1900;
+const CURTAIN_OPEN_WAIT_MS = CURTAIN_MOVE_MS + 180;
+const CURTAIN_CLOSE_WAIT_MS = CURTAIN_MOVE_MS + 320;
+
 /** 與 CSS transition 秒數、`scheduleSpinTicksAtSliceCrossings` 一致 */
 const SPIN_TRANSITION_MS = 7200;
 /** 略長於 transition，讓最後一格聲音與減速尾段對齊 */
@@ -517,6 +522,21 @@ export function runWheelSpectacle(
     document.addEventListener("keydown", onKey);
 
     void (async () => {
+      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const openWaitMs = reduceMotion ? 420 : CURTAIN_OPEN_WAIT_MS;
+      const closeWaitMs = reduceMotion ? 360 : CURTAIN_CLOSE_WAIT_MS;
+
+      /** 幕板慢慢闔上後再卸除（領取／關閉） */
+      const closeCurtainsThen = (after: () => void) => {
+        primaryBtn.disabled = true;
+        overlay.classList.remove("is-cracked", "is-seam-pop", "is-win-burst");
+        overlay.classList.add("is-closing");
+        window.setTimeout(() => {
+          tearDown();
+          after();
+        }, closeWaitMs);
+      };
+
       let reelBus: AudioNode | null = null;
       if (audioCtx) {
         const g = audioCtx.createGain();
@@ -563,7 +583,7 @@ export function runWheelSpectacle(
         }
       });
 
-      const [, prizeList, sfx] = await Promise.all([sleep(980), labelsPromise, sfxPromise]);
+      const [, prizeList, sfx] = await Promise.all([sleep(openWaitMs), labelsPromise, sfxPromise]);
       if (prizeList && prizeList.length > 0) {
         mountPrizeWheelSvg(wheel, prizeList);
       }
@@ -591,8 +611,7 @@ export function runWheelSpectacle(
         primaryBtn.textContent = "關閉";
         primaryBtn.disabled = false;
         dismiss = () => {
-          tearDown();
-          reject(e);
+          closeCurtainsThen(() => reject(e));
         };
         primaryBtn.onclick = dismiss;
         primaryBtn.focus();
@@ -666,8 +685,7 @@ export function runWheelSpectacle(
 
       primaryBtn.disabled = false;
       dismiss = () => {
-        tearDown();
-        resolve(data);
+        closeCurtainsThen(() => resolve(data));
       };
       primaryBtn.onclick = dismiss;
       primaryBtn.focus();

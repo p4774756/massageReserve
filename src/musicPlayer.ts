@@ -148,7 +148,14 @@ export function mountMusicMiniPlayer(
   const artPh = el("div", { class: "music-mini-player__art-ph", ariaHidden: "true" }, ["♪"]);
   artBox.append(artImg, artPh);
 
-  const titleEl = el("div", { class: "music-mini-player__title" }, ["—"]);
+  const titleWrap = el("div", { class: "music-mini-player__title-wrap", role: "group" });
+  const titleTrack = el("div", { class: "music-mini-player__title-track" });
+  titleTrack.setAttribute("aria-hidden", "true");
+  const titleSegA = el("span", { class: "music-mini-player__title-seg" }, ["—"]);
+  const titleSegB = el("span", { class: "music-mini-player__title-seg" }, []);
+  titleTrack.append(titleSegA, titleSegB);
+  titleWrap.append(titleTrack);
+
   const trackIxEl = el("div", { class: "music-mini-player__track-ix" }, []);
   trackIxEl.hidden = true;
   const artistEl = el("div", { class: "music-mini-player__artist" }, []);
@@ -260,12 +267,46 @@ export function mountMusicMiniPlayer(
     trackIxEl.textContent = `第 ${currentIndex + 1} 首 · 共 ${n} 首`;
   }
 
+  function updateTitleMarquee() {
+    requestAnimationFrame(() => {
+      const t = titleSegA.textContent ?? "";
+      titleSegB.textContent = "";
+      titleWrap.classList.remove("music-mini-player__title-wrap--scroll");
+      titleTrack.style.removeProperty("animation");
+      void titleWrap.offsetWidth;
+      const w = titleWrap.clientWidth;
+      if (!t.trim() || w < 12) {
+        return;
+      }
+      const singleW = titleSegA.scrollWidth;
+      if (singleW <= w + 2) {
+        return;
+      }
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        return;
+      }
+      titleSegB.textContent = t;
+      void titleWrap.offsetWidth;
+      const dur = Math.min(32, Math.max(8, singleW / 18));
+      titleTrack.style.setProperty("--marquee-sec", `${dur}s`);
+      titleWrap.classList.add("music-mini-player__title-wrap--scroll");
+    });
+  }
+
+  function onTitleMarqueeResize() {
+    updateTitleMarquee();
+  }
+  window.addEventListener("resize", onTitleMarqueeResize);
+
   function applyMeta(track: MusicTrack) {
-    titleEl.textContent = track.title;
+    titleSegA.textContent = track.title;
+    titleSegB.textContent = "";
     const n = MUSIC_PLAYLIST.length;
     const ix = n > 0 ? `第 ${currentIndex + 1}/${n} 首` : "";
     const tipArtist = track.artist?.trim() ? `${track.title} — ${track.artist.trim()}` : track.title;
-    titleEl.title = ix ? `${tipArtist}（${ix}）` : tipArtist;
+    const fullLabel = ix ? `${tipArtist}（${ix}）` : tipArtist;
+    titleWrap.title = fullLabel;
+    titleWrap.setAttribute("aria-label", fullLabel);
     artistEl.textContent = track.artist?.trim() ? track.artist.trim() : "舒壓配樂";
     artistEl.setAttribute("aria-hidden", "true");
     if (track.artUrl) {
@@ -277,6 +318,7 @@ export function mountMusicMiniPlayer(
       artImg.hidden = true;
       artPh.hidden = false;
     }
+    updateTitleMarquee();
   }
 
   function syncSeekUi() {
@@ -399,7 +441,7 @@ export function mountMusicMiniPlayer(
 
   const seekWrap = el("div", { class: "music-bar__seek-wrap" }, [seek]);
   const timesRow = el("div", { class: "music-bar__times" }, [timeCurEl, timeRemEl]);
-  const metaText = el("div", { class: "music-mini-player__text" }, [titleEl, trackIxEl, artistEl]);
+  const metaText = el("div", { class: "music-mini-player__text" }, [titleWrap, trackIxEl, artistEl]);
   const meta = el("div", { class: "music-bar__meta" }, [artBox, metaText]);
   const ctrl = el("div", { class: "music-bar__ctrl" }, [btnPrev, btnPlay, btnNext, btnList]);
   const volWrap = el("div", { class: "music-bar__vol" }, [volIcon, vol]);
@@ -466,6 +508,9 @@ export function mountMusicMiniPlayer(
     }
     applyShellCollapseUi();
     opts?.onBoundsChange?.();
+    if (!shellCollapsed) {
+      requestAnimationFrame(() => updateTitleMarquee());
+    }
   }
 
   btnCollapse.addEventListener("click", (e) => {
@@ -480,6 +525,7 @@ export function mountMusicMiniPlayer(
   void loadTrack(0, false);
 
   function dispose(): void {
+    window.removeEventListener("resize", onTitleMarqueeResize);
     document.removeEventListener("click", onDocClick);
     document.removeEventListener("keydown", onPlaylistEscape);
     audio.pause();

@@ -16,3 +16,8 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+/** 獎勵廣告：若由站方注入，則「看廣告領全部」等流程會改呼叫此函式（回傳是否成功觀看完畢） */
+interface Window {
+  __MR_rewardedShow?: () => Promise<boolean>;
+}

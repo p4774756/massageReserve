@@ -89,6 +89,17 @@ a:hover {
   overflow: hidden;
 }
 
+/* 與 main.panel:has(...) 並用：卡片最底多留一點內距給子層外擴陰影（仍維持 overflow:hidden 圓角裁切） */
+.shell:has(#book-tab-panel-lucky-slot:not([hidden])) {
+  padding-bottom: 28px;
+}
+
+/* 浮動音樂播放器 .music-mini-player-root--float 為 z-index:1180，與 #app 內 shell 同層疊時會蓋住預約主卡，導致老虎機按鈕點不到 */
+#app:has(#book-tab-panel-lucky-slot:not([hidden])) .shell {
+  position: relative;
+  z-index: 1190;
+}
+
 .app-version-footer {
   margin: 0;
   padding: 10px 18px 14px;
@@ -620,6 +631,11 @@ main.panel {
   gap: var(--section-gap);
 }
 
+/* 試玩老虎機：陰影／rotateX 會畫在 flow 外，墊高 main 避免被 .shell overflow:hidden 裁底 */
+main.panel:has(#book-tab-panel-lucky-slot:not([hidden])) {
+  padding-bottom: 96px;
+}
+
 /* 作者樣式若指定 display:flex，會蓋過部分瀏覽器對 [hidden] 的預設，導致兩個 main 同時可見 */
 main.panel[hidden] {
   display: none !important;
@@ -660,6 +676,679 @@ main.panel[hidden] {
 
 .book-tab-panel--my-bookings .my-bookings {
   margin-top: 0;
+}
+
+/* --- 預約分頁：試玩老虎機（仿手遊假廣告 · 厚描邊／五軸／高飽和／偽 3D 景深） --- */
+.book-tab-panel--lucky-slot {
+  margin-top: 4px;
+  /* 底緣預留：厚 box-shadow + __deck-3d 透視會超出邊界；勿用 overflow-x:auto 單獨開在面板（會把 overflow-y 收成 auto 而裁切底部） */
+  padding: 8px 12px 72px;
+  overflow: visible;
+}
+
+.book-tab-panel--lucky-slot .lucky-slot-machine {
+  max-width: 100%;
+}
+
+.lucky-slot-machine {
+  --slot-outline: #0d0a08;
+  --slot-orange: #ff8c1a;
+  --slot-orange-deep: #e85d00;
+  --slot-yellow: #ffe566;
+  --slot-gold: #ffd24a;
+  --slot-gold-mid: #ffc233;
+  --slot-chrome: linear-gradient(145deg, #f5f5f5 0%, #c8c8c8 45%, #ececec 78%, #a8a8a8 100%);
+  --slot-cell-h: 88px;
+  --slot-reel-window-h: calc(var(--slot-cell-h) + 10px);
+  position: relative;
+  z-index: 0;
+  min-width: min(100%, 320px);
+  margin-bottom: 8px;
+  padding: 16px 12px 36px;
+  border-radius: 22px;
+  overflow: visible;
+  background:
+    radial-gradient(ellipse 120% 55% at 50% -8%, rgb(255 255 255 / 0.55), transparent 52%),
+    linear-gradient(100deg, rgb(0 0 0 / 0.14) 0%, transparent 14%, transparent 86%, rgb(0 0 0 / 0.12) 100%),
+    linear-gradient(180deg, rgb(255 255 255 / 0.32) 0%, transparent 26%),
+    linear-gradient(165deg, #ffb347 0%, var(--slot-orange) 32%, var(--slot-orange-deep) 72%, #7a2e00 100%);
+  border: 5px solid var(--slot-outline);
+  /* 內高光 + 下緣厚度（外擴略收，避免被 .shell overflow:hidden 裁切） */
+  box-shadow:
+    0 0 0 3px #ffcc66 inset,
+    0 0 0 8px #d94f00 inset,
+    0 -14px 28px rgb(255 200 120 / 0.22) inset,
+    0 7px 0 #e86812,
+    0 9px 0 #c9550a,
+    0 11px 0 #a84608,
+    0 13px 0 #7a3206,
+    0 15px 0 #4a1e04,
+    0 16px 0 var(--slot-outline),
+    0 20px 16px rgb(0 0 0 / 0.34),
+    0 10px 0 rgb(0 0 0 / 0.16);
+  /* 勿在此層用 filter：會擴張繪製邊界，易被 .shell overflow:hidden 裁掉底部 */
+}
+
+.lucky-slot-machine::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border-radius: 16px;
+  border: 2px solid rgb(255 255 255 / 0.22);
+  background:
+    radial-gradient(ellipse 90% 45% at 50% 0%, rgb(255 255 255 / 0.28), transparent 55%),
+    linear-gradient(95deg, rgb(0 0 0 / 0.05) 0%, transparent 20%, transparent 80%, rgb(0 0 0 / 0.06) 100%);
+  pointer-events: none;
+}
+
+/* 接地面柔影（與機台透視一起略帶角度，像截圖裡浮在畫面前） */
+.lucky-slot-machine::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -18px;
+  width: 96%;
+  max-width: 520px;
+  height: 24px;
+  transform: translateX(-50%) scaleY(0.45);
+  transform-origin: center top;
+  border-radius: 50%;
+  background: radial-gradient(ellipse 72% 100% at 50% 50%, rgb(0 0 0 / 0.42), rgb(0 0 0 / 0.12) 55%, transparent 72%);
+  filter: blur(3px);
+  opacity: 0.85;
+  z-index: -1;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lucky-slot-machine__deck-3d {
+    transform: none;
+    box-shadow: none;
+  }
+}
+
+/* 底部主按鈕 + 看廣告列：上緣為軸略往前倒（藍框區維持透視）；勿用 filter（外接矩形常導致父層裁切） */
+.lucky-slot-machine__deck-3d {
+  position: relative;
+  z-index: 2;
+  isolation: isolate;
+  margin-top: 4px;
+  margin-inline: 2px;
+  padding: 2px 4px 18px;
+  border-radius: 14px;
+  transform-style: preserve-3d;
+  transform: perspective(1100px) rotateX(5.2deg) translateZ(0);
+  transform-origin: 50% 0%;
+  box-shadow: 0 14px 26px rgb(0 0 0 / 0.2);
+}
+
+/* 上半（跑馬燈～銀管）略縮入，避免與外框貼齊時擠壓視覺；底部按鈕區維持較滿寬 */
+.lucky-slot-machine > .lucky-slot-machine__chrome-top,
+.lucky-slot-machine > .lucky-slot-machine__stage,
+.lucky-slot-machine > .lucky-slot-machine__nobs,
+.lucky-slot-machine > .lucky-slot-machine__pipes {
+  margin-inline: 12px;
+  max-width: calc(100% - 24px);
+}
+
+.lucky-slot-machine__chrome-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.lucky-slot-machine__bulb {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  margin-top: 2px;
+  filter: drop-shadow(0 0 12px rgb(255 220 80 / 0.95)) drop-shadow(0 3px 0 rgb(0 0 0 / 0.35));
+}
+
+.lucky-slot-machine__bulb svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.lucky-slot-machine__marquee-bezel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #5a5a5a, #2a2826 55%, #1a1816);
+  border: 4px solid var(--slot-outline);
+  box-shadow:
+    0 2px 0 rgb(255 255 255 / 0.18) inset,
+    0 -2px 0 rgb(0 0 0 / 0.35) inset,
+    0 10px 20px rgb(0 0 0 / 0.5) inset,
+    0 5px 0 rgb(0 0 0 / 0.2);
+}
+
+.lucky-slot-machine__marquee-lights {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.lucky-slot-machine__marquee-lights--r {
+  flex-direction: column;
+}
+
+.lucky-slot-machine__marquee-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 25%, #ffb347, #e85d00 55%, #6a2000);
+  border: 2px solid var(--slot-outline);
+  box-shadow: 0 0 6px rgb(255 120 40 / 0.85);
+}
+
+.lucky-slot-machine__marquee-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  justify-content: center;
+}
+
+.lucky-slot-machine__siren {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 28%, var(--slot-yellow), #ffc107 42%, #f57c00 78%, #bf360c);
+  border: 3px solid var(--slot-outline);
+  box-shadow:
+    0 0 14px #ffeb3b,
+    0 0 22px rgb(255 200 60 / 0.75),
+    0 3px 0 rgb(0 0 0 / 0.25);
+  animation: lucky-slot-siren-pulse 1s ease-in-out infinite;
+}
+
+@keyframes lucky-slot-siren-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    filter: brightness(1);
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.92;
+    filter: brightness(1.2);
+    transform: scale(1.05);
+  }
+}
+
+.lucky-slot-machine__marquee {
+  font-family: "Press Start 2P", ui-monospace, monospace;
+  font-size: 0.48rem;
+  font-weight: 400;
+  line-height: 1.55;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: center;
+  padding: 10px 8px;
+  border-radius: 6px;
+  color: #ff9a3c;
+  text-shadow:
+    0 0 10px rgb(255 150 50 / 0.95),
+    0 0 2px #fff3a0,
+    2px 2px 0 #4a1500;
+  background: linear-gradient(180deg, #0f0f0f, #1c1410);
+  border: 3px solid #1f1f1f;
+  box-shadow:
+    0 0 0 1px #3d2a18 inset,
+    0 4px 14px rgb(0 0 0 / 0.6) inset;
+}
+
+.lucky-slot-machine__marquee-sub {
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-align: center;
+  color: #fff8dc;
+  text-shadow:
+    0 0 1px #000,
+    1px 1px 0 #000,
+    0 1px 0 rgb(255 200 100 / 0.35);
+  letter-spacing: 0.04em;
+}
+
+.lucky-slot-machine__stage {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+}
+
+.lucky-slot-reels {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  padding: 10px 6px 12px;
+  border-radius: 14px;
+  background:
+    linear-gradient(105deg, rgb(255 255 255 / 0.22) 0%, transparent 35%),
+    linear-gradient(180deg, #ffe8a8 0%, #ffc978 40%, #ff9f40 100%);
+  border: 4px solid var(--slot-outline);
+  box-shadow:
+    0 2px 0 rgb(255 255 255 / 0.65) inset,
+    0 -3px 8px rgb(0 0 0 / 0.08) inset,
+    0 12px 28px rgb(0 0 0 / 0.22) inset,
+    0 5px 0 rgb(0 0 0 / 0.14),
+    0 8px 14px rgb(0 0 0 / 0.12);
+}
+
+.lucky-slot-reel-column {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.lucky-slot-reel-column--paper-warm .lucky-slot-reel-window {
+  background: linear-gradient(180deg, #f2e0c4, #dcc8a8);
+}
+
+.lucky-slot-reel-column--paper-bright .lucky-slot-reel-window {
+  background: linear-gradient(180deg, #ffffff, #fff8ec);
+}
+
+.lucky-slot-reel-column--paper-warm .lucky-slot-cell {
+  background: linear-gradient(90deg, rgb(255 255 255 / 0.12), transparent 55%);
+  border-bottom: 1px solid rgb(0 0 0 / 0.08);
+}
+
+.lucky-slot-reel-column--paper-bright .lucky-slot-cell {
+  background: linear-gradient(90deg, rgb(0 0 0 / 0.04), transparent 50%);
+  border-bottom: 1px solid rgb(0 0 0 / 0.06);
+}
+
+.lucky-slot-reel-column--paper-warm .lucky-slot-cell__label {
+  color: #2a1a0a;
+  text-shadow:
+    0 1px 0 rgb(255 255 255 / 0.5),
+    1px 1px 0 rgb(255 255 255 / 0.25);
+}
+
+.lucky-slot-reel-column--paper-bright .lucky-slot-cell__label {
+  color: #1a1008;
+  text-shadow:
+    0 1px 0 rgb(255 255 255 / 0.9),
+    1px 1px 0 rgb(255 255 255 / 0.5);
+}
+
+.lucky-slot-reel-ad-badge {
+  margin-top: 4px;
+  line-height: 0;
+  filter: drop-shadow(0 2px 0 rgb(0 0 0 / 0.35));
+}
+
+.lucky-slot-reel-ad-badge svg {
+  display: block;
+}
+
+.lucky-slot-reel-window {
+  position: relative;
+  width: 100%;
+  flex: 0 0 auto;
+  height: var(--slot-reel-window-h);
+  max-height: var(--slot-reel-window-h);
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 4px solid var(--slot-outline);
+  box-shadow:
+    0 0 0 2px rgb(255 255 255 / 0.45) inset,
+    0 8px 14px rgb(0 0 0 / 0.12) inset,
+    0 3px 0 rgb(0 0 0 / 0.08) inset,
+    0 2px 6px rgb(0 0 0 / 0.08);
+}
+
+.lucky-slot-reel-window::before,
+.lucky-slot-reel-window::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 12px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.lucky-slot-reel-window::before {
+  top: 0;
+  background: linear-gradient(180deg, rgb(0 0 0 / 0.18), transparent);
+}
+
+.lucky-slot-reel-window::after {
+  bottom: 0;
+  background: linear-gradient(0deg, rgb(0 0 0 / 0.18), transparent);
+}
+
+.lucky-slot-reel-strip {
+  will-change: transform;
+}
+
+.lucky-slot-cell {
+  height: var(--slot-cell-h);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px 2px;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.lucky-slot-cell__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.lucky-slot-cell__icon svg {
+  width: min(48px, 100%);
+  height: auto;
+  max-height: 48px;
+  display: block;
+  filter: drop-shadow(0 2px 0 rgb(0 0 0 / 0.35));
+}
+
+.lucky-slot-cell__label {
+  font-size: 0.58rem;
+  font-weight: 900;
+  line-height: 1.15;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lucky-slot-cell--coin .lucky-slot-cell__label {
+  display: inline-block;
+  margin-top: 1px;
+  padding: 1px 6px 2px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #fff9e0, #ffd54a);
+  color: #3d2200;
+  text-shadow: 0 1px 0 rgb(255 255 255 / 0.5);
+  border: 2px solid var(--slot-outline);
+  box-shadow: 0 2px 0 rgb(0 0 0 / 0.15);
+}
+
+.lucky-slot-machine__lever-rail {
+  flex-shrink: 0;
+  width: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 4px 10px;
+  overflow: hidden;
+  background: var(--slot-chrome);
+  border-radius: 12px;
+  border: 4px solid var(--slot-outline);
+  box-shadow:
+    0 2px 0 rgb(255 255 255 / 0.55) inset,
+    0 8px 16px rgb(0 0 0 / 0.32) inset,
+    0 4px 0 rgb(0 0 0 / 0.14),
+    4px 6px 10px rgb(0 0 0 / 0.15);
+}
+
+.lucky-slot-lever {
+  position: relative;
+  width: 100%;
+  min-height: 120px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.lucky-slot-lever:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+
+.lucky-slot-lever__svg-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: 50% 88%;
+  transform: rotate(-8deg);
+  transition: transform 0.38s cubic-bezier(0.34, 1.35, 0.64, 1);
+}
+
+.lucky-slot-lever__svg-wrap svg {
+  display: block;
+  width: 100%;
+  max-width: 52px;
+  height: auto;
+  filter: drop-shadow(0 4px 3px rgb(0 0 0 / 0.4));
+}
+
+.lucky-slot-lever--pull .lucky-slot-lever__svg-wrap {
+  transform: rotate(18deg);
+}
+
+.lucky-slot-machine__nobs {
+  display: flex;
+  justify-content: center;
+  gap: 22px;
+  margin: 12px 0 8px;
+}
+
+.lucky-slot-machine__nob {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 3px solid var(--slot-outline);
+  box-shadow:
+    0 3px 0 rgb(0 0 0 / 0.2),
+    0 2px 4px rgb(255 255 255 / 0.55) inset,
+    0 -2px 6px rgb(0 0 0 / 0.2) inset;
+}
+
+.lucky-slot-machine__nob--g {
+  background: radial-gradient(circle at 32% 22%, #e8ffc4, #4cd964 45%, #1a7a32);
+}
+
+.lucky-slot-machine__nob--r {
+  background: radial-gradient(circle at 32% 22%, #ffd0d0, #ff5a5a 45%, #b71c1c);
+}
+
+.lucky-slot-machine__nob--b {
+  background: radial-gradient(circle at 32% 22%, #d4e8ff, #4a9fff 45%, #1a4a9e);
+}
+
+.lucky-slot-machine__pipes {
+  height: 12px;
+  margin-bottom: 10px;
+  border-radius: 6px;
+  border: 3px solid var(--slot-outline);
+  background: repeating-linear-gradient(90deg, #9a9a9a 0px, #d8d8d8 7px, #787878 14px);
+  box-shadow:
+    0 2px 0 rgb(255 255 255 / 0.35) inset,
+    0 3px 0 rgb(0 0 0 / 0.15);
+}
+
+.lucky-slot-machine__console {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.lucky-slot-machine__console .lucky-slot-btn--spin {
+  order: 1;
+}
+
+.lucky-slot-machine__console .lucky-slot-btn--claim {
+  order: 2;
+  min-height: 48px;
+  font-size: 1.02rem;
+  letter-spacing: 0.08em;
+}
+
+.lucky-slot-machine__ad-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 4px;
+}
+
+.lucky-slot-machine__tv {
+  flex-shrink: 0;
+  width: 52px;
+  height: 52px;
+  filter: drop-shadow(0 0 16px rgb(80 160 255 / 0.85)) drop-shadow(0 3px 0 rgb(0 0 0 / 0.35));
+}
+
+.lucky-slot-machine__tv svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.lucky-slot-machine__ad-row .lucky-slot-btn--ad {
+  flex: 1;
+  min-width: 0;
+}
+
+.lucky-slot-btn {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  font: inherit;
+  font-weight: 900;
+  font-size: 0.82rem;
+  padding: 11px 14px;
+  border-radius: 14px;
+  border: 4px solid var(--slot-outline);
+  cursor: pointer;
+  position: relative;
+  z-index: 1;
+  transform: translateZ(0);
+  box-shadow:
+    0 5px 0 rgb(0 0 0 / 0.28),
+    0 2px 0 rgb(255 255 255 / 0.35) inset;
+  transition:
+    transform 0.08s ease,
+    filter 0.12s ease;
+}
+
+.lucky-slot-btn:active:not(:disabled) {
+  transform: translate3d(0, 3px, 0);
+  box-shadow: 0 1px 0 rgb(0 0 0 / 0.2);
+}
+
+.lucky-slot-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lucky-slot-btn--spin {
+  color: #3a1800;
+  background: linear-gradient(180deg, #fff0a0, var(--slot-gold) 55%, var(--slot-gold-mid));
+  border-color: #a67c00;
+  text-shadow: 0 1px 0 rgb(255 255 255 / 0.45);
+}
+
+.lucky-slot-btn--claim {
+  color: #fff;
+  text-shadow:
+    0 0 1px #000,
+    0 2px 0 rgb(0 0 0 / 0.25);
+  background: linear-gradient(180deg, #5ce38a, #2bbf55 45%, #168a32);
+  border-color: #0d5a22;
+}
+
+.lucky-slot-btn--ad {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #fff;
+  text-shadow: 0 1px 0 rgb(0 0 0 / 0.35);
+  background: linear-gradient(180deg, #7ec8ff, #4a9fff 50%, #2566d4);
+  border-color: #143d7a;
+}
+
+.lucky-slot-btn__play-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  font-size: 0.55rem;
+  border-radius: 5px;
+  border: 2px solid rgb(255 255 255 / 0.5);
+  background: rgb(255 255 255 / 0.98);
+  color: #2566d4;
+  box-shadow: 0 2px 0 rgb(0 0 0 / 0.12);
+}
+
+.lucky-slot-hint {
+  margin: 12px 0 0;
+}
+
+/* 獎勵廣告模擬覆蓋層 */
+.rewarded-ad-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgb(0 0 0 / 0.45);
+}
+
+.rewarded-ad-dialog {
+  width: min(360px, 100%);
+  padding: 20px 22px 18px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+}
+
+.rewarded-ad-dialog__title {
+  margin: 0 0 10px;
+  font-size: 1.05rem;
+}
+
+.rewarded-ad-dialog__body {
+  margin: 0 0 18px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.rewarded-ad-dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
 }
 
 .grid {
@@ -1735,7 +2424,7 @@ body.wheel-spectacle-lock {
   box-shadow:
     inset 0 0 0 1px rgb(255 255 255 / 0.35),
     inset 0 0 80px rgb(0 0 0 / 0.04);
-  transition: transform 0.95s cubic-bezier(0.48, 0, 0.06, 1);
+  transition: transform 1.9s cubic-bezier(0.42, 0, 0.14, 1);
   will-change: transform;
 }
 
@@ -1757,12 +2446,31 @@ body.wheel-spectacle-lock {
     0 -10px 40px rgb(0 0 0 / 0.08);
 }
 
-.wheel-spectacle-overlay.is-open .wheel-spectacle-shard--top {
+/* 推開：僅在未進入闔上階段時維持開口 */
+.wheel-spectacle-overlay.is-open:not(.is-closing) .wheel-spectacle-shard--top {
   transform: translateY(calc(-100% - 6px));
 }
 
-.wheel-spectacle-overlay.is-open .wheel-spectacle-shard--bottom {
+.wheel-spectacle-overlay.is-open:not(.is-closing) .wheel-spectacle-shard--bottom {
   transform: translateY(calc(100% + 6px));
+}
+
+/* 闔上：幕板回到中線，中央舞台隨之收進「畫面後」 */
+.wheel-spectacle-overlay.is-closing .wheel-spectacle-shard--top,
+.wheel-spectacle-overlay.is-closing .wheel-spectacle-shard--bottom {
+  transform: translateY(0);
+  transition-timing-function: cubic-bezier(0.55, 0.06, 0.36, 1);
+}
+
+.wheel-spectacle-overlay.is-closing .wheel-spectacle-stage {
+  opacity: 0.22;
+  transform: scale(0.86);
+  filter: brightness(0.72) saturate(0.85);
+  transition:
+    opacity 1.45s ease-in,
+    transform 1.45s ease-in,
+    filter 1.45s ease-in,
+    box-shadow 1.45s ease-in;
 }
 
 .wheel-spectacle-seam-flash {
@@ -2095,7 +2803,7 @@ body.wheel-spectacle-lock {
   align-items: center;
   justify-content: center;
   margin: 0;
-  padding: 3px 6px 4px;
+  padding: 2px 5px 2px;
   border: none;
   border-right: 1px solid rgb(0 0 0 / 0.06);
   border-radius: 0;
@@ -2153,7 +2861,7 @@ body.wheel-spectacle-lock {
 .music-float__drag-handle__grip {
   display: block;
   width: 22px;
-  height: 9px;
+  height: 7px;
   opacity: 0.85;
   background:
     radial-gradient(circle at 20% 50%, currentColor 1.1px, transparent 1.2px),
@@ -2172,14 +2880,14 @@ body.wheel-spectacle-lock {
 }
 
 .music-mini-player--float .music-bar__inner {
-  gap: 3px;
-  padding: 5px 7px 7px;
+  gap: 2px;
+  padding: 4px 6px 5px;
 }
 
 .music-mini-player--float .music-bar__main {
   flex-direction: column;
   align-items: stretch;
-  gap: 4px;
+  gap: 2px;
   flex-wrap: nowrap;
   overflow: visible;
 }
@@ -2187,13 +2895,13 @@ body.wheel-spectacle-lock {
 .music-mini-player--float .music-bar__meta {
   flex: 0 0 auto;
   width: 100%;
-  gap: 6px;
+  gap: 4px;
 }
 
 .music-mini-player--float .music-bar__ctrl {
   justify-content: center;
   width: 100%;
-  gap: 4px;
+  gap: 3px;
 }
 
 .music-mini-player--float .music-bar__vol {
@@ -2213,39 +2921,81 @@ body.wheel-spectacle-lock {
 }
 
 .music-mini-player--float.music-mini-player--bar .music-mini-player__art {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  border-radius: 5px;
 }
 
-.music-mini-player--float.music-mini-player--bar .music-mini-player__title {
-  font-size: 0.68rem;
-  line-height: 1.18;
-  white-space: normal;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+.music-mini-player--float.music-mini-player--bar .music-mini-player__title-wrap {
+  font-size: 0.64rem;
+  line-height: 1.1;
+  font-weight: 700;
+  color: var(--bar-fg);
+}
+
+.music-mini-player__title-wrap {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
   overflow: hidden;
+  height: 1.1em;
+  line-height: 1.1;
+}
+
+.music-mini-player__title-track {
+  display: inline-flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  will-change: transform;
+}
+
+.music-mini-player__title-wrap--scroll .music-mini-player__title-track {
+  animation: music-mini-player-title-marquee var(--marquee-sec, 14s) linear infinite;
+}
+
+.music-mini-player__title-seg {
+  flex: 0 0 auto;
+  padding-right: 1.25em;
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+}
+
+@keyframes music-mini-player-title-marquee {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .music-mini-player__title-wrap--scroll .music-mini-player__title-track {
+    animation: none;
+  }
 }
 
 .music-mini-player--float.music-mini-player--bar .music-mini-player__track-ix {
-  font-size: 0.56rem;
-  line-height: 1.12;
+  font-size: 0.52rem;
+  line-height: 1.08;
 }
 
 .music-mini-player--float.music-mini-player--bar .music-mini-player__icon-btn {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
 }
 
 .music-mini-player--float.music-mini-player--bar .music-mini-player__icon-btn--primary {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
 }
 
 .music-mini-player--float.music-mini-player--bar .music-mini-player__icon-btn--sm {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
 }
 
 .music-mini-player--float.music-mini-player--bar .music-mini-player__svg {
@@ -2401,18 +3151,11 @@ body.wheel-spectacle-lock {
   gap: 1px;
 }
 
-.music-mini-player--bar .music-mini-player__title {
+.music-mini-player--bar .music-mini-player__title-wrap {
   font-size: 0.86rem;
   font-weight: 700;
   color: var(--bar-fg);
   text-shadow: none;
-}
-
-.music-mini-player__title {
-  line-height: 1.25;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .music-mini-player--bar .music-mini-player__track-ix {

@@ -44,6 +44,7 @@ import { attachMusicMiniPlayerFloatDrag } from "./musicMiniPlayerFloatDock";
 import { mountAdminSupportChat, mountMemberSupportChat, type SupportChatUnmount } from "./supportChat";
 import { attachSupportChatFloatDrag } from "./supportChatFloatDock";
 import { createVisitorStatsLine } from "./visitorStats";
+import { mountLuckySlotMachine } from "./luckySlotMachine";
 import { allStartSlots } from "./slots";
 import { runWheelSpectacle } from "./wheelSpectacle";
 import {
@@ -1752,7 +1753,7 @@ function render() {
     ),
   ]);
   const wheelRow = el("div", { class: "book-wheel-row" }, [spinBtn, wheelTestBtn, wheelStatus, wheelResult]);
-  memberExtrasWrap.append(emailVerifyBanner, walletStatus, wheelRulesHint, wheelRow);
+  memberExtrasWrap.append(emailVerifyBanner, walletStatus);
   const bookSupportChatMount = el("div", { class: "book-support-chat" });
   mountMemberSupportChat(db, auth, bookSupportChatMount);
 
@@ -1844,33 +1845,49 @@ function render() {
   const guestbookMount = el("div", { class: "guestbook-mount" });
   mountGuestbook(db, auth, guestbookMount);
 
-  let bookSubTab: "book" | "guestbook" | "mybookings" = "book";
+  let bookSubTab: "book" | "guestbook" | "wheel" | "luckyslot" | "mybookings" = "book";
 
   const bookTabList = el("div", { class: "book-tabs", role: "tablist" });
   bookTabList.setAttribute(
     "aria-label",
-    t("book.tabsAria", "預約、心得與評價、我的預約（登入會員後顯示第三項）"),
+    t(
+      "book.tabsAria",
+      "預約按摩、我的預約、心得與評價、抽輪盤、試玩老虎機（「我的預約／抽輪盤」於登入會員後顯示）",
+    ),
   );
   const tabBook = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-book" }, [
-    t("book.tab.booking", "預約"),
+    t("book.tab.booking", "預約按摩"),
   ]);
   const tabGuestbook = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-guestbook" }, [
     t("book.tab.guestbook", "心得與評價"),
+  ]);
+  const tabWheel = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-wheel" }, [
+    t("book.tab.wheel", "抽輪盤"),
+  ]);
+  const tabLuckySlot = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-lucky-slot" }, [
+    t("book.tab.luckySlot", "老虎機（試玩）"),
   ]);
   const tabMyBookings = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-my-bookings" }, [
     t("book.tab.myBookings", "我的預約"),
   ]);
   tabBook.setAttribute("aria-controls", "book-tab-panel-book");
   tabGuestbook.setAttribute("aria-controls", "book-tab-panel-guestbook");
+  tabWheel.setAttribute("aria-controls", "book-tab-panel-wheel");
+  tabLuckySlot.setAttribute("aria-controls", "book-tab-panel-lucky-slot");
   tabMyBookings.setAttribute("aria-controls", "book-tab-panel-my-bookings");
   tabBook.setAttribute("aria-selected", "true");
   tabGuestbook.setAttribute("aria-selected", "false");
+  tabWheel.setAttribute("aria-selected", "false");
+  tabLuckySlot.setAttribute("aria-selected", "false");
   tabMyBookings.setAttribute("aria-selected", "false");
   tabBook.tabIndex = 0;
   tabGuestbook.tabIndex = -1;
+  tabWheel.tabIndex = -1;
+  tabLuckySlot.tabIndex = -1;
   tabMyBookings.tabIndex = -1;
   tabMyBookings.hidden = memberExtrasWrap.hidden;
-  bookTabList.append(tabBook, tabGuestbook, tabMyBookings);
+  tabWheel.hidden = memberExtrasWrap.hidden;
+  bookTabList.append(tabBook, tabMyBookings, tabGuestbook, tabWheel, tabLuckySlot);
 
   const bookPanelBook = el("div", {
     class: "book-tab-panel",
@@ -1925,6 +1942,24 @@ function render() {
   bookPanelGuestbook.setAttribute("aria-labelledby", "book-tab-guestbook");
   bookPanelGuestbook.append(guestbookMount);
 
+  const bookPanelWheel = el("div", {
+    class: "book-tab-panel book-tab-panel--wheel",
+    id: "book-tab-panel-wheel",
+    role: "tabpanel",
+    hidden: true,
+  });
+  bookPanelWheel.setAttribute("aria-labelledby", "book-tab-wheel");
+  bookPanelWheel.append(wheelRulesHint, wheelRow);
+
+  const bookPanelLuckySlot = el("div", {
+    class: "book-tab-panel book-tab-panel--lucky-slot",
+    id: "book-tab-panel-lucky-slot",
+    role: "tabpanel",
+    hidden: true,
+  });
+  bookPanelLuckySlot.setAttribute("aria-labelledby", "book-tab-lucky-slot");
+  mountLuckySlotMachine(bookPanelLuckySlot, t);
+
   const bookPanelMyBookings = el("div", {
     class: "book-tab-panel book-tab-panel--my-bookings",
     id: "book-tab-panel-my-bookings",
@@ -1934,32 +1969,48 @@ function render() {
   bookPanelMyBookings.setAttribute("aria-labelledby", "book-tab-my-bookings");
   bookPanelMyBookings.append(myBookingsSection);
 
-  function setBookSubTab(which: "book" | "guestbook" | "mybookings") {
+  function setBookSubTab(which: "book" | "guestbook" | "wheel" | "luckyslot" | "mybookings") {
     bookSubTab = which;
     tabBook.setAttribute("aria-selected", String(which === "book"));
     tabGuestbook.setAttribute("aria-selected", String(which === "guestbook"));
+    tabWheel.setAttribute("aria-selected", String(which === "wheel"));
+    tabLuckySlot.setAttribute("aria-selected", String(which === "luckyslot"));
     tabMyBookings.setAttribute("aria-selected", String(which === "mybookings"));
     tabBook.tabIndex = which === "book" ? 0 : -1;
     tabGuestbook.tabIndex = which === "guestbook" ? 0 : -1;
+    tabWheel.tabIndex = which === "wheel" ? 0 : -1;
+    tabLuckySlot.tabIndex = which === "luckyslot" ? 0 : -1;
     tabMyBookings.tabIndex = which === "mybookings" ? 0 : -1;
     bookPanelBook.hidden = which !== "book";
     bookPanelGuestbook.hidden = which !== "guestbook";
+    bookPanelWheel.hidden = which !== "wheel";
+    bookPanelLuckySlot.hidden = which !== "luckyslot";
     bookPanelMyBookings.hidden = which !== "mybookings";
   }
   tabBook.addEventListener("click", () => setBookSubTab("book"));
   tabGuestbook.addEventListener("click", () => setBookSubTab("guestbook"));
+  tabWheel.addEventListener("click", () => setBookSubTab("wheel"));
+  tabLuckySlot.addEventListener("click", () => setBookSubTab("luckyslot"));
   tabMyBookings.addEventListener("click", () => setBookSubTab("mybookings"));
 
   syncBookMyBookingsTabVisibility = () => {
     const show = !memberExtrasWrap.hidden;
     tabMyBookings.hidden = !show;
-    if (!show && bookSubTab === "mybookings") {
+    tabWheel.hidden = !show;
+    if (!show && (bookSubTab === "mybookings" || bookSubTab === "wheel")) {
       setBookSubTab("book");
     }
   };
   syncBookMyBookingsTabVisibility();
 
-  panelBook.append(bookTabList, bookPanelBook, bookPanelGuestbook, bookPanelMyBookings);
+  panelBook.append(
+    bookTabList,
+    bookPanelBook,
+    bookPanelGuestbook,
+    bookPanelWheel,
+    bookPanelLuckySlot,
+    bookPanelMyBookings,
+  );
 
   root.append(supportChatFloat);
   const supportChatFloatDock = attachSupportChatFloatDrag(supportChatFloat, supportChatFab);

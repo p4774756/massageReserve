@@ -21,10 +21,34 @@ export const EN: Record<string, string> = {
   "booking.mode.member_wallet": "Member · wallet (deduct NT$50)",
   "booking.mode.member_beverage": "Member · drink credit",
 
-  "book.tabsAria": "Booking, reviews, and my bookings (third tab when signed in)",
-  "book.tab.booking": "Book",
+  "book.tabsAria":
+    "Massage booking, my bookings (when signed in), reviews, wheel tab (when signed in), and demo slot machine (rightmost tab)",
+  "book.tab.booking": "Book massage",
   "book.tab.guestbook": "Reviews",
+  "book.tab.wheel": "Wheel",
+  "book.tab.luckySlot": "Slot (demo)",
   "book.tab.myBookings": "My bookings",
+
+  "luckySlot.marqueeLed": "LET'S GO!!!",
+  "luckySlot.marqueeSub": "Demo spin · illustrative prizes",
+  "luckySlot.leverAria": "Pull lever to spin",
+  "luckySlot.reelAdHint": "Reward-ad slot (illustrative)",
+  "luckySlot.spin": "Spin",
+  "luckySlot.claim": "Claim",
+  "luckySlot.claimWithAd": "Watch ad & claim all",
+  "luckySlot.hint":
+    "Prizes are random client-side demos. Real rewarded ads need Ad Manager / IMA, etc.; if you set window.__MR_rewardedShow(), that implementation runs instead.",
+  "luckySlot.spinning": "Spinning…",
+  "luckySlot.stopped": "Stopped. Claim, or use the ad demo to “claim all”.",
+  "luckySlot.claimed": "Claimed (demo): ",
+  "luckySlot.needSpinFirst": "Spin once first.",
+  "luckySlot.adTitle": "Reward (demo)",
+  "luckySlot.adBody":
+    "A real rewarded video would play here. If window.__MR_rewardedShow is set, your SDK runs instead.",
+  "luckySlot.adComplete": "Simulate finished watching",
+  "luckySlot.adCancel": "Cancel",
+  "luckySlot.adCancelled": "Cancelled; nothing granted.",
+  "luckySlot.claimedAd": "After ad, claimed all (demo): ",
 
   "status.pending": "Pending",
   "status.confirmed": "Confirmed",
