@@ -138,7 +138,9 @@ export function attachSupportChatFloatDrag(floatEl: HTMLElement, fab: HTMLButton
     window.removeEventListener("pointermove", onDragMove);
     window.removeEventListener("pointerup", onDragEnd);
     window.removeEventListener("pointercancel", onDragEnd);
-    blockAccidentalClickAfterDrag();
+    // 觸控拖曳後通常不會再派發「同一手勢」的合成 click；若仍掛攔截器會吃掉使用者第一次點擊。
+    // 滑鼠在 mouseup 後仍會派發 click，才需要擋掉誤觸。
+    if (e.pointerType === "mouse") blockAccidentalClickAfterDrag();
     const r = floatEl.getBoundingClientRect();
     const cx = r.left + r.width / 2;
     dockSide = cx < window.innerWidth / 2 ? "left" : "right";
