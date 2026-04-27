@@ -4,7 +4,7 @@ const BOOKING_MODE_LABEL: Record<string, string> = {
   guest_cash: "訪客｜現場現金",
   guest_beverage: "訪客｜飲料折抵",
   member_cash: "會員｜現場現金",
-  member_wallet: "會員｜儲值扣款",
+  member_wallet: "會員｜次數扣 1 次",
   member_beverage: "會員｜飲料折抵",
 };
 
@@ -24,7 +24,7 @@ const BOOKING_MODE_LABEL_EN: Record<string, string> = {
   guest_cash: "Guest · cash on site",
   guest_beverage: "Guest · drink credit",
   member_cash: "Member · cash on site",
-  member_wallet: "Member · wallet charge",
+  member_wallet: "Member · session credit",
   member_beverage: "Member · drink credit",
 };
 

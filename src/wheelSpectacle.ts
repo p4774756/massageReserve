@@ -11,6 +11,8 @@ export type SpinWheelSpectacleResult = {
   prize: { id?: string; name: string; type: string; value: number };
   drawChances: number;
   walletBalance: number;
+  wheelPoints?: number;
+  sessionCredits?: number;
 };
 
 /** 與後端 `listActiveWheelPrizes` 對齊，用於畫出真實獎項扇形 */
@@ -677,8 +679,8 @@ export function runWheelSpectacle(
       resultLine.textContent = "恭喜獲得";
       subLine.hidden = false;
       subLine.textContent =
-        data.prize.type === "credit"
-          ? `已入帳 ${data.prize.value} 元儲值金`
+        data.prize.type === "points"
+          ? `已獲得 ${data.prize.value} 點（目前共 ${data.wheelPoints ?? "—"} 點）`
           : data.prize.type === "chance"
             ? `可抽次數已更新（目前 ${data.drawChances} 次）`
             : "祝你有美好的一天";

@@ -38,7 +38,9 @@ export function getFns() {
 
 export const createBookingCall = () => httpsCallable(getFns(), "createBooking");
 export const getAvailabilityCall = () => httpsCallable(getFns(), "getAvailability");
+export const getBookingPricingCall = () => httpsCallable(getFns(), "getBookingPricing");
 export const getMyWalletCall = () => httpsCallable(getFns(), "getMyWallet");
+export const redeemWheelPointsCall = () => httpsCallable(getFns(), "redeemWheelPoints");
 export const topupWalletCall = () => httpsCallable(getFns(), "topupWallet");
 export const completeBookingCall = () => httpsCallable(getFns(), "completeBooking");
 export const testSendMemberBookingStatusEmailCall = () =>
@@ -46,6 +48,7 @@ export const testSendMemberBookingStatusEmailCall = () =>
 export const cancelBookingCall = () => httpsCallable(getFns(), "cancelBooking");
 export const spinWheelCall = () => httpsCallable(getFns(), "spinWheel");
 export const listActiveWheelPrizesCall = () => httpsCallable(getFns(), "listActiveWheelPrizes");
+export const seedWheelPrizesCall = () => httpsCallable(getFns(), "seedWheelPrizes");
 export const getAdminStatusCall = () => httpsCallable(getFns(), "getAdminStatus");
 export const createMemberAccountCall = () => httpsCallable(getFns(), "createMemberAccount");
 export const searchMemberUsersCall = () => httpsCallable(getFns(), "searchMemberUsers");

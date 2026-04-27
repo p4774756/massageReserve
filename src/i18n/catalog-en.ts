@@ -15,10 +15,10 @@ export const EN: Record<string, string> = {
   "pwd.ariaHide": "Hide password",
 
   "booking.beverageOption": "Buy the therapist a drink",
-  "booking.mode.guest_cash": "Guest · cash (NT$50)",
+  "booking.mode.guest_cash": "Guest · cash (NT$ {{price}})",
   "booking.mode.guest_beverage": "Guest · drink credit",
-  "booking.mode.member_cash": "Member · cash (NT$50)",
-  "booking.mode.member_wallet": "Member · wallet (deduct NT$50)",
+  "booking.mode.member_cash": "Member · cash (NT$ {{price}})",
+  "booking.mode.member_wallet": "Member · prepaid sessions (deduct 1)",
   "booking.mode.member_beverage": "Member · drink credit",
 
   "book.tabsAria":
@@ -109,7 +109,7 @@ export const EN: Record<string, string> = {
   "booking.resendVerify": "Resend verification email",
   "booking.reloadVerify": "I've verified — refresh status",
   "booking.modeHintGuest":
-    "Guest bookings settle in cash for NT$50; top-ups and the wheel use sign-in (top right).",
+    "Guest bookings settle in cash for the amount shown; session top-ups and the wheel use sign-in (top right).",
   "booking.pickSlotFirst": "Pick a date to see open slots and quotas.",
   "booking.datePast": "Dates before today cannot be selected.",
   "booking.dateBeyond": "Bookings are only open through the Sunday of next calendar week.",
@@ -146,7 +146,7 @@ export const EN: Record<string, string> = {
   "wheel.previewBtn": "Preview wheel effect",
   "wheel.previewTitle": "Preview only — no real spin or deduction",
   "wheel.rules":
-    "Wheel rules: after a member booking is marked completed in admin, you earn 1 spin (once per booking). Each Spin uses 1 chance. Prizes are random by admin weights (wallet credit, extra spins, thanks, fun text, etc.). Email verification is required.",
+    "Wheel rules: after a member booking is marked completed in admin, you earn 1 spin (once per booking). Each spin uses 1 chance. Prizes are random by admin weights (points, extra spins, thanks, fun text, etc.). Points can be redeemed for sessions when you reach the threshold. Email verification is required.",
   "wheel.spinNeedLogin": "Please sign in as a member.",
   "wheel.spinNeedVerify": "Please verify your email first.",
   "wheel.spinNoChances": "No spins available.",
@@ -154,6 +154,8 @@ export const EN: Record<string, string> = {
   "wheel.spinDone": "Spin complete!",
   "wheel.previewDone": "That was a visual preview only — no real spin or deduction.",
   "wheel.previewPrizeName": "【Preview】+5 wallet credit",
+  "wheel.previewPrizePts5": "【Preview】+5 pts",
+  "wheel.previewPrizePts3": "【Preview】+3 pts",
   "wheel.previewPrizeC10": "+10 wallet credit",
   "wheel.previewPrizeExtra": "One extra spin",
   "wheel.previewPrizeThanks": "Thanks for participating",
@@ -195,6 +197,8 @@ export const EN: Record<string, string> = {
     "Member payment needs a verified email — check your inbox for the verification link.",
   "booking.walletShort":
     "Insufficient wallet balance — switch to cash, “buy a drink”, or top up first.",
+  "booking.sessionShort":
+    "Not enough prepaid sessions — switch to cash, “buy a drink”, or add sessions first.",
   "booking.confirmTitle": "Confirm booking",
   "booking.confirmSubmit": "Confirm submit",
   "booking.cancelledSubmit": "Submission cancelled.",
@@ -223,6 +227,13 @@ export const EN: Record<string, string> = {
     "Signed in, but email is not verified. Open the link in your email, then tap “I've verified — refresh status”.",
   "member.walletLoading": "Loading member balance…",
   "member.walletLine": "Signed in: wallet balance {{balance}} (NTD), spin chances {{chances}}.",
+  "member.walletLine2":
+    "Signed in: sessions {{sessions}}, points {{points}} / {{per}} pts for 1 session, spin chances {{chances}}. {{legacy}}",
+  "member.walletLegacyLine": "Remaining cash not yet folded into sessions: {{n}} (NTD).",
+  "member.redeemPointsBtn": "Redeem {{per}} points → 1 session",
+  "member.redeemOk": "Redeemed successfully.",
+  "member.modalRedeemHint":
+    "The “redeem points” button is below the signed-in status on the booking tab; close this dialog to use it.",
   "member.wheelLuck": "You can spin — good luck!",
   "member.wheelNone": "No spins right now.",
   "member.wheelStateFail": "Could not read spin state.",
@@ -273,15 +284,15 @@ export const EN: Record<string, string> = {
   "member.signedInAs": "Signed in: {{email}} (UID: {{uid}})",
   "member.noEmail": "(no email)",
   "member.verifyModalHint":
-    "Verify your email to use wallet, member booking, and the wheel.",
-  "member.mode.wallet": "Member wallet (deduct NT$50)",
-  "member.mode.cash": "Member cash (NT$50)",
+    "Verify your email to use sessions, member booking, and the wheel.",
+  "member.mode.wallet": "Member sessions (deduct 1)",
+  "member.mode.cash": "Member cash (NT$ {{price}})",
   "member.modeHint.member":
-    "Choose wallet deduction, member cash (NT$50), or “buy a drink” (per on-site agreement).",
+    "Choose session deduction, member cash (NT$ {{price}}), or “buy a drink” (per on-site agreement).",
   "member.modeHint.unverified":
     "Signed in but email not verified — book as guest for now; after verification you can use member payment, wallet, and wheel.",
   "member.modeHint.guest":
-    "Guests can pay cash NT$50 or “buy a drink”; wallet and wheel need sign-in (top right).",
+    "Guests can pay cash NT$ {{price}} or “buy a drink”; session top-up and wheel need sign-in (top right).",
 
   "session.guest": "Guest",
   "session.guestChat": "Guest chat mode",
@@ -330,7 +341,14 @@ export const EN: Record<string, string> = {
   "admin.testStatusEmail.ok": "Test email sent to {{email}}",
   "admin.testStatusEmail.fail": "Failed to send test email",
 
+  "admin.seedWheelPrizes.heading": "Wheel prizes (Firestore)",
+  "admin.seedWheelPrizes.hint":
+    "Calls the seedWheelPrizes Cloud Function: writes default prizes only when the wheelPrizes collection is completely empty; if any document exists, it skips (edit in Console or delete existing prizes first).",
+  "admin.seedWheelPrizes.btn": "Seed default wheel prizes",
+  "admin.seedWheelPrizes.okSeeded": "Default prizes written ({{count}} rows).",
+  "admin.seedWheelPrizes.skipped": "Nothing written: wheelPrizes already has data (seed runs only on an empty collection).",
   "admin.wheelSpectacle.save": "Save wheel preview toggle",
+  "admin.luckySlotDemo.save": "Save demo slot machine tab toggle",
   "admin.caps.save": "Save booking caps",
   "admin.blocks.addRow": "Add row",
   "admin.blocks.save": "Save closed booking windows",
@@ -369,6 +387,15 @@ export const EN: Record<string, string> = {
     "After enabling and saving, the booking page member area shows a “Preview wheel effect” button. It only plays animation, does not call spin API, and does not consume chances. Recommended off in production. Firestore: ",
   "admin.announce.wheelHintB": ".",
 
+  "admin.announce.luckySlotHeading": "Booking page · demo slot machine tab",
+  "admin.announce.luckySlotHintA":
+    "Controls whether the main booking card shows the “Slot machine (demo)” tab. When off, the tab is hidden for everyone. Firestore: ",
+  "admin.announce.luckySlotHintB": " field ",
+  "admin.announce.luckySlotHintC": " (boolean; missing doc or true = show tab).",
+  "admin.announce.luckySlotToggle": "Show “Slot machine (demo)” tab on the booking page",
+
+  "admin.snapshot.loadFailLuckySlot": "Could not load demo slot machine settings.",
+
   "admin.caps.heading": "Booking caps",
   "admin.caps.perDay": "Max bookings same day",
   "admin.caps.perWeek": "Max bookings same work week",
@@ -379,12 +406,23 @@ export const EN: Record<string, string> = {
   "admin.caps.hintD":
     ", integer 1-50; if doc is missing backend defaults to 2 and 4).",
 
+  "admin.pricing.heading": "Pricing & point redemption",
+  "admin.pricing.hint": "Controls the cash amount shown for guests/members, the rate to fold legacy wallet cash into sessions, and how many wheel points redeem for 1 session. Firestore:",
+  "admin.pricing.hintEnd": "",
+  "admin.pricing.sessionPrice": "On-site price per session (NTD)",
+  "admin.pricing.pointsPer": "Points needed for 1 session",
+  "admin.pricing.save": "Save pricing",
+  "admin.pricing.loadFail": "Could not load pricing settings.",
+  "admin.pricing.badSessionPrice": "On-site price must be an integer ≥ 1.",
+  "admin.pricing.badPointsPer": "Redemption threshold must be an integer ≥ 2.",
   "admin.wallet.heading": "Member top-up",
   "admin.wallet.memberLabel": "Member (email or UID)",
   "admin.wallet.searchHint":
     "Type at least 2 characters to match emails, or paste a UID directly.",
-  "admin.wallet.amount": "Top-up amount",
+  "admin.wallet.sessions": "Sessions to add (required)",
+  "admin.wallet.amount": "Payment amount for records (required, NTD)",
   "admin.wallet.note": "Note (optional)",
+  "admin.topup.sessionsInt": "Sessions to add must be a positive integer.",
   "admin.member.createBtn": "Create member account",
   "admin.member.createTitle": "Create member account",
   "admin.member.email": "Member email",
@@ -489,7 +527,9 @@ export const EN: Record<string, string> = {
   "admin.memberList.th.verified": "Email verified",
   "admin.memberList.th.uid": "UID",
   "admin.memberList.th.nickname": "Display name",
-  "admin.memberList.th.wallet": "Wallet balance",
+  "admin.memberList.th.sessions": "Sessions",
+  "admin.memberList.th.points": "Points",
+  "admin.memberList.th.wallet": "Legacy cash (NTD)",
   "admin.memberList.th.draws": "Spin chances",
   "admin.memberList.th.actions": "Actions",
   "admin.memberList.sortTitle": "Sort by “{{label}}”; click again to reverse",

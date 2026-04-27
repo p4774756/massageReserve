@@ -18,6 +18,7 @@ import {
   resolveBookingCaps,
   TIMEZONE,
 } from "./bookingLogic";
+import { foldWalletBalanceIntoSessions, resolvePointsPerMassage, resolveSessionPriceNtd } from "./pricing";
 import { parseLocale, st, type ServerLocale } from "./serverI18n";
 
 initializeApp();
@@ -41,10 +42,8 @@ type CreateBookingInput = {
   bookingMode?: unknown;
 };
 
-const BOOKING_PRICE = 50;
-
 type BookingStatus = "pending" | "confirmed" | "done" | "cancelled" | "deleted";
-type PrizeType = "credit" | "chance" | "thanks" | "penalty_text";
+type PrizeType = "points" | "chance" | "thanks" | "penalty_text";
 
 async function assertAdminByUid(uid: string, locale: ServerLocale): Promise<void> {
   const adminSnap = await db.collection("admins").doc(uid).get();
@@ -116,7 +115,7 @@ async function loadActiveWheelPrizes(): Promise<WheelPrizeRow[]> {
       const type = data.type as PrizeType | undefined;
       const name = typeof data.name === "string" ? data.name : "";
       const value = asNonNegativeInteger(data.value);
-      if (!name || !type || !["credit", "chance", "thanks", "penalty_text"].includes(type) || weight <= 0) {
+      if (!name || !type || !["points", "chance", "thanks", "penalty_text"].includes(type) || weight <= 0) {
         return null;
       }
       return {
@@ -314,6 +313,8 @@ export const createBooking = onCall(
 
   try {
     await db.runTransaction(async (tx) => {
+      const pricingSnap = await tx.get(db.collection("siteSettings").doc("pricing"));
+      const sessionPriceNtd = resolveSessionPriceNtd(pricingSnap.data());
       const capsRef = db.collection("siteSettings").doc("bookingCaps");
       const dayQ = db
         .collection("bookings")
@@ -348,29 +349,46 @@ export const createBooking = onCall(
       let customerId: string | null = null;
       let walletDeducted = 0;
       let paidCash = 0;
+      let sessionCreditsDeducted = 0;
       if (bookingMode === "guest_cash") {
-        paidCash = BOOKING_PRICE;
+        paidCash = sessionPriceNtd;
       } else if (bookingMode === "guest_beverage") {
         // 訪客以飲料折抵：不綁 customerId、不扣款
       } else if (bookingMode === "member_cash") {
         customerId = uid!;
-        paidCash = BOOKING_PRICE;
+        paidCash = sessionPriceNtd;
       } else if (bookingMode === "member_beverage") {
         customerId = uid!;
       } else {
         customerId = uid!;
-        walletDeducted = BOOKING_PRICE;
         const customerRef = db.collection("customers").doc(uid!);
         const customerSnap = await tx.get(customerRef);
         const walletBalanceRaw = customerSnap.exists ? customerSnap.get("walletBalance") : 0;
-        const walletBalance = typeof walletBalanceRaw === "number" ? walletBalanceRaw : 0;
-        if (walletBalance < BOOKING_PRICE) {
-          throw new HttpsError("resource-exhausted", st(locale, "booking.walletShort", "儲值餘額不足，請改用現金或先儲值"));
+        const sessionCreditsRaw = customerSnap.exists ? customerSnap.get("sessionCredits") : 0;
+        const drawChancesRaw = customerSnap.exists ? customerSnap.get("drawChances") : 0;
+        const wheelPointsRaw = customerSnap.exists ? customerSnap.get("wheelPoints") : 0;
+        let walletBalance = typeof walletBalanceRaw === "number" ? walletBalanceRaw : 0;
+        let sessionCredits = typeof sessionCreditsRaw === "number" ? sessionCreditsRaw : 0;
+        const drawChances = typeof drawChancesRaw === "number" ? drawChancesRaw : 0;
+        const wheelPoints = typeof wheelPointsRaw === "number" ? wheelPointsRaw : 0;
+        const folded = foldWalletBalanceIntoSessions(walletBalance, sessionCredits, sessionPriceNtd);
+        walletBalance = folded.walletBalance;
+        sessionCredits = folded.sessionCredits;
+        if (sessionCredits < 1) {
+          throw new HttpsError(
+            "resource-exhausted",
+            st(locale, "booking.sessionShort", "預約次數不足，請改用現金、飲料折抵或先儲值次數。"),
+          );
         }
+        sessionCredits -= 1;
+        sessionCreditsDeducted = 1;
         tx.set(
           customerRef,
           {
-            walletBalance: walletBalance - BOOKING_PRICE,
+            walletBalance,
+            sessionCredits,
+            drawChances,
+            wheelPoints,
             updatedAt: FieldValueOrServerTimestamp(),
           },
           { merge: true },
@@ -379,9 +397,11 @@ export const createBooking = onCall(
         tx.set(txRef, {
           customerId,
           bookingId: bookingRef.id,
-          type: "charge",
-          amount: -BOOKING_PRICE,
-          note: "預約建立時扣款",
+          type: "session_charge",
+          amount: 0,
+          sessionsDelta: -1,
+          sessionPriceSnapshot: sessionPriceNtd,
+          note: `預約扣次數 1 次（現場單價參考 ${sessionPriceNtd} 元）`,
           operatorId: uid!,
           createdAt: FieldValueOrServerTimestamp(),
         });
@@ -396,9 +416,10 @@ export const createBooking = onCall(
         startAt,
         bookingMode,
         customerId,
-        price: BOOKING_PRICE,
+        price: sessionPriceNtd,
         walletDeducted,
         paidCash,
+        sessionCreditsDeducted,
         drawGranted: false,
         status: "pending",
         notificationLocale: locale === "en" ? "en" : "zh-Hant",
@@ -448,16 +469,122 @@ export const getMyWallet = onCall(publicCall, async (request) => {
     throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
   }
   await assertMemberEmailVerified(uid, locale);
-  const snap = await db.collection("customers").doc(uid).get();
-  const walletBalanceRaw = snap.exists ? snap.get("walletBalance") : 0;
-  const drawChancesRaw = snap.exists ? snap.get("drawChances") : 0;
-  const nicknameRaw = snap.exists ? snap.get("nickname") : "";
-  const nickname = typeof nicknameRaw === "string" ? nicknameRaw.trim() : "";
+  const customerRef = db.collection("customers").doc(uid);
+  const out = await db.runTransaction(async (tx) => {
+    const pricingSnap = await tx.get(db.collection("siteSettings").doc("pricing"));
+    const sessionPriceNtd = resolveSessionPriceNtd(pricingSnap.data());
+    const pointsPerMassage = resolvePointsPerMassage(pricingSnap.data());
+    const snap = await tx.get(customerRef);
+    const walletBalanceRaw = snap.exists ? snap.get("walletBalance") : 0;
+    const drawChancesRaw = snap.exists ? snap.get("drawChances") : 0;
+    const nicknameRaw = snap.exists ? snap.get("nickname") : "";
+    const sessionCreditsRaw = snap.exists ? snap.get("sessionCredits") : 0;
+    const wheelPointsRaw = snap.exists ? snap.get("wheelPoints") : 0;
+    const nickname = typeof nicknameRaw === "string" ? nicknameRaw.trim() : "";
+    let walletBalance = typeof walletBalanceRaw === "number" ? walletBalanceRaw : 0;
+    let sessionCredits = typeof sessionCreditsRaw === "number" ? sessionCreditsRaw : 0;
+    const wheelPoints = typeof wheelPointsRaw === "number" ? wheelPointsRaw : 0;
+    const drawChances = typeof drawChancesRaw === "number" ? drawChancesRaw : 0;
+    const folded = foldWalletBalanceIntoSessions(walletBalance, sessionCredits, sessionPriceNtd);
+    if (folded.walletBalance !== walletBalance || folded.sessionCredits !== sessionCredits) {
+      walletBalance = folded.walletBalance;
+      sessionCredits = folded.sessionCredits;
+      tx.set(
+        customerRef,
+        {
+          walletBalance,
+          sessionCredits,
+          drawChances,
+          wheelPoints,
+          updatedAt: FieldValueOrServerTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+    return {
+      walletBalance,
+      sessionCredits,
+      wheelPoints,
+      drawChances,
+      nickname,
+      sessionPriceNtd,
+      pointsPerMassage,
+    };
+  });
+  return out;
+});
+
+/** 前台／訪客：讀取現場單次金額與點數兌換門檻（無需登入） */
+export const getBookingPricing = onCall(publicCall, async (request) => {
+  parseLocale(request.data);
+  const snap = await db.collection("siteSettings").doc("pricing").get();
   return {
-    walletBalance: typeof walletBalanceRaw === "number" ? walletBalanceRaw : 0,
-    drawChances: typeof drawChancesRaw === "number" ? drawChancesRaw : 0,
-    nickname,
+    sessionPriceNtd: resolveSessionPriceNtd(snap.data()),
+    pointsPerMassage: resolvePointsPerMassage(snap.data()),
   };
+});
+
+/** 會員：輪盤點數滿門檻時手動兌換為 1 次預約次數 */
+export const redeemWheelPoints = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
+  }
+  await assertMemberEmailVerified(uid, locale);
+
+  const customerRef = db.collection("customers").doc(uid);
+  const walletTxRef = db.collection("walletTransactions").doc();
+
+  const result = await db.runTransaction(async (tx) => {
+    const pricingSnap = await tx.get(db.collection("siteSettings").doc("pricing"));
+    const sessionPriceNtd = resolveSessionPriceNtd(pricingSnap.data());
+    const pointsPerMassage = resolvePointsPerMassage(pricingSnap.data());
+    const snap = await tx.get(customerRef);
+    const walletBalanceRaw = snap.exists ? snap.get("walletBalance") : 0;
+    const sessionCreditsRaw = snap.exists ? snap.get("sessionCredits") : 0;
+    const wheelPointsRaw = snap.exists ? snap.get("wheelPoints") : 0;
+    const drawChancesRaw = snap.exists ? snap.get("drawChances") : 0;
+    let walletBalance = typeof walletBalanceRaw === "number" ? walletBalanceRaw : 0;
+    let sessionCredits = typeof sessionCreditsRaw === "number" ? sessionCreditsRaw : 0;
+    let wheelPoints = typeof wheelPointsRaw === "number" ? wheelPointsRaw : 0;
+    const drawChances = typeof drawChancesRaw === "number" ? drawChancesRaw : 0;
+    const folded = foldWalletBalanceIntoSessions(walletBalance, sessionCredits, sessionPriceNtd);
+    walletBalance = folded.walletBalance;
+    sessionCredits = folded.sessionCredits;
+    if (wheelPoints < pointsPerMassage) {
+      throw new HttpsError(
+        "failed-precondition",
+        st(locale, "redeem.pointsShort", "點數不足，無法兌換。"),
+      );
+    }
+    wheelPoints -= pointsPerMassage;
+    sessionCredits += 1;
+    tx.set(
+      customerRef,
+      {
+        walletBalance,
+        sessionCredits,
+        wheelPoints,
+        drawChances,
+        updatedAt: FieldValueOrServerTimestamp(),
+      },
+      { merge: true },
+    );
+    tx.set(walletTxRef, {
+      customerId: uid,
+      type: "points_redeem",
+      amount: 0,
+      pointsDelta: -pointsPerMassage,
+      sessionsDelta: 1,
+      note: `點數兌換：-${pointsPerMassage} 點 → +1 次`,
+      operatorId: uid,
+      createdAt: FieldValueOrServerTimestamp(),
+    });
+    return { wheelPoints, sessionCredits, pointsPerMassage };
+  });
+
+  return { ok: true as const, ...result };
 });
 
 export const topupWallet = onCall(publicCall, async (request) => {
@@ -471,8 +598,12 @@ export const topupWallet = onCall(publicCall, async (request) => {
   const customerIdRaw = typeof request.data?.customerId === "string" ? request.data.customerId.trim() : "";
   const note = typeof request.data?.note === "string" ? request.data.note.trim() : "";
   const amount = asPositiveInteger(request.data?.amount);
+  const sessions = asPositiveInteger(request.data?.sessions);
   if (!amount) {
     throw new HttpsError("invalid-argument", st(locale, "topup.amountPositive", "儲值金額需為正整數"));
+  }
+  if (!sessions) {
+    throw new HttpsError("invalid-argument", st(locale, "topup.sessionsPositive", "儲值次數需為正整數"));
   }
 
   const customerId = await resolveCustomerUidForTopup(customerIdRaw, locale);
@@ -483,13 +614,18 @@ export const topupWallet = onCall(publicCall, async (request) => {
     const customerSnap = await tx.get(customerRef);
     const walletBalanceRaw = customerSnap.exists ? customerSnap.get("walletBalance") : 0;
     const drawChancesRaw = customerSnap.exists ? customerSnap.get("drawChances") : 0;
-    const nextWallet = (typeof walletBalanceRaw === "number" ? walletBalanceRaw : 0) + amount;
+    const sessionCreditsRaw = customerSnap.exists ? customerSnap.get("sessionCredits") : 0;
+    const wheelPointsRaw = customerSnap.exists ? customerSnap.get("wheelPoints") : 0;
+    const nextSessions = (typeof sessionCreditsRaw === "number" ? sessionCreditsRaw : 0) + sessions;
     const drawChances = typeof drawChancesRaw === "number" ? drawChancesRaw : 0;
+    const wheelPoints = typeof wheelPointsRaw === "number" ? wheelPointsRaw : 0;
     tx.set(
       customerRef,
       {
-        walletBalance: nextWallet,
+        walletBalance: typeof walletBalanceRaw === "number" ? walletBalanceRaw : 0,
+        sessionCredits: nextSessions,
         drawChances,
+        wheelPoints,
         updatedAt: FieldValueOrServerTimestamp(),
       },
       { merge: true },
@@ -498,7 +634,8 @@ export const topupWallet = onCall(publicCall, async (request) => {
       customerId,
       type: "topup",
       amount,
-      note: note || "後台儲值",
+      sessionsDelta: sessions,
+      note: note || `後台儲值：${sessions} 次（金額 ${amount} 元）`,
       operatorId: uid,
       createdAt: FieldValueOrServerTimestamp(),
     });
@@ -548,6 +685,8 @@ export const createMemberAccount = onCall(publicCall, async (request) => {
     await db.collection("customers").doc(userRecord.uid).set(
       {
         walletBalance: 0,
+        sessionCredits: 0,
+        wheelPoints: 0,
         drawChances: 0,
         ...(nickname ? { nickname } : {}),
         createdAt: FieldValueOrServerTimestamp(),
@@ -605,6 +744,8 @@ type ListMembersAdminRow = {
   emailVerified: boolean;
   nickname: string;
   walletBalance: number;
+  sessionCredits: number;
+  wheelPoints: number;
   drawChances: number;
 };
 
@@ -638,6 +779,8 @@ export const listMembersAdmin = onCall(publicCall, async (request) => {
         emailVerified: u.emailVerified === true,
         nickname: typeof d.nickname === "string" ? d.nickname : "",
         walletBalance: typeof d.walletBalance === "number" ? d.walletBalance : 0,
+        sessionCredits: typeof d.sessionCredits === "number" ? d.sessionCredits : 0,
+        wheelPoints: typeof d.wheelPoints === "number" ? d.wheelPoints : 0,
         drawChances: typeof d.drawChances === "number" ? d.drawChances : 0,
       });
     }
@@ -891,7 +1034,16 @@ export const cancelBooking = onCall(publicCall, async (request) => {
     }
     const walletDeductedRaw = data.walletDeducted;
     const walletDeducted = typeof walletDeductedRaw === "number" ? walletDeductedRaw : 0;
-    if (customerId && walletDeducted > 0) {
+    const sessionCreditsDeductedRaw = data.sessionCreditsDeducted;
+    const sessionCreditsDeducted =
+      typeof sessionCreditsDeductedRaw === "number" ? Math.max(0, Math.floor(sessionCreditsDeductedRaw)) : 0;
+    const bookingMode = typeof data.bookingMode === "string" ? data.bookingMode : "";
+    const legacyWalletRefund =
+      customerId && bookingMode === "member_wallet" && walletDeducted > 0 && sessionCreditsDeducted < 1;
+    const sessionRefund =
+      customerId && bookingMode === "member_wallet" && sessionCreditsDeducted >= 1;
+
+    if (legacyWalletRefund) {
       const customerRef = db.collection("customers").doc(customerId);
       const customerSnap = await tx.get(customerRef);
       const walletBalanceRaw = customerSnap.exists ? customerSnap.get("walletBalance") : 0;
@@ -911,7 +1063,31 @@ export const cancelBooking = onCall(publicCall, async (request) => {
         bookingId,
         type: "refund",
         amount: walletDeducted,
-        note: "取消預約退款",
+        note: "取消預約退款（舊版儲值金）",
+        operatorId: uid,
+        createdAt: FieldValueOrServerTimestamp(),
+      });
+    } else if (sessionRefund) {
+      const customerRef = db.collection("customers").doc(customerId);
+      const customerSnap = await tx.get(customerRef);
+      const sessionCreditsRaw = customerSnap.exists ? customerSnap.get("sessionCredits") : 0;
+      const prevSc = typeof sessionCreditsRaw === "number" ? sessionCreditsRaw : 0;
+      tx.set(
+        customerRef,
+        {
+          sessionCredits: prevSc + sessionCreditsDeducted,
+          updatedAt: FieldValueOrServerTimestamp(),
+        },
+        { merge: true },
+      );
+      const walletTxRef = db.collection("walletTransactions").doc();
+      tx.set(walletTxRef, {
+        customerId,
+        bookingId,
+        type: "session_refund",
+        amount: 0,
+        sessionsDelta: sessionCreditsDeducted,
+        note: `取消預約退回次數 ${sessionCreditsDeducted}`,
         operatorId: uid,
         createdAt: FieldValueOrServerTimestamp(),
       });
@@ -968,40 +1144,49 @@ export const spinWheel = onCall(publicCall, async (request) => {
 
   let remainingDrawChances = 0;
   let nextWalletBalance = 0;
+  let nextWheelPoints = 0;
+  let nextSessionCredits = 0;
   await db.runTransaction(async (tx) => {
     const customerSnap = await tx.get(customerRef);
     const drawChances = asNonNegativeInteger(customerSnap.exists ? customerSnap.get("drawChances") : 0);
     const walletBalance = asNonNegativeInteger(customerSnap.exists ? customerSnap.get("walletBalance") : 0);
+    const wheelPoints = asNonNegativeInteger(customerSnap.exists ? customerSnap.get("wheelPoints") : 0);
+    const sessionCredits = asNonNegativeInteger(customerSnap.exists ? customerSnap.get("sessionCredits") : 0);
     if (drawChances < 1) {
       throw new HttpsError("failed-precondition", st(locale, "wheel.noChances", "可抽次數不足"));
     }
 
-    let walletDelta = 0;
+    let pointsDelta = 0;
     let chanceDelta = -1;
-    if (picked.type === "credit") {
-      walletDelta = picked.value;
+    if (picked.type === "points") {
+      pointsDelta = picked.value;
     } else if (picked.type === "chance") {
       chanceDelta += picked.value;
     }
     remainingDrawChances = drawChances + chanceDelta;
-    nextWalletBalance = walletBalance + walletDelta;
+    nextWalletBalance = walletBalance;
+    nextWheelPoints = wheelPoints + pointsDelta;
+    nextSessionCredits = sessionCredits;
 
     tx.set(
       customerRef,
       {
         walletBalance: nextWalletBalance,
+        wheelPoints: nextWheelPoints,
+        sessionCredits: nextSessionCredits,
         drawChances: remainingDrawChances,
         updatedAt: FieldValueOrServerTimestamp(),
       },
       { merge: true },
     );
 
-    if (walletDelta > 0) {
+    if (pointsDelta > 0) {
       tx.set(walletTxRef, {
         customerId: uid,
-        type: "prize_credit",
-        amount: walletDelta,
-        note: `輪盤獎勵：${picked.name}`,
+        type: "prize_points",
+        amount: 0,
+        pointsDelta,
+        note: `輪盤獎勵：${picked.name}（+${pointsDelta} 點）`,
         operatorId: uid,
         createdAt: FieldValueOrServerTimestamp(),
       });
@@ -1030,6 +1215,8 @@ export const spinWheel = onCall(publicCall, async (request) => {
     },
     drawChances: remainingDrawChances,
     walletBalance: nextWalletBalance,
+    wheelPoints: nextWheelPoints,
+    sessionCredits: nextSessionCredits,
   };
 });
 
@@ -1047,11 +1234,12 @@ export const seedWheelPrizes = onCall(publicCall, async (request) => {
   }
 
   const defaults: Array<{ id: string; name: string; type: PrizeType; value: number; weight: number }> = [
-    { id: "credit10", name: "+10 儲值金", type: "credit", value: 10, weight: 20 },
-    { id: "credit5", name: "+5 儲值金", type: "credit", value: 5, weight: 25 },
-    { id: "chance1", name: "再抽一次", type: "chance", value: 1, weight: 15 },
-    { id: "thanks", name: "銘謝惠顧", type: "thanks", value: 0, weight: 30 },
-    { id: "penalty", name: "小處罰文案", type: "penalty_text", value: 0, weight: 10 },
+    { id: "pts5", name: "+5 點", type: "points", value: 5, weight: 18 },
+    { id: "pts3", name: "+3 點", type: "points", value: 3, weight: 26 },
+    { id: "pts1", name: "+1 點", type: "points", value: 1, weight: 22 },
+    { id: "chance1", name: "再抽一次", type: "chance", value: 1, weight: 14 },
+    { id: "thanks", name: "銘謝惠顧", type: "thanks", value: 0, weight: 14 },
+    { id: "penalty", name: "小處罰文案", type: "penalty_text", value: 0, weight: 6 },
   ];
   const batch = db.batch();
   for (const item of defaults) {

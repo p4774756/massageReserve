@@ -46,7 +46,7 @@ flowchart LR
 | `functions/src/index.ts` | 所有 Callable、Firestore 觸發器（預約狀態變更寄信） |
 | `functions/src/bookingLogic.ts` | 時段、容量、週曆規則（與前端 `src/slots.ts` 對齊概念） |
 | `functions/src/resendNotify.ts` | Resend：新預約通知擁有者、會員預約狀態變更信（由 `createBooking`／觸發器呼叫） |
-| `scripts/seed-wheel-prizes.mjs` | 本機／CI 呼叫 `seedWheelPrizes` 初始化獎項 |
+| `scripts/seed-wheel-prizes.mjs` | 本機／CI 呼叫 `seedWheelPrizes` 初始化獎項（與後台「初始化輪盤獎項」按鈕相同 Callable） |
 | `.github/workflows/deploy-firebase.yml` | 推送 `main` 時建置並部署（需 `FIREBASE_TOKEN`） |
 
 ---
@@ -75,7 +75,7 @@ flowchart LR
 
 ## 4. Callable Functions 一覽
 
-所有可呼叫函式定義於 `functions/src/index.ts`，前端封裝於 `src/firebase.ts`（不含 `seedWheelPrizes`，該項通常由腳本呼叫）。
+所有可呼叫函式定義於 `functions/src/index.ts`，前端封裝於 `src/firebase.ts`（含 `seedWheelPrizesCall`，後台公告區可一鍵初始化空集合之獎項）。
 
 | 函式 | 誰可呼叫 | 用途摘要 |
 |------|-----------|----------|

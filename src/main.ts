@@ -28,15 +28,18 @@ import {
   createMemberAccountCall,
   getAvailabilityCall,
   getAdminStatusCall,
+  getBookingPricingCall,
   getDb,
   getFirebaseAuth,
   getMyWalletCall,
   isFirebaseConfigured,
+  redeemWheelPointsCall,
   searchMemberUsersCall,
   listMembersAdminCall,
   updateMemberNicknameAdminCall,
   spinWheelCall,
   listActiveWheelPrizesCall,
+  seedWheelPrizesCall,
   testSendMemberBookingStatusEmailCall,
   topupWalletCall,
 } from "./firebase";
@@ -94,7 +97,7 @@ function bookingModeLabel(mode: BookingMode): string {
     guest_cash: t("booking.mode.guest_cash", "訪客現金"),
     guest_beverage: beverageOptionLabel(),
     member_cash: t("booking.mode.member_cash", "會員現金"),
-    member_wallet: t("booking.mode.member_wallet", "會員儲值"),
+    member_wallet: t("booking.mode.member_wallet", "會員次數"),
     member_beverage: beverageOptionLabel(),
   };
   return labels[mode];
@@ -736,9 +739,7 @@ function render() {
   const slotSelect = el("select", {}, []);
   const noteInput = el("textarea", { maxLength: 500 });
   const bookingModeSelect = el("select", {}, []);
-  const bookingModeHint = el("span", { class: "hint" }, [
-    t("booking.modeHintGuest", "訪客預約以現金 50 元結帳；儲值與抽獎請使用右上角登入。"),
-  ]);
+  const bookingModeHint = el("span", { class: "hint" }, []);
   const submitBtn = el("button", { class: "primary", type: "button" }, [t("booking.submit", "送出預約")]);
   /** 選日期／載入空檔與名額相關提示，緊接在時段選擇下方，避免訊息落在頁面底部 */
   const scheduleStatus = el("div", {
@@ -775,7 +776,48 @@ function render() {
   ]);
   emailVerifyBanner.append(emailVerifyText, el("div", { class: "row-actions" }, [resendVerifyBtn, reloadVerifyBtn]));
   let walletBalance = 0;
+  let sessionCreditsCount = 0;
+  let wheelPointsCount = 0;
+  let pointsPerMassageSetting = 10;
+  let sessionPriceNtdSetting = 50;
   let drawChances = 0;
+
+  const redeemPointsStatus = el("div", { class: "status-line", hidden: true });
+  const redeemPointsBtn = el("button", { type: "button", class: "ghost" }, [
+    t("member.redeemPointsBtn", "用 {{per}} 點換 1 次按摩", { per: pointsPerMassageSetting }),
+  ]);
+  const redeemRow = el("div", { class: "row-actions book-redeem-row", hidden: true }, [redeemPointsBtn]);
+  redeemPointsBtn.addEventListener("click", async () => {
+    redeemPointsStatus.textContent = "";
+    redeemPointsStatus.className = "status-line";
+    redeemPointsStatus.hidden = false;
+    redeemPointsBtn.setAttribute("disabled", "true");
+    try {
+      const fn = redeemWheelPointsCall();
+      await fn({ ...localeApiParam() });
+      redeemPointsStatus.textContent = t("member.redeemOk", "兌換成功。");
+      redeemPointsStatus.classList.add("ok");
+      await refreshWalletStatus();
+    } catch (e) {
+      redeemPointsStatus.textContent = errorMessage(e);
+      redeemPointsStatus.classList.add("error");
+    } finally {
+      syncRedeemPointsUi();
+    }
+  });
+  function syncRedeemPointsUi() {
+    redeemPointsBtn.textContent = t("member.redeemPointsBtn", "用 {{per}} 點換 1 次按摩", { per: pointsPerMassageSetting });
+    const u = auth.currentUser;
+    const vis = Boolean(u && !u.isAnonymous && u.emailVerified);
+    redeemRow.hidden = !vis;
+    if (!vis) {
+      redeemPointsStatus.hidden = true;
+      return;
+    }
+    redeemPointsStatus.hidden = redeemPointsStatus.textContent.length === 0;
+    if (wheelPointsCount >= pointsPerMassageSetting) redeemPointsBtn.removeAttribute("disabled");
+    else redeemPointsBtn.setAttribute("disabled", "true");
+  }
 
   let myBookingsUnsub: (() => void) | null = null;
   let myBookingsListenerUid: string | null = null;
@@ -1364,6 +1406,13 @@ function render() {
         );
       }
       modalBody.push(walletStatus.cloneNode(true) as HTMLElement);
+      if (user.emailVerified) {
+        modalBody.push(
+          el("p", { class: "hint" }, [
+            t("member.modalRedeemHint", "「點數換次數」按鈕在預約區登入後資訊列下方；關閉本視窗即可操作。"),
+          ]),
+        );
+      }
       modalBody.push(el("div", { class: "modal-actions" }, [closeBtn, logoutBtn]));
       dialog.append(...modalBody);
     }
@@ -1379,14 +1428,15 @@ function render() {
   function refillBookingModes(isMember: boolean) {
     const current = bookingModeSelect.value as BookingMode;
     bookingModeSelect.innerHTML = "";
+    const price = sessionPriceNtdSetting;
     const modes: { value: BookingMode; label: string; disabled?: boolean }[] = isMember
       ? [
-          { value: "member_wallet", label: t("member.mode.wallet", "會員儲值（扣 50 元）") },
-          { value: "member_cash", label: t("member.mode.cash", "會員現金（50 元）") },
+          { value: "member_wallet", label: t("member.mode.wallet", "會員次數（扣 1 次）") },
+          { value: "member_cash", label: t("member.mode.cash", "會員現金（{{price}} 元）", { price }) },
           { value: "member_beverage", label: beverageOptionLabel() },
         ]
       : [
-          { value: "guest_cash", label: t("booking.mode.guest_cash", "訪客現金") },
+          { value: "guest_cash", label: t("booking.mode.guest_cash", "訪客現金（{{price}} 元）", { price }) },
           { value: "guest_beverage", label: beverageOptionLabel() },
         ];
     for (const mode of modes) {
@@ -1399,13 +1449,21 @@ function render() {
       auth.currentUser && !auth.currentUser.isAnonymous && !auth.currentUser.emailVerified,
     );
     bookingModeHint.textContent = isMember
-      ? t("member.modeHint.member", "可選儲值扣款、會員現金（50 元），或「請師傅一杯飲料」（依現場約定）。")
+      ? t(
+          "member.modeHint.member",
+          "可選次數扣 1 次、會員現金（{{price}} 元），或「請師傅一杯飲料」（依現場約定）。",
+          { price },
+        )
       : loggedInUnverified
         ? t(
             "member.modeHint.unverified",
             "已登入但尚未驗證信箱，暫以訪客方式預約；完成驗證後可選會員付款、儲值與抽獎。",
           )
-        : t("member.modeHint.guest", "訪客可選現金 50 元或「請師傅一杯飲料」；儲值與抽獎請使用右上角登入。");
+        : t(
+            "member.modeHint.guest",
+            "訪客可選現金 {{price}} 元或「請師傅一杯飲料」；次數儲值與抽獎請使用右上角登入。",
+            { price },
+          );
   }
 
   /** 與下方 `setBookSubTab` 一併指派：會員區隱藏時關閉「我的預約」分頁並切回預約表單 */
@@ -1419,6 +1477,8 @@ function render() {
       if (!user) {
         stopMyBookingsListener();
         walletBalance = 0;
+        sessionCreditsCount = 0;
+        wheelPointsCount = 0;
         drawChances = 0;
         memberExtrasWrap.hidden = true;
         emailVerifyBanner.hidden = true;
@@ -1428,12 +1488,15 @@ function render() {
         wheelStatus.textContent = "";
         wheelStatus.className = "status-line";
         wheelResult.hidden = true;
+        syncRedeemPointsUi();
         syncPageHeadSession();
         return;
       }
       if (user.isAnonymous) {
         stopMyBookingsListener();
         walletBalance = 0;
+        sessionCreditsCount = 0;
+        wheelPointsCount = 0;
         drawChances = 0;
         memberExtrasWrap.hidden = true;
         emailVerifyBanner.hidden = true;
@@ -1443,6 +1506,7 @@ function render() {
         wheelStatus.textContent = "";
         wheelStatus.className = "status-line";
         wheelResult.hidden = true;
+        syncRedeemPointsUi();
         syncPageHeadSession();
         return;
       }
@@ -1450,6 +1514,8 @@ function render() {
       if (!user.emailVerified) {
         stopMyBookingsListener();
         walletBalance = 0;
+        sessionCreditsCount = 0;
+        wheelPointsCount = 0;
         drawChances = 0;
         emailVerifyBanner.hidden = false;
         emailVerifyText.textContent = t(
@@ -1462,6 +1528,7 @@ function render() {
         wheelStatus.textContent = t("member.wheelNeedVerifyFirst", "完成信箱驗證後才可抽輪盤。");
         wheelStatus.className = "status-line";
         wheelResult.hidden = true;
+        syncRedeemPointsUi();
         syncPageHeadSession();
         return;
       }
@@ -1469,13 +1536,32 @@ function render() {
       ensureMyBookingsListener(user.uid);
       walletStatus.textContent = t("member.walletLoading", "讀取會員餘額中…");
       walletStatus.className = "status-line";
+      redeemPointsStatus.textContent = "";
+      redeemPointsStatus.className = "status-line";
       syncPageHeadSession(user.displayName?.trim() || user.email?.trim());
       try {
         const fn = getMyWalletCall();
         const res = await fn({ ...localeApiParam() });
-        const data = res.data as { walletBalance: number; drawChances: number; nickname?: string };
+        const data = res.data as {
+          walletBalance: number;
+          sessionCredits: number;
+          wheelPoints: number;
+          drawChances: number;
+          nickname?: string;
+          sessionPriceNtd?: number;
+          pointsPerMassage?: number;
+        };
         walletBalance = typeof data.walletBalance === "number" ? data.walletBalance : 0;
+        sessionCreditsCount = typeof data.sessionCredits === "number" ? data.sessionCredits : 0;
+        wheelPointsCount = typeof data.wheelPoints === "number" ? data.wheelPoints : 0;
         drawChances = typeof data.drawChances === "number" ? data.drawChances : 0;
+        if (typeof data.sessionPriceNtd === "number" && Number.isFinite(data.sessionPriceNtd)) {
+          sessionPriceNtdSetting = Math.max(1, Math.round(data.sessionPriceNtd));
+        }
+        if (typeof data.pointsPerMassage === "number" && Number.isFinite(data.pointsPerMassage)) {
+          pointsPerMassageSetting = Math.max(2, Math.round(data.pointsPerMassage));
+        }
+        refillBookingModes(isVerifiedMember());
         const nickFromDb =
           typeof data.nickname === "string" && data.nickname.trim() ? data.nickname.trim() : "";
         const nickFromAuth = user.displayName?.trim() ?? "";
@@ -1483,19 +1569,33 @@ function render() {
         if (profileNick && !nameInput.value.trim()) {
           nameInput.value = profileNick.slice(0, 80);
         }
-        walletStatus.textContent = t("member.walletLine", "會員已登入：儲值餘額 {{balance}} 元，可抽次數 {{chances}}。", {
-          balance: walletBalance,
-          chances: drawChances,
-        });
+        const legacyLine =
+          walletBalance > 0
+            ? t("member.walletLegacyLine", "尚有 {{n}} 元未折成次數。", { n: walletBalance })
+            : "";
+        walletStatus.textContent = t(
+          "member.walletLine2",
+          "會員：預約次數 {{sessions}}、點數 {{points}}／滿 {{per}} 點可換 1 次；可抽獎 {{chances}} 次。{{legacy}}",
+          {
+            sessions: sessionCreditsCount,
+            points: wheelPointsCount,
+            per: pointsPerMassageSetting,
+            chances: drawChances,
+            legacy: legacyLine,
+          },
+        );
         walletStatus.className = "status-line ok";
         wheelStatus.textContent =
           drawChances > 0 ? t("member.wheelLuck", "可抽輪盤，祝你好運！") : t("member.wheelNone", "目前無可抽次數。");
         wheelStatus.className = "status-line";
         if (drawChances > 0) spinBtn.removeAttribute("disabled");
         else spinBtn.setAttribute("disabled", "true");
+        syncRedeemPointsUi();
         syncPageHeadSession(profileNick);
       } catch (e) {
         walletBalance = 0;
+        sessionCreditsCount = 0;
+        wheelPointsCount = 0;
         drawChances = 0;
         memberExtrasWrap.hidden = false;
         walletStatus.textContent = errorMessage(e);
@@ -1503,6 +1603,7 @@ function render() {
         spinBtn.setAttribute("disabled", "true");
         wheelStatus.textContent = t("member.wheelStateFail", "無法讀取抽獎狀態。");
         wheelStatus.className = "status-line error";
+        syncRedeemPointsUi();
         syncPageHeadSession();
       }
     } finally {
@@ -1519,8 +1620,8 @@ function render() {
 
   /** 預覽輪盤用：固定示範獎項（不連後端），格內可立即看到文字與比例 */
   const wheelPreviewMockPrizes: { id: string; name: string; weight: number }[] = [
-    { id: "pv-c10", name: t("wheel.previewPrizeC10", "+10 儲值金"), weight: 22 },
-    { id: "pv-c5", name: t("wheel.previewPrizeName", "【預覽】+5 儲值金"), weight: 26 },
+    { id: "pv-p5", name: t("wheel.previewPrizePts5", "【預覽】+5 點"), weight: 22 },
+    { id: "pv-p3", name: t("wheel.previewPrizePts3", "【預覽】+3 點"), weight: 26 },
     { id: "pv-ch", name: t("wheel.previewPrizeExtra", "再抽一次"), weight: 16 },
     { id: "pv-th", name: t("wheel.previewPrizeThanks", "銘謝惠顧"), weight: 24 },
     { id: "pv-pn", name: t("wheel.previewPrizeFun", "小處罰文案"), weight: 12 },
@@ -1554,6 +1655,8 @@ function render() {
             prize: { name: string; type: string; value: number };
             drawChances: number;
             walletBalance: number;
+            wheelPoints: number;
+            sessionCredits: number;
           };
         },
         { splitAnchor: wheelRow, fetchPrizeLabels: fetchWheelPrizeLabelsForSpectacle },
@@ -1639,6 +1742,23 @@ function render() {
   }
 
   refillSlots(new Set(), true, "", new Map());
+
+  async function refreshBookingPricing() {
+    try {
+      const fn = getBookingPricingCall();
+      const res = await fn({ ...localeApiParam() });
+      const d = res.data as { sessionPriceNtd?: number; pointsPerMassage?: number };
+      if (typeof d.sessionPriceNtd === "number" && Number.isFinite(d.sessionPriceNtd)) {
+        sessionPriceNtdSetting = Math.max(1, Math.round(d.sessionPriceNtd));
+      }
+      if (typeof d.pointsPerMassage === "number" && Number.isFinite(d.pointsPerMassage)) {
+        pointsPerMassageSetting = Math.max(2, Math.round(d.pointsPerMassage));
+      }
+    } catch {
+      /* 使用預設 */
+    }
+    refillBookingModes(isVerifiedMember());
+  }
 
   async function refreshAvailability() {
     scheduleStatus.textContent = "";
@@ -1797,10 +1917,10 @@ function render() {
       bookStatus.classList.add("error");
       return;
     }
-    if (bookingMode === "member_wallet" && walletBalance < 50) {
+    if (bookingMode === "member_wallet" && sessionCreditsCount < 1) {
       bookStatus.textContent = t(
-        "booking.walletShort",
-        "儲值餘額不足，請改用現金、「請師傅一杯飲料」或先儲值。",
+        "booking.sessionShort",
+        "預約次數不足，請改用現金、「請師傅一杯飲料」或先儲值次數。",
       );
       bookStatus.classList.add("error");
       return;
@@ -1851,11 +1971,11 @@ function render() {
   const wheelRulesHint = el("p", { class: "hint wheel-rules-hint" }, [
     t(
       "wheel.rules",
-      "輪盤規則：預約有綁定會員，且後台將該筆標為「已完成」後，可獲得 1 次抽獎機會（同一筆僅發一次）。每次按下「抽輪盤」消耗 1 次；獎項由後台依權重隨機抽出，可能為儲值金、加抽次數、銘謝惠顧或趣味文案等。須完成 Email 驗證才可抽獎。",
+      "輪盤規則：預約有綁定會員，且後台將該筆標為「已完成」後，可獲得 1 次抽獎機會（同一筆僅發一次）。每次按下「抽輪盤」消耗 1 次；獎項由後台依權重隨機抽出，可能為點數、加抽次數、銘謝惠顧或趣味文案等。點數可累積，滿門檻可手動兌換 1 次預約次數。須完成 Email 驗證才可抽獎。",
     ),
   ]);
   const wheelRow = el("div", { class: "book-wheel-row" }, [spinBtn, wheelTestBtn, wheelStatus, wheelResult]);
-  memberExtrasWrap.append(emailVerifyBanner, walletStatus);
+  memberExtrasWrap.append(emailVerifyBanner, walletStatus, redeemRow, redeemPointsStatus);
   const bookSupportChatMount = el("div", { class: "book-support-chat" });
   mountMemberSupportChat(db, auth, bookSupportChatMount);
 
@@ -1920,13 +2040,15 @@ function render() {
           await new Promise((r) => setTimeout(r, 1200));
           return {
             prize: {
-              id: "pv-c5",
-              name: t("wheel.previewPrizeName", "【預覽】+5 儲值金"),
-              type: "credit",
-              value: 5,
+              id: "pv-p3",
+              name: t("wheel.previewPrizePts3", "【預覽】+3 點"),
+              type: "points",
+              value: 3,
             },
             drawChances,
             walletBalance,
+            wheelPoints: wheelPointsCount,
+            sessionCredits: sessionCreditsCount,
           };
         },
         {
@@ -1948,6 +2070,8 @@ function render() {
   mountGuestbook(db, auth, guestbookMount);
 
   let bookSubTab: "book" | "guestbook" | "wheel" | "luckyslot" | "mybookings" = "book";
+  /** 後台 `siteSettings/luckySlotDemo`；未建立或欄位缺省時視為顯示（與既有行為一致） */
+  let luckySlotBookTabEnabled = true;
 
   const bookTabList = el("div", { class: "book-tabs", role: "tablist" });
   bookTabList.setAttribute(
@@ -2083,10 +2207,11 @@ function render() {
     tabWheel.tabIndex = which === "wheel" ? 0 : -1;
     tabLuckySlot.tabIndex = which === "luckyslot" ? 0 : -1;
     tabMyBookings.tabIndex = which === "mybookings" ? 0 : -1;
+    tabLuckySlot.hidden = !luckySlotBookTabEnabled;
     bookPanelBook.hidden = which !== "book";
     bookPanelGuestbook.hidden = which !== "guestbook";
     bookPanelWheel.hidden = which !== "wheel";
-    bookPanelLuckySlot.hidden = which !== "luckyslot";
+    bookPanelLuckySlot.hidden = which !== "luckyslot" || !luckySlotBookTabEnabled;
     bookPanelMyBookings.hidden = which !== "mybookings";
   }
   tabBook.addEventListener("click", () => setBookSubTab("book"));
@@ -2101,9 +2226,29 @@ function render() {
     tabWheel.hidden = !show;
     if (!show && (bookSubTab === "mybookings" || bookSubTab === "wheel")) {
       setBookSubTab("book");
+    } else {
+      setBookSubTab(bookSubTab);
     }
   };
   syncBookMyBookingsTabVisibility();
+
+  const luckySlotDemoSettingsRef = doc(db, "siteSettings", "luckySlotDemo");
+  onSnapshot(
+    luckySlotDemoSettingsRef,
+    (snap) => {
+      const data = snap.data() as { showBookTab?: unknown } | undefined;
+      luckySlotBookTabEnabled = data?.showBookTab !== false;
+      if (!luckySlotBookTabEnabled && bookSubTab === "luckyslot") {
+        setBookSubTab("book");
+      } else {
+        setBookSubTab(bookSubTab);
+      }
+    },
+    () => {
+      luckySlotBookTabEnabled = true;
+      setBookSubTab(bookSubTab);
+    },
+  );
 
   panelBook.append(
     bookTabList,
@@ -2125,6 +2270,8 @@ function render() {
   let adminMarqueeTextUnsub: (() => void) | null = null;
   let adminMarqueeLedUnsub: (() => void) | null = null;
   let adminWheelSpectacleUnsub: (() => void) | null = null;
+  let adminPricingUnsub: (() => void) | null = null;
+  let adminLuckySlotDemoUnsub: (() => void) | null = null;
   let adminBookingCapsUnsub: (() => void) | null = null;
   let adminBookingBlocksUnsub: (() => void) | null = null;
   let adminSupportChatUnmount: SupportChatUnmount | null = null;
@@ -2145,6 +2292,14 @@ function render() {
     if (adminWheelSpectacleUnsub) {
       adminWheelSpectacleUnsub();
       adminWheelSpectacleUnsub = null;
+    }
+    if (adminPricingUnsub) {
+      adminPricingUnsub();
+      adminPricingUnsub = null;
+    }
+    if (adminLuckySlotDemoUnsub) {
+      adminLuckySlotDemoUnsub();
+      adminLuckySlotDemoUnsub = null;
     }
     if (adminBookingCapsUnsub) {
       adminBookingCapsUnsub();
@@ -2321,17 +2476,77 @@ function render() {
       }, 200);
     });
     const topupAmount = el("input", { type: "number", value: "100", min: "1", step: "1" });
+    const topupSessions = el("input", { type: "number", value: "1", min: "1", step: "1" });
     const topupNote = el("input", {
       type: "text",
       placeholder: t("admin.topup.notePlaceholder", "備註（選填）"),
     });
     const topupBtn = el("button", { class: "ghost", type: "button" }, [t("admin.topup.btn", "儲值")]);
     const topupStatus = el("div", { class: "status-line" });
+    const pricingDocRef = doc(db, "siteSettings", "pricing");
+    const pricingSessionPriceInput = el("input", { type: "number", min: "1", step: "1", value: "50" });
+    const pricingPointsPerInput = el("input", { type: "number", min: "2", step: "1", value: "10" });
+    const savePricingBtn = el("button", { type: "button", class: "ghost" }, [t("admin.pricing.save", "儲存定價")]);
+    const pricingAdminStatus = el("div", { class: "status-line" });
+    adminPricingUnsub = onSnapshot(
+      pricingDocRef,
+      (snap) => {
+        const d = snap.data() as { sessionPriceNtd?: unknown; pointsPerMassage?: unknown } | undefined;
+        const sp = d?.sessionPriceNtd;
+        if (typeof sp === "number" && Number.isFinite(sp)) {
+          pricingSessionPriceInput.value = String(Math.max(1, Math.round(sp)));
+        }
+        const pp = d?.pointsPerMassage;
+        if (typeof pp === "number" && Number.isFinite(pp)) {
+          pricingPointsPerInput.value = String(Math.max(2, Math.round(pp)));
+        }
+      },
+      () => {
+        pricingAdminStatus.textContent = t("admin.pricing.loadFail", "無法讀取定價設定。");
+        pricingAdminStatus.className = "status-line error";
+      },
+    );
+    savePricingBtn.addEventListener("click", async () => {
+      pricingAdminStatus.textContent = "";
+      pricingAdminStatus.className = "status-line";
+      const sp = Number(pricingSessionPriceInput.value);
+      const pp = Number(pricingPointsPerInput.value);
+      if (!Number.isFinite(sp) || sp < 1 || !Number.isInteger(sp)) {
+        pricingAdminStatus.textContent = t("admin.pricing.badSessionPrice", "現場單次金額需為 ≥1 的整數。");
+        pricingAdminStatus.classList.add("error");
+        return;
+      }
+      if (!Number.isFinite(pp) || pp < 2 || !Number.isInteger(pp)) {
+        pricingAdminStatus.textContent = t("admin.pricing.badPointsPer", "兌換門檻需為 ≥2 的整數（點）。");
+        pricingAdminStatus.classList.add("error");
+        return;
+      }
+      savePricingBtn.setAttribute("disabled", "true");
+      try {
+        await setDoc(
+          pricingDocRef,
+          {
+            sessionPriceNtd: Math.round(sp),
+            pointsPerMassage: Math.round(pp),
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+        pricingAdminStatus.textContent = t("admin.status.updated", "已更新");
+        pricingAdminStatus.classList.add("ok");
+      } catch (e) {
+        pricingAdminStatus.textContent = e instanceof Error ? e.message : t("admin.memberList.saveFail", "儲存失敗");
+        pricingAdminStatus.classList.add("error");
+      } finally {
+        savePricingBtn.removeAttribute("disabled");
+      }
+    });
     topupBtn.addEventListener("click", async () => {
       topupStatus.textContent = "";
       topupStatus.className = "status-line";
       const customerId = topupCustomerId.value.trim();
       const amount = Number(topupAmount.value);
+      const sessions = Number(topupSessions.value);
       const note = topupNote.value.trim();
       if (!customerId) {
         topupStatus.textContent = t("admin.topup.needId", "請輸入會員 Email 或 UID。");
@@ -2343,11 +2558,16 @@ function render() {
         topupStatus.classList.add("error");
         return;
       }
+      if (!Number.isFinite(sessions) || sessions <= 0 || !Number.isInteger(sessions)) {
+        topupStatus.textContent = t("admin.topup.sessionsInt", "儲值次數需為正整數。");
+        topupStatus.classList.add("error");
+        return;
+      }
       topupBtn.setAttribute("disabled", "true");
       topupStatus.textContent = t("admin.topup.processing", "儲值中…");
       try {
         const fn = topupWalletCall();
-        await fn({ customerId, amount, note, ...localeApiParam() });
+        await fn({ customerId, amount, sessions, note, ...localeApiParam() });
         topupStatus.textContent = t("admin.topup.ok", "儲值成功");
         topupStatus.classList.add("ok");
       } catch (e) {
@@ -2408,6 +2628,37 @@ function render() {
     const wheelSpectacleShowTest = el("input", { type: "checkbox" });
     const saveWheelSpectacleBtn = el("button", { class: "ghost", type: "button" }, [t("admin.wheelSpectacle.save", "儲存輪盤預覽開關")]);
     const wheelSpectacleStatus = el("div", { class: "status-line" });
+    const seedWheelPrizesBtn = el("button", { class: "ghost", type: "button" }, [
+      t("admin.seedWheelPrizes.btn", "初始化輪盤獎項"),
+    ]);
+    const seedWheelPrizesStatus = el("div", { class: "status-line" });
+    seedWheelPrizesBtn.addEventListener("click", async () => {
+      seedWheelPrizesStatus.textContent = "";
+      seedWheelPrizesStatus.className = "status-line";
+      seedWheelPrizesBtn.setAttribute("disabled", "true");
+      try {
+        const fn = seedWheelPrizesCall();
+        const res = await fn({ ...localeApiParam() });
+        const data = res.data as { seeded?: boolean; message?: string; count?: number };
+        if (data.seeded === true) {
+          seedWheelPrizesStatus.textContent = t("admin.seedWheelPrizes.okSeeded", "已寫入預設獎項（{{count}} 筆）。", {
+            count: typeof data.count === "number" ? data.count : 0,
+          });
+          seedWheelPrizesStatus.classList.add("ok");
+        } else {
+          seedWheelPrizesStatus.textContent =
+            typeof data.message === "string" && data.message.trim()
+              ? data.message
+              : t("admin.seedWheelPrizes.skipped", "未寫入：wheelPrizes 已有資料（僅在集合為空時會初始化）。");
+          seedWheelPrizesStatus.className = "status-line";
+        }
+      } catch (e) {
+        seedWheelPrizesStatus.textContent = errorMessage(e);
+        seedWheelPrizesStatus.classList.add("error");
+      } finally {
+        seedWheelPrizesBtn.removeAttribute("disabled");
+      }
+    });
 
     adminWheelSpectacleUnsub = onSnapshot(
       wheelSpectacleDocRef,
@@ -2441,6 +2692,48 @@ function render() {
         wheelSpectacleStatus.classList.add("error");
       } finally {
         saveWheelSpectacleBtn.removeAttribute("disabled");
+      }
+    });
+
+    const luckySlotDemoDocRef = doc(db, "siteSettings", "luckySlotDemo");
+    const luckySlotShowBookTab = el("input", { type: "checkbox" });
+    const saveLuckySlotDemoBtn = el("button", { class: "ghost", type: "button" }, [
+      t("admin.luckySlotDemo.save", "儲存試玩老虎機分頁開關"),
+    ]);
+    const luckySlotDemoStatus = el("div", { class: "status-line" });
+
+    adminLuckySlotDemoUnsub = onSnapshot(
+      luckySlotDemoDocRef,
+      (snap) => {
+        const data = snap.data() as { showBookTab?: unknown } | undefined;
+        luckySlotShowBookTab.checked = data?.showBookTab !== false;
+      },
+      () => {
+        luckySlotDemoStatus.textContent = t("admin.snapshot.loadFailLuckySlot", "無法讀取試玩老虎機設定。");
+        luckySlotDemoStatus.className = "status-line error";
+      },
+    );
+
+    saveLuckySlotDemoBtn.addEventListener("click", async () => {
+      luckySlotDemoStatus.textContent = "";
+      luckySlotDemoStatus.className = "status-line";
+      saveLuckySlotDemoBtn.setAttribute("disabled", "true");
+      try {
+        await setDoc(
+          luckySlotDemoDocRef,
+          {
+            showBookTab: luckySlotShowBookTab.checked,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+        luckySlotDemoStatus.textContent = t("admin.status.updated", "已更新");
+        luckySlotDemoStatus.classList.add("ok");
+      } catch (e) {
+        luckySlotDemoStatus.textContent = e instanceof Error ? e.message : t("admin.memberList.saveFail", "儲存失敗");
+        luckySlotDemoStatus.classList.add("error");
+      } finally {
+        saveLuckySlotDemoBtn.removeAttribute("disabled");
       }
     });
 
@@ -2811,6 +3104,32 @@ function render() {
       ]),
       el("div", { class: "row-actions" }, [saveWheelSpectacleBtn]),
       wheelSpectacleStatus,
+      el("h4", { class: "admin-subhead" }, [t("admin.seedWheelPrizes.heading", "輪盤獎項（Firestore）")]),
+      el("p", { class: "hint" }, [
+        t(
+          "admin.seedWheelPrizes.hint",
+          "呼叫 Cloud Function「seedWheelPrizes」：僅在集合 wheelPrizes 完全沒有文件時寫入預設獎項；若已有資料則略過（請至 Console 編輯或先刪除既有獎項）。",
+        ),
+      ]),
+      el("div", { class: "row-actions" }, [seedWheelPrizesBtn]),
+      seedWheelPrizesStatus,
+      el("h4", { class: "admin-subhead" }, [t("admin.announce.luckySlotHeading", "前台 · 試玩老虎機分頁")]),
+      el("p", { class: "hint" }, [
+        t(
+          "admin.announce.luckySlotHintA",
+          "控制預約主卡是否顯示「老虎機（試玩）」分頁；關閉後訪客與會員皆看不到該分頁。Firestore：",
+        ),
+        el("code", {}, ["siteSettings/luckySlotDemo"]),
+        t("admin.announce.luckySlotHintB", " 欄位 "),
+        el("code", {}, ["showBookTab"]),
+        t("admin.announce.luckySlotHintC", "（布林；未建立或為 true 時顯示分頁）。"),
+      ]),
+      el("label", { class: "field checkbox-field" }, [
+        luckySlotShowBookTab,
+        el("span", {}, [t("admin.announce.luckySlotToggle", "顯示前台「老虎機（試玩）」分頁")]),
+      ]),
+      el("div", { class: "row-actions" }, [saveLuckySlotDemoBtn]),
+      luckySlotDemoStatus,
       el("h4", { class: "admin-subhead" }, [t("admin.caps.heading", "預約名額上限")]),
       el("p", { class: "hint" }, [
         t("admin.caps.hintA", "控制「同一天」「同一工作週（週一至週五曆）」各最多幾筆有效預約（"),
@@ -2849,10 +3168,23 @@ function render() {
       bookingBlocksStatus,
     );
     walletTopupSection.append(
+      el("h3", {}, [t("admin.pricing.heading", "定價與點數兌換")]),
+      el("p", { class: "hint" }, [
+        t("admin.pricing.hint", "影響訪客／會員現金預約所示金額、舊儲值金折次數之單價、以及輪盤點數幾點可換 1 次。Firestore："),
+        el("code", {}, ["siteSettings/pricing"]),
+        t("admin.pricing.hintEnd", "。"),
+      ]),
+      el("div", { class: "grid grid-2" }, [
+        el("label", { class: "field" }, [t("admin.pricing.sessionPrice", "現場單次金額（元）"), pricingSessionPriceInput]),
+        el("label", { class: "field" }, [t("admin.pricing.pointsPer", "幾點換 1 次按摩"), pricingPointsPerInput]),
+      ]),
+      el("div", { class: "row-actions" }, [savePricingBtn]),
+      pricingAdminStatus,
       el("h3", {}, [t("admin.wallet.heading", "會員儲值")]),
       el("label", { class: "field" }, [t("admin.wallet.memberLabel", "會員（Email 或 UID）"), topupTypeaheadWrap]),
       el("div", { class: "hint" }, [t("admin.wallet.searchHint", "輸入至少 2 個字元會顯示符合的 Email；亦可直接貼上 UID。")]),
-      el("label", { class: "field" }, [t("admin.wallet.amount", "儲值金額"), topupAmount]),
+      el("label", { class: "field" }, [t("admin.wallet.sessions", "儲值次數（必填）"), topupSessions]),
+      el("label", { class: "field" }, [t("admin.wallet.amount", "儲值金額（必填）"), topupAmount]),
       el("label", { class: "field" }, [t("admin.wallet.note", "備註（選填）"), topupNote]),
       el("div", { class: "row-actions" }, [topupBtn]),
       topupStatus,
@@ -2961,6 +3293,8 @@ function render() {
       emailVerified: boolean;
       nickname: string;
       walletBalance: number;
+      sessionCredits: number;
+      wheelPoints: number;
       drawChances: number;
     };
     type MemberListSortKey =
@@ -2969,6 +3303,8 @@ function render() {
       | "uid"
       | "nickname"
       | "walletBalance"
+      | "sessionCredits"
+      | "wheelPoints"
       | "drawChances";
 
     const MEMBER_LIST_PAGE_SIZE = 10;
@@ -3019,6 +3355,14 @@ function render() {
           cmp = a.walletBalance === b.walletBalance ? 0 : a.walletBalance < b.walletBalance ? -1 : 1;
           break;
         }
+        case "sessionCredits": {
+          cmp = a.sessionCredits === b.sessionCredits ? 0 : a.sessionCredits < b.sessionCredits ? -1 : 1;
+          break;
+        }
+        case "wheelPoints": {
+          cmp = a.wheelPoints === b.wheelPoints ? 0 : a.wheelPoints < b.wheelPoints ? -1 : 1;
+          break;
+        }
         case "drawChances": {
           cmp = a.drawChances === b.drawChances ? 0 : a.drawChances < b.drawChances ? -1 : 1;
           break;
@@ -3051,7 +3395,9 @@ function render() {
         mk(t("admin.memberList.th.verified", "信箱驗證"), "emailVerified"),
         mk(t("admin.memberList.th.uid", "UID"), "uid"),
         mk(t("admin.memberList.th.nickname", "稱呼"), "nickname"),
-        mk(t("admin.memberList.th.wallet", "儲值餘額"), "walletBalance"),
+        mk(t("admin.memberList.th.sessions", "預約次數"), "sessionCredits"),
+        mk(t("admin.memberList.th.points", "點數"), "wheelPoints"),
+        mk(t("admin.memberList.th.wallet", "未折抵金額"), "walletBalance"),
         mk(t("admin.memberList.th.draws", "可抽次數"), "drawChances"),
         el("th", { class: "admin-member-th-actions" }, [t("admin.memberList.th.actions", "操作")]),
       ]);
@@ -3075,7 +3421,7 @@ function render() {
       if (total === 0) {
         memberListTable.append(
           el("tr", {}, [
-            el("td", { class: "hint", colSpan: 7 }, [t("admin.memberList.empty", "目前沒有使用者資料。請按「重新載入會員清單」。")]),
+            el("td", { class: "hint", colSpan: 9 }, [t("admin.memberList.empty", "目前沒有使用者資料。請按「重新載入會員清單」。")]),
           ]),
         );
         memberListPagePrev.disabled = true;
@@ -3126,6 +3472,8 @@ function render() {
             verifyCell,
             el("td", { class: "mono admin-member-uid" }, [m.uid]),
             el("td", {}, [nickInput]),
+            el("td", { class: "mono" }, [String(m.sessionCredits)]),
+            el("td", { class: "mono" }, [String(m.wheelPoints)]),
             el("td", { class: "mono" }, [String(m.walletBalance)]),
             el("td", { class: "mono" }, [String(m.drawChances)]),
             el("td", { class: "admin-member-td-actions" }, [saveBtn]),
@@ -3191,6 +3539,8 @@ function render() {
           emailVerified: m.emailVerified === true,
           nickname: typeof m.nickname === "string" ? m.nickname : "",
           walletBalance: typeof m.walletBalance === "number" ? m.walletBalance : 0,
+          sessionCredits: typeof m.sessionCredits === "number" ? m.sessionCredits : 0,
+          wheelPoints: typeof m.wheelPoints === "number" ? m.wheelPoints : 0,
           drawChances: typeof m.drawChances === "number" ? m.drawChances : 0,
         }));
         memberListPageIndex = 0;
@@ -3902,7 +4252,10 @@ function render() {
   }
 
   onAuthStateChanged(auth, () => {
-    void refreshWalletStatus();
+    void (async () => {
+      await refreshBookingPricing();
+      await refreshWalletStatus();
+    })();
     if (tab !== "admin") return;
     void syncAdminView();
   });
@@ -3954,7 +4307,10 @@ function render() {
   window.addEventListener("popstate", () => setTab(tabFromPath()));
 
   setTab(tabFromPath());
-  void refreshWalletStatus();
+  void (async () => {
+    await refreshBookingPricing();
+    await refreshWalletStatus();
+  })();
 }
 
 render();

@@ -37,6 +37,25 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    /** 會員餘額／次數／點數：僅 Cloud Functions（Admin SDK）讀寫 */
+    match /customers/{uid} {
+      allow read, write: if false;
+    }
+
+    /** 儲值與扣款紀錄：僅後台／Functions */
+    match /walletTransactions/{id} {
+      allow read, write: if false;
+    }
+
+    /** 輪盤獎項與紀錄：僅管理後台與 Functions */
+    match /wheelPrizes/{id} {
+      allow read, write: if false;
+    }
+
+    match /wheelSpins/{id} {
+      allow read, write: if false;
+    }
+
     /**
      * 客服對話：文件 id = Auth UID（含匿名）。客戶端僅讀取；建立、回覆、重新開啟與結案皆走
      * Cloud Functions（Admin SDK），避免客戶端直接改寫對話狀態或摘要欄位。
