@@ -287,7 +287,7 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
   const hint = el("p", { class: "hint" }, [
     t(
       "supportUi.adminIntroA",
-      "左側為會員對話列表（進行中優先、各組內依最近更新排序）；點選後於右側回覆。Firestore：",
+      "左側為會員對話列表，以分頁切換「進行中／已結束」，各分頁內依最近更新排序；點選後於右側回覆。Firestore：",
     ),
     el("code", {}, [`${THREADS}/{會員UID}`]),
     t("supportUi.adminIntroB", " 與子集合 "),
@@ -300,8 +300,57 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
   const detailCol = el("div", { class: "support-chat-admin-detail" });
   split.append(listCol, detailCol);
 
-  const listScroll = el("div", { class: "support-chat-admin-list-scroll" });
-  listCol.append(el("h4", { class: "admin-subhead" }, [t("supportUi.threadList", "對話列表")]), listScroll);
+  const listScroll = el("div", {
+    class: "support-chat-admin-list-scroll",
+    id: "support-chat-admin-list-scroll",
+    role: "tabpanel",
+  });
+  let latestThreadDocs: { id: string; data: () => Record<string, unknown> }[] = [];
+  let listTab: "open" | "closed" = "open";
+  const tabOpenBtn = el("button", {
+    type: "button",
+    class: "admin-tab",
+    role: "tab",
+    id: "support-chat-tab-open",
+  });
+  const tabClosedBtn = el("button", {
+    type: "button",
+    class: "admin-tab",
+    role: "tab",
+    id: "support-chat-tab-closed",
+  });
+  tabOpenBtn.setAttribute("aria-controls", listScroll.id);
+  tabClosedBtn.setAttribute("aria-controls", listScroll.id);
+  const tablist = el("div", {
+    class: "admin-tabs support-chat-admin-thread-tabs",
+    role: "tablist",
+    ariaLabel: t("supportUi.threadListTabsAria", "對話狀態分頁"),
+  });
+  tablist.append(tabOpenBtn, tabClosedBtn);
+
+  tabOpenBtn.addEventListener("click", () => {
+    listTab = "open";
+    renderThreadList(latestThreadDocs);
+    tabOpenBtn.focus();
+  });
+  tabClosedBtn.addEventListener("click", () => {
+    listTab = "closed";
+    renderThreadList(latestThreadDocs);
+    tabClosedBtn.focus();
+  });
+  tablist.addEventListener("keydown", (ev) => {
+    if (ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;
+    ev.preventDefault();
+    listTab = ev.key === "ArrowRight" ? "closed" : "open";
+    renderThreadList(latestThreadDocs);
+    (listTab === "open" ? tabOpenBtn : tabClosedBtn).focus();
+  });
+
+  listCol.append(
+    el("h4", { class: "admin-subhead" }, [t("supportUi.threadList", "對話列表")]),
+    tablist,
+    listScroll,
+  );
 
   const detailPlaceholder = el("p", { class: "hint" }, [t("supportUi.pickThread", "請由左側選擇一則對話。")]);
   const detailHead = el("div", { class: "support-chat-admin-detail-head" });
@@ -336,7 +385,6 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
   const identityByCustomer = new Map<string, { kind: CustomerKind; label: string }>();
   const memberDirectory = new Map<string, { nickname: string; email: string; emailVerified: boolean }>();
   let memberDirectoryReady = false;
-  let latestThreadDocs: { id: string; data: () => Record<string, unknown> }[] = [];
   async function ensureMemberDirectoryLoaded() {
     if (memberDirectoryReady) return;
     memberDirectoryReady = true;
@@ -498,34 +546,44 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
     });
   }
 
+  function threadUpdatedAtSeconds(data: Record<string, unknown>): number {
+    const u = data.updatedAt;
+    if (typeof u === "object" && u !== null && "seconds" in u && typeof (u as { seconds?: unknown }).seconds === "number") {
+      return (u as { seconds: number }).seconds ?? 0;
+    }
+    return 0;
+  }
+
   function renderThreadList(
     docs: { id: string; data: () => Record<string, unknown> }[],
   ) {
     listScroll.replaceChildren();
     threadBtnByCustomer.clear();
-    const sortedDocs = [...docs].sort((a, b) => {
-      const aData = a.data();
-      const bData = b.data();
-      const aClosed = aData.status === "closed";
-      const bClosed = bData.status === "closed";
-      if (aClosed !== bClosed) return aClosed ? 1 : -1;
-      const aUpdated =
-        typeof aData.updatedAt === "object" &&
-        aData.updatedAt !== null &&
-        "seconds" in aData.updatedAt &&
-        typeof (aData.updatedAt as { seconds?: unknown }).seconds === "number"
-          ? ((aData.updatedAt as { seconds: number }).seconds ?? 0)
-          : 0;
-      const bUpdated =
-        typeof bData.updatedAt === "object" &&
-        bData.updatedAt !== null &&
-        "seconds" in bData.updatedAt &&
-        typeof (bData.updatedAt as { seconds?: unknown }).seconds === "number"
-          ? ((bData.updatedAt as { seconds: number }).seconds ?? 0)
-          : 0;
-      return bUpdated - aUpdated;
-    });
-    for (const d of sortedDocs) {
+
+    const byRecent = (a: (typeof docs)[0], b: (typeof docs)[0]) =>
+      threadUpdatedAtSeconds(b.data()) - threadUpdatedAtSeconds(a.data());
+
+    const openDocs = [...docs].filter((d) => d.data().status !== "closed").sort(byRecent);
+    const closedDocs = [...docs].filter((d) => d.data().status === "closed").sort(byRecent);
+
+    tabOpenBtn.textContent = t("supportUi.threadTabOpen", "進行中（{{n}}）", { n: openDocs.length });
+    tabClosedBtn.textContent = t("supportUi.threadTabClosed", "已結束（{{n}}）", { n: closedDocs.length });
+
+    const onOpen = listTab === "open";
+    tabOpenBtn.setAttribute("aria-selected", String(onOpen));
+    tabOpenBtn.classList.toggle("is-active", onOpen);
+    tabOpenBtn.tabIndex = onOpen ? 0 : -1;
+    tabClosedBtn.setAttribute("aria-selected", String(!onOpen));
+    tabClosedBtn.classList.toggle("is-active", !onOpen);
+    tabClosedBtn.tabIndex = !onOpen ? 0 : -1;
+    listScroll.setAttribute("aria-labelledby", onOpen ? tabOpenBtn.id : tabClosedBtn.id);
+
+    const slice = onOpen ? openDocs : closedDocs;
+    const emptyHint = onOpen
+      ? t("supportUi.threadSectionEmptyOpen", "（尚無進行中對話）")
+      : t("supportUi.threadSectionEmptyClosed", "（尚無已結束對話）");
+
+    function makeThreadButton(d: (typeof docs)[0]): HTMLButtonElement {
       const id = d.id;
       const data = d.data();
       threadDataByCustomer.set(id, data);
@@ -533,18 +591,24 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
       identityByCustomer.set(id, identity);
       const preview =
         typeof data.lastMessagePreview === "string" ? data.lastMessagePreview : t("supportUi.previewNone", "（尚無預覽）");
-      const st = data.status === "closed" ? t("supportUi.statusClosed", "已結束") : t("supportUi.statusOpen", "進行中");
       const btn = el("button", { type: "button", class: "support-chat-thread-item" }, []);
       btn.classList.toggle("is-active", id === selectedCustomerId);
       btn.append(
         el("div", { class: "support-chat-thread-item-id" }, [identity.label]),
         el("div", { class: "support-chat-thread-item-uid mono" }, [`UID ${truncateUid(id)}`]),
         el("div", { class: "support-chat-thread-item-preview" }, [preview]),
-        el("div", { class: "support-chat-thread-item-status" }, [st]),
       );
       btn.addEventListener("click", () => selectCustomer(id));
       threadBtnByCustomer.set(id, btn);
-      listScroll.append(btn);
+      return btn;
+    }
+
+    if (slice.length === 0) {
+      listScroll.append(el("p", { class: "hint support-chat-admin-list-empty" }, [emptyHint]));
+    } else {
+      for (const d of slice) {
+        listScroll.append(makeThreadButton(d));
+      }
     }
   }
 
@@ -616,6 +680,8 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
       const fn = setSupportThreadStatusAdminCall();
       await fn({ customerId: selectedCustomerId, status: "closed", ...localeApiParam() });
       selectedStatus = "closed";
+      listTab = "closed";
+      renderThreadList(latestThreadDocs);
       ta.disabled = true;
       sendBtn.disabled = true;
       closeBtn.hidden = true;
@@ -635,6 +701,8 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
       const fn = setSupportThreadStatusAdminCall();
       await fn({ customerId: selectedCustomerId, status: "open", ...localeApiParam() });
       selectedStatus = "open";
+      listTab = "open";
+      renderThreadList(latestThreadDocs);
       ta.disabled = false;
       sendBtn.disabled = false;
       closeBtn.hidden = false;

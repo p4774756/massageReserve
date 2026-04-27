@@ -1028,7 +1028,7 @@ function render() {
     }
     if (!u.emailVerified) {
       setLines(
-        t("session.signInLine1", "已登入 ·"),
+        t("session.signInLine1", "已登入 · "),
         t("session.verifyPendingLine2", "待驗證信箱"),
       );
       headSessionStatus.title = u.email ?? t("session.verifyTitleFallback", "尚未驗證信箱");
@@ -1046,7 +1046,7 @@ function render() {
           : fromEmail && fromEmail.length > 0
             ? fromEmail
             : t("session.memberFallback", "會員");
-    const prefix = t("session.signInLine1", "已登入 ·");
+    const prefix = t("session.signInLine1", "已登入 · ");
     const combinedFull = `${prefix}${raw}`;
     const displayed = truncateOneLine(combinedFull, 28);
     setLines(displayed, null);
