@@ -702,6 +702,74 @@ export const topupWallet = onCall(publicCall, async (request) => {
   return { ok: true };
 });
 
+const MAX_ADMIN_DRAW_GRANT = 50;
+
+/** 管理員：贈送輪盤「可抽次數」（寫入 walletTransactions 稽核） */
+export const grantDrawChancesAdmin = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
+  }
+  await assertAdminByUid(uid, locale);
+
+  const customerIdRaw = typeof request.data?.customerId === "string" ? request.data.customerId.trim() : "";
+  const noteRaw = typeof request.data?.note === "string" ? request.data.note.trim() : "";
+  const deltaCandidate = request.data?.delta ?? request.data?.count;
+  const delta = asPositiveInteger(deltaCandidate);
+  if (!customerIdRaw) {
+    throw new HttpsError("invalid-argument", st(locale, "topup.needId", "請填入會員識別（Email 或 UID）"));
+  }
+  if (!delta || delta > MAX_ADMIN_DRAW_GRANT) {
+    throw new HttpsError(
+      "invalid-argument",
+      st(locale, "grantDraw.deltaRange", "贈送次數需為 1～{{max}} 的整數。", { max: MAX_ADMIN_DRAW_GRANT }),
+    );
+  }
+  if (noteRaw.length > 200) {
+    throw new HttpsError("invalid-argument", st(locale, "grantDraw.noteTooLong", "備註不可超過 200 字。"));
+  }
+
+  const customerId = await resolveCustomerUidForTopup(customerIdRaw, locale);
+  const customerRef = db.collection("customers").doc(customerId);
+  const walletTxRef = db.collection("walletTransactions").doc();
+
+  let drawChancesTotal = 0;
+  await db.runTransaction(async (tx) => {
+    const customerSnap = await tx.get(customerRef);
+    const walletBalanceRaw = customerSnap.exists ? customerSnap.get("walletBalance") : 0;
+    const drawChancesRaw = customerSnap.exists ? customerSnap.get("drawChances") : 0;
+    const sessionCreditsRaw = customerSnap.exists ? customerSnap.get("sessionCredits") : 0;
+    const wheelPointsRaw = customerSnap.exists ? customerSnap.get("wheelPoints") : 0;
+    const prevDraw = asNonNegativeInteger(drawChancesRaw);
+    drawChancesTotal = prevDraw + delta;
+
+    tx.set(
+      customerRef,
+      {
+        walletBalance: typeof walletBalanceRaw === "number" ? walletBalanceRaw : 0,
+        sessionCredits: typeof sessionCreditsRaw === "number" ? sessionCreditsRaw : 0,
+        wheelPoints: typeof wheelPointsRaw === "number" ? wheelPointsRaw : 0,
+        drawChances: drawChancesTotal,
+        updatedAt: FieldValueOrServerTimestamp(),
+      },
+      { merge: true },
+    );
+
+    tx.set(walletTxRef, {
+      customerId,
+      type: "admin_grant_draw",
+      amount: 0,
+      drawChancesDelta: delta,
+      note: noteRaw || st(locale, "grantDraw.defaultNote", "後台贈送輪盤抽獎次數"),
+      operatorId: uid,
+      createdAt: FieldValueOrServerTimestamp(),
+    });
+  });
+
+  return { ok: true as const, drawChancesAdded: delta, drawChancesTotal };
+});
+
 export const getAdminStatus = onCall(publicCall, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) {

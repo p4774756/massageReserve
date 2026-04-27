@@ -75,7 +75,7 @@ flowchart LR
 
 ## 4. Callable Functions 一覽
 
-所有可呼叫函式定義於 `functions/src/index.ts`，前端封裝於 `src/firebase.ts`（含 `seedWheelPrizesCall`、`migrateLegacyWalletsAdminCall`、`testSendMemberStatusTestEmailCall`：後台分別可初始化空獎項、折換全體 customers 未折抵金額、會員清單測試寄信）。
+所有可呼叫函式定義於 `functions/src/index.ts`，前端封裝於 `src/firebase.ts`（含 `seedWheelPrizesCall`、`migrateLegacyWalletsAdminCall`、`testSendMemberStatusTestEmailCall`、`grantDrawChancesAdminCall`：後台分別可初始化空獎項、折換全體 customers 未折抵金額、會員清單測試寄信、贈送輪盤可抽次數）。
 
 | 函式 | 誰可呼叫 | 用途摘要 |
 |------|-----------|----------|
@@ -86,7 +86,8 @@ flowchart LR
 | `getAdminStatus` | 已登入 | 是否為管理員 |
 | `completeBooking` | 管理員 | 將預約標為完成；符合條件時 **顧客 `drawChances + 1`** |
 | `cancelBooking` | 預約本人或管理員 | 取消預約；若曾錢包扣款則退款 |
-| `topupWallet` | 管理員 | 後台儲值 |
+| `topupWallet` | 管理員 | 後台儲值（次數／金額；不變更可抽次數） |
+| `grantDrawChancesAdmin` | 管理員 | 贈送輪盤 **`drawChances`**（1～50／次），並寫入 `walletTransactions`（`type: "admin_grant_draw"`） |
 | `createMemberAccount` | 管理員 | 建立 Auth 使用者 + `customers` 初始文件 |
 | `searchMemberUsers` / `listMembersAdmin` / `updateMemberNicknameAdmin` / `migrateLegacyWalletsAdmin` / `testSendMemberStatusTestEmail` | 管理員 | 會員搜尋、列表、暱稱；一鍵依定價折換 `customers` 未折抵金額→次數；依 UID 寄【測試】狀態通知樣板信 |
 | `listActiveWheelPrizes` | 已登入且 **Email 已驗證** | 列出啟用中獎項（供輪盤 UI） |
@@ -104,7 +105,7 @@ flowchart LR
 
 - **`firestore.rules`**：`bookings` 僅 **管理員** 或 **`customerId == request.auth.uid` 的本人** 可讀；**建立／刪除** 關閉，**更新** 僅管理員且僅限特定欄位（狀態、軟刪等）。因此一般預約建立 **不走** 客戶端直接 `addDoc`，而走 **`createBooking` Callable**（Admin SDK 寫入）。
 - **`customers`、`walletTransactions`、`wheelPrizes`、`wheelSpins`**：規則檔中未對一般使用者開放直接寫入；餘額與抽獎次數應僅由 **Functions** 更新。
-- **管理員**：後端以 `admins/{uid}` **存在與否** 判斷（例如 `completeBooking`、`topupWallet`）。
+- **管理員**：後端以 `admins/{uid}` **存在與否** 判斷（例如 `completeBooking`、`topupWallet`、`grantDrawChancesAdmin`）。
 
 ---
 
@@ -194,10 +195,11 @@ sequenceDiagram
 
 **初始化獎項**：`wheelPrizes` 為空時可執行 `seedWheelPrizes` 或專案內 `scripts/seed-wheel-prizes.mjs`；詳見根目錄 `README.md`。
 
-### 6.5 會員錢包（`getMyWallet` / `topupWallet`）
+### 6.5 會員錢包（`getMyWallet` / `topupWallet` / `grantDrawChancesAdmin`）
 
 - **`getMyWallet`**：回傳目前登入者的 `walletBalance`、`drawChances`、暱稱。
 - **`topupWallet`**：僅管理員；增加餘額並寫入儲值交易（不直接增加抽獎次數）。
+- **`grantDrawChancesAdmin`**：僅管理員；`customers.drawChances` 增加指定整數，並寫入 **`walletTransactions`**（`admin_grant_draw`、`drawChancesDelta`、`operatorId`、選填 `note`）。
 
 ---
 

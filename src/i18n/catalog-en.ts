@@ -326,6 +326,16 @@ export const EN: Record<string, string> = {
   "admin.topup.amountInt": "Top-up amount must be a positive integer.",
   "admin.topup.processing": "Processing top-up…",
   "admin.topup.ok": "Top-up successful",
+  "admin.grantDraw.heading": "Grant wheel spin chances",
+  "admin.grantDraw.hint":
+    "Uses the same member field as above; does not change wallet balance or session credits. Up to 50 per request. Writes walletTransactions (type: admin_grant_draw) for audit.",
+  "admin.grantDraw.deltaLabel": "Chances to add (1–50)",
+  "admin.grantDraw.noteLabel": "Note (optional)",
+  "admin.grantDraw.notePlaceholder": "Note (optional, max 200 characters)",
+  "admin.grantDraw.btn": "Grant spin chances",
+  "admin.grantDraw.badDelta": "Count must be an integer from 1 to 50.",
+  "admin.grantDraw.processing": "Processing…",
+  "admin.grantDraw.ok": "Granted {{added}} chance(s); member can spin {{total}} time(s) now.",
 
   "admin.marquee.saveText": "Save top marquee",
   "admin.marquee.saveLed": "Save bottom LED",

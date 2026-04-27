@@ -43,6 +43,7 @@ import {
   listActiveWheelPrizesCall,
   seedWheelPrizesCall,
   topupWalletCall,
+  grantDrawChancesAdminCall,
 } from "./firebase";
 import { mountGuestbook } from "./guestbook";
 import { mountMusicMiniPlayer } from "./musicPlayer";
@@ -2476,6 +2477,14 @@ function render() {
     });
     const topupBtn = el("button", { class: "ghost", type: "button" }, [t("admin.topup.btn", "儲值")]);
     const topupStatus = el("div", { class: "status-line" });
+    const grantDrawDelta = el("input", { type: "number", value: "1", min: "1", max: "50", step: "1" });
+    const grantDrawNote = el("input", {
+      type: "text",
+      maxLength: 200,
+      placeholder: t("admin.grantDraw.notePlaceholder", "備註（選填，最多 200 字）"),
+    });
+    const grantDrawBtn = el("button", { class: "ghost", type: "button" }, [t("admin.grantDraw.btn", "贈送抽獎次數")]);
+    const grantDrawStatus = el("div", { class: "status-line" });
     const pricingDocRef = doc(db, "siteSettings", "pricing");
     const pricingSessionPriceInput = el("input", { type: "number", min: "1", step: "1", value: "50" });
     const pricingPointsPerInput = el("input", { type: "number", min: "2", step: "1", value: "10" });
@@ -2568,6 +2577,40 @@ function render() {
         topupStatus.classList.add("error");
       } finally {
         topupBtn.removeAttribute("disabled");
+      }
+    });
+    grantDrawBtn.addEventListener("click", async () => {
+      grantDrawStatus.textContent = "";
+      grantDrawStatus.className = "status-line";
+      const customerId = topupCustomerId.value.trim();
+      const delta = Number(grantDrawDelta.value);
+      const note = grantDrawNote.value.trim();
+      if (!customerId) {
+        grantDrawStatus.textContent = t("admin.topup.needId", "請輸入會員 Email 或 UID。");
+        grantDrawStatus.classList.add("error");
+        return;
+      }
+      if (!Number.isFinite(delta) || delta <= 0 || !Number.isInteger(delta) || delta > 50) {
+        grantDrawStatus.textContent = t("admin.grantDraw.badDelta", "贈送次數需為 1～50 的整數。");
+        grantDrawStatus.classList.add("error");
+        return;
+      }
+      grantDrawBtn.setAttribute("disabled", "true");
+      grantDrawStatus.textContent = t("admin.grantDraw.processing", "處理中…");
+      try {
+        const fn = grantDrawChancesAdminCall();
+        const res = await fn({ customerId, delta, note, ...localeApiParam() });
+        const data = res.data as { drawChancesAdded?: number; drawChancesTotal?: number };
+        grantDrawStatus.textContent = t("admin.grantDraw.ok", "已贈送 {{added}} 次，該會員目前可抽 {{total}} 次。", {
+          added: typeof data.drawChancesAdded === "number" ? data.drawChancesAdded : delta,
+          total: typeof data.drawChancesTotal === "number" ? data.drawChancesTotal : "—",
+        });
+        grantDrawStatus.classList.add("ok");
+      } catch (e) {
+        grantDrawStatus.textContent = errorMessage(e);
+        grantDrawStatus.classList.add("error");
+      } finally {
+        grantDrawBtn.removeAttribute("disabled");
       }
     });
     const announcementSection = el("div", { class: "admin-announce" }, []);
@@ -3181,6 +3224,17 @@ function render() {
       el("label", { class: "field" }, [t("admin.wallet.note", "備註（選填）"), topupNote]),
       el("div", { class: "row-actions" }, [topupBtn]),
       topupStatus,
+      el("h4", { class: "admin-subhead" }, [t("admin.grantDraw.heading", "贈送輪盤抽獎次數")]),
+      el("p", { class: "hint" }, [
+        t(
+          "admin.grantDraw.hint",
+          "與上方「會員」為同一欄位；不影響儲值金額或預約次數。單次最多 50 次；會寫入 walletTransactions（type：admin_grant_draw）供稽核。",
+        ),
+      ]),
+      el("label", { class: "field" }, [t("admin.grantDraw.deltaLabel", "贈送次數（1～50）"), grantDrawDelta]),
+      el("label", { class: "field" }, [t("admin.grantDraw.noteLabel", "備註（選填）"), grantDrawNote]),
+      el("div", { class: "row-actions" }, [grantDrawBtn]),
+      grantDrawStatus,
     );
     const createMemberEmail = el("input", {
       type: "email",
