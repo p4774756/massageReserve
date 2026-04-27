@@ -36,11 +36,12 @@ import {
   redeemWheelPointsCall,
   searchMemberUsersCall,
   listMembersAdminCall,
+  migrateLegacyWalletsAdminCall,
+  testSendMemberStatusTestEmailCall,
   updateMemberNicknameAdminCall,
   spinWheelCall,
   listActiveWheelPrizesCall,
   seedWheelPrizesCall,
-  testSendMemberBookingStatusEmailCall,
   topupWalletCall,
 } from "./firebase";
 import { mountGuestbook } from "./guestbook";
@@ -287,14 +288,6 @@ function bookingIsDoneForAdmin(b: Pick<Booking, "status" | "completedAt">): bool
 
 function bookingIsCancelledForAdmin(status: unknown): boolean {
   return bookingStatusNorm(status) === "cancelled";
-}
-
-/** 後台：是否可對該筆測試「會員狀態通知信」（訪客或未綁會員為否） */
-function adminBookingCanSendMemberStatusTestEmail(b: Pick<Booking, "bookingMode" | "customerId">): boolean {
-  const mode = b.bookingMode;
-  if (mode === "guest_cash" || mode === "guest_beverage") return false;
-  const cid = typeof b.customerId === "string" ? b.customerId.trim() : "";
-  return cid.length > 0;
 }
 
 /** 後台預約表：是否為訪客預約（是／否） */
@@ -3282,6 +3275,21 @@ function render() {
     const memberListRefreshBtn = el("button", { class: "ghost", type: "button" }, [
       t("admin.memberList.reload", "重新載入會員清單"),
     ]);
+    const memberListMigrateWalletBtn = el("button", { class: "ghost", type: "button" }, [
+      t("admin.memberList.migrateWalletBtn", "折換未折抵金額→次數"),
+    ]);
+    const memberListTestEmailBtn = el(
+      "button",
+      {
+        class: "ghost",
+        type: "button",
+        title: t(
+          "admin.memberList.testEmailTitle",
+          "依目前清單勾選會員，各寄一封【測試】預約狀態通知樣板信（不變更預約；需 RESEND_API_KEY）",
+        ),
+      },
+      [t("admin.memberList.testEmailBtn", "測試通知信")],
+    );
     const memberListStatus = el("div", { class: "status-line" });
     const memberListTableWrap = el("div", { class: "table-wrap admin-member-list-table" });
     const memberListTable = el("table", {}, []);
@@ -3528,6 +3536,7 @@ function render() {
       memberListStatus.textContent = t("admin.memberList.loading", "載入會員清單中…");
       memberListStatus.className = "status-line";
       memberListRefreshBtn.setAttribute("disabled", "true");
+      memberListTestEmailBtn.setAttribute("disabled", "true");
       try {
         const fn = listMembersAdminCall();
         const res = await fn({ ...localeApiParam() });
@@ -3556,11 +3565,230 @@ function render() {
         memberListStatus.classList.add("error");
       } finally {
         memberListRefreshBtn.removeAttribute("disabled");
+        memberListTestEmailBtn.removeAttribute("disabled");
       }
     }
 
     memberListRefreshBtn.addEventListener("click", () => {
       void loadMemberList();
+    });
+
+    memberListMigrateWalletBtn.addEventListener("click", async () => {
+      memberListStatus.textContent = "";
+      memberListStatus.className = "status-line";
+      memberListMigrateWalletBtn.setAttribute("disabled", "true");
+      memberListRefreshBtn.setAttribute("disabled", "true");
+      memberListTestEmailBtn.setAttribute("disabled", "true");
+      memberListStatus.textContent = t("admin.memberList.migrateRunning", "折換中…");
+      try {
+        const fn = migrateLegacyWalletsAdminCall();
+        const res = await fn({ ...localeApiParam() });
+        const data = res.data as { scanned?: number; updated?: number; sessionPriceNtd?: number };
+        memberListStatus.textContent = t(
+          "admin.memberList.migrateDone",
+          "完成：掃描 {{scanned}} 筆 customers，已更新 {{updated}} 筆（單價參考 {{price}} 元）。請按「重新載入會員清單」刷新表格。",
+          {
+            scanned: typeof data.scanned === "number" ? data.scanned : 0,
+            updated: typeof data.updated === "number" ? data.updated : 0,
+            price: typeof data.sessionPriceNtd === "number" ? data.sessionPriceNtd : 0,
+          },
+        );
+        memberListStatus.classList.add("ok");
+        if (memberListCache.length > 0) {
+          await loadMemberList();
+        }
+      } catch (e) {
+        memberListStatus.textContent = errorMessage(e);
+        memberListStatus.classList.add("error");
+      } finally {
+        memberListMigrateWalletBtn.removeAttribute("disabled");
+        memberListRefreshBtn.removeAttribute("disabled");
+        memberListTestEmailBtn.removeAttribute("disabled");
+      }
+    });
+
+    memberListTestEmailBtn.addEventListener("click", () => {
+      memberListStatus.textContent = "";
+      memberListStatus.className = "status-line";
+
+      const withEmail = [...memberListCache]
+        .filter((m) => (m.email ?? "").trim().length > 0)
+        .sort((a, b) =>
+          (a.email ?? "")
+            .toLowerCase()
+            .localeCompare((b.email ?? "").toLowerCase(), getLocale() === "en" ? "en" : "zh-Hant", {
+              numeric: true,
+            }),
+        );
+
+      if (memberListCache.length === 0) {
+        memberListStatus.textContent = t(
+          "admin.memberList.testEmailNeedLoad",
+          "請先按「重新載入會員清單」載入資料後再寄測試信。",
+        );
+        memberListStatus.classList.add("error");
+        return;
+      }
+      if (withEmail.length === 0) {
+        memberListStatus.textContent = t(
+          "admin.memberList.testEmailNoTargets",
+          "目前清單中沒有可寄送的會員（需在 Firebase Auth 有 Email）。",
+        );
+        memberListStatus.classList.add("error");
+        return;
+      }
+
+      const overlay = el("div", { class: "modal-overlay" });
+      const dialog = el("div", { class: "modal-card admin-member-test-email-dialog" });
+      dialog.setAttribute("role", "dialog");
+      dialog.setAttribute("aria-modal", "true");
+      const heading = el("h3", { id: "admin-member-test-email-title" }, [
+        t("admin.memberList.testEmailModalTitle", "測試通知信：選擇收件人"),
+      ]);
+      dialog.setAttribute("aria-labelledby", "admin-member-test-email-title");
+
+      const hint = el("p", { class: "hint admin-member-test-email-hint" }, [
+        t(
+          "admin.memberList.testEmailModalHint",
+          "僅列出目前有 Email 的會員。信內為【測試】樣板（待確認→已確認），不會改動任何預約。",
+        ),
+      ]);
+
+      const listWrap = el("div", { class: "admin-member-test-email-list" });
+      const checks = new Map<string, HTMLInputElement>();
+      for (const m of withEmail) {
+        const cb = el("input", { type: "checkbox", name: "admin-test-email-target" });
+        cb.value = m.uid;
+        checks.set(m.uid, cb);
+        const label = el("label", { class: "admin-member-test-email-row" });
+        const line = `${m.email ?? ""} · ${m.nickname.trim() ? m.nickname : shortUidForDisplay(m.uid)}`;
+        label.append(cb, el("span", {}, [line]));
+        listWrap.append(label);
+      }
+
+      const toolbar = el("div", { class: "row-actions admin-member-test-email-toolbar" });
+      const selectAllBtn = el("button", { class: "ghost", type: "button" }, [
+        t("admin.memberList.testEmailSelectAll", "全選可寄送"),
+      ]);
+      const selectNoneBtn = el("button", { class: "ghost", type: "button" }, [
+        t("admin.memberList.testEmailSelectNone", "全部取消"),
+      ]);
+      toolbar.append(selectAllBtn, selectNoneBtn);
+
+      const sendBtn = el("button", { class: "primary", type: "button" }, [
+        t("admin.memberList.testEmailSend", "寄出測試信"),
+      ]);
+      const closeBtn = el("button", { class: "ghost", type: "button" }, [t("modal.close", "關閉")]);
+      const actions = el("div", { class: "modal-actions" }, [closeBtn, sendBtn]);
+      const modalStatus = el("div", { class: "status-line" });
+
+      function syncSendDisabled() {
+        const any = [...checks.values()].some((c) => c.checked);
+        if (any) sendBtn.removeAttribute("disabled");
+        else sendBtn.setAttribute("disabled", "true");
+      }
+
+      selectAllBtn.addEventListener("click", () => {
+        checks.forEach((c) => {
+          c.checked = true;
+        });
+        syncSendDisabled();
+      });
+      selectNoneBtn.addEventListener("click", () => {
+        checks.forEach((c) => {
+          c.checked = false;
+        });
+        syncSendDisabled();
+      });
+      checks.forEach((c) => c.addEventListener("change", syncSendDisabled));
+
+      const dismiss = () => {
+        document.removeEventListener("keydown", onKeyDown);
+        overlay.remove();
+      };
+      const onKeyDown = (ev: KeyboardEvent) => {
+        if (ev.key === "Escape") {
+          ev.preventDefault();
+          dismiss();
+        }
+      };
+
+      closeBtn.addEventListener("click", dismiss);
+      overlay.addEventListener("click", (ev) => {
+        if (ev.target === overlay) dismiss();
+      });
+      document.addEventListener("keydown", onKeyDown);
+
+      sendBtn.addEventListener("click", async () => {
+        const selected = [...checks.entries()]
+          .filter(([, c]) => c.checked)
+          .map(([id]) => id);
+        if (selected.length === 0) return;
+
+        const listLines = selected
+          .map((id) => {
+            const row = withEmail.find((x) => x.uid === id);
+            return row?.email ?? id;
+          })
+          .join("\n");
+        const confirmed = await showConfirmModal(
+          t("admin.memberList.testEmailConfirmTitle", "確認寄送測試通知信"),
+          t("admin.memberList.testEmailConfirmBody", "將對以下信箱各寄一封【測試】樣板信（不變更任何預約）：\n\n{{list}}\n\n共 {{n}} 封。", {
+            list: listLines,
+            n: selected.length,
+          }),
+          t("admin.memberList.testEmailConfirmOk", "確定寄出"),
+        );
+        if (!confirmed) return;
+
+        modalStatus.textContent = t("admin.memberList.testEmailSending", "寄送中…");
+        modalStatus.className = "status-line";
+        sendBtn.setAttribute("disabled", "true");
+        selectAllBtn.setAttribute("disabled", "true");
+        selectNoneBtn.setAttribute("disabled", "true");
+        checks.forEach((c) => c.setAttribute("disabled", "true"));
+        closeBtn.setAttribute("disabled", "true");
+
+        const mailLocale = getLocale() === "en" ? "en" : "zh-Hant";
+        const fn = testSendMemberStatusTestEmailCall();
+        const lines: string[] = [];
+        try {
+          for (const customerId of selected) {
+            try {
+              const res = await fn({ customerId, mailLocale, ...localeApiParam() });
+              const sentTo = (res.data as { sentTo?: string }).sentTo ?? "";
+              lines.push(
+                t("admin.memberList.testEmailLineOk", "✓ {{email}}", {
+                  email: sentTo || customerId,
+                }),
+              );
+            } catch (e) {
+              const row = withEmail.find((x) => x.uid === customerId);
+              lines.push(
+                t("admin.memberList.testEmailLineFail", "✗ {{email}}：{{err}}", {
+                  email: row?.email ?? customerId,
+                  err: errorMessage(e),
+                }),
+              );
+            }
+          }
+          dismiss();
+          memberListStatus.className = "status-line ok admin-member-test-email-summary";
+          memberListStatus.textContent = [
+            t("admin.memberList.testEmailResultHead", "測試信結果（{{n}} 筆）：", { n: selected.length }),
+            ...lines,
+          ].join("\n");
+        } finally {
+          sendBtn.removeAttribute("disabled");
+        }
+      });
+
+      dialog.append(heading, hint, toolbar, listWrap, modalStatus, actions);
+      overlay.append(dialog);
+      document.body.append(overlay);
+      syncSendDisabled();
+      const firstCb = listWrap.querySelector("input[type=checkbox]") as HTMLInputElement | null;
+      (sendBtn.disabled ? firstCb ?? closeBtn : sendBtn).focus();
     });
 
     memberListSection.append(
@@ -3573,7 +3801,13 @@ function render() {
       el("p", { class: "hint" }, [
         t("admin.memberList.introSort", "表頭欄位可點擊排序；預設已驗證信箱在前。清單每頁顯示 10 位。"),
       ]),
-      el("div", { class: "row-actions" }, [memberListRefreshBtn]),
+      el("p", { class: "hint" }, [
+        t(
+          "admin.memberList.migrateHint",
+          "「折換未折抵金額→次數」會掃描 Firestore 全部 customers 文件，依後台定價將 walletBalance 可折整數次併入 sessionCredits；不滿一次的金額仍留在未折抵欄。",
+        ),
+      ]),
+      el("div", { class: "row-actions" }, [memberListRefreshBtn, memberListMigrateWalletBtn, memberListTestEmailBtn]),
       memberListStatus,
       memberListTableWrap,
       memberListPager,
@@ -3594,13 +3828,13 @@ function render() {
     ]);
     subTabMemberList.id = "admin-member-subtab-list";
 
-    const panelMemberCreateSub = el("div", {
+    const panelMemberListSub = el("div", {
       class: "admin-tab-panel admin-member-subpanel",
       role: "tabpanel",
-      id: "admin-member-subpanel-create",
+      id: "admin-member-subpanel-list",
     });
-    panelMemberCreateSub.setAttribute("aria-labelledby", "admin-member-subtab-create");
-    panelMemberCreateSub.append(accountCreateSection);
+    panelMemberListSub.setAttribute("aria-labelledby", "admin-member-subtab-list");
+    panelMemberListSub.append(memberListSection);
 
     const panelMemberWalletSub = el("div", {
       class: "admin-tab-panel admin-member-subpanel",
@@ -3611,26 +3845,26 @@ function render() {
     panelMemberWalletSub.setAttribute("aria-labelledby", "admin-member-subtab-wallet");
     panelMemberWalletSub.append(walletTopupSection);
 
-    const panelMemberListSub = el("div", {
+    const panelMemberCreateSub = el("div", {
       class: "admin-tab-panel admin-member-subpanel",
       role: "tabpanel",
-      id: "admin-member-subpanel-list",
+      id: "admin-member-subpanel-create",
       hidden: true,
     });
-    panelMemberListSub.setAttribute("aria-labelledby", "admin-member-subtab-list");
-    panelMemberListSub.append(memberListSection);
+    panelMemberCreateSub.setAttribute("aria-labelledby", "admin-member-subtab-create");
+    panelMemberCreateSub.append(accountCreateSection);
 
-    subTabMemberCreate.setAttribute("aria-controls", "admin-member-subpanel-create");
-    subTabMemberWallet.setAttribute("aria-controls", "admin-member-subpanel-wallet");
     subTabMemberList.setAttribute("aria-controls", "admin-member-subpanel-list");
+    subTabMemberWallet.setAttribute("aria-controls", "admin-member-subpanel-wallet");
+    subTabMemberCreate.setAttribute("aria-controls", "admin-member-subpanel-create");
 
     const membersSubTablist = el("div", { class: "admin-tabs admin-member-subtabs", role: "tablist" });
-    membersSubTablist.append(subTabMemberCreate, subTabMemberWallet, subTabMemberList);
+    membersSubTablist.append(subTabMemberList, subTabMemberWallet, subTabMemberCreate);
     const membersSubPanelsWrap = el("div", { class: "admin-member-subpanels" });
-    membersSubPanelsWrap.append(panelMemberCreateSub, panelMemberWalletSub, panelMemberListSub);
+    membersSubPanelsWrap.append(panelMemberListSub, panelMemberWalletSub, panelMemberCreateSub);
 
-    const memberSubTabButtons = [subTabMemberCreate, subTabMemberWallet, subTabMemberList] as const;
-    const memberSubTabPanels = [panelMemberCreateSub, panelMemberWalletSub, panelMemberListSub] as const;
+    const memberSubTabButtons = [subTabMemberList, subTabMemberWallet, subTabMemberCreate] as const;
+    const memberSubTabPanels = [panelMemberListSub, panelMemberWalletSub, panelMemberCreateSub] as const;
 
     function selectMembersSubTab(index: 0 | 1 | 2) {
       memberSubTabButtons.forEach((btn, i) => {
@@ -3645,9 +3879,9 @@ function render() {
       });
     }
 
-    subTabMemberCreate.addEventListener("click", () => selectMembersSubTab(0));
+    subTabMemberList.addEventListener("click", () => selectMembersSubTab(0));
     subTabMemberWallet.addEventListener("click", () => selectMembersSubTab(1));
-    subTabMemberList.addEventListener("click", () => selectMembersSubTab(2));
+    subTabMemberCreate.addEventListener("click", () => selectMembersSubTab(2));
 
     membersSubTablist.addEventListener("keydown", (ev) => {
       if (ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;
@@ -3939,37 +4173,7 @@ function render() {
           unhideBtn.removeAttribute("disabled");
         }
       });
-      const testMailHiddenBtn = el("button", { class: "ghost", type: "button" }, [
-        t("admin.testStatusEmail.btn", "測試通知信"),
-      ]);
-      const canTestMailHidden = adminBookingCanSendMemberStatusTestEmail(b);
-      testMailHiddenBtn.disabled = !canTestMailHidden;
-      testMailHiddenBtn.title = canTestMailHidden
-        ? t(
-            "admin.testStatusEmail.title",
-            "寄一封測試用的狀態通知信到該會員信箱（不改預約；主旨與內文會標示【測試】）",
-          )
-        : t("admin.testStatusEmail.titleDisabled", "僅適用有綁定會員的預約（訪客預約不會寄發狀態信）");
-      testMailHiddenBtn.addEventListener("click", async () => {
-        if (!adminBookingCanSendMemberStatusTestEmail(b)) return;
-        hiddenBookingsStatus.textContent = t("admin.testStatusEmail.sending", "寄送測試信中…");
-        hiddenBookingsStatus.className = "status-line";
-        testMailHiddenBtn.setAttribute("disabled", "true");
-        try {
-          const fn = testSendMemberBookingStatusEmailCall();
-          const res = await fn({ bookingId: b.id, ...localeApiParam() });
-          const sentTo = (res.data as { sentTo?: string } | undefined)?.sentTo ?? "";
-          hiddenBookingsStatus.textContent = t("admin.testStatusEmail.ok", "已送出測試信至 {{email}}", { email: sentTo });
-          hiddenBookingsStatus.classList.add("ok");
-        } catch (e) {
-          hiddenBookingsStatus.textContent =
-            e instanceof Error ? e.message : t("admin.testStatusEmail.fail", "測試信寄送失敗");
-          hiddenBookingsStatus.classList.add("error");
-        } finally {
-          if (canTestMailHidden) testMailHiddenBtn.removeAttribute("disabled");
-        }
-      });
-      const actionCell = el("div", { class: "admin-booking-actions" }, [cancelBtn, unhideBtn, testMailHiddenBtn]);
+      const actionCell = el("div", { class: "admin-booking-actions" }, [cancelBtn, unhideBtn]);
       hiddenTable.append(
         el("tr", {}, [
           el("td", { class: "mono" }, [formatWhen(b)]),
@@ -4164,37 +4368,7 @@ function render() {
               deleteBtn.removeAttribute("disabled");
             }
           });
-          const testMailBtn = el("button", { class: "ghost", type: "button" }, [
-            t("admin.testStatusEmail.btn", "測試通知信"),
-          ]);
-          const canTestMail = adminBookingCanSendMemberStatusTestEmail(b);
-          testMailBtn.disabled = !canTestMail;
-          testMailBtn.title = canTestMail
-            ? t(
-                "admin.testStatusEmail.title",
-                "寄一封測試用的狀態通知信到該會員信箱（不改預約；主旨與內文會標示【測試】）",
-              )
-            : t("admin.testStatusEmail.titleDisabled", "僅適用有綁定會員的預約（訪客預約不會寄發狀態信）");
-          testMailBtn.addEventListener("click", async () => {
-            if (!adminBookingCanSendMemberStatusTestEmail(b)) return;
-            adminStatus.textContent = t("admin.testStatusEmail.sending", "寄送測試信中…");
-            adminStatus.className = "status-line";
-            testMailBtn.setAttribute("disabled", "true");
-            try {
-              const fn = testSendMemberBookingStatusEmailCall();
-              const res = await fn({ bookingId: b.id, ...localeApiParam() });
-              const sentTo = (res.data as { sentTo?: string } | undefined)?.sentTo ?? "";
-              adminStatus.textContent = t("admin.testStatusEmail.ok", "已送出測試信至 {{email}}", { email: sentTo });
-              adminStatus.classList.add("ok");
-            } catch (e) {
-              adminStatus.textContent =
-                e instanceof Error ? e.message : t("admin.testStatusEmail.fail", "測試信寄送失敗");
-              adminStatus.classList.add("error");
-            } finally {
-              if (canTestMail) testMailBtn.removeAttribute("disabled");
-            }
-          });
-          const actionCell = el("div", { class: "admin-booking-actions" }, [cancelBtn, deleteBtn, testMailBtn]);
+          const actionCell = el("div", { class: "admin-booking-actions" }, [cancelBtn, deleteBtn]);
           table.append(
             el("tr", {}, [
               el("td", { class: "mono" }, [formatWhen(b)]),

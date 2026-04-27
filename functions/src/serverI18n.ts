@@ -68,6 +68,7 @@ const EN: Record<string, string> = {
   "testStatusEmail.noCustomer": "This booking has no linked member (customerId).",
   "testStatusEmail.noMemberEmail": "The member account has no email in Firebase Auth.",
   "testStatusEmail.noResendKey": "RESEND_API_KEY is not configured for this project.",
+  "testStatusEmail.memberNotFound": "That member was not found or Firebase Auth could not read the user.",
 };
 
 function applyVars(s: string, vars?: Record<string, string | number>): string {

@@ -63,7 +63,7 @@
 - 架構與流程（含預約、錢包、輪盤、客服）：[`docs/architecture-and-flows.md`](docs/architecture-and-flows.md)。
 - `src/`：Vite 前端（預約表單、會員中心、管理分頁；入口 `src/main.ts`，Firebase Callable 封裝 `src/firebase.ts`）。
 - `functions/`：Cloud Functions 主程式 [`functions/src/index.ts`](functions/src/index.ts)；預約時段與上限規則 [`functions/src/bookingLogic.ts`](functions/src/bookingLogic.ts)；**Resend 寄信** [`functions/src/resendNotify.ts`](functions/src/resendNotify.ts)。
-  - **Callable**（名稱與權限摘要見架構文件）：`getAvailability`、`recordSiteVisit`、`createBooking`、`getMyWallet`、`getAdminStatus`、`topupWallet`、`createMemberAccount`、`searchMemberUsers`、`listMembersAdmin`、`updateMemberNicknameAdmin`、`completeBooking`、`cancelBooking`、`listActiveWheelPrizes`、`spinWheel`、`seedWheelPrizes`、`sendSupportChatMessage`、`sendSupportChatAdminReply`、`setSupportThreadStatusAdmin`。
+  - **Callable**（名稱與權限摘要見架構文件）：`getAvailability`、`recordSiteVisit`、`createBooking`、`getMyWallet`、`getAdminStatus`、`topupWallet`、`createMemberAccount`、`searchMemberUsers`、`listMembersAdmin`、`updateMemberNicknameAdmin`、`testSendMemberBookingStatusEmail`（依預約）、`testSendMemberStatusTestEmail`（依會員 UID）、`completeBooking`、`cancelBooking`、`listActiveWheelPrizes`、`spinWheel`、`seedWheelPrizes`、`sendSupportChatMessage`、`sendSupportChatAdminReply`、`setSupportThreadStatusAdmin`。
   - **Firestore 觸發器**（非 Callable）：`notifyMemberBookingStatusChange` — `bookings/{id}` 更新且 `status` 變更時，對會員預約寄送狀態通知信（訪客模式略過）。
 - `firestore.rules`：僅 `admins/{uid}` 可讀取預約；管理員可更新 `status` / `updatedAt`（含軟刪除欄位），不開放硬刪除；公告設定提供公開讀取、管理員可寫入。
 

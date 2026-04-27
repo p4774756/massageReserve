@@ -43,8 +43,6 @@ export const getMyWalletCall = () => httpsCallable(getFns(), "getMyWallet");
 export const redeemWheelPointsCall = () => httpsCallable(getFns(), "redeemWheelPoints");
 export const topupWalletCall = () => httpsCallable(getFns(), "topupWallet");
 export const completeBookingCall = () => httpsCallable(getFns(), "completeBooking");
-export const testSendMemberBookingStatusEmailCall = () =>
-  httpsCallable(getFns(), "testSendMemberBookingStatusEmail");
 export const cancelBookingCall = () => httpsCallable(getFns(), "cancelBooking");
 export const spinWheelCall = () => httpsCallable(getFns(), "spinWheel");
 export const listActiveWheelPrizesCall = () => httpsCallable(getFns(), "listActiveWheelPrizes");
@@ -53,6 +51,8 @@ export const getAdminStatusCall = () => httpsCallable(getFns(), "getAdminStatus"
 export const createMemberAccountCall = () => httpsCallable(getFns(), "createMemberAccount");
 export const searchMemberUsersCall = () => httpsCallable(getFns(), "searchMemberUsers");
 export const listMembersAdminCall = () => httpsCallable(getFns(), "listMembersAdmin");
+export const migrateLegacyWalletsAdminCall = () => httpsCallable(getFns(), "migrateLegacyWalletsAdmin");
+export const testSendMemberStatusTestEmailCall = () => httpsCallable(getFns(), "testSendMemberStatusTestEmail");
 export const updateMemberNicknameAdminCall = () => httpsCallable(getFns(), "updateMemberNicknameAdmin");
 export const sendSupportChatMessageCall = () => httpsCallable(getFns(), "sendSupportChatMessage");
 export const sendSupportChatAdminReplyCall = () => httpsCallable(getFns(), "sendSupportChatAdminReply");

@@ -2119,6 +2119,40 @@ tbody tr:hover td {
   margin-top: 10px;
 }
 
+.admin-member-test-email-dialog {
+  max-width: min(520px, 94vw);
+}
+
+.admin-member-test-email-hint {
+  margin: 0 0 10px;
+}
+
+.admin-member-test-email-list {
+  max-height: min(44vh, 360px);
+  overflow-y: auto;
+  margin: 8px 0 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.admin-member-test-email-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 6px 4px;
+  font-size: 0.9rem;
+}
+
+.admin-member-test-email-toolbar {
+  margin-top: 0;
+}
+
+.admin-member-test-email-summary {
+  white-space: pre-wrap;
+}
+
 .admin-member-th-actions,
 .admin-member-td-actions {
   white-space: nowrap;

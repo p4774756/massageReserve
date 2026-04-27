@@ -587,6 +587,64 @@ export const redeemWheelPoints = onCall(publicCall, async (request) => {
   return { ok: true as const, ...result };
 });
 
+/**
+ * 管理員：依 `siteSettings/pricing` 的單價，對 `customers` 全集合套用與 `getMyWallet` 相同的折換
+ *（未滿一次的金額留在 walletBalance）。大量文件時以 batch 分段提交。
+ */
+export const migrateLegacyWalletsAdmin = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
+  }
+  await assertAdminByUid(uid, locale);
+
+  const pricingSnap = await db.collection("siteSettings").doc("pricing").get();
+  const sessionPriceNtd = resolveSessionPriceNtd(pricingSnap.data());
+
+  const snaps = await db.collection("customers").get();
+  let scanned = 0;
+  let updated = 0;
+  const maxBatch = 450;
+  let batch = db.batch();
+  let inBatch = 0;
+
+  for (const doc of snaps.docs) {
+    scanned++;
+    const d = doc.data() as Record<string, unknown>;
+    const wb0 = typeof d.walletBalance === "number" ? d.walletBalance : 0;
+    const sc0 = typeof d.sessionCredits === "number" ? d.sessionCredits : 0;
+    const folded = foldWalletBalanceIntoSessions(wb0, sc0, sessionPriceNtd);
+    if (folded.walletBalance === wb0 && folded.sessionCredits === sc0) continue;
+    updated++;
+    batch.set(
+      doc.ref,
+      {
+        walletBalance: folded.walletBalance,
+        sessionCredits: folded.sessionCredits,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    inBatch++;
+    if (inBatch >= maxBatch) {
+      await batch.commit();
+      batch = db.batch();
+      inBatch = 0;
+    }
+  }
+  if (inBatch > 0) {
+    await batch.commit();
+  }
+
+  return {
+    ok: true as const,
+    scanned,
+    updated,
+    sessionPriceNtd,
+  };
+});
+
 export const topupWallet = onCall(publicCall, async (request) => {
   const locale = parseLocale(request.data);
   const uid = request.auth?.uid;
@@ -969,6 +1027,102 @@ export const testSendMemberBookingStatusEmail = onCall(
       payload: {
         to,
         displayName: displayName || (mailLocale === "en" ? "Member" : "會員"),
+        dateKey,
+        startSlot,
+        previousStatus: "pending",
+        newStatus: "confirmed",
+      },
+    });
+
+    return { ok: true as const, sentTo: to };
+  },
+);
+
+function formatTaipeiDateKey(d: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(d);
+  const y = parts.find((p) => p.type === "year")?.value;
+  const mo = parts.find((p) => p.type === "month")?.value;
+  const da = parts.find((p) => p.type === "day")?.value;
+  if (!y || !mo || !da) return "2000-01-01";
+  return `${y}-${mo}-${da}`;
+}
+
+/** 管理員：依會員 UID 寄出一封測試用「預約狀態通知」樣板信（不綁預約、不改 Firestore） */
+export const testSendMemberStatusTestEmail = onCall(
+  { ...publicCall, secrets: [resendApiKey] },
+  async (request) => {
+    const locale = parseLocale(request.data);
+    const uid = request.auth?.uid;
+    if (!uid) {
+      throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
+    }
+    await assertAdminByUid(uid, locale);
+
+    const customerId = typeof request.data?.customerId === "string" ? request.data.customerId.trim() : "";
+    if (!customerId) {
+      throw new HttpsError(
+        "invalid-argument",
+        st(locale, "admin.customerIdRequired", "customerId 必填（會員 UID 或 Email）"),
+      );
+    }
+
+    const apiKey = resendApiKey.value().trim();
+    if (!apiKey) {
+      throw new HttpsError(
+        "failed-precondition",
+        st(locale, "testStatusEmail.noResendKey", "專案未設定 RESEND_API_KEY，無法寄信。"),
+      );
+    }
+    const from = resendFrom.value().trim() || "Massage預約 <onboarding@resend.dev>";
+
+    let to = "";
+    let authDisplayName = "";
+    try {
+      const user = await getAuth().getUser(customerId);
+      to = user.email ?? "";
+      authDisplayName = typeof user.displayName === "string" ? user.displayName.trim() : "";
+    } catch (e) {
+      console.warn("testSendMemberStatusTestEmail: getUser failed", customerId, e);
+      throw new HttpsError(
+        "failed-precondition",
+        st(locale, "testStatusEmail.memberNotFound", "找不到該會員帳號，或無法讀取 Firebase Auth。"),
+      );
+    }
+    if (!to) {
+      throw new HttpsError(
+        "failed-precondition",
+        st(locale, "testStatusEmail.noMemberEmail", "此會員在 Firebase Auth 沒有設定 Email，無法寄送。"),
+      );
+    }
+
+    const customerSnap = await db.collection("customers").doc(customerId).get();
+    const nickRaw =
+      customerSnap.exists && typeof (customerSnap.data() as Record<string, unknown>).nickname === "string"
+        ? ((customerSnap.data() as Record<string, unknown>).nickname as string).trim()
+        : "";
+
+    const mailLocale = request.data?.mailLocale === "en" ? "en" : "zh-Hant";
+    const displayName =
+      nickRaw || authDisplayName || (mailLocale === "en" ? "Member" : "會員");
+
+    const dateKeyRaw = typeof request.data?.dateKey === "string" ? request.data.dateKey.trim() : "";
+    const startSlotRaw = typeof request.data?.startSlot === "string" ? request.data.startSlot.trim() : "";
+    const dateKey = dateKeyRaw || formatTaipeiDateKey(new Date());
+    const startSlot = startSlotRaw || "15:00";
+
+    await sendMemberBookingStatusChangedEmail({
+      apiKey,
+      from,
+      locale: mailLocale === "en" ? "en" : "zh-Hant",
+      testMode: true,
+      payload: {
+        to,
+        displayName,
         dateKey,
         startSlot,
         previousStatus: "pending",

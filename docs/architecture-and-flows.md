@@ -75,7 +75,7 @@ flowchart LR
 
 ## 4. Callable Functions 一覽
 
-所有可呼叫函式定義於 `functions/src/index.ts`，前端封裝於 `src/firebase.ts`（含 `seedWheelPrizesCall`，後台公告區可一鍵初始化空集合之獎項）。
+所有可呼叫函式定義於 `functions/src/index.ts`，前端封裝於 `src/firebase.ts`（含 `seedWheelPrizesCall`、`migrateLegacyWalletsAdminCall`、`testSendMemberStatusTestEmailCall`：後台分別可初始化空獎項、折換全體 customers 未折抵金額、會員清單測試寄信）。
 
 | 函式 | 誰可呼叫 | 用途摘要 |
 |------|-----------|----------|
@@ -88,7 +88,7 @@ flowchart LR
 | `cancelBooking` | 預約本人或管理員 | 取消預約；若曾錢包扣款則退款 |
 | `topupWallet` | 管理員 | 後台儲值 |
 | `createMemberAccount` | 管理員 | 建立 Auth 使用者 + `customers` 初始文件 |
-| `searchMemberUsers` / `listMembersAdmin` / `updateMemberNicknameAdmin` | 管理員 | 會員搜尋、列表、暱稱 |
+| `searchMemberUsers` / `listMembersAdmin` / `updateMemberNicknameAdmin` / `migrateLegacyWalletsAdmin` / `testSendMemberStatusTestEmail` | 管理員 | 會員搜尋、列表、暱稱；一鍵依定價折換 `customers` 未折抵金額→次數；依 UID 寄【測試】狀態通知樣板信 |
 | `listActiveWheelPrizes` | 已登入且 **Email 已驗證** | 列出啟用中獎項（供輪盤 UI） |
 | `spinWheel` | 已登入且 **Email 已驗證** | 消耗可抽次數、加權隨機獎項、更新餘額與紀錄 |
 | `seedWheelPrizes` | 需已登入且為 **admin** | 若 `wheelPrizes` 為空則寫入預設獎項 |

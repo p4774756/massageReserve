@@ -332,15 +332,6 @@ export const EN: Record<string, string> = {
   "admin.marquee.placeholderText": "Top banner e.g. Wed 15:00–16:00 closed",
   "admin.marquee.placeholderLed": "Bottom LED: can be longer, e.g. promo tagline",
 
-  "admin.testStatusEmail.btn": "Test status email",
-  "admin.testStatusEmail.title":
-    "Send one sample status email to the member (does not change the booking; subject/body marked as test)",
-  "admin.testStatusEmail.titleDisabled":
-    "Only for bookings linked to a member (guest bookings do not receive status emails)",
-  "admin.testStatusEmail.sending": "Sending test email…",
-  "admin.testStatusEmail.ok": "Test email sent to {{email}}",
-  "admin.testStatusEmail.fail": "Failed to send test email",
-
   "admin.seedWheelPrizes.heading": "Wheel prizes (Firestore)",
   "admin.seedWheelPrizes.hint":
     "Calls the seedWheelPrizes Cloud Function: writes default prizes only when the wheelPrizes collection is completely empty; if any document exists, it skips (edit in Console or delete existing prizes first).",
@@ -516,6 +507,31 @@ export const EN: Record<string, string> = {
   "admin.memberList.introSort":
     "Click column headers to sort. Verified email is listed first by default; 10 rows per page.",
   "admin.memberList.reload": "Reload member list",
+  "admin.memberList.testEmailBtn": "Test status email",
+  "admin.memberList.testEmailTitle":
+    "From the loaded list, pick members to each receive one [TEST] booking-status sample email (no booking changes; needs RESEND_API_KEY).",
+  "admin.memberList.testEmailNeedLoad": "Tap “Reload member list” first, then send test emails.",
+  "admin.memberList.testEmailNoTargets": "No sendable members in the list (Firebase Auth must have an email).",
+  "admin.memberList.testEmailModalTitle": "Test status email: choose recipients",
+  "admin.memberList.testEmailModalHint":
+    "Only members with an email are listed. The message is a [TEST] template (Pending → Confirmed) and does not change any booking.",
+  "admin.memberList.testEmailSelectAll": "Select all sendable",
+  "admin.memberList.testEmailSelectNone": "Clear selection",
+  "admin.memberList.testEmailSend": "Send test emails",
+  "admin.memberList.testEmailConfirmTitle": "Confirm test status emails",
+  "admin.memberList.testEmailConfirmBody":
+    "Send one [TEST] template email to each address below (no booking changes):\n\n{{list}}\n\nTotal: {{n}}.",
+  "admin.memberList.testEmailConfirmOk": "Send",
+  "admin.memberList.testEmailSending": "Sending…",
+  "admin.memberList.testEmailLineOk": "✓ {{email}}",
+  "admin.memberList.testEmailLineFail": "✗ {{email}}: {{err}}",
+  "admin.memberList.testEmailResultHead": "Test email results ({{n}}):",
+  "admin.memberList.migrateWalletBtn": "Fold legacy cash → sessions",
+  "admin.memberList.migrateHint":
+    "“Fold legacy cash → sessions” scans every Firestore customers document, uses admin pricing to move whole-session amounts from walletBalance into sessionCredits; any remainder under one session stays in the legacy cash column.",
+  "admin.memberList.migrateRunning": "Folding balances…",
+  "admin.memberList.migrateDone":
+    "Done: scanned {{scanned}} customers documents, updated {{updated}} (price reference NT$ {{price}}). Tap “Reload member list” to refresh the table.",
   "admin.memberList.loading": "Loading member list…",
   "admin.memberList.loaded": "Loaded {{n}} users.",
   "admin.memberList.loadFail": "Load failed",
