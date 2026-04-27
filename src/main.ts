@@ -1570,6 +1570,13 @@ function render() {
     }
   });
 
+  function blockNoteForSlot(blockReason: string | undefined, blockedHere: boolean): string {
+    if (!blockedHere || blockReason === undefined) return "";
+    return blockReason
+      ? t("slot.blockedWith", "（不開放：{{reason}}）", { reason: blockReason })
+      : t("slot.blocked", "（不開放預約）");
+  }
+
   function refillSlots(
     taken: Set<string>,
     disabled: boolean,
@@ -1581,17 +1588,38 @@ function render() {
     slotSelect.disabled = disabled;
     const opt0 = el("option", { value: "" }, [t("slot.optionPick", "請選擇開始時間")]);
     slotSelect.append(opt0);
-    for (const s of allStartSlots()) {
+    const slots = allStartSlots();
+    for (let i = 0; i < slots.length; ) {
+      const s = slots[i]!;
       const takenHere = taken.has(s);
       const pastHere = isStartSlotInPastForTaipeiToday(selectedDateKey, s);
       const blockReason = blockedReasonBySlot.get(s);
       const blockedHere = blockReason !== undefined;
-      const blockNote =
-        blockedHere && blockReason
-          ? t("slot.blockedWith", "（不開放：{{reason}}）", { reason: blockReason })
-          : blockedHere
-            ? t("slot.blocked", "（不開放預約）")
-            : "";
+
+      const mergeableBlocked = blockedHere && !takenHere && !pastHere;
+      if (mergeableBlocked) {
+        const reason0 = blockReason as string;
+        let j = i;
+        while (j + 1 < slots.length) {
+          const s2 = slots[j + 1]!;
+          if (taken.has(s2)) break;
+          if (isStartSlotInPastForTaipeiToday(selectedDateKey, s2)) break;
+          const r2 = blockedReasonBySlot.get(s2);
+          if (r2 === undefined || r2 !== reason0) break;
+          j++;
+        }
+        if (j > i) {
+          const blockNote = blockNoteForSlot(reason0, true);
+          const timePart = t("slot.blockedRangeTimes", "{{from}}–{{to}}", { from: s, to: slots[j]! });
+          slotSelect.append(
+            el("option", { value: "", disabled: true }, [`${timePart}${blockNote}`]),
+          );
+          i = j + 1;
+          continue;
+        }
+      }
+
+      const blockNote = blockNoteForSlot(blockReason, blockedHere);
       const suffix = takenHere
         ? t("slot.taken", "（已佔用）")
         : pastHere
@@ -1601,6 +1629,7 @@ function render() {
         `${s}${suffix}`,
       ]);
       slotSelect.append(o);
+      i++;
     }
     if (prev) {
       const keep = [...slotSelect.options].some((o) => o.value === prev && !o.disabled);
@@ -3202,6 +3231,88 @@ function render() {
 
     paintMemberListTable();
 
+    const subTabMemberCreate = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
+      t("admin.memberTab.create", "建立帳號"),
+    ]);
+    subTabMemberCreate.id = "admin-member-subtab-create";
+    const subTabMemberWallet = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
+      t("admin.memberTab.wallet", "會員儲值"),
+    ]);
+    subTabMemberWallet.id = "admin-member-subtab-wallet";
+    const subTabMemberList = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
+      t("admin.memberTab.list", "會員清單"),
+    ]);
+    subTabMemberList.id = "admin-member-subtab-list";
+
+    const panelMemberCreateSub = el("div", {
+      class: "admin-tab-panel admin-member-subpanel",
+      role: "tabpanel",
+      id: "admin-member-subpanel-create",
+    });
+    panelMemberCreateSub.setAttribute("aria-labelledby", "admin-member-subtab-create");
+    panelMemberCreateSub.append(accountCreateSection);
+
+    const panelMemberWalletSub = el("div", {
+      class: "admin-tab-panel admin-member-subpanel",
+      role: "tabpanel",
+      id: "admin-member-subpanel-wallet",
+      hidden: true,
+    });
+    panelMemberWalletSub.setAttribute("aria-labelledby", "admin-member-subtab-wallet");
+    panelMemberWalletSub.append(walletTopupSection);
+
+    const panelMemberListSub = el("div", {
+      class: "admin-tab-panel admin-member-subpanel",
+      role: "tabpanel",
+      id: "admin-member-subpanel-list",
+      hidden: true,
+    });
+    panelMemberListSub.setAttribute("aria-labelledby", "admin-member-subtab-list");
+    panelMemberListSub.append(memberListSection);
+
+    subTabMemberCreate.setAttribute("aria-controls", "admin-member-subpanel-create");
+    subTabMemberWallet.setAttribute("aria-controls", "admin-member-subpanel-wallet");
+    subTabMemberList.setAttribute("aria-controls", "admin-member-subpanel-list");
+
+    const membersSubTablist = el("div", { class: "admin-tabs admin-member-subtabs", role: "tablist" });
+    membersSubTablist.append(subTabMemberCreate, subTabMemberWallet, subTabMemberList);
+    const membersSubPanelsWrap = el("div", { class: "admin-member-subpanels" });
+    membersSubPanelsWrap.append(panelMemberCreateSub, panelMemberWalletSub, panelMemberListSub);
+
+    const memberSubTabButtons = [subTabMemberCreate, subTabMemberWallet, subTabMemberList] as const;
+    const memberSubTabPanels = [panelMemberCreateSub, panelMemberWalletSub, panelMemberListSub] as const;
+
+    function selectMembersSubTab(index: 0 | 1 | 2) {
+      memberSubTabButtons.forEach((btn, i) => {
+        const on = i === index;
+        btn.setAttribute("aria-selected", String(on));
+        btn.classList.toggle("is-active", on);
+        btn.tabIndex = on ? 0 : -1;
+      });
+      memberSubTabPanels.forEach((panel, i) => {
+        panel.hidden = i !== index;
+        panel.classList.toggle("is-active", i === index);
+      });
+    }
+
+    subTabMemberCreate.addEventListener("click", () => selectMembersSubTab(0));
+    subTabMemberWallet.addEventListener("click", () => selectMembersSubTab(1));
+    subTabMemberList.addEventListener("click", () => selectMembersSubTab(2));
+
+    membersSubTablist.addEventListener("keydown", (ev) => {
+      if (ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;
+      ev.preventDefault();
+      const cur = memberSubTabButtons.findIndex((b) => b.getAttribute("aria-selected") === "true");
+      if (cur < 0) return;
+      const delta = ev.key === "ArrowRight" ? 1 : -1;
+      const n = memberSubTabButtons.length;
+      const next = ((cur + delta) % n + n) % n;
+      selectMembersSubTab(next as 0 | 1 | 2);
+      memberSubTabButtons[next].focus();
+    });
+
+    selectMembersSubTab(0);
+
     const tabBookings = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
       t("admin.tab.bookings", "預約管理"),
     ]);
@@ -3293,7 +3404,7 @@ function render() {
     tabReports.setAttribute("aria-controls", "admin-tab-panel-reports");
 
     panelBookingsEl.append(adminStatus, tableHolder);
-    panelMembersEl.append(accountCreateSection, walletTopupSection, memberListSection);
+    panelMembersEl.append(membersSubTablist, membersSubPanelsWrap);
     panelAnnounceEl.append(announcementSection);
 
     const adminPanelsWrap = el("div", { class: "admin-tab-panels" });

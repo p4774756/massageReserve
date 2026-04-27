@@ -1942,6 +1942,15 @@ tbody tr:hover td {
   display: none !important;
 }
 
+/* 後台「會員與儲值」內次子分頁 */
+.admin-member-subtabs {
+  margin-top: 4px;
+}
+
+.admin-member-subpanels {
+  margin-top: 12px;
+}
+
 /* --- 管理後台：報表 --- */
 .admin-reports {
   max-width: 880px;

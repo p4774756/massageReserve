@@ -130,6 +130,7 @@ export const EN: Record<string, string> = {
   "slot.past": " (past)",
   "slot.blocked": " (closed)",
   "slot.blockedWith": " (closed: {{reason}})",
+  "slot.blockedRangeTimes": "{{from}}–{{to}}",
 
   "field.name": "Name",
   "field.nameHint":
@@ -414,6 +415,10 @@ export const EN: Record<string, string> = {
   "admin.tab.announce": "Marquee",
   "admin.tab.support": "Support chat",
   "admin.tab.reports": "Reports",
+
+  "admin.memberTab.create": "Create account",
+  "admin.memberTab.wallet": "Top up",
+  "admin.memberTab.list": "Member list",
 
   "admin.reports.intro":
     "Booking figures use the same live snapshot as the Bookings tab. Visitor counts, guestbook, and support threads are read separately. Charts (Chart.js) load when you open this tab: doughnuts for status, payment mode, and support; bar charts for booking volume and visits; polar area for guestbook stars. Wait for the booking list to load, then refresh the report.",
