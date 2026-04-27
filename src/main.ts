@@ -37,6 +37,7 @@ import {
   updateMemberNicknameAdminCall,
   spinWheelCall,
   listActiveWheelPrizesCall,
+  testSendMemberBookingStatusEmailCall,
   topupWalletCall,
 } from "./firebase";
 import { mountGuestbook } from "./guestbook";
@@ -51,6 +52,7 @@ import { runWheelSpectacle } from "./wheelSpectacle";
 import {
   clampLedSpeed,
   createLedMarquee,
+  LED_SPEED_DEFAULT,
   LED_SPEED_MAX,
   LED_SPEED_MIN,
   type LedMarqueeHandle,
@@ -70,6 +72,8 @@ type Booking = {
   weekStart?: string;
   /** 後台「自列表隱藏」；不改 status，會員端仍看真實狀態 */
   invisible?: boolean;
+  /** 後台標為完成時寫入（與 status done 一併出現） */
+  completedAt?: { seconds: number };
   bookingMode?: BookingMode | string;
   customerId?: string | null;
 };
@@ -265,6 +269,29 @@ function bookingStatusLabel(status: string): string {
     deleted: t("status.deleted", "已刪除"),
   };
   return map[status] ?? status;
+}
+
+function bookingStatusNorm(status: unknown): string {
+  return typeof status === "string" ? status.trim().toLowerCase() : "";
+}
+
+/** 後台列表：已完成則不可改狀態（容錯 status 大小寫／空白；若有 completedAt 亦視為已完成） */
+function bookingIsDoneForAdmin(b: Pick<Booking, "status" | "completedAt">): boolean {
+  if (bookingStatusNorm(b.status) === "done") return true;
+  const ca = b.completedAt;
+  return ca != null && typeof ca === "object" && typeof ca.seconds === "number";
+}
+
+function bookingIsCancelledForAdmin(status: unknown): boolean {
+  return bookingStatusNorm(status) === "cancelled";
+}
+
+/** 後台：是否可對該筆測試「會員狀態通知信」（訪客或未綁會員為否） */
+function adminBookingCanSendMemberStatusTestEmail(b: Pick<Booking, "bookingMode" | "customerId">): boolean {
+  const mode = b.bookingMode;
+  if (mode === "guest_cash" || mode === "guest_beverage") return false;
+  const cid = typeof b.customerId === "string" ? b.customerId.trim() : "";
+  return cid.length > 0;
 }
 
 /** 後台預約表：是否為訪客預約（是／否） */
@@ -571,6 +598,40 @@ function render() {
   let topMarqueeOn = false;
   let bottomMarqueeOn = false;
 
+  let topMarqueeTextResizeObs: ResizeObserver | null = null;
+  let topMarqueeTrackEl: HTMLElement | null = null;
+  let topMarqueeTextSpeedPxPerSec = LED_SPEED_DEFAULT;
+
+  function disposeTopTextMarqueeResizeObserver() {
+    topMarqueeTextResizeObs?.disconnect();
+    topMarqueeTextResizeObs = null;
+  }
+
+  /** 頂部文字跑馬燈：與底部 LED 相同 px/s，動畫一圈時間 ≈ 軌道寬 / 速度 */
+  function applyTopTextMarqueeDuration(track: HTMLElement, speedPxPerSec: number) {
+    const speed = clampLedSpeed(speedPxPerSec);
+    topMarqueeTextSpeedPxPerSec = speed;
+    const run = () => {
+      if (!track.isConnected) return;
+      const w = track.scrollWidth;
+      if (w <= 0) return;
+      const sec = Math.max(0.35, w / speed);
+      track.style.animationDuration = `${sec}s`;
+    };
+    requestAnimationFrame(() => requestAnimationFrame(run));
+  }
+
+  function wireTopTextMarqueeDuration(track: HTMLElement, speedPxPerSec: number) {
+    disposeTopTextMarqueeResizeObserver();
+    topMarqueeTrackEl = track;
+    applyTopTextMarqueeDuration(track, speedPxPerSec);
+    const ro = new ResizeObserver(() => {
+      applyTopTextMarqueeDuration(track, topMarqueeTextSpeedPxPerSec);
+    });
+    ro.observe(track);
+    topMarqueeTextResizeObs = ro;
+  }
+
   function parseMarqueeSettings(data: unknown): { text: string; enabled: boolean } {
     const o = data as { text?: unknown; enabled?: unknown } | undefined;
     const text = typeof o?.text === "string" ? o.text.trim() : "";
@@ -586,6 +647,9 @@ function render() {
     }
     announcementTextStrip.hidden = !topMarqueeOn;
     announcementBox.hidden = !bottomMarqueeOn;
+    if (topMarqueeOn && topMarqueeTrackEl?.isConnected) {
+      applyTopTextMarqueeDuration(topMarqueeTrackEl, topMarqueeTextSpeedPxPerSec);
+    }
   }
 
   onSnapshot(
@@ -595,20 +659,26 @@ function render() {
         announcementTextStrip.hidden = true;
         return;
       }
-      const { text, enabled } = parseMarqueeSettings(snap.data());
+      const raw = snap.data() as { text?: unknown; enabled?: unknown; speed?: unknown } | undefined;
+      const { text, enabled } = parseMarqueeSettings(raw);
+      const speed = clampLedSpeed(raw?.speed);
+      disposeTopTextMarqueeResizeObserver();
+      topMarqueeTrackEl = null;
       if (!enabled || !text) {
         topMarqueeOn = false;
         announcementTextStrip.replaceChildren();
       } else {
         topMarqueeOn = true;
-        announcementTextStrip.replaceChildren(
-          el("div", { class: "marquee-track" }, [text, "  •  ", text]),
-        );
+        const track = el("div", { class: "marquee-track" }, [text, "  •  ", text]);
+        announcementTextStrip.replaceChildren(track);
+        wireTopTextMarqueeDuration(track, speed);
       }
       syncMarqueeVisibilityForTab();
     },
     () => {
       topMarqueeOn = false;
+      disposeTopTextMarqueeResizeObserver();
+      topMarqueeTrackEl = null;
       announcementTextStrip.replaceChildren();
       announcementTextStrip.hidden = true;
       syncMarqueeVisibilityForTab();
@@ -2267,6 +2337,18 @@ function render() {
       placeholder: t("admin.marquee.placeholderText", "頂部橫幅：例如本週三 15:00-16:00 暫停服務"),
       autocomplete: "off",
     });
+    const marqueeTextSpeed = el("input", {
+      type: "range",
+      min: String(LED_SPEED_MIN),
+      max: String(LED_SPEED_MAX),
+      step: "1",
+    });
+    const marqueeTextSpeedValue = el("span", { class: "led-speed-readout" }, [
+      String(clampLedSpeed(undefined)),
+    ]);
+    marqueeTextSpeed.addEventListener("input", () => {
+      marqueeTextSpeedValue.textContent = marqueeTextSpeed.value;
+    });
     const saveMarqueeTextBtn = el("button", { class: "ghost", type: "button" }, [t("admin.marquee.saveText", "儲存頂部跑馬燈")]);
     const marqueeTextStatus = el("div", { class: "status-line" });
     const marqueeTextDocRef = doc(db, "siteSettings", "marqueeText");
@@ -2569,9 +2651,12 @@ function render() {
     adminMarqueeTextUnsub = onSnapshot(
       marqueeTextDocRef,
       (snap) => {
-        const data = snap.data() as { text?: unknown; enabled?: unknown } | undefined;
+        const data = snap.data() as { text?: unknown; enabled?: unknown; speed?: unknown } | undefined;
         marqueeTextBody.value = typeof data?.text === "string" ? data.text : "";
         marqueeTextEnabled.checked = typeof data?.enabled === "boolean" ? data.enabled : false;
+        const ts = clampLedSpeed(data?.speed);
+        marqueeTextSpeed.value = String(ts);
+        marqueeTextSpeedValue.textContent = String(ts);
       },
       () => {
         marqueeTextStatus.textContent = t("admin.snapshot.loadFail", "無法讀取頂部跑馬燈設定。");
@@ -2604,6 +2689,7 @@ function render() {
           {
             text: marqueeTextBody.value.trim(),
             enabled: marqueeTextEnabled.checked,
+            speed: clampLedSpeed(Number(marqueeTextSpeed.value)),
             updatedAt: serverTimestamp(),
           },
           { merge: true },
@@ -2646,10 +2732,23 @@ function render() {
     announcementSection.append(
       el("h3", {}, [t("admin.announce.heading", "跑馬燈公告")]),
       el("p", { class: "hint" }, [
-        t("admin.announce.intro", "頂部與底部分開設定：Firestore `siteSettings/marqueeText`、`siteSettings/marqueeLed`。"),
+        t(
+          "admin.announce.intro",
+          "頂部與底部分開設定：Firestore `siteSettings/marqueeText`、`siteSettings/marqueeLed`；兩者皆可設定捲動速度（像素／秒）。",
+        ),
       ]),
       el("h4", { class: "admin-subhead" }, [t("admin.announce.topHeading", "頂部 · 文字跑馬燈")]),
       el("label", { class: "field" }, [t("admin.announce.topLabel", "內容"), marqueeTextBody]),
+      el("label", { class: "field led-speed-field" }, [
+        t("admin.announce.speedLabel", "捲動速度"),
+        el("div", { class: "led-speed-row" }, [marqueeTextSpeed, marqueeTextSpeedValue]),
+        el("span", { class: "hint" }, [
+          t("admin.announce.speedHint", "約 {{min}}～{{max}}（數字愈大移動愈快，單位：像素／秒）。", {
+            min: LED_SPEED_MIN,
+            max: LED_SPEED_MAX,
+          }),
+        ]),
+      ]),
       el("label", { class: "field checkbox-field" }, [marqueeTextEnabled, el("span", {}, [t("admin.announce.enable", "啟用")])]),
       el("div", { class: "row-actions" }, [saveMarqueeTextBtn]),
       marqueeTextStatus,
@@ -3280,10 +3379,13 @@ function render() {
 
     function appendHiddenInvisibleRowAdmin(b: Booking) {
       const statusCell: HTMLElement =
-        b.status === "cancelled"
+        bookingIsCancelledForAdmin(b.status)
           ? el("span", { class: "admin-booking-status-readonly" }, [bookingStatusLabel("cancelled")])
-          : el("select", {}, []);
-      const sel = b.status === "cancelled" ? null : (statusCell as HTMLSelectElement);
+          : bookingIsDoneForAdmin(b)
+            ? el("span", { class: "admin-booking-status-readonly" }, [bookingStatusLabel("done")])
+            : el("select", {}, []);
+      const sel =
+        bookingIsCancelledForAdmin(b.status) || bookingIsDoneForAdmin(b) ? null : (statusCell as HTMLSelectElement);
       if (sel) {
         for (const opt of getAdminStatusSelectOptions()) {
           const o = el("option", { value: opt.value }, [opt.label]);
@@ -3319,10 +3421,10 @@ function render() {
         });
       }
       const cancelBtn = el("button", { class: "ghost", type: "button" }, [t("admin.booking.cancel", "取消")]);
-      const canAdminCancel = b.status !== "done" && b.status !== "cancelled";
+      const canAdminCancel = !bookingIsDoneForAdmin(b) && !bookingIsCancelledForAdmin(b.status);
       cancelBtn.disabled = !canAdminCancel;
       cancelBtn.title = !canAdminCancel
-        ? b.status === "done"
+        ? bookingIsDoneForAdmin(b)
           ? t("admin.booking.hideTitleDone", "已完成預約不可取消")
           : t("admin.booking.hideTitleCancelled", "已取消")
         : "";
@@ -3376,7 +3478,37 @@ function render() {
           unhideBtn.removeAttribute("disabled");
         }
       });
-      const actionCell = el("div", { class: "admin-booking-actions" }, [cancelBtn, unhideBtn]);
+      const testMailHiddenBtn = el("button", { class: "ghost", type: "button" }, [
+        t("admin.testStatusEmail.btn", "測試通知信"),
+      ]);
+      const canTestMailHidden = adminBookingCanSendMemberStatusTestEmail(b);
+      testMailHiddenBtn.disabled = !canTestMailHidden;
+      testMailHiddenBtn.title = canTestMailHidden
+        ? t(
+            "admin.testStatusEmail.title",
+            "寄一封測試用的狀態通知信到該會員信箱（不改預約；主旨與內文會標示【測試】）",
+          )
+        : t("admin.testStatusEmail.titleDisabled", "僅適用有綁定會員的預約（訪客預約不會寄發狀態信）");
+      testMailHiddenBtn.addEventListener("click", async () => {
+        if (!adminBookingCanSendMemberStatusTestEmail(b)) return;
+        hiddenBookingsStatus.textContent = t("admin.testStatusEmail.sending", "寄送測試信中…");
+        hiddenBookingsStatus.className = "status-line";
+        testMailHiddenBtn.setAttribute("disabled", "true");
+        try {
+          const fn = testSendMemberBookingStatusEmailCall();
+          const res = await fn({ bookingId: b.id, ...localeApiParam() });
+          const sentTo = (res.data as { sentTo?: string } | undefined)?.sentTo ?? "";
+          hiddenBookingsStatus.textContent = t("admin.testStatusEmail.ok", "已送出測試信至 {{email}}", { email: sentTo });
+          hiddenBookingsStatus.classList.add("ok");
+        } catch (e) {
+          hiddenBookingsStatus.textContent =
+            e instanceof Error ? e.message : t("admin.testStatusEmail.fail", "測試信寄送失敗");
+          hiddenBookingsStatus.classList.add("error");
+        } finally {
+          if (canTestMailHidden) testMailHiddenBtn.removeAttribute("disabled");
+        }
+      });
+      const actionCell = el("div", { class: "admin-booking-actions" }, [cancelBtn, unhideBtn, testMailHiddenBtn]);
       hiddenTable.append(
         el("tr", {}, [
           el("td", { class: "mono" }, [formatWhen(b)]),
@@ -3463,10 +3595,13 @@ function render() {
             continue;
           }
           const statusCell: HTMLElement =
-            b.status === "cancelled"
+            bookingIsCancelledForAdmin(b.status)
               ? el("span", { class: "admin-booking-status-readonly" }, [bookingStatusLabel("cancelled")])
-              : el("select", {}, []);
-          const sel = b.status === "cancelled" ? null : (statusCell as HTMLSelectElement);
+              : bookingIsDoneForAdmin(b)
+                ? el("span", { class: "admin-booking-status-readonly" }, [bookingStatusLabel("done")])
+                : el("select", {}, []);
+          const sel =
+            bookingIsCancelledForAdmin(b.status) || bookingIsDoneForAdmin(b) ? null : (statusCell as HTMLSelectElement);
           if (sel) {
             for (const opt of getAdminStatusSelectOptions()) {
               const o = el("option", { value: opt.value }, [opt.label]);
@@ -3501,10 +3636,10 @@ function render() {
             });
           }
           const cancelBtn = el("button", { class: "ghost", type: "button" }, [t("admin.booking.cancel", "取消")]);
-          const canAdminCancel = b.status !== "done" && b.status !== "cancelled";
+          const canAdminCancel = !bookingIsDoneForAdmin(b) && !bookingIsCancelledForAdmin(b.status);
           cancelBtn.disabled = !canAdminCancel;
           cancelBtn.title = !canAdminCancel
-            ? b.status === "done"
+            ? bookingIsDoneForAdmin(b)
               ? t("admin.booking.hideTitleDone", "已完成預約不可取消")
               : t("admin.booking.hideTitleCancelled", "已取消")
             : "";
@@ -3568,7 +3703,37 @@ function render() {
               deleteBtn.removeAttribute("disabled");
             }
           });
-          const actionCell = el("div", { class: "admin-booking-actions" }, [cancelBtn, deleteBtn]);
+          const testMailBtn = el("button", { class: "ghost", type: "button" }, [
+            t("admin.testStatusEmail.btn", "測試通知信"),
+          ]);
+          const canTestMail = adminBookingCanSendMemberStatusTestEmail(b);
+          testMailBtn.disabled = !canTestMail;
+          testMailBtn.title = canTestMail
+            ? t(
+                "admin.testStatusEmail.title",
+                "寄一封測試用的狀態通知信到該會員信箱（不改預約；主旨與內文會標示【測試】）",
+              )
+            : t("admin.testStatusEmail.titleDisabled", "僅適用有綁定會員的預約（訪客預約不會寄發狀態信）");
+          testMailBtn.addEventListener("click", async () => {
+            if (!adminBookingCanSendMemberStatusTestEmail(b)) return;
+            adminStatus.textContent = t("admin.testStatusEmail.sending", "寄送測試信中…");
+            adminStatus.className = "status-line";
+            testMailBtn.setAttribute("disabled", "true");
+            try {
+              const fn = testSendMemberBookingStatusEmailCall();
+              const res = await fn({ bookingId: b.id, ...localeApiParam() });
+              const sentTo = (res.data as { sentTo?: string } | undefined)?.sentTo ?? "";
+              adminStatus.textContent = t("admin.testStatusEmail.ok", "已送出測試信至 {{email}}", { email: sentTo });
+              adminStatus.classList.add("ok");
+            } catch (e) {
+              adminStatus.textContent =
+                e instanceof Error ? e.message : t("admin.testStatusEmail.fail", "測試信寄送失敗");
+              adminStatus.classList.add("error");
+            } finally {
+              if (canTestMail) testMailBtn.removeAttribute("disabled");
+            }
+          });
+          const actionCell = el("div", { class: "admin-booking-actions" }, [cancelBtn, deleteBtn, testMailBtn]);
           table.append(
             el("tr", {}, [
               el("td", { class: "mono" }, [formatWhen(b)]),

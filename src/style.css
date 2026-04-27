@@ -1814,7 +1814,7 @@ button.ghost:disabled {
 
 .admin-booking-actions {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: center;
 }

@@ -61,6 +61,10 @@ const EN: Record<string, string> = {
   "support.needCustomerId": "customerId is missing",
   "support.needReply": "Enter a reply",
   "support.threadMissing": "Conversation not found",
+  "testStatusEmail.guest": "Guest bookings do not receive member status emails.",
+  "testStatusEmail.noCustomer": "This booking has no linked member (customerId).",
+  "testStatusEmail.noMemberEmail": "The member account has no email in Firebase Auth.",
+  "testStatusEmail.noResendKey": "RESEND_API_KEY is not configured for this project.",
 };
 
 function applyVars(s: string, vars?: Record<string, string | number>): string {

@@ -115,10 +115,13 @@ export async function sendMemberBookingStatusChangedEmail(opts: {
   apiKey: string;
   from: string;
   locale?: EmailLocale;
+  /** 後台一鍵測試：主旨與內文標示為測試，不應宣稱已變更預約 */
+  testMode?: boolean;
   payload: MemberBookingStatusEmailPayload;
 }): Promise<void> {
   const { apiKey, from, payload } = opts;
   const loc = opts.locale === "en" ? "en" : "zh-Hant";
+  const testMode = opts.testMode === true;
   const prev =
     loc === "en"
       ? (STATUS_LABEL_EN[payload.previousStatus] ?? payload.previousStatus)
@@ -127,8 +130,29 @@ export async function sendMemberBookingStatusChangedEmail(opts: {
     loc === "en"
       ? (STATUS_LABEL_EN[payload.newStatus] ?? payload.newStatus)
       : (STATUS_LABEL_ZH[payload.newStatus] ?? payload.newStatus);
-  const lines =
-    loc === "en"
+  const lines: string[] = testMode
+    ? loc === "en"
+      ? [
+          `Hello ${payload.displayName},`,
+          "",
+          "[TEST] Sent from the admin panel (“Test status email”). Your booking was not changed.",
+          "The status line below is sample text (Pending → Confirmed) to verify inbox delivery.",
+          "",
+          `This booking’s date: ${payload.dateKey}`,
+          `Start time: ${payload.startSlot}`,
+          `Status (sample only): ${prev} → ${next}`,
+        ]
+      : [
+          `${payload.displayName} 您好，`,
+          "",
+          "【測試】此信由管理員在後台按下「測試通知信」寄出，您的預約狀態不會因此改變。",
+          "以下「狀態」為範例文案（待確認→已確認），用於確認會員信箱能否收到、版面是否正常。",
+          "",
+          `此筆預約日期：${payload.dateKey}`,
+          `開始時間：${payload.startSlot}`,
+          `狀態（僅示範）：${prev} → ${next}`,
+        ]
+    : loc === "en"
       ? [
           `Hello ${payload.displayName},`,
           "",
@@ -147,7 +171,7 @@ export async function sendMemberBookingStatusChangedEmail(opts: {
           `開始時間：${payload.startSlot}`,
           `狀態：${prev} → ${next}`,
         ];
-  if (payload.newStatus === "cancelled" && payload.cancelReason) {
+  if (!testMode && payload.newStatus === "cancelled" && payload.cancelReason) {
     lines.push("", loc === "en" ? `Cancellation note: ${payload.cancelReason}` : `取消說明：${payload.cancelReason}`);
   }
   lines.push(
@@ -160,8 +184,11 @@ export async function sendMemberBookingStatusChangedEmail(opts: {
   );
   const text = lines.join("\n");
   const resend = new Resend(apiKey);
-  const subject =
-    loc === "en"
+  const subject = testMode
+    ? loc === "en"
+      ? `[Test] Booking status email test | ${payload.dateKey} ${payload.startSlot}`
+      : `[測試] 預約狀態通知信測試｜${payload.dateKey} ${payload.startSlot}`
+    : loc === "en"
       ? `Booking update: ${next} | ${payload.dateKey} ${payload.startSlot}`
       : `預約狀態更新：${next}｜${payload.dateKey} ${payload.startSlot}`;
   const { error } = await resend.emails.send({

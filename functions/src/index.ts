@@ -753,6 +753,90 @@ export const completeBooking = onCall(publicCall, async (request) => {
   return { ok: true };
 });
 
+/** 管理員：對指定「會員預約」寄出一封測試用狀態通知信（不變更 Firestore；與正式信相同 Resend 管道） */
+export const testSendMemberBookingStatusEmail = onCall(
+  { ...publicCall, secrets: [resendApiKey] },
+  async (request) => {
+    const locale = parseLocale(request.data);
+    const uid = request.auth?.uid;
+    if (!uid) {
+      throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
+    }
+    await assertAdminByUid(uid, locale);
+
+    const bookingId = typeof request.data?.bookingId === "string" ? request.data.bookingId.trim() : "";
+    if (!bookingId) {
+      throw new HttpsError("invalid-argument", st(locale, "booking.idRequired", "bookingId 必填"));
+    }
+
+    const snap = await db.collection("bookings").doc(bookingId).get();
+    if (!snap.exists) {
+      throw new HttpsError("not-found", st(locale, "booking.notFound", "找不到預約"));
+    }
+    const data = snap.data() as Record<string, unknown>;
+    const mode = data.bookingMode;
+    if (mode === "guest_cash" || mode === "guest_beverage") {
+      throw new HttpsError("failed-precondition", st(locale, "testStatusEmail.guest", "訪客預約不會寄發會員狀態信。"));
+    }
+    const customerId = typeof data.customerId === "string" ? data.customerId.trim() : "";
+    if (!customerId) {
+      throw new HttpsError(
+        "failed-precondition",
+        st(locale, "testStatusEmail.noCustomer", "此預約未綁定會員（無 customerId），無法測試會員通知信。"),
+      );
+    }
+
+    const apiKey = resendApiKey.value().trim();
+    if (!apiKey) {
+      throw new HttpsError(
+        "failed-precondition",
+        st(locale, "testStatusEmail.noResendKey", "專案未設定 RESEND_API_KEY，無法寄信。"),
+      );
+    }
+    const from = resendFrom.value().trim() || "Massage預約 <onboarding@resend.dev>";
+
+    let to: string;
+    try {
+      const user = await getAuth().getUser(customerId);
+      to = user.email ?? "";
+    } catch (e) {
+      console.warn("testSendMemberBookingStatusEmail: getUser failed", customerId, e);
+      throw new HttpsError(
+        "failed-precondition",
+        st(locale, "testStatusEmail.noMemberEmail", "無法讀取會員帳號或該帳號沒有信箱。"),
+      );
+    }
+    if (!to) {
+      throw new HttpsError(
+        "failed-precondition",
+        st(locale, "testStatusEmail.noMemberEmail", "此會員在 Firebase Auth 沒有設定 Email，無法寄送。"),
+      );
+    }
+
+    const displayName = typeof data.displayName === "string" ? data.displayName.trim() : "";
+    const dateKey = typeof data.dateKey === "string" ? data.dateKey : "";
+    const startSlot = typeof data.startSlot === "string" ? data.startSlot : "";
+    const mailLocale = data.notificationLocale === "en" ? "en" : "zh-Hant";
+
+    await sendMemberBookingStatusChangedEmail({
+      apiKey,
+      from,
+      locale: mailLocale,
+      testMode: true,
+      payload: {
+        to,
+        displayName: displayName || (mailLocale === "en" ? "Member" : "會員"),
+        dateKey,
+        startSlot,
+        previousStatus: "pending",
+        newStatus: "confirmed",
+      },
+    });
+
+    return { ok: true as const, sentTo: to };
+  },
+);
+
 export const cancelBooking = onCall(publicCall, async (request) => {
   const locale = parseLocale(request.data);
   const uid = request.auth?.uid;

@@ -320,6 +320,15 @@ export const EN: Record<string, string> = {
   "admin.marquee.placeholderText": "Top banner e.g. Wed 15:00–16:00 closed",
   "admin.marquee.placeholderLed": "Bottom LED: can be longer, e.g. promo tagline",
 
+  "admin.testStatusEmail.btn": "Test status email",
+  "admin.testStatusEmail.title":
+    "Send one sample status email to the member (does not change the booking; subject/body marked as test)",
+  "admin.testStatusEmail.titleDisabled":
+    "Only for bookings linked to a member (guest bookings do not receive status emails)",
+  "admin.testStatusEmail.sending": "Sending test email…",
+  "admin.testStatusEmail.ok": "Test email sent to {{email}}",
+  "admin.testStatusEmail.fail": "Failed to send test email",
+
   "admin.wheelSpectacle.save": "Save wheel preview toggle",
   "admin.caps.save": "Save booking caps",
   "admin.blocks.addRow": "Add row",
@@ -344,7 +353,7 @@ export const EN: Record<string, string> = {
 
   "admin.announce.heading": "Marquee announcements",
   "admin.announce.intro":
-    "Top and bottom are configured separately in Firestore: siteSettings/marqueeText and siteSettings/marqueeLed.",
+    "Top and bottom are configured separately in Firestore: siteSettings/marqueeText and siteSettings/marqueeLed. Each supports text, enable, and scroll speed (px/s).",
   "admin.announce.topHeading": "Top · text marquee",
   "admin.announce.topLabel": "Content",
   "admin.announce.enable": "Enable",
