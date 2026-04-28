@@ -607,7 +607,7 @@ export const EN: Record<string, string> = {
   "admin.memberList.th.verified": "Email verified",
   "admin.memberList.th.uid": "UID",
   "admin.memberList.th.nickname": "Display name",
-  "admin.memberList.th.sessions": "Sessions",
+  "admin.memberList.th.sessions": "Bookable sessions",
   "admin.memberList.th.points": "Points",
   "admin.memberList.th.wallet": "Legacy cash (NTD)",
   "admin.memberList.th.draws": "Spin chances",

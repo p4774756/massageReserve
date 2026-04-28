@@ -3519,7 +3519,7 @@ function render() {
         mk(t("admin.memberList.th.verified", "信箱驗證"), "emailVerified"),
         mk(t("admin.memberList.th.uid", "UID"), "uid"),
         mk(t("admin.memberList.th.nickname", "稱呼"), "nickname"),
-        mk(t("admin.memberList.th.sessions", "預約次數"), "sessionCredits"),
+        mk(t("admin.memberList.th.sessions", "可預約次數"), "sessionCredits"),
         mk(t("admin.memberList.th.points", "點數"), "wheelPoints"),
         mk(t("admin.memberList.th.wallet", "未折抵金額"), "walletBalance"),
         mk(t("admin.memberList.th.draws", "可抽次數"), "drawChances"),
