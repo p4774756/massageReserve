@@ -25,14 +25,6 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-function fmtInt(n: number): string {
-  return Math.round(n).toLocaleString(intlLocaleTag());
-}
-
-function fmtAvg(n: number): string {
-  return n.toLocaleString(intlLocaleTag(), { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-}
-
 function taipeiTodayDateKey(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" });
 }
@@ -66,10 +58,6 @@ function taipeiMondayOfSameWeek(dateKey: string): string {
   const wd = taipeiWeekdayNumMon1Sun7(dateKey);
   if (!Number.isFinite(wd)) return dateKey;
   return addDaysTaipeiDateKey(dateKey, -(wd - 1));
-}
-
-function isMainListBooking(b: ReportBookingRow): boolean {
-  return b.status !== "deleted" && b.invisible !== true;
 }
 
 function countByStatus(bookings: ReportBookingRow[], pred: (b: ReportBookingRow) => boolean): Record<string, number> {
@@ -113,38 +101,16 @@ function paymentModeLabel(modeKey: string): string {
   return t(`booking.mode.${modeKey}`, modeKey);
 }
 
-function statCard(label: string, value: string): HTMLElement {
-  return el("div", { class: "admin-report-card" }, [
-    el("div", { class: "admin-report-card__label" }, [label]),
-    el("div", { class: "admin-report-card__value" }, [value]),
-  ]);
-}
-
-function statSection(title: string, cards: HTMLElement[]): HTMLElement {
-  const inner = el("div", { class: "admin-reports__grid" }, []);
-  for (const c of cards) inner.append(c);
-  return el("section", { class: "admin-reports__section" }, [
-    el("h4", { class: "admin-reports__section-title" }, [title]),
-    inner,
-  ]);
-}
-
 export function mountAdminReportsPanel(
   db: Firestore,
   getBookings: () => ReportBookingRow[],
 ): { root: HTMLElement; refresh: () => Promise<void> } {
   const statusLine = el("p", { class: "status-line" }, []);
   const updatedAt = el("span", { class: "admin-reports__updated hint" }, []);
-  const statsWrap = el("div", { class: "admin-reports__stats" }, []);
   const donutRow = el("div", { class: "admin-reports__donut-row" });
   const barRow = el("div", { class: "admin-reports__bar-row" });
   const polarWrap = el("div", { class: "admin-reports__polar-wrap" });
-  const flashCharts = el("div", { class: "admin-reports__charts" }, [
-    el("h4", { class: "admin-reports__section-title admin-reports__section-title--charts" }, [
-      t("admin.reports.chartsHeading", "圖表"),
-    ]),
-    el("div", { class: "admin-reports__flash" }, [donutRow, barRow, polarWrap]),
-  ]);
+  const flashCharts = el("div", { class: "admin-reports__flash" }, [donutRow, barRow, polarWrap]);
 
   const chartReg: ReportChartRegistry = { charts: [] };
 
@@ -161,7 +127,7 @@ export function mountAdminReportsPanel(
     el("div", { class: "admin-reports__details-body hint" }, [
       t(
         "admin.reports.intro",
-        "預約數字與「預約管理」分頁相同資料來源（即時快照）；訪次、心得與客服為額外讀取。下方圖表使用 Chart.js（切換至此分頁時才載入圖表程式）。若剛進後台，請待列表載入後再按重新整理。",
+        "圖表資料：預約分布與「預約管理」主列表同一快照；訪次、心得星等、客服為重新整理時額外讀取。使用 Chart.js，切換至此分頁後首次重新整理才載入圖表程式。",
       ),
     ]),
   ]);
@@ -170,21 +136,18 @@ export function mountAdminReportsPanel(
     el("p", { class: "hint admin-reports__intro-short" }, [
       t(
         "admin.reports.introShort",
-        "數字與「預約管理」主列表一致；按「重新整理」會一併讀取訪次、心得與客服。",
+        "此頁僅顯示圖表。按「重新整理」會讀取訪次、心得與客服並重繪圖表（與「預約管理」列表同一預約快照）。",
       ),
     ]),
     introDetails,
     toolbar,
     statusLine,
-    statsWrap,
     flashCharts,
   ]);
 
   async function refresh(): Promise<void> {
     statusLine.textContent = t("admin.reports.loading", "彙整中…");
     statusLine.className = "status-line";
-    statsWrap.replaceChildren();
-
     const chartMod = await import("./adminReportCharts");
     chartMod.destroyReportCharts(chartReg);
 
@@ -192,10 +155,6 @@ export function mountAdminReportsPanel(
     const weekStart = taipeiMondayOfSameWeek(today);
     const monthPrefix = today.slice(0, 7);
     const bookings = getBookings();
-
-    const total = bookings.length;
-    const mainList = bookings.filter(isMainListBooking);
-    const hiddenOrDeleted = total - mainList.length;
 
     const notDeleted = (b: ReportBookingRow) => b.status !== "deleted";
 
@@ -212,9 +171,6 @@ export function mountAdminReportsPanel(
         getDocs(collection(db, "supportThreads")),
       ]);
 
-      let dayVisits = "—";
-      let weekVisits = "—";
-      let totalVisits = "—";
       let dayVisitsN = 0;
       let weekVisitsN = 0;
       let totalVisitsN = 0;
@@ -222,31 +178,23 @@ export function mountAdminReportsPanel(
         const v = visitorSnap.data() as Record<string, unknown>;
         if (typeof v.dayVisits === "number") {
           dayVisitsN = v.dayVisits;
-          dayVisits = fmtInt(v.dayVisits);
         }
         if (typeof v.weekVisits === "number") {
           weekVisitsN = v.weekVisits;
-          weekVisits = fmtInt(v.weekVisits);
         }
         if (typeof v.totalVisits === "number") {
           totalVisitsN = v.totalVisits;
-          totalVisits = fmtInt(v.totalVisits);
         }
       }
 
       const starCounts: [number, number, number, number, number] = [0, 0, 0, 0, 0];
-      let gbCount = 0;
-      let gbSum = 0;
       for (const d of guestSnap.docs) {
         const r = d.data() as { rating?: unknown };
         if (typeof r.rating === "number" && Number.isFinite(r.rating)) {
-          gbCount += 1;
-          gbSum += r.rating;
           const ri = Math.round(r.rating);
           if (ri >= 1 && ri <= 5) starCounts[ri - 1] += 1;
         }
       }
-      const gbAvg = gbCount > 0 ? fmtAvg(gbSum / gbCount) : "—";
 
       let thOpen = 0;
       let thClosed = 0;
@@ -255,32 +203,6 @@ export function mountAdminReportsPanel(
         if (st === "closed") thClosed += 1;
         else thOpen += 1;
       }
-
-      statsWrap.append(
-        statSection(t("admin.reports.section.list", "預約文件與列表"), [
-          statCard(t("admin.reports.card.totalDocs", "預約文件總數"), fmtInt(total)),
-          statCard(t("admin.reports.card.mainList", "主列表筆數"), fmtInt(mainList.length)),
-          statCard(t("admin.reports.card.hiddenDeleted", "封存／已刪除"), fmtInt(hiddenOrDeleted)),
-        ]),
-        statSection(t("admin.reports.section.volume", "預約量（依日期區間）"), [
-          statCard(t("admin.reports.vol.today", "今日（曆日）"), fmtInt(todayBookings.length)),
-          statCard(t("admin.reports.vol.week", "本週（週一起算）"), fmtInt(weekBookings.length)),
-          statCard(t("admin.reports.vol.month", "本月"), fmtInt(monthBookings.length)),
-        ]),
-        statSection(t("admin.reports.section.visits", "網站訪次"), [
-          statCard(t("admin.reports.visit.today", "今日"), dayVisits),
-          statCard(t("admin.reports.visit.week", "本週"), weekVisits),
-          statCard(t("admin.reports.visit.total", "累計"), totalVisits),
-        ]),
-        statSection(t("admin.reports.section.guestbook", "心得與評價"), [
-          statCard(t("admin.reports.gb.count", "則數"), fmtInt(gbCount)),
-          statCard(t("admin.reports.gb.avgStars", "平均星等"), gbAvg),
-        ]),
-        statSection(t("admin.reports.section.support", "客服對話"), [
-          statCard(t("admin.reports.sup.open", "進行中"), fmtInt(thOpen)),
-          statCard(t("admin.reports.sup.closed", "已結束"), fmtInt(thClosed)),
-        ]),
-      );
 
       const statusSorted = Object.entries(countByStatus(bookings, () => true)).sort((a, b) => b[1] - a[1]);
       const modeSorted = Object.entries(countByMode(bookings, notDeleted)).sort((a, b) => b[1] - a[1]);

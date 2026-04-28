@@ -491,14 +491,13 @@ export const EN: Record<string, string> = {
   "admin.memberTab.list": "Member list",
 
   "admin.reports.introShort":
-    "Numbers match the main Bookings list. “Refresh report” also loads visits, guestbook, and support.",
+    "This tab shows charts only. “Refresh report” loads visits, guestbook, and support, then redraws charts (same booking snapshot as Bookings).",
   "admin.reports.detailsSummary": "Where this data comes from / chart notes",
   "admin.reports.section.list": "Booking files & lists",
   "admin.reports.section.volume": "Bookings by date range",
   "admin.reports.section.visits": "Site visits",
   "admin.reports.section.guestbook": "Guestbook",
   "admin.reports.section.support": "Support chat",
-  "admin.reports.chartsHeading": "Charts",
   "admin.reports.vol.today": "Today (calendar day)",
   "admin.reports.vol.week": "This week (Mon–Sun)",
   "admin.reports.vol.month": "This month",
@@ -511,7 +510,7 @@ export const EN: Record<string, string> = {
   "admin.reports.sup.closed": "Closed",
 
   "admin.reports.intro":
-    "Booking figures use the same live snapshot as the Bookings tab. Visitor counts, guestbook, and support threads are read separately. Charts (Chart.js) load when you open this tab: doughnuts for status, payment mode, and support; bar charts for booking volume and visits; polar area for guestbook stars. Wait for the booking list to load, then refresh the report.",
+    "Charts: booking mix uses the same live snapshot as the Bookings tab. Visitor counters, guestbook star counts, and support threads are read when you refresh. Chart.js loads on first refresh after opening this tab: doughnuts for status, payment mode, and support; bar charts for booking volume and visits; polar area for guestbook stars.",
   "admin.reports.refresh": "Refresh report",
   "admin.reports.loading": "Crunching numbers…",
   "admin.reports.ok": "Report updated.",
