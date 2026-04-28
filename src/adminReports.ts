@@ -127,7 +127,7 @@ export function mountAdminReportsPanel(
     el("div", { class: "admin-reports__details-body hint" }, [
       t(
         "admin.reports.intro",
-        "圖表資料：預約分布與「預約管理」主列表同一快照；訪次、心得星等、客服為重新整理時額外讀取。使用 Chart.js，切換至此分頁後首次重新整理才載入圖表程式。",
+        "圖表資料：預約分布與「預約管理」主列表同一快照；訪次、心得星等、客服為重新整理時額外讀取。使用 ECharts（含 echarts-gl 3D 長條），切換至此分頁後首次重新整理才載入圖表程式。",
       ),
     ]),
   ]);

@@ -820,7 +820,7 @@ function render() {
       redeemPointsStatus.hidden = true;
       return;
     }
-    redeemPointsStatus.hidden = redeemPointsStatus.textContent.length === 0;
+    redeemPointsStatus.hidden = (redeemPointsStatus.textContent ?? "").length === 0;
     if (wheelPointsCount >= pointsPerMassageSetting) redeemPointsBtn.removeAttribute("disabled");
     else redeemPointsBtn.setAttribute("disabled", "true");
   }

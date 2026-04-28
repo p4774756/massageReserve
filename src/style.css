@@ -2060,15 +2060,19 @@ tbody tr:hover td {
   min-height: 200px;
 }
 
-.admin-report-chart-card__canvas {
-  display: block;
-  width: 100% !important;
-  height: 220px !important;
+.admin-report-chart-card__echarts {
+  width: 100%;
+  height: 240px;
   max-height: 48vh;
+  min-height: 200px;
 }
 
-.admin-report-chart-card__canvas--polar {
-  height: 280px !important;
+.admin-report-chart-card__echarts--gl {
+  height: 260px;
+}
+
+.admin-report-chart-card__echarts--radar {
+  height: 300px;
 }
 
 .admin-report-chart-card__empty {

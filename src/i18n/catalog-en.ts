@@ -510,7 +510,7 @@ export const EN: Record<string, string> = {
   "admin.reports.sup.closed": "Closed",
 
   "admin.reports.intro":
-    "Charts: booking mix uses the same live snapshot as the Bookings tab. Visitor counters, guestbook star counts, and support threads are read when you refresh. Chart.js loads on first refresh after opening this tab: doughnuts for status, payment mode, and support; bar charts for booking volume and visits; polar area for guestbook stars.",
+    "Charts: booking mix uses the same live snapshot as the Bookings tab. Visitor counters, guestbook star counts, and support threads are read when you refresh. ECharts (with echarts-gl for 3D bars) loads on first refresh after opening this tab: pies for status, payment mode, and support; 3D bars for booking volume and visits; radar for guestbook stars.",
   "admin.reports.refresh": "Refresh report",
   "admin.reports.loading": "Crunching numbers…",
   "admin.reports.ok": "Report updated.",
@@ -545,6 +545,8 @@ export const EN: Record<string, string> = {
   "admin.reports.chart.donutMode": "Payment mode",
   "admin.reports.chart.donutSupport": "Support threads",
   "admin.reports.chart.polarStars": "Guestbook · polar (1–5 stars)",
+  "admin.reports.chart.radarStars": "Guestbook · radar (1–5 stars)",
+  "admin.reports.chart.radarSeriesName": "Posts",
   "admin.reports.chart.star1": "1 star",
   "admin.reports.chart.star2": "2 stars",
   "admin.reports.chart.star3": "3 stars",
