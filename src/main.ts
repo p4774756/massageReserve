@@ -755,6 +755,32 @@ function render() {
   });
   const bookStatus = el("div", { class: "status-line book-submit-status", role: "status", ariaLive: "polite" });
   const meta = el("div", { class: "meta-pills" });
+  /** 未選日期時顯示；選定日期後改為依步驟顯示時段／結帳區 */
+  const bookProgressHint = el("p", { class: "hint book-progress-hint" }, [
+    t("booking.pickSlotFirst", "先選擇日期後，會顯示可選時段與名額。"),
+  ]);
+  const slotFieldWrap = el(
+    "div",
+    { class: "grid" },
+    [
+      el("label", { class: "field" }, [
+        t("field.startSlot", "開始時間（15 分鐘一格）"),
+        slotSelect,
+        el("span", { class: "hint" }, [
+          t("field.startSlotHint", "開始時間為 15 分鐘一格；單次服務約15~50分鐘, 看情況."),
+        ]),
+      ]),
+    ],
+  );
+  const bookThenFinalizeHint = el("p", { class: "hint book-then-finalize-hint", hidden: true }, [
+    t("booking.thenFinalize", "選定開始時間後，將顯示付款方式、備註與送出按鈕。"),
+  ]);
+  const slotStepSection = el("div", { class: "book-step book-step--slots" }, [
+    slotFieldWrap,
+    scheduleStatus,
+    meta,
+    bookThenFinalizeHint,
+  ]);
   const bookFooterNote = el("div", { class: "footer-note" });
   bookFooterNote.textContent = t(
     "booking.rulesFooterDefault",
@@ -772,6 +798,21 @@ function render() {
   const spinBtn = el("button", { class: "ghost", type: "button" }, [t("booking.spinWheel", "抽輪盤")]);
   /** 僅登入後顯示：餘額／抽輪盤（訪客預約不需此區） */
   const memberExtrasWrap = el("div", { class: "book-member-extras", hidden: true });
+  const finalizeSection = el("div", { class: "book-step book-step--finalize" }, [
+    el("div", { class: "grid" }, [
+      el("label", { class: "field" }, [t("field.payment", "付款方式"), bookingModeSelect, bookingModeHint]),
+    ]),
+    memberExtrasWrap,
+    el("div", { class: "grid" }, [
+      el("label", { class: "field" }, [
+        t("field.note", "備註（選填）"),
+        noteInput,
+        el("span", { class: "hint" }, [t("field.noteHint", "可填寫需求，例如：頭痛、背部痠痛、腿部需要按壓等")]),
+      ]),
+    ]),
+    el("div", { class: "row-actions" }, [submitBtn]),
+    bookStatus,
+  ]);
   const emailVerifyBanner = el("div", { class: "email-verify-banner", hidden: true });
   const emailVerifyText = el("p", { class: "hint" }, []);
   const resendVerifyBtn = el("button", { class: "ghost", type: "button" }, [
@@ -1747,7 +1788,46 @@ function render() {
     }
   }
 
+  /** 當日／本工作週名額已滿時後端會停用所有時段；隱藏時段選單以免以為還能選時間 */
+  let bookingCapacityBlocksSlots = false;
+  /** 查詢空檔中：隱藏整段開始時間 UI，避免長下拉或舊資料閃現 */
+  let bookingAvailabilityLoading = false;
+
+  /** 依日期／時段顯示「時段＋名額」區與「付款＋備註＋送出」區，減少一進頁的視覺負擔 */
+  function syncBookingStepVisibility() {
+    const dk = dateInput.value;
+    const minKey = taipeiTodayDateKey();
+    const maxKey = taipeiLatestBookableDateKey();
+    const inWindow = dk !== "" && dk >= minKey && dk <= maxKey;
+    const weekdayOk = dk !== "" && isDateKeyMonFri(dk);
+    const showSlotFields = inWindow && weekdayOk;
+
+    const pickable =
+      !slotSelect.disabled &&
+      Array.from(slotSelect.options).some((o) => o.value !== "" && !o.disabled);
+    const hideStartTimeRow =
+      !showSlotFields ||
+      bookingCapacityBlocksSlots ||
+      bookingAvailabilityLoading ||
+      (showSlotFields && !bookingAvailabilityLoading && !pickable);
+
+    bookProgressHint.hidden = dk !== "";
+    slotStepSection.hidden = dk === "";
+    slotFieldWrap.hidden = hideStartTimeRow;
+
+    const slotPicked = Boolean(slotSelect.value);
+    finalizeSection.hidden = !slotPicked || !showSlotFields;
+    bookThenFinalizeHint.hidden = !(
+      showSlotFields &&
+      pickable &&
+      !slotPicked &&
+      !bookingAvailabilityLoading &&
+      !bookingCapacityBlocksSlots
+    );
+  }
+
   refillSlots(new Set(), true, "", new Map());
+  syncBookingStepVisibility();
 
   async function refreshBookingPricing() {
     try {
@@ -1767,110 +1847,129 @@ function render() {
   }
 
   async function refreshAvailability() {
-    scheduleStatus.textContent = "";
-    scheduleStatus.className = "status-line schedule-status";
-    meta.innerHTML = "";
-    const dk = dateInput.value;
-    if (!dk) {
-      refillSlots(new Set(), true, "", new Map());
-      meta.append(
-        el("span", { class: "pill" }, [t("booking.pickSlotFirst", "先選擇日期後，會顯示可選時段與名額")]),
-      );
-      return;
-    }
-
-    const minKey = taipeiTodayDateKey();
-    const maxKey = taipeiLatestBookableDateKey();
-    dateInput.min = minKey;
-    dateInput.max = maxKey;
-    if (dk < minKey) {
-      refillSlots(new Set(), true, "", new Map());
-      scheduleStatus.textContent = t("booking.datePast", "不可選擇今天以前的日期。");
-      scheduleStatus.classList.add("error");
-      dateInput.value = "";
-      return;
-    }
-
-    if (dk > maxKey) {
-      refillSlots(new Set(), true, "", new Map());
-      scheduleStatus.textContent = t("booking.dateBeyond", "僅能預約至下週日為止。");
-      scheduleStatus.classList.add("error");
-      dateInput.value = "";
-      return;
-    }
-
-    if (!isDateKeyMonFri(dk)) {
-      refillSlots(new Set(), true, dk, new Map());
-      scheduleStatus.textContent = t("booking.weekdayOnly", "僅能預約週一到週五。");
-      scheduleStatus.classList.add("error");
-      return;
-    }
-
     try {
-      const fn = getAvailabilityCall();
-      const res = await fn({ dateKey: dk, ...localeApiParam() });
-      const data = res.data as {
-        taken: string[];
-        blockedSlots?: { startSlot: string; reason?: string }[];
-        dayCount: number;
-        weekCount: number;
-        dayCap: number;
-        weekCap: number;
-      };
-      const taken = new Set(data.taken);
-      const dayFull = data.dayCount >= data.dayCap;
-      const weekFull = data.weekCount >= data.weekCap;
-      const blocked = dayFull || weekFull;
-      const blockedMap = new Map<string, string>();
-      for (const b of data.blockedSlots ?? []) {
-        if (b && typeof b.startSlot === "string") {
-          blockedMap.set(b.startSlot, typeof b.reason === "string" ? b.reason : "");
-        }
+      bookingCapacityBlocksSlots = false;
+      bookingAvailabilityLoading = false;
+      scheduleStatus.textContent = "";
+      scheduleStatus.className = "status-line schedule-status";
+      meta.innerHTML = "";
+      const dk = dateInput.value;
+      if (!dk) {
+        refillSlots(new Set(), true, "", new Map());
+        return;
       }
 
-      setBookFooterFromCaps(data.dayCap, data.weekCap);
-      refillSlots(taken, blocked, dk, blockedMap);
-      const weekMon = taipeiMondayOfSameWeek(dk);
-      const weekFri = addDaysTaipeiDateKey(weekMon, 4);
-      meta.append(
-        el("span", { class: "pill" }, [
-          t("booking.metaDay", "當日已預約 "),
-          el("strong", {}, [String(data.dayCount)]),
-          ` / ${data.dayCap}`,
-        ]),
-        el("span", { class: "pill" }, [
-          t("booking.metaWeek", "本工作週已預約 "),
-          el("strong", {}, [String(data.weekCount)]),
-          ` / ${data.weekCap}`,
-        ]),
-        el("div", { class: "meta-pills-note" }, [
-          t("booking.metaNoteLead", "「當日」＝您所選的這一天："),
-          el("strong", {}, [dateKeyLabelTaipei(dk)]),
-          t("booking.metaNoteMid", "。「本工作週」＝該日所屬曆週之週一至週五："),
-          el("strong", {}, [dateKeyLabelTaipei(weekMon)]),
-          "～",
-          el("strong", {}, [dateKeyLabelTaipei(weekFri)]),
-          t("booking.metaNoteTail", "（週一與後端 "),
-          el("code", {}, [t("booking.metaNoteCode", "weekStart")]),
-          t("booking.metaNoteEnd", " 相同，名額為該曆週內有效預約合計）。"),
-        ]),
-      );
-      if (dayFull) {
-        scheduleStatus.textContent = t("booking.dayFull", "這一天已額滿。");
+      const minKey = taipeiTodayDateKey();
+      const maxKey = taipeiLatestBookableDateKey();
+      dateInput.min = minKey;
+      dateInput.max = maxKey;
+      if (dk < minKey) {
+        refillSlots(new Set(), true, "", new Map());
+        scheduleStatus.textContent = t("booking.datePast", "不可選擇今天以前的日期。");
         scheduleStatus.classList.add("error");
-      } else if (weekFull) {
-        scheduleStatus.textContent = t("booking.weekFull", "本工作週已達上限。");
-        scheduleStatus.classList.add("error");
+        dateInput.value = "";
+        return;
       }
-    } catch (e) {
-      console.error(e);
-      refillSlots(new Set(), true, dk, new Map());
-      scheduleStatus.textContent = t("booking.loadSlotsFail", "無法載入空檔，請稍後再試。");
-      scheduleStatus.classList.add("error");
+
+      if (dk > maxKey) {
+        refillSlots(new Set(), true, "", new Map());
+        scheduleStatus.textContent = t("booking.dateBeyond", "僅能預約至下週日為止。");
+        scheduleStatus.classList.add("error");
+        dateInput.value = "";
+        return;
+      }
+
+      if (!isDateKeyMonFri(dk)) {
+        refillSlots(new Set(), true, dk, new Map());
+        scheduleStatus.textContent = t("booking.weekdayOnly", "僅能預約週一到週五。");
+        scheduleStatus.classList.add("error");
+        return;
+      }
+
+      try {
+        bookingAvailabilityLoading = true;
+        scheduleStatus.textContent = t("booking.slotsLoading", "正在載入可預約時段…");
+        scheduleStatus.className = "status-line schedule-status";
+        syncBookingStepVisibility();
+        const fn = getAvailabilityCall();
+        const res = await fn({ dateKey: dk, ...localeApiParam() });
+        const data = res.data as {
+          taken: string[];
+          blockedSlots?: { startSlot: string; reason?: string }[];
+          dayCount: number;
+          weekCount: number;
+          dayCap: number;
+          weekCap: number;
+        };
+        const taken = new Set(data.taken);
+        const dayFull = data.dayCount >= data.dayCap;
+        const weekFull = data.weekCount >= data.weekCap;
+        const blocked = dayFull || weekFull;
+        bookingCapacityBlocksSlots = blocked;
+        const blockedMap = new Map<string, string>();
+        for (const b of data.blockedSlots ?? []) {
+          if (b && typeof b.startSlot === "string") {
+            blockedMap.set(b.startSlot, typeof b.reason === "string" ? b.reason : "");
+          }
+        }
+
+        setBookFooterFromCaps(data.dayCap, data.weekCap);
+        refillSlots(taken, blocked, dk, blockedMap);
+        const weekMon = taipeiMondayOfSameWeek(dk);
+        const weekFri = addDaysTaipeiDateKey(weekMon, 4);
+        meta.append(
+          el("span", { class: "pill" }, [
+            t("booking.metaDay", "當日已預約 "),
+            el("strong", {}, [String(data.dayCount)]),
+            ` / ${data.dayCap}`,
+          ]),
+          el("span", { class: "pill" }, [
+            t("booking.metaWeek", "本工作週已預約 "),
+            el("strong", {}, [String(data.weekCount)]),
+            ` / ${data.weekCap}`,
+          ]),
+          el("div", { class: "meta-pills-note" }, [
+            t("booking.metaNoteLead", "「當日」＝您所選的這一天："),
+            el("strong", {}, [dateKeyLabelTaipei(dk)]),
+            t("booking.metaNoteMid", "。「本工作週」＝該日所屬曆週之週一至週五："),
+            el("strong", {}, [dateKeyLabelTaipei(weekMon)]),
+            "～",
+            el("strong", {}, [dateKeyLabelTaipei(weekFri)]),
+            t("booking.metaNoteTail", "（週一與後端 "),
+            el("code", {}, [t("booking.metaNoteCode", "weekStart")]),
+            t("booking.metaNoteEnd", " 相同，名額為該曆週內有效預約合計）。"),
+          ]),
+        );
+        if (dayFull) {
+          scheduleStatus.textContent = t("booking.dayFull", "這一天已額滿。");
+          scheduleStatus.classList.add("error");
+        } else if (weekFull) {
+          scheduleStatus.textContent = t("booking.weekFull", "本工作週已達上限。");
+          scheduleStatus.classList.add("error");
+        } else {
+          scheduleStatus.textContent = "";
+          scheduleStatus.className = "status-line schedule-status";
+          const hasPickable = Array.from(slotSelect.options).some((o) => o.value !== "" && !o.disabled);
+          if (!hasPickable) {
+            scheduleStatus.textContent = t("booking.noPickableSlot", "當日已無可選的開始時間。");
+            scheduleStatus.classList.add("error");
+          }
+        }
+      } catch (e) {
+        console.error(e);
+        refillSlots(new Set(), true, dk, new Map());
+        scheduleStatus.textContent = t("booking.loadSlotsFail", "無法載入空檔，請稍後再試。");
+        scheduleStatus.classList.add("error");
+      } finally {
+        bookingAvailabilityLoading = false;
+      }
+    } finally {
+      syncBookingStepVisibility();
     }
   }
 
   dateInput.addEventListener("change", refreshAvailability);
+  slotSelect.addEventListener("change", syncBookingStepVisibility);
 
   submitBtn.addEventListener("click", async () => {
     bookStatus.textContent = "";
@@ -2132,28 +2231,9 @@ function render() {
         el("span", { class: "hint" }, [t("field.dateHint", "最遠僅開放至本週曆之下週日（台北）；更後的日期無法選取。")]),
       ]),
     ]),
-    el("div", { class: "grid" }, [
-      el("label", { class: "field" }, [
-        t("field.startSlot", "開始時間（15 分鐘一格）"),
-        slotSelect,
-        el("span", { class: "hint" }, [t("field.startSlotHint", "開始時間為 15 分鐘一格；單次服務約15~50分鐘, 看情況.")]),
-      ]),
-    ]),
-    scheduleStatus,
-    el("div", { class: "grid" }, [
-      el("label", { class: "field" }, [t("field.payment", "付款方式"), bookingModeSelect, bookingModeHint]),
-    ]),
-    memberExtrasWrap,
-    meta,
-    el("div", { class: "grid" }, [
-      el("label", { class: "field" }, [
-        t("field.note", "備註（選填）"),
-        noteInput,
-        el("span", { class: "hint" }, [t("field.noteHint", "可填寫需求，例如：頭痛、背部痠痛、腿部需要按壓等")]),
-      ]),
-    ]),
-    el("div", { class: "row-actions" }, [submitBtn]),
-    bookStatus,
+    bookProgressHint,
+    slotStepSection,
+    finalizeSection,
     bookFooterNote,
   );
 

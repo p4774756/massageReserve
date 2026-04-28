@@ -665,6 +665,32 @@ main.panel[hidden] {
   display: none !important;
 }
 
+.book-progress-hint {
+  margin: 0;
+}
+
+.book-step[hidden] {
+  display: none !important;
+}
+
+.book-step--slots {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.book-step--finalize {
+  display: flex;
+  flex-direction: column;
+  gap: var(--section-gap);
+  min-width: 0;
+}
+
+.book-then-finalize-hint {
+  margin: 0;
+}
+
 .book-tab-panel--guestbook .guestbook-mount {
   margin-top: 0;
   padding-top: 0;
@@ -678,6 +704,11 @@ main.panel[hidden] {
 .grid {
   display: grid;
   gap: 22px;
+}
+
+/* 與 main.panel[hidden] 相同：author .grid 會蓋過 [hidden]，預約「開始時間」外包 div.grid 須強制隱藏 */
+.grid[hidden] {
+  display: none !important;
 }
 
 /** 預約表單：姓名＋日期雙欄頂對齊，避免右欄被左欄說明文字撐高後留白不整齊 */
