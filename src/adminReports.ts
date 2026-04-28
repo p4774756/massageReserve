@@ -109,8 +109,7 @@ export function mountAdminReportsPanel(
   const updatedAt = el("span", { class: "admin-reports__updated hint" }, []);
   const donutRow = el("div", { class: "admin-reports__donut-row" });
   const barRow = el("div", { class: "admin-reports__bar-row" });
-  const polarWrap = el("div", { class: "admin-reports__polar-wrap" });
-  const flashCharts = el("div", { class: "admin-reports__flash" }, [donutRow, barRow, polarWrap]);
+  const flashCharts = el("div", { class: "admin-reports__flash" }, [donutRow, barRow]);
 
   const chartReg: ReportChartRegistry = { charts: [] };
 
@@ -127,7 +126,7 @@ export function mountAdminReportsPanel(
     el("div", { class: "admin-reports__details-body hint" }, [
       t(
         "admin.reports.intro",
-        "圖表資料：預約分布與「預約管理」主列表同一快照；訪次、心得星等、客服為重新整理時額外讀取。使用 ECharts（含 echarts-gl 3D 長條），切換至此分頁後首次重新整理才載入圖表程式。",
+        "圖表資料：預約分布與「預約管理」主列表同一快照；訪次與客服為重新整理時額外讀取。使用 ECharts（含 echarts-gl 3D 長條），切換至此分頁後首次重新整理才載入圖表程式。",
       ),
     ]),
   ]);
@@ -136,7 +135,7 @@ export function mountAdminReportsPanel(
     el("p", { class: "hint admin-reports__intro-short" }, [
       t(
         "admin.reports.introShort",
-        "此頁僅顯示圖表。按「重新整理」會讀取訪次、心得與客服並重繪圖表（與「預約管理」列表同一預約快照）。",
+        "此頁僅顯示圖表。按「重新整理」會讀取訪次與客服並重繪圖表（與「預約管理」列表同一預約快照）。",
       ),
     ]),
     introDetails,
@@ -165,9 +164,8 @@ export function mountAdminReportsPanel(
     refreshBtn.setAttribute("disabled", "true");
 
     try {
-      const [visitorSnap, guestSnap, threadSnap] = await Promise.all([
+      const [visitorSnap, threadSnap] = await Promise.all([
         getDoc(doc(db, "siteStats", "visitorCounters")),
-        getDocs(collection(db, "guestbookPosts")),
         getDocs(collection(db, "supportThreads")),
       ]);
 
@@ -187,15 +185,6 @@ export function mountAdminReportsPanel(
         }
       }
 
-      const starCounts: [number, number, number, number, number] = [0, 0, 0, 0, 0];
-      for (const d of guestSnap.docs) {
-        const r = d.data() as { rating?: unknown };
-        if (typeof r.rating === "number" && Number.isFinite(r.rating)) {
-          const ri = Math.round(r.rating);
-          if (ri >= 1 && ri <= 5) starCounts[ri - 1] += 1;
-        }
-      }
-
       let thOpen = 0;
       let thClosed = 0;
       for (const d of threadSnap.docs) {
@@ -207,15 +196,7 @@ export function mountAdminReportsPanel(
       const statusSorted = Object.entries(countByStatus(bookings, () => true)).sort((a, b) => b[1] - a[1]);
       const modeSorted = Object.entries(countByMode(bookings, notDeleted)).sort((a, b) => b[1] - a[1]);
 
-      const starLabels: [string, string, string, string, string] = [
-        t("admin.reports.chart.star1", "1 星"),
-        t("admin.reports.chart.star2", "2 星"),
-        t("admin.reports.chart.star3", "3 星"),
-        t("admin.reports.chart.star4", "4 星"),
-        t("admin.reports.chart.star5", "5 星"),
-      ];
-
-      await chartMod.renderFlashReportCharts(donutRow, barRow, polarWrap, chartReg, {
+      await chartMod.renderFlashReportCharts(donutRow, barRow, chartReg, {
         statusLabels: statusSorted.map(([k]) => bookingStatusLabel(k)),
         statusValues: statusSorted.map(([, v]) => v),
         modeLabels: modeSorted.map(([k]) => paymentModeLabel(k)),
@@ -234,8 +215,6 @@ export function mountAdminReportsPanel(
           t("admin.reports.chart.labelTotal", "累計"),
         ],
         visitsBarValues: [dayVisitsN, weekVisitsN, totalVisitsN],
-        starLabels,
-        starValues: [...starCounts],
       });
 
       statusLine.textContent = t("admin.reports.ok", "報表已更新。");

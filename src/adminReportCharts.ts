@@ -107,20 +107,16 @@ export type FlashChartsInput = {
   bookingBarValues: number[];
   visitsBarLabels: string[];
   visitsBarValues: number[];
-  starLabels: string[];
-  starValues: number[];
 };
 
 export async function renderFlashReportCharts(
   donutRow: HTMLElement,
   barRow: HTMLElement,
-  polarWrap: HTMLElement,
   reg: ReportChartRegistry,
   data: FlashChartsInput,
 ): Promise<void> {
   donutRow.replaceChildren();
   barRow.replaceChildren();
-  polarWrap.replaceChildren();
 
   const font = chartFontFamily();
 
@@ -277,40 +273,4 @@ export async function renderFlashReportCharts(
     data.visitsBarLabels,
     data.visitsBarValues,
   );
-
-  const radarCard = chartCard(t("admin.reports.chart.radarStars", "心得星等 · 雷達圖"));
-  polarWrap.append(radarCard.card);
-  const starSum = data.starValues.reduce((a, b) => a + b, 0);
-  if (starSum === 0) {
-    radarCard.body.append(
-      el("p", { class: "hint admin-report-chart-card__empty" }, [t("admin.reports.chart.starsEmpty", "尚無心得或無星等資料")]),
-    );
-    return;
-  }
-  const host = el("div", { class: "admin-report-chart-card__echarts admin-report-chart-card__echarts--radar" });
-  radarCard.body.append(host);
-  const chart = echarts.init(host, undefined, { renderer: "canvas" });
-  const maxR = Math.max(...data.starValues, 1) + Math.ceil(Math.max(...data.starValues, 1) * 0.25);
-  chart.setOption({
-    textStyle: { fontFamily: font },
-    animationDuration: 800,
-    color: pickColors(5),
-    tooltip: { trigger: "item" },
-    radar: {
-      indicator: data.starLabels.map((name) => ({ name, max: maxR })),
-      splitLine: { lineStyle: { color: "rgba(0,0,0,0.08)" } },
-      splitArea: { show: true, areaStyle: { color: ["rgba(0,0,0,0.02)", "rgba(0,0,0,0.04)"] } },
-      axisName: { fontFamily: font, fontSize: 11, color: "#444" },
-    },
-    series: [
-      {
-        type: "radar",
-        areaStyle: { opacity: 0.22 },
-        lineStyle: { width: 2 },
-        symbolSize: 6,
-        data: [{ value: [...data.starValues], name: t("admin.reports.chart.radarSeriesName", "心得則數") }],
-      },
-    ],
-  });
-  pushChart(reg, chart, radarCard.body);
 }

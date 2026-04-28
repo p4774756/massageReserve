@@ -287,7 +287,7 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
   const scopeNote = el("p", { class: "hint admin-scope-banner admin-scope-banner--support" }, [
     t(
       "supportUi.adminScopeNote",
-      "此為非公開一對一私訊（不會出現在預約頁心得板）；公開心得回覆請用同一主分頁內的「心得回覆」子分頁。",
+      "此為非公開一對一私訊，僅管理後台與該會員／訪客可見。",
     ),
   ]);
   const hint = el("p", { class: "hint" }, [

@@ -638,7 +638,7 @@ main.panel[hidden] {
   display: none !important;
 }
 
-/* 預約主面板：預約表單與心得留言分頁 */
+/* 預約主面板：預約表單等分頁 */
 .book-tabs {
   display: flex;
   flex-direction: row;
@@ -689,12 +689,6 @@ main.panel[hidden] {
 
 .book-then-finalize-hint {
   margin: 0;
-}
-
-.book-tab-panel--guestbook .guestbook-mount {
-  margin-top: 0;
-  padding-top: 0;
-  border-top: none;
 }
 
 .book-tab-panel--my-bookings .my-bookings {
@@ -1370,10 +1364,6 @@ tbody tr:hover td {
   align-items: stretch;
 }
 
-.admin-reports__polar-wrap {
-  min-width: 0;
-}
-
 .admin-report-chart-card {
   position: relative;
   border: 1px solid var(--border);
@@ -1411,10 +1401,6 @@ tbody tr:hover td {
 
 .admin-report-chart-card__echarts--gl {
   height: 260px;
-}
-
-.admin-report-chart-card__echarts--radar {
-  height: 300px;
 }
 
 .admin-report-chart-card__empty {
@@ -3014,193 +3000,6 @@ body.wheel-spectacle-lock {
   font-weight: 400;
 }
 
-/* --- 心得留言板（Firestore guestbookPosts） --- */
-.guestbook-mount {
-  margin-top: var(--section-gap);
-  padding-top: var(--section-gap);
-  border-top: 1px solid var(--border);
-}
-
-.guestbook__title {
-  margin: 0 0 8px;
-  font-size: 1.15rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-.guestbook__intro {
-  margin: 0 0 18px;
-}
-
-.guestbook-list {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin-bottom: 22px;
-}
-
-.guestbook-empty {
-  margin: 0 0 16px;
-}
-
-.guestbook-empty.error {
-  color: var(--danger);
-}
-
-.guestbook-card {
-  margin: 0;
-  padding: 14px 16px;
-  background: var(--surface-muted);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: none;
-}
-
-.guestbook-card__head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 14px;
-  margin-bottom: 10px;
-}
-
-.guestbook-stars {
-  display: inline-flex;
-  gap: 2px;
-  line-height: 1;
-}
-
-.guestbook-stars--static .guestbook-star {
-  font-size: 1rem;
-  color: var(--border-strong);
-}
-
-.guestbook-stars--static .guestbook-star--on {
-  color: #c4a000;
-}
-
-.guestbook-stars--pick {
-  gap: 4px;
-}
-
-.guestbook-star-btn {
-  margin: 0;
-  padding: 4px 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  font: inherit;
-  font-size: 1.25rem;
-  line-height: 1;
-  color: var(--border-strong);
-  cursor: pointer;
-  transition: color 0.12s var(--ease), border-color 0.12s var(--ease), background 0.12s var(--ease);
-}
-
-.guestbook-star-btn:hover {
-  border-color: var(--border-strong);
-  color: #a68b00;
-}
-
-.guestbook-star-btn--on {
-  color: #c4a000;
-  border-color: rgb(196 160 0 / 0.45);
-  background: rgb(196 160 0 / 0.08);
-}
-
-.guestbook-rating-field {
-  display: grid;
-  gap: 8px;
-}
-
-.guestbook-rating-label {
-  font-weight: 500;
-  font-size: 0.875rem;
-  color: var(--ink);
-}
-
-.guestbook-card__name {
-  font-weight: 600;
-  font-size: 0.92rem;
-}
-
-.guestbook-card__time {
-  font-size: 0.8rem;
-  color: var(--muted);
-  margin-left: auto;
-}
-
-.guestbook-card__text {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-size: 0.9rem;
-  line-height: 1.55;
-}
-
-.guestbook-card__reply {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-}
-
-.guestbook-card__reply-label {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--muted);
-  margin-bottom: 4px;
-}
-
-.guestbook-card__reply-time {
-  display: block;
-  font-size: 0.75rem;
-  color: var(--muted);
-  margin-bottom: 6px;
-}
-
-.guestbook-card__reply-text {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-size: 0.88rem;
-  line-height: 1.5;
-  color: var(--ink);
-}
-
-.guestbook-write {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.guestbook-guest-gate {
-  padding: 14px 16px;
-  border-radius: var(--radius);
-  border: 1px dashed var(--border-strong);
-  background: var(--surface-muted);
-}
-
-.guestbook-guest-gate .hint {
-  margin: 0 0 12px;
-}
-
-.guestbook-textarea {
-  width: 100%;
-  min-height: 96px;
-  resize: vertical;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  font: inherit;
-  font-size: 0.9rem;
-}
-
-.guestbook-composer {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
 /* --- 客服對話（Firestore supportThreads） --- */
 .book-support-chat {
   margin-top: var(--section-gap);
@@ -3540,23 +3339,6 @@ body.wheel-spectacle-lock {
   margin-top: 4px;
   word-break: break-all;
   font-size: 0.82rem;
-}
-
-.admin-guestbook-post-meta {
-  margin-top: 6px;
-}
-
-.admin-guestbook-post-text {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-size: 0.9rem;
-  line-height: 1.55;
-}
-
-.admin-guestbook-actions {
-  flex-wrap: wrap;
-  gap: 8px;
 }
 
 @media (prefers-reduced-motion: reduce) {

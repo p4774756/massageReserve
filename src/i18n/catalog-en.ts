@@ -22,10 +22,8 @@ export const EN: Record<string, string> = {
   "booking.mode.member_beverage": "Member · drink credit",
 
   "book.tabsAria":
-    "Massage booking, my bookings (when signed in), reviews, and wheel tab (when signed in)",
+    "Massage booking, my bookings (when signed in), and wheel tab (when signed in)",
   "book.tab.booking": "Book massage",
-  "book.tab.guestbook": "Reviews",
-  "guestbook.shopReply": "Shop reply",
   "book.tab.wheel": "Wheel",
   "book.tab.myBookings": "My bookings",
 
@@ -445,42 +443,19 @@ export const EN: Record<string, string> = {
   "admin.tab.hidden": "Archived bookings",
   "admin.tab.members": "Members & top-up",
   "admin.tab.announce": "Front page & rules",
-  "admin.tab.engage": "Support & guestbook",
-  "admin.tab.support": "Support chat",
-  "admin.tab.guestbook": "Guestbook replies",
+  "admin.tab.engage": "Support",
   "admin.tab.reports": "Reports",
-
-  "adminGuestbook.title": "Guestbook · shop replies",
-  "adminGuestbook.intro":
-    "Latest reviews (same data as the booking page). Pick one to write a single public shop reply; it appears under that review on the booking page. Clear removes the public reply.",
-  "adminGuestbook.listAria": "Guestbook list",
-  "adminGuestbook.listHead": "Reviews",
-  "adminGuestbook.pickPost": "Select a review on the left.",
-  "adminGuestbook.replyLabel": "Public shop reply",
-  "adminGuestbook.replyPh": "Thanks for visiting… (shown under the review on the booking page)",
-  "adminGuestbook.save": "Save reply",
-  "adminGuestbook.clear": "Clear public reply",
-  "adminGuestbook.needText": "Enter reply text, or use “Clear public reply”.",
-  "adminGuestbook.clearedOk": "Public reply cleared.",
-  "adminGuestbook.savedOk": "Saved. The booking page will show this reply.",
-  "adminGuestbook.saveFail": "Save failed",
-  "adminGuestbook.clearConfirm": "Clear this public reply?",
-  "adminGuestbook.empty": "No guestbook posts yet.",
-  "adminGuestbook.guestName": "Guest",
-  "adminGuestbook.hasReply": "Replied",
-  "adminGuestbook.listFail": "Could not load guestbook",
 
   "admin.memberTab.create": "Create account",
   "admin.memberTab.wallet": "Top up",
   "admin.memberTab.list": "Member list",
 
   "admin.reports.introShort":
-    "This tab shows charts only. “Refresh report” loads visits, guestbook, and support, then redraws charts (same booking snapshot as Bookings).",
+    "This tab shows charts only. “Refresh report” loads visits and support, then redraws charts (same booking snapshot as Bookings).",
   "admin.reports.detailsSummary": "Where this data comes from / chart notes",
   "admin.reports.section.list": "Booking files & lists",
   "admin.reports.section.volume": "Bookings by date range",
   "admin.reports.section.visits": "Site visits",
-  "admin.reports.section.guestbook": "Guestbook",
   "admin.reports.section.support": "Support chat",
   "admin.reports.vol.today": "Today (calendar day)",
   "admin.reports.vol.week": "This week (Mon–Sun)",
@@ -488,13 +463,11 @@ export const EN: Record<string, string> = {
   "admin.reports.visit.today": "Today",
   "admin.reports.visit.week": "This week",
   "admin.reports.visit.total": "All time",
-  "admin.reports.gb.count": "Posts",
-  "admin.reports.gb.avgStars": "Avg. stars",
   "admin.reports.sup.open": "Open",
   "admin.reports.sup.closed": "Closed",
 
   "admin.reports.intro":
-    "Charts: booking mix uses the same live snapshot as the Bookings tab. Visitor counters, guestbook star counts, and support threads are read when you refresh. ECharts (with echarts-gl for 3D bars) loads on first refresh after opening this tab: pies for status, payment mode, and support; 3D bars for booking volume and visits; radar for guestbook stars.",
+    "Charts: booking mix uses the same live snapshot as the Bookings tab. Visitor counters and support threads are read when you refresh. ECharts (with echarts-gl for 3D bars) loads on first refresh after opening this tab: pies for status, payment mode, and support; 3D bars for booking volume and visits.",
   "admin.reports.refresh": "Refresh report",
   "admin.reports.loading": "Crunching numbers…",
   "admin.reports.ok": "Report updated.",
@@ -510,8 +483,6 @@ export const EN: Record<string, string> = {
   "admin.reports.card.visitsToday": "Site visits · today",
   "admin.reports.card.visitsWeek": "Site visits · this week",
   "admin.reports.card.visitsTotal": "Site visits · all time",
-  "admin.reports.card.guestbookCount": "Guestbook posts",
-  "admin.reports.card.guestbookAvg": "Guestbook avg. stars",
   "admin.reports.card.supportOpen": "Support threads · open",
   "admin.reports.card.supportClosed": "Support threads · closed",
 
@@ -524,19 +495,9 @@ export const EN: Record<string, string> = {
   "admin.reports.chart.supportEmpty": "No support threads yet.",
   "admin.reports.chart.legendOpen": "Open",
   "admin.reports.chart.legendClosed": "Closed",
-  "admin.reports.chart.starsEmpty": "No guestbook ratings yet.",
   "admin.reports.chart.donutStatus": "Booking status",
   "admin.reports.chart.donutMode": "Payment mode",
   "admin.reports.chart.donutSupport": "Support threads",
-  "admin.reports.chart.polarStars": "Guestbook · polar (1–5 stars)",
-  "admin.reports.chart.radarStars": "Guestbook · radar (1–5 stars)",
-  "admin.reports.chart.radarSeriesName": "Posts",
-  "admin.reports.chart.star1": "1 star",
-  "admin.reports.chart.star2": "2 stars",
-  "admin.reports.chart.star3": "3 stars",
-  "admin.reports.chart.star4": "4 stars",
-  "admin.reports.chart.star5": "5 stars",
-
   "admin.hidden.intro":
     "Archived from the Bookings sub-tab’s main list, or legacy “deleted” in the database. Caps and slots still follow real status (only affects admin list). 10 per page — use Previous/Next below.",
 
@@ -633,7 +594,7 @@ export const EN: Record<string, string> = {
 
   "admin.backTitle": "Admin",
   "admin.backSubtitle":
-    "Use tabs: bookings & archive (sub-tabs: main list / archived), members & top-up, front page & booking rules, support & guestbook (sub-tabs: chat / replies), reports.",
+    "Use tabs: bookings & archive (sub-tabs: main list / archived), members & top-up, front page & booking rules, support, reports.",
 
   "booking.rulesFooter":
     "Rules: max {{dayCap}} same day, max {{weekCap}} same work week; cancelled do not count toward caps.",
@@ -677,7 +638,7 @@ export const EN: Record<string, string> = {
   "supportUi.failList": "Could not load thread list",
   "supportUi.adminTitle": "Support chat",
   "supportUi.adminScopeNote":
-    "Private one-to-one chat (not shown on the booking guestbook). For public replies under reviews, use the “Guestbook replies” sub-tab in the same admin tab.",
+    "Private one-to-one chat — visible only in admin and to that member or guest.",
   "supportUi.adminIntroA":
     "Left: member threads with tabs for Open vs Closed, each sorted by recent update. Select one to reply on the right. Firestore: ",
   "supportUi.threadListTabsAria": "Thread status tabs",

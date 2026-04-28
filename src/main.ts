@@ -20,7 +20,6 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
-import { mountAdminGuestbook, type AdminGuestbookUnmount } from "./adminGuestbook";
 import { mountAdminReportsPanel } from "./adminReports";
 import {
   cancelBookingCall,
@@ -47,7 +46,6 @@ import {
   adjustSessionCreditsAdminCall,
   grantDrawChancesAdminCall,
 } from "./firebase";
-import { mountGuestbook } from "./guestbook";
 import { mountMusicMiniPlayer } from "./musicPlayer";
 import { attachMusicMiniPlayerFloatDrag } from "./musicMiniPlayerFloatDock";
 import { mountAdminSupportChat, mountMemberSupportChat, type SupportChatUnmount } from "./supportChat";
@@ -2171,24 +2169,18 @@ function render() {
     }
   });
 
-  const guestbookMount = el("div", { class: "guestbook-mount" });
-  mountGuestbook(db, auth, guestbookMount);
-
-  let bookSubTab: "book" | "guestbook" | "wheel" | "mybookings" = "book";
+  let bookSubTab: "book" | "wheel" | "mybookings" = "book";
 
   const bookTabList = el("div", { class: "book-tabs", role: "tablist" });
   bookTabList.setAttribute(
     "aria-label",
     t(
       "book.tabsAria",
-      "預約按摩、我的預約、心得與評價、抽輪盤（「我的預約／抽輪盤」於登入會員後顯示）",
+      "預約按摩、我的預約、抽輪盤（「我的預約／抽輪盤」於登入會員後顯示）",
     ),
   );
   const tabBook = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-book" }, [
     t("book.tab.booking", "預約按摩"),
-  ]);
-  const tabGuestbook = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-guestbook" }, [
-    t("book.tab.guestbook", "心得與評價"),
   ]);
   const tabWheel = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-wheel" }, [
     t("book.tab.wheel", "抽輪盤"),
@@ -2197,20 +2189,17 @@ function render() {
     t("book.tab.myBookings", "我的預約"),
   ]);
   tabBook.setAttribute("aria-controls", "book-tab-panel-book");
-  tabGuestbook.setAttribute("aria-controls", "book-tab-panel-guestbook");
   tabWheel.setAttribute("aria-controls", "book-tab-panel-wheel");
   tabMyBookings.setAttribute("aria-controls", "book-tab-panel-my-bookings");
   tabBook.setAttribute("aria-selected", "true");
-  tabGuestbook.setAttribute("aria-selected", "false");
   tabWheel.setAttribute("aria-selected", "false");
   tabMyBookings.setAttribute("aria-selected", "false");
   tabBook.tabIndex = 0;
-  tabGuestbook.tabIndex = -1;
   tabWheel.tabIndex = -1;
   tabMyBookings.tabIndex = -1;
   tabMyBookings.hidden = memberExtrasWrap.hidden;
   tabWheel.hidden = memberExtrasWrap.hidden;
-  bookTabList.append(tabBook, tabMyBookings, tabGuestbook, tabWheel);
+  bookTabList.append(tabBook, tabMyBookings, tabWheel);
 
   const bookPanelBook = el("div", {
     class: "book-tab-panel",
@@ -2237,15 +2226,6 @@ function render() {
     bookFooterNote,
   );
 
-  const bookPanelGuestbook = el("div", {
-    class: "book-tab-panel book-tab-panel--guestbook",
-    id: "book-tab-panel-guestbook",
-    role: "tabpanel",
-    hidden: true,
-  });
-  bookPanelGuestbook.setAttribute("aria-labelledby", "book-tab-guestbook");
-  bookPanelGuestbook.append(guestbookMount);
-
   const bookPanelWheel = el("div", {
     class: "book-tab-panel book-tab-panel--wheel",
     id: "book-tab-panel-wheel",
@@ -2264,23 +2244,19 @@ function render() {
   bookPanelMyBookings.setAttribute("aria-labelledby", "book-tab-my-bookings");
   bookPanelMyBookings.append(myBookingsSection);
 
-  function setBookSubTab(which: "book" | "guestbook" | "wheel" | "mybookings") {
+  function setBookSubTab(which: "book" | "wheel" | "mybookings") {
     bookSubTab = which;
     tabBook.setAttribute("aria-selected", String(which === "book"));
-    tabGuestbook.setAttribute("aria-selected", String(which === "guestbook"));
     tabWheel.setAttribute("aria-selected", String(which === "wheel"));
     tabMyBookings.setAttribute("aria-selected", String(which === "mybookings"));
     tabBook.tabIndex = which === "book" ? 0 : -1;
-    tabGuestbook.tabIndex = which === "guestbook" ? 0 : -1;
     tabWheel.tabIndex = which === "wheel" ? 0 : -1;
     tabMyBookings.tabIndex = which === "mybookings" ? 0 : -1;
     bookPanelBook.hidden = which !== "book";
-    bookPanelGuestbook.hidden = which !== "guestbook";
     bookPanelWheel.hidden = which !== "wheel";
     bookPanelMyBookings.hidden = which !== "mybookings";
   }
   tabBook.addEventListener("click", () => setBookSubTab("book"));
-  tabGuestbook.addEventListener("click", () => setBookSubTab("guestbook"));
   tabWheel.addEventListener("click", () => setBookSubTab("wheel"));
   tabMyBookings.addEventListener("click", () => setBookSubTab("mybookings"));
 
@@ -2299,7 +2275,6 @@ function render() {
   panelBook.append(
     bookTabList,
     bookPanelBook,
-    bookPanelGuestbook,
     bookPanelWheel,
     bookPanelMyBookings,
   );
@@ -2319,7 +2294,6 @@ function render() {
   let adminBookingCapsUnsub: (() => void) | null = null;
   let adminBookingBlocksUnsub: (() => void) | null = null;
   let adminSupportChatUnmount: SupportChatUnmount | null = null;
-  let adminGuestbookUnmount: AdminGuestbookUnmount | null = null;
 
   function stopAdminListener() {
     if (adminUnsub) {
@@ -2353,10 +2327,6 @@ function render() {
     if (adminSupportChatUnmount) {
       adminSupportChatUnmount();
       adminSupportChatUnmount = null;
-    }
-    if (adminGuestbookUnmount) {
-      adminGuestbookUnmount();
-      adminGuestbookUnmount = null;
     }
   }
 
@@ -4085,7 +4055,7 @@ function render() {
     ]);
     tabAnnounce.id = "admin-tab-trigger-announce";
     const tabEngage = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
-      t("admin.tab.engage", "客服與心得"),
+      t("admin.tab.engage", "客服"),
     ]);
     tabEngage.id = "admin-tab-trigger-engage";
     const tabReports = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
@@ -4191,74 +4161,6 @@ function render() {
     });
     panelAnnounceEl.setAttribute("aria-labelledby", "admin-tab-trigger-announce");
 
-    const subEngageSupport = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
-      t("admin.tab.support", "客服對話"),
-    ]);
-    subEngageSupport.id = "admin-engage-subtab-support";
-    const subEngageGuestbook = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
-      t("admin.tab.guestbook", "心得回覆"),
-    ]);
-    subEngageGuestbook.id = "admin-engage-subtab-guestbook";
-
-    const panelEngageSupportSub = el("div", {
-      class: "admin-tab-panel admin-member-subpanel",
-      role: "tabpanel",
-      id: "admin-engage-subpanel-support",
-    });
-    panelEngageSupportSub.setAttribute("aria-labelledby", "admin-engage-subtab-support");
-    const adminSupportChatHost = el("div", { class: "admin-support-chat-host" });
-    panelEngageSupportSub.append(adminSupportChatHost);
-    adminSupportChatUnmount = mountAdminSupportChat(db, auth, adminSupportChatHost);
-
-    const panelEngageGuestbookSub = el("div", {
-      class: "admin-tab-panel admin-member-subpanel",
-      role: "tabpanel",
-      id: "admin-engage-subpanel-guestbook",
-      hidden: true,
-    });
-    panelEngageGuestbookSub.setAttribute("aria-labelledby", "admin-engage-subtab-guestbook");
-    const adminGuestbookHost = el("div", { class: "admin-guestbook-host" });
-    panelEngageGuestbookSub.append(adminGuestbookHost);
-    adminGuestbookUnmount = mountAdminGuestbook(db, auth, adminGuestbookHost);
-
-    subEngageSupport.setAttribute("aria-controls", "admin-engage-subpanel-support");
-    subEngageGuestbook.setAttribute("aria-controls", "admin-engage-subpanel-guestbook");
-    const engageSubTablist = el("div", { class: "admin-tabs admin-member-subtabs", role: "tablist" });
-    engageSubTablist.append(subEngageSupport, subEngageGuestbook);
-    const engageSubPanelsWrap = el("div", { class: "admin-member-subpanels" });
-    engageSubPanelsWrap.append(panelEngageSupportSub, panelEngageGuestbookSub);
-
-    const engageSubTabButtons = [subEngageSupport, subEngageGuestbook] as const;
-    const engageSubTabPanels = [panelEngageSupportSub, panelEngageGuestbookSub] as const;
-
-    function selectEngageSubTab(index: 0 | 1) {
-      engageSubTabButtons.forEach((btn, i) => {
-        const on = i === index;
-        btn.setAttribute("aria-selected", String(on));
-        btn.classList.toggle("is-active", on);
-        btn.tabIndex = on ? 0 : -1;
-      });
-      engageSubTabPanels.forEach((panel, i) => {
-        panel.hidden = i !== index;
-        panel.classList.toggle("is-active", i === index);
-      });
-    }
-
-    subEngageSupport.addEventListener("click", () => selectEngageSubTab(0));
-    subEngageGuestbook.addEventListener("click", () => selectEngageSubTab(1));
-    engageSubTablist.addEventListener("keydown", (ev) => {
-      if (ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;
-      ev.preventDefault();
-      const cur = engageSubTabButtons.findIndex((b) => b.getAttribute("aria-selected") === "true");
-      if (cur < 0) return;
-      const delta = ev.key === "ArrowRight" ? 1 : -1;
-      const n = engageSubTabButtons.length;
-      const next = ((cur + delta) % n + n) % n;
-      selectEngageSubTab(next as 0 | 1);
-      engageSubTabButtons[next].focus();
-    });
-    selectEngageSubTab(0);
-
     const panelEngageEl = el("div", {
       class: "admin-tab-panel",
       role: "tabpanel",
@@ -4266,7 +4168,9 @@ function render() {
       hidden: true,
     });
     panelEngageEl.setAttribute("aria-labelledby", "admin-tab-trigger-engage");
-    panelEngageEl.append(engageSubTablist, engageSubPanelsWrap);
+    const adminSupportChatHost = el("div", { class: "admin-support-chat-host" });
+    panelEngageEl.append(adminSupportChatHost);
+    adminSupportChatUnmount = mountAdminSupportChat(db, auth, adminSupportChatHost);
 
     const panelReportsEl = el("div", {
       class: "admin-tab-panel",
@@ -4736,7 +4640,7 @@ function render() {
         )
       : t(
           "admin.backSubtitle",
-          "以分頁切換：預約與封存（內含預約管理／封存的預約）、會員與儲值、前台與預約規則、客服與心得（內含客服對話／心得回覆）、報表。",
+          "以分頁切換：預約與封存（內含預約管理／封存的預約）、會員與儲值、前台與預約規則、客服、報表。",
         );
     document.title = isBook ? t("meta.docTitle", "辦公室按摩預約") : t("admin.backTitle", "管理後台");
     panelBook.hidden = !isBook;
