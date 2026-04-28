@@ -91,6 +91,15 @@ function asPositiveInteger(v: unknown): number | null {
   return n;
 }
 
+/** 管理員調整可預約次數：非零整數，絕對值上限與贈送抽獎次數一致 */
+function asNonZeroSessionAdjustDelta(v: unknown, maxAbs: number): number | null {
+  if (typeof v !== "number" || !Number.isFinite(v)) return null;
+  const n = Math.trunc(v);
+  if (n === 0 || n !== v) return null;
+  if (Math.abs(n) > maxAbs) return null;
+  return n;
+}
+
 function asNonNegativeInteger(v: unknown): number {
   if (typeof v !== "number" || !Number.isFinite(v)) return 0;
   const n = Math.trunc(v);
@@ -704,6 +713,119 @@ export const topupWallet = onCall(publicCall, async (request) => {
   });
 
   return { ok: true };
+});
+
+const MAX_ADMIN_SESSION_ADJUST = 50;
+const ADMIN_SESSION_NOTE_MIN = 3;
+const ADMIN_SESSION_NOTE_MAX = 500;
+
+/**
+ * 管理員：調整會員「可預約次數」（可增可減）。先依定價折疊 walletBalance→sessionCredits，再套用增減；
+ * 寫入 walletTransactions（type: admin_session_adjust）供稽核。
+ */
+export const adjustSessionCreditsAdmin = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
+  const operatorUid = request.auth?.uid;
+  if (!operatorUid) {
+    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
+  }
+  await assertAdminByUid(operatorUid, locale);
+
+  const customerIdRaw = typeof request.data?.customerId === "string" ? request.data.customerId.trim() : "";
+  const noteRaw = typeof request.data?.note === "string" ? request.data.note.trim() : "";
+  const deltaCandidate = request.data?.sessionsDelta ?? request.data?.delta;
+  const sessionsDelta = asNonZeroSessionAdjustDelta(deltaCandidate, MAX_ADMIN_SESSION_ADJUST);
+
+  if (!customerIdRaw) {
+    throw new HttpsError("invalid-argument", st(locale, "topup.needId", "請填入會員識別（Email 或 UID）"));
+  }
+  if (!sessionsDelta) {
+    throw new HttpsError(
+      "invalid-argument",
+      st(
+        locale,
+        "adjustSessions.deltaRange",
+        "調整次數須為非零整數，且絕對值不可超過 {{max}}。",
+        { max: MAX_ADMIN_SESSION_ADJUST },
+      ),
+    );
+  }
+  if (noteRaw.length < ADMIN_SESSION_NOTE_MIN) {
+    throw new HttpsError(
+      "invalid-argument",
+      st(locale, "adjustSessions.noteTooShort", "備註至少 {{min}} 字，請簡述原因以利稽核。", { min: ADMIN_SESSION_NOTE_MIN }),
+    );
+  }
+  if (noteRaw.length > ADMIN_SESSION_NOTE_MAX) {
+    throw new HttpsError(
+      "invalid-argument",
+      st(locale, "adjustSessions.noteTooLong", "備註不可超過 {{max}} 字。", { max: ADMIN_SESSION_NOTE_MAX }),
+    );
+  }
+
+  const customerId = await resolveCustomerUidForTopup(customerIdRaw, locale);
+  const customerRef = db.collection("customers").doc(customerId);
+  const walletTxRef = db.collection("walletTransactions").doc();
+  const pricingRef = db.collection("siteSettings").doc("pricing");
+
+  let nextSessionCredits = 0;
+  await db.runTransaction(async (tx) => {
+    const [pricingSnap, customerSnap] = await Promise.all([tx.get(pricingRef), tx.get(customerRef)]);
+    const sessionPriceNtd = resolveSessionPriceNtd(pricingSnap.data());
+
+    const walletBalanceRaw = customerSnap.exists ? customerSnap.get("walletBalance") : 0;
+    const sessionCreditsRaw = customerSnap.exists ? customerSnap.get("sessionCredits") : 0;
+    const drawChancesRaw = customerSnap.exists ? customerSnap.get("drawChances") : 0;
+    const wheelPointsRaw = customerSnap.exists ? customerSnap.get("wheelPoints") : 0;
+
+    let walletBalance = typeof walletBalanceRaw === "number" ? walletBalanceRaw : 0;
+    let sessionCredits = typeof sessionCreditsRaw === "number" ? sessionCreditsRaw : 0;
+    const drawChances = typeof drawChancesRaw === "number" ? drawChancesRaw : 0;
+    const wheelPoints = typeof wheelPointsRaw === "number" ? wheelPointsRaw : 0;
+
+    const folded = foldWalletBalanceIntoSessions(walletBalance, sessionCredits, sessionPriceNtd);
+    walletBalance = folded.walletBalance;
+    sessionCredits = folded.sessionCredits;
+
+    const proposed = sessionCredits + sessionsDelta;
+    if (proposed < 0) {
+      throw new HttpsError(
+        "failed-precondition",
+        st(
+          locale,
+          "adjustSessions.insufficient",
+          "調整後可預約次數不可為負。目前可扣次數為 {{have}}，本次變更為 {{delta}}。",
+          { have: sessionCredits, delta: sessionsDelta },
+        ),
+      );
+    }
+    nextSessionCredits = proposed;
+
+    tx.set(
+      customerRef,
+      {
+        walletBalance,
+        sessionCredits: nextSessionCredits,
+        drawChances,
+        wheelPoints,
+        updatedAt: FieldValueOrServerTimestamp(),
+      },
+      { merge: true },
+    );
+
+    tx.set(walletTxRef, {
+      customerId,
+      type: "admin_session_adjust",
+      amount: 0,
+      sessionsDelta,
+      sessionPriceSnapshot: sessionPriceNtd,
+      note: noteRaw,
+      operatorId: operatorUid,
+      createdAt: FieldValueOrServerTimestamp(),
+    });
+  });
+
+  return { ok: true as const, sessionCredits: nextSessionCredits };
 });
 
 const MAX_ADMIN_DRAW_GRANT = 50;

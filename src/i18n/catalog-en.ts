@@ -305,6 +305,17 @@ export const EN: Record<string, string> = {
   "admin.topup.amountInt": "Top-up amount must be a positive integer.",
   "admin.topup.processing": "Processing top-up…",
   "admin.topup.ok": "Top-up successful",
+  "admin.adjustSessions.heading": "Adjust bookable session count (+/−)",
+  "admin.adjustSessions.hint":
+    "Uses the same member field as top-up. Change the bookable session balance by a non-zero integer (−50 to +50 per request). Wallet balance is folded into bookable sessions at the current session price before applying. Writes walletTransactions (type: admin_session_adjust).",
+  "admin.adjustSessions.deltaLabel": "Bookable sessions delta (−50…+50, e.g. −2 to deduct two)",
+  "admin.adjustSessions.noteLabel": "Reason (required, 3–500 characters)",
+  "admin.adjustSessions.notePlaceholder": "e.g. Walk-in 2 sessions on site, no booking",
+  "admin.adjustSessions.btn": "Apply bookable-session adjustment",
+  "admin.adjustSessions.badDelta": "Delta must be a non-zero integer with absolute value at most 50.",
+  "admin.adjustSessions.noteShort": "Reason must be at least 3 characters.",
+  "admin.adjustSessions.processing": "Applying…",
+  "admin.adjustSessions.ok": "Updated. Member now has {{sessions}} bookable session(s).",
   "admin.grantDraw.heading": "Grant wheel spin chances",
   "admin.grantDraw.hint":
     "Uses the same member field as above; does not change wallet balance or session credits. Up to 50 per request. Writes walletTransactions (type: admin_grant_draw) for audit.",

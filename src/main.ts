@@ -44,6 +44,7 @@ import {
   listActiveWheelPrizesCall,
   seedWheelPrizesCall,
   topupWalletCall,
+  adjustSessionCreditsAdminCall,
   grantDrawChancesAdminCall,
 } from "./firebase";
 import { mountGuestbook } from "./guestbook";
@@ -2373,7 +2374,7 @@ function render() {
     top.append(who, outBtn);
 
     const adminStatus = el("div", { class: "status-line" });
-    const walletTopupSection = el("div", { class: "admin-announce" }, []);
+    const walletTopupSection = el("div", { class: "admin-announce admin-announce--wallet" }, []);
     const accountCreateSection = el("div", { class: "admin-announce" }, []);
     const topupCustomerId = el("input", {
       type: "text",
@@ -2447,6 +2448,16 @@ function render() {
     });
     const topupBtn = el("button", { class: "ghost", type: "button" }, [t("admin.topup.btn", "儲值")]);
     const topupStatus = el("div", { class: "status-line" });
+    const adjustSessionDelta = el("input", { type: "number", value: "-1", min: "-50", max: "50", step: "1" });
+    const adjustSessionNote = el("input", {
+      type: "text",
+      maxLength: 500,
+      placeholder: t("admin.adjustSessions.notePlaceholder", "例：現場 walk-in 2 次，無預約紀錄"),
+    });
+    const adjustSessionBtn = el("button", { class: "ghost", type: "button" }, [
+      t("admin.adjustSessions.btn", "調整可預約次數"),
+    ]);
+    const adjustSessionStatus = el("div", { class: "status-line" });
     const grantDrawDelta = el("input", { type: "number", value: "1", min: "1", max: "50", step: "1" });
     const grantDrawNote = el("input", {
       type: "text",
@@ -2547,6 +2558,52 @@ function render() {
         topupStatus.classList.add("error");
       } finally {
         topupBtn.removeAttribute("disabled");
+      }
+    });
+    adjustSessionBtn.addEventListener("click", async () => {
+      adjustSessionStatus.textContent = "";
+      adjustSessionStatus.className = "status-line";
+      const customerId = topupCustomerId.value.trim();
+      const sessionsDelta = Number(adjustSessionDelta.value);
+      const note = adjustSessionNote.value.trim();
+      if (!customerId) {
+        adjustSessionStatus.textContent = t("admin.topup.needId", "請輸入會員 Email 或 UID。");
+        adjustSessionStatus.classList.add("error");
+        return;
+      }
+      if (
+        !Number.isFinite(sessionsDelta) ||
+        sessionsDelta === 0 ||
+        !Number.isInteger(sessionsDelta) ||
+        Math.abs(sessionsDelta) > 50
+      ) {
+        adjustSessionStatus.textContent = t(
+          "admin.adjustSessions.badDelta",
+          "調整量須為非零整數，且絕對值不可超過 50。",
+        );
+        adjustSessionStatus.classList.add("error");
+        return;
+      }
+      if (note.length < 3) {
+        adjustSessionStatus.textContent = t("admin.adjustSessions.noteShort", "備註至少 3 字，請簡述原因。");
+        adjustSessionStatus.classList.add("error");
+        return;
+      }
+      adjustSessionBtn.setAttribute("disabled", "true");
+      adjustSessionStatus.textContent = t("admin.adjustSessions.processing", "處理中…");
+      try {
+        const fn = adjustSessionCreditsAdminCall();
+        const res = await fn({ customerId, sessionsDelta, note, ...localeApiParam() });
+        const data = res.data as { sessionCredits?: number };
+        adjustSessionStatus.textContent = t("admin.adjustSessions.ok", "已更新，該會員目前可預約次數為 {{sessions}} 次。", {
+          sessions: typeof data.sessionCredits === "number" ? data.sessionCredits : "—",
+        });
+        adjustSessionStatus.classList.add("ok");
+      } catch (e) {
+        adjustSessionStatus.textContent = errorMessage(e);
+        adjustSessionStatus.classList.add("error");
+      } finally {
+        adjustSessionBtn.removeAttribute("disabled");
       }
     });
     grantDrawBtn.addEventListener("click", async () => {
@@ -3159,19 +3216,25 @@ function render() {
       blockPlay,
       blockRules,
     );
-    walletTopupSection.append(
-      el("h3", {}, [t("admin.pricing.heading", "定價與點數兌換")]),
-      el("p", { class: "hint" }, [
-        t("admin.pricing.hint", "影響訪客／會員現金預約所示金額、舊儲值金折次數之單價、以及輪盤點數幾點可換 1 次。Firestore："),
-        el("code", {}, ["siteSettings/pricing"]),
-        t("admin.pricing.hintEnd", "。"),
-      ]),
-      el("div", { class: "grid grid-2" }, [
-        el("label", { class: "field" }, [t("admin.pricing.sessionPrice", "現場單次金額（元）"), pricingSessionPriceInput]),
-        el("label", { class: "field" }, [t("admin.pricing.pointsPer", "幾點換 1 次按摩"), pricingPointsPerInput]),
-      ]),
-      el("div", { class: "row-actions" }, [savePricingBtn]),
-      pricingAdminStatus,
+    const walletSegmentPricing = el(
+      "section",
+      { class: "admin-announce__wallet-segment admin-announce__wallet-segment--pricing" },
+      [
+        el("h3", {}, [t("admin.pricing.heading", "定價與點數兌換")]),
+        el("p", { class: "hint" }, [
+          t("admin.pricing.hint", "影響訪客／會員現金預約所示金額、舊儲值金折次數之單價、以及輪盤點數幾點可換 1 次。Firestore："),
+          el("code", {}, ["siteSettings/pricing"]),
+          t("admin.pricing.hintEnd", "。"),
+        ]),
+        el("div", { class: "grid grid-2" }, [
+          el("label", { class: "field" }, [t("admin.pricing.sessionPrice", "現場單次金額（元）"), pricingSessionPriceInput]),
+          el("label", { class: "field" }, [t("admin.pricing.pointsPer", "幾點換 1 次按摩"), pricingPointsPerInput]),
+        ]),
+        el("div", { class: "row-actions" }, [savePricingBtn]),
+        pricingAdminStatus,
+      ],
+    );
+    const walletSegmentTopup = el("section", { class: "admin-announce__wallet-segment admin-announce__wallet-segment--topup" }, [
       el("h3", {}, [t("admin.wallet.heading", "會員儲值")]),
       el("label", { class: "field" }, [t("admin.wallet.memberLabel", "會員（Email 或 UID）"), topupTypeaheadWrap]),
       el("div", { class: "hint" }, [t("admin.wallet.searchHint", "輸入至少 2 個字元會顯示符合的 Email；亦可直接貼上 UID。")]),
@@ -3180,18 +3243,34 @@ function render() {
       el("label", { class: "field" }, [t("admin.wallet.note", "備註（選填）"), topupNote]),
       el("div", { class: "row-actions" }, [topupBtn]),
       topupStatus,
+    ]);
+    const walletSegmentAdjust = el("section", { class: "admin-announce__wallet-segment admin-announce__wallet-segment--adjust" }, [
+      el("h4", { class: "admin-subhead" }, [t("admin.adjustSessions.heading", "調整可預約次數（增／減）")]),
+      el("p", { class: "hint" }, [
+        t(
+          "admin.adjustSessions.hint",
+          "與上方「會員」同一欄位。每次可增減 −50～+50（非零整數）；會先依「現場單次金額」把儲值金餘額折成「可預約次數」再套用。寫入 walletTransactions（type：admin_session_adjust）供稽核。",
+        ),
+      ]),
+      el("label", { class: "field" }, [t("admin.adjustSessions.deltaLabel", "可預約次數增減（−50～+50，扣點填負數）"), adjustSessionDelta]),
+      el("label", { class: "field" }, [t("admin.adjustSessions.noteLabel", "備註（必填，3～500 字）"), adjustSessionNote]),
+      el("div", { class: "row-actions" }, [adjustSessionBtn]),
+      adjustSessionStatus,
+    ]);
+    const walletSegmentGrant = el("section", { class: "admin-announce__wallet-segment admin-announce__wallet-segment--grant" }, [
       el("h4", { class: "admin-subhead" }, [t("admin.grantDraw.heading", "贈送輪盤抽獎次數")]),
       el("p", { class: "hint" }, [
         t(
           "admin.grantDraw.hint",
-          "與上方「會員」為同一欄位；不影響儲值金額或預約次數。單次最多 50 次；會寫入 walletTransactions（type：admin_grant_draw）供稽核。",
+          "與上方「會員」為同一欄位；不影響儲值金額或可預約次數。單次最多 50 次；會寫入 walletTransactions（type：admin_grant_draw）供稽核。",
         ),
       ]),
       el("label", { class: "field" }, [t("admin.grantDraw.deltaLabel", "贈送次數（1～50）"), grantDrawDelta]),
       el("label", { class: "field" }, [t("admin.grantDraw.noteLabel", "備註（選填）"), grantDrawNote]),
       el("div", { class: "row-actions" }, [grantDrawBtn]),
       grantDrawStatus,
-    );
+    ]);
+    walletTopupSection.append(walletSegmentPricing, walletSegmentTopup, walletSegmentAdjust, walletSegmentGrant);
     const createMemberEmail = el("input", {
       type: "email",
       placeholder: t("admin.member.emailPh", "會員 Email"),

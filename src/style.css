@@ -1524,6 +1524,51 @@ tbody tr:hover td {
   box-shadow: none;
 }
 
+/* 會員與儲值：定價／儲值／可預約次數調整／贈抽 分區淡色，與「前台與預約規則」卡片語彙一致 */
+.admin-announce--wallet {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+.admin-announce__wallet-segment {
+  margin: 0;
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-left-style: solid;
+  background: var(--surface);
+}
+
+.admin-announce__wallet-segment--pricing {
+  border-left-color: #4a7ab5;
+  background: linear-gradient(135deg, rgb(74 122 181 / 0.08) 0%, var(--surface) 48%);
+}
+
+.admin-announce__wallet-segment--topup {
+  border-left-color: #2f8f6f;
+  background: linear-gradient(135deg, rgb(47 143 111 / 0.09) 0%, var(--surface) 48%);
+}
+
+.admin-announce__wallet-segment--adjust {
+  border-left-color: #c97a35;
+  background: linear-gradient(135deg, rgb(201 122 53 / 0.1) 0%, var(--surface) 48%);
+}
+
+.admin-announce__wallet-segment--grant {
+  border-left-color: #8b62b3;
+  background: linear-gradient(135deg, rgb(139 98 179 / 0.09) 0%, var(--surface) 48%);
+}
+
+.admin-announce--wallet .admin-announce__wallet-segment > h4.admin-subhead:first-child {
+  margin-top: 0;
+}
+
 /* 跑馬燈分頁：多區設定，改為分組卡片＋淡色條，避免長篇素底難掃視 */
 .admin-announce--settings {
   display: flex;
