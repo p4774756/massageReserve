@@ -2164,6 +2164,9 @@ tbody tr:hover td {
 
 .admin-member-test-email-summary {
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: 100%;
 }
 
 .admin-member-th-actions,

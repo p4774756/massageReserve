@@ -137,6 +137,17 @@ function errorMessage(e: unknown): string {
   return t("errors.generic", "發生錯誤");
 }
 
+/** Resend 測試網域錯誤常為英文；在後台測試信結果附上一句與介面語系一致的處理說明 */
+function formatTestEmailCallableError(e: unknown): string {
+  const base = errorMessage(e);
+  if (!/only send testing emails/i.test(base)) return base;
+  const hint = t(
+    "admin.memberList.testEmailErrResendTestingRecipients",
+    "在 Resend 仍使用測試寄件者時，只能寄到該 Resend 帳號的信箱；要寄給其他會員請先於 Resend 驗證自有網域，並設定 Cloud Functions 參數 RESEND_FROM。",
+  );
+  return `${base}\n${hint}`;
+}
+
 /** 密碼輸入框右側「顯示／隱藏」切換（不改變 input 的 value） */
 function wrapPasswordField(input: HTMLInputElement): HTMLElement {
   const row = el("div", { class: "field-password-row" });
@@ -3339,7 +3350,7 @@ function render() {
         type: "button",
         title: t(
           "admin.memberList.testEmailTitle",
-          "依目前清單勾選會員，各寄一封【測試】預約狀態通知樣板信（不變更預約；需 RESEND_API_KEY）",
+          "依目前清單勾選會員，各寄一封【測試】預約狀態通知樣板信（不變更預約；需 RESEND_API_KEY）。若店家「新預約通知」能收信但會員收不到測試信，多半是 RESEND_FROM 仍為 Resend 預設 onboarding@resend.dev：請在 Resend 驗證自有網域並改設 RESEND_FROM。",
         ),
       },
       [t("admin.memberList.testEmailBtn", "測試通知信")],
@@ -3704,7 +3715,7 @@ function render() {
       const hint = el("p", { class: "hint admin-member-test-email-hint" }, [
         t(
           "admin.memberList.testEmailModalHint",
-          "僅列出目前有 Email 的會員。信內為【測試】樣板（待確認→已確認），不會改動任何預約。",
+          "僅列出目前有 Email 的會員。信內為【測試】樣板（待確認→已確認），不會改動任何預約。若會員實際收不到信，但店家新預約通知正常，請驗證寄件網域並設定 RESEND_FROM（見寄送結果下方提示）。",
         ),
       ]);
 
@@ -3806,11 +3817,16 @@ function render() {
         const mailLocale = getLocale() === "en" ? "en" : "zh-Hant";
         const fn = testSendMemberStatusTestEmailCall();
         const lines: string[] = [];
+        let deliverabilityWarning = "";
         try {
           for (const customerId of selected) {
             try {
               const res = await fn({ customerId, mailLocale, ...localeApiParam() });
-              const sentTo = (res.data as { sentTo?: string }).sentTo ?? "";
+              const data = res.data as { sentTo?: string; deliverabilityWarning?: string };
+              const sentTo = data.sentTo ?? "";
+              if (typeof data.deliverabilityWarning === "string" && data.deliverabilityWarning.trim()) {
+                deliverabilityWarning = data.deliverabilityWarning.trim();
+              }
               lines.push(
                 t("admin.memberList.testEmailLineOk", "✓ {{email}}", {
                   email: sentTo || customerId,
@@ -3821,7 +3837,7 @@ function render() {
               lines.push(
                 t("admin.memberList.testEmailLineFail", "✗ {{email}}：{{err}}", {
                   email: row?.email ?? customerId,
-                  err: errorMessage(e),
+                  err: formatTestEmailCallableError(e),
                 }),
               );
             }
@@ -3831,6 +3847,7 @@ function render() {
           memberListStatus.textContent = [
             t("admin.memberList.testEmailResultHead", "測試信結果（{{n}} 筆）：", { n: selected.length }),
             ...lines,
+            ...(deliverabilityWarning ? ["", deliverabilityWarning] : []),
           ].join("\n");
         } finally {
           sendBtn.removeAttribute("disabled");

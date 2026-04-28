@@ -519,12 +519,12 @@ export const EN: Record<string, string> = {
   "admin.memberList.reload": "Reload member list",
   "admin.memberList.testEmailBtn": "Test status email",
   "admin.memberList.testEmailTitle":
-    "From the loaded list, pick members to each receive one [TEST] booking-status sample email (no booking changes; needs RESEND_API_KEY).",
+    "From the loaded list, pick members to each receive one [TEST] booking-status sample email (no booking changes; needs RESEND_API_KEY). If the shop gets “new booking” mail but members get nothing, RESEND_FROM is probably still Resend’s default onboarding@resend.dev — verify your domain in Resend and set RESEND_FROM.",
   "admin.memberList.testEmailNeedLoad": "Tap “Reload member list” first, then send test emails.",
   "admin.memberList.testEmailNoTargets": "No sendable members in the list (Firebase Auth must have an email).",
   "admin.memberList.testEmailModalTitle": "Test status email: choose recipients",
   "admin.memberList.testEmailModalHint":
-    "Only members with an email are listed. The message is a [TEST] template (Pending → Confirmed) and does not change any booking.",
+    "Only members with an email are listed. The message is a [TEST] template (Pending → Confirmed) and does not change any booking. If members never receive it while owner new-booking mail works, verify your sending domain and set RESEND_FROM (see note under send results).",
   "admin.memberList.testEmailSelectAll": "Select all sendable",
   "admin.memberList.testEmailSelectNone": "Clear selection",
   "admin.memberList.testEmailSend": "Send test emails",
@@ -535,6 +535,8 @@ export const EN: Record<string, string> = {
   "admin.memberList.testEmailSending": "Sending…",
   "admin.memberList.testEmailLineOk": "✓ {{email}}",
   "admin.memberList.testEmailLineFail": "✗ {{email}}: {{err}}",
+  "admin.memberList.testEmailErrResendTestingRecipients":
+    "While using Resend’s test sender, you can only mail the address tied to your Resend account. To reach other members, verify your domain in Resend and set the Cloud Functions param RESEND_FROM.",
   "admin.memberList.testEmailResultHead": "Test email results ({{n}}):",
   "admin.memberList.migrateWalletBtn": "Fold legacy cash → sessions",
   "admin.memberList.migrateHint":

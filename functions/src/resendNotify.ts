@@ -1,4 +1,26 @@
+import { HttpsError } from "firebase-functions/v2/https";
 import { Resend } from "resend";
+
+/** Resend `emails.send` 的 `error` 為純物件，不可直接拋給 Callable（會變成 INTERNAL）。 */
+function throwResendEmailError(error: unknown): never {
+  let msg = "Resend error";
+  if (error && typeof error === "object" && "message" in error) {
+    const m = (error as { message: unknown }).message;
+    const n = (error as { name?: unknown }).name;
+    const parts: string[] = [];
+    if (typeof n === "string" && n.length > 0) parts.push(n);
+    if (typeof m === "string" && m.length > 0) parts.push(m);
+    if (parts.length > 0) msg = parts.join(": ");
+  } else if (error instanceof Error && error.message) {
+    msg = error.message;
+  }
+  throw new HttpsError("failed-precondition", msg.slice(0, 500));
+}
+
+/** Resend 入門預設寄件者；此模式下 API 常仍回成功，但「收件人」若非 Resend 允許的測試對象則實際不進對方信箱。 */
+export function isResendOnboardingFromAddress(from: string): boolean {
+  return /onboarding@resend\.dev/i.test(from);
+}
 
 const BOOKING_MODE_LABEL: Record<string, string> = {
   guest_cash: "訪客｜現場現金",
@@ -80,7 +102,7 @@ export async function sendNewBookingEmailToOwner(opts: {
     text,
   });
   if (error) {
-    throw error;
+    throwResendEmailError(error);
   }
 }
 
@@ -198,6 +220,6 @@ export async function sendMemberBookingStatusChangedEmail(opts: {
     text,
   });
   if (error) {
-    throw error;
+    throwResendEmailError(error);
   }
 }

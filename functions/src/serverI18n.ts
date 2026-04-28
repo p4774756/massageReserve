@@ -72,6 +72,8 @@ const EN: Record<string, string> = {
   "testStatusEmail.noMemberEmail": "The member account has no email in Firebase Auth.",
   "testStatusEmail.noResendKey": "RESEND_API_KEY is not configured for this project.",
   "testStatusEmail.memberNotFound": "That member was not found or Firebase Auth could not read the user.",
+  "testStatusEmail.resendOnboardingFromWarning":
+    "Sender is still Resend’s test address (onboarding@resend.dev). In this mode, mail to arbitrary member inboxes often never arrives, while “new booking” mail to your configured owner address can still work. Verify your own domain in Resend and set Cloud Functions param RESEND_FROM to an address on that domain so members receive status and test emails.",
 };
 
 function applyVars(s: string, vars?: Record<string, string | number>): string {

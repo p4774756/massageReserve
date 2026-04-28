@@ -5,7 +5,11 @@ import { defineSecret, defineString } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { DateTime } from "luxon";
-import { sendMemberBookingStatusChangedEmail, sendNewBookingEmailToOwner } from "./resendNotify";
+import {
+  isResendOnboardingFromAddress,
+  sendMemberBookingStatusChangedEmail,
+  sendNewBookingEmailToOwner,
+} from "./resendNotify";
 import {
   ACTIVE_STATUSES,
   assertSlotAllowed,
@@ -1102,7 +1106,14 @@ export const testSendMemberBookingStatusEmail = onCall(
       },
     });
 
-    return { ok: true as const, sentTo: to };
+    const deliverabilityWarning = isResendOnboardingFromAddress(from)
+      ? st(
+          locale,
+          "testStatusEmail.resendOnboardingFromWarning",
+          "目前寄件者仍為 Resend 測試用 onboarding@resend.dev：此模式下寄到一般會員信箱常實際收不到（但「新預約通知」寄到您設定的店家信箱仍可能正常）。若要讓會員收到狀態信與測試信，請至 Resend 驗證自有網域，並將 Functions 參數 RESEND_FROM 改為該網域下的寄件地址。",
+        )
+      : undefined;
+    return { ok: true as const, sentTo: to, ...(deliverabilityWarning ? { deliverabilityWarning } : {}) };
   },
 );
 
@@ -1198,7 +1209,14 @@ export const testSendMemberStatusTestEmail = onCall(
       },
     });
 
-    return { ok: true as const, sentTo: to };
+    const deliverabilityWarning = isResendOnboardingFromAddress(from)
+      ? st(
+          locale,
+          "testStatusEmail.resendOnboardingFromWarning",
+          "目前寄件者仍為 Resend 測試用 onboarding@resend.dev：此模式下寄到一般會員信箱常實際收不到（但「新預約通知」寄到您設定的店家信箱仍可能正常）。若要讓會員收到狀態信與測試信，請至 Resend 驗證自有網域，並將 Functions 參數 RESEND_FROM 改為該網域下的寄件地址。",
+        )
+      : undefined;
+    return { ok: true as const, sentTo: to, ...(deliverabilityWarning ? { deliverabilityWarning } : {}) };
   },
 );
 
