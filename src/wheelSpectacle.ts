@@ -122,6 +122,27 @@ function computeSliceBoundaryCrossingAnglesDeg(
   return slim;
 }
 
+/**
+ * 與 `mountPrizeWheelSvg` 相同的角度約定（極角為數學角：0° 為右、逆時針為正；-90° 為輪盤頂端，與指標對齊）。
+ * 回傳中獎扇形中心角度（度），找不到則 null。
+ */
+function winnerSliceCenterDeg(prizes: WheelPrizeLabel[], wonId: string): number | null {
+  const idx = prizes.findIndex((p) => p.id === wonId);
+  if (idx < 0) return null;
+  const totalW = prizes.reduce((s, p) => s + Math.max(0, p.weight), 0) || 1;
+  let angle = -90;
+  for (let i = 0; i < prizes.length; i++) {
+    const sweep = (Math.max(0, prizes[i].weight) / totalW) * 360;
+    const a0 = angle;
+    const a1 = angle + sweep;
+    if (i === idx) {
+      return (a0 + a1) / 2;
+    }
+    angle = a1;
+  }
+  return null;
+}
+
 function mountPrizeWheelSvg(wheelEl: HTMLElement, prizes: WheelPrizeLabel[]) {
   wheelEl.replaceChildren();
   wheelEl.classList.add("has-prize-labels");
@@ -628,8 +649,29 @@ export function runWheelSpectacle(
       let stopDrone: (() => void) | null = null;
 
       const spins = 7 + Math.floor(Math.random() * 4);
-      const jitter = Math.random() * 360;
-      const finalDeg = spins * 360 + jitter;
+      /** 指標在輪盤正上方，對應極角 -90°（與 SVG 扇形起算一致） */
+      const POINTER_DEG = -90;
+      let finalDeg: number;
+      if (data.prize.id && prizeList && prizeList.length > 0) {
+        const midW = winnerSliceCenterDeg(prizeList, data.prize.id);
+        if (midW != null) {
+          /**
+           * CSS 對輪盤 `rotate(finalDeg)` 為順時針；輪上原在極角 midW 的點，在父層視為 midW - finalDeg（逆時針角）。
+           * 欲使該點落在指標處 (-90°)：midW - finalDeg ≡ POINTER_DEG → finalDeg ≡ midW - POINTER_DEG。
+           */
+          const align = (midW - POINTER_DEG + 360 * 10) % 360;
+          const sliceW =
+            (Math.max(0, prizeList.find((p) => p.id === data.prize.id)?.weight ?? 0) /
+              (prizeList.reduce((s, p) => s + Math.max(0, p.weight), 0) || 1)) *
+            360;
+          const wobble = (Math.random() - 0.5) * Math.min(28, sliceW * 0.35);
+          finalDeg = spins * 360 + align + wobble;
+        } else {
+          finalDeg = spins * 360 + Math.random() * 360;
+        }
+      } else {
+        finalDeg = spins * 360 + Math.random() * 360;
+      }
       const crossingAngles = computeSliceBoundaryCrossingAnglesDeg(finalDeg, prizeList);
 
       wheel.classList.add("is-rim-glow");
