@@ -9,6 +9,7 @@ import {
   query,
   serverTimestamp,
 } from "firebase/firestore";
+import { t } from "./i18n";
 
 const COLLECTION = "guestbookPosts";
 const MAX_TEXT = 800;
@@ -160,6 +161,8 @@ export function mountGuestbook(db: Firestore, auth: Auth, mount: HTMLElement): G
       text?: string;
       rating?: number;
       createdAt?: { seconds: number };
+      adminReply?: string;
+      adminRepliedAt?: { seconds: number };
     }[],
   ) {
     listHost.replaceChildren();
@@ -173,14 +176,32 @@ export function mountGuestbook(db: Firestore, auth: Auth, mount: HTMLElement): G
       if (r.createdAt?.seconds) {
         timeEl.dateTime = new Date(r.createdAt.seconds * 1000).toISOString();
       }
-      const card = el("article", { class: "guestbook-card" }, [
+      const adminReply =
+        typeof r.adminReply === "string" && r.adminReply.trim().length > 0 ? r.adminReply.trim() : "";
+      let replyBlock: HTMLElement | null = null;
+      if (adminReply.length > 0) {
+        const replyTimeEl = el("time", { class: "guestbook-card__reply-time" }, [
+          formatPostTime(r.adminRepliedAt),
+        ]);
+        if (r.adminRepliedAt?.seconds) {
+          replyTimeEl.dateTime = new Date(r.adminRepliedAt.seconds * 1000).toISOString();
+        }
+        replyBlock = el("div", { class: "guestbook-card__reply" }, [
+          el("div", { class: "guestbook-card__reply-label" }, [t("guestbook.shopReply", "店家回覆")]),
+          replyTimeEl,
+          el("p", { class: "guestbook-card__reply-text" }, [adminReply]),
+        ]);
+      }
+      const cardChildren: HTMLElement[] = [
         el("header", { class: "guestbook-card__head" }, [
           starRowStatic(rating),
           el("span", { class: "guestbook-card__name" }, [name]),
           timeEl,
         ]),
         el("p", { class: "guestbook-card__text" }, [text]),
-      ]);
+      ];
+      if (replyBlock) cardChildren.push(replyBlock);
+      const card = el("article", { class: "guestbook-card" }, cardChildren);
       listHost.append(card);
     }
   }

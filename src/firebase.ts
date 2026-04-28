@@ -57,6 +57,7 @@ export const testSendMemberStatusTestEmailCall = () => httpsCallable(getFns(), "
 export const updateMemberNicknameAdminCall = () => httpsCallable(getFns(), "updateMemberNicknameAdmin");
 export const sendSupportChatMessageCall = () => httpsCallable(getFns(), "sendSupportChatMessage");
 export const sendSupportChatAdminReplyCall = () => httpsCallable(getFns(), "sendSupportChatAdminReply");
+export const setGuestbookPostAdminReplyCall = () => httpsCallable(getFns(), "setGuestbookPostAdminReply");
 export const setSupportThreadStatusAdminCall = () => httpsCallable(getFns(), "setSupportThreadStatusAdmin");
 export const recordSiteVisitCall = () => httpsCallable(getFns(), "recordSiteVisit");
 

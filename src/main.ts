@@ -20,6 +20,7 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
+import { mountAdminGuestbook, type AdminGuestbookUnmount } from "./adminGuestbook";
 import { mountAdminReportsPanel } from "./adminReports";
 import {
   cancelBookingCall,
@@ -2280,6 +2281,7 @@ function render() {
   let adminBookingCapsUnsub: (() => void) | null = null;
   let adminBookingBlocksUnsub: (() => void) | null = null;
   let adminSupportChatUnmount: SupportChatUnmount | null = null;
+  let adminGuestbookUnmount: AdminGuestbookUnmount | null = null;
 
   function stopAdminListener() {
     if (adminUnsub) {
@@ -2317,6 +2319,10 @@ function render() {
     if (adminSupportChatUnmount) {
       adminSupportChatUnmount();
       adminSupportChatUnmount = null;
+    }
+    if (adminGuestbookUnmount) {
+      adminGuestbookUnmount();
+      adminGuestbookUnmount = null;
     }
   }
 
@@ -3988,13 +3994,17 @@ function render() {
       t("admin.tab.support", "客服對話"),
     ]);
     tabSupport.id = "admin-tab-trigger-support";
+    const tabGuestbookAdmin = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
+      t("admin.tab.guestbook", "心得回覆"),
+    ]);
+    tabGuestbookAdmin.id = "admin-tab-trigger-guestbook";
     const tabReports = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
       t("admin.tab.reports", "報表"),
     ]);
     tabReports.id = "admin-tab-trigger-reports";
 
     const adminTablist = el("div", { class: "admin-tabs", role: "tablist" });
-    adminTablist.append(tabBookings, tabHiddenBookings, tabMembers, tabAnnounce, tabSupport, tabReports);
+    adminTablist.append(tabBookings, tabHiddenBookings, tabMembers, tabAnnounce, tabSupport, tabGuestbookAdmin, tabReports);
 
     const panelBookingsEl = el("div", { class: "admin-tab-panel", role: "tabpanel", id: "admin-tab-panel-bookings" });
     panelBookingsEl.setAttribute("aria-labelledby", "admin-tab-trigger-bookings");
@@ -4041,6 +4051,17 @@ function render() {
     panelSupportEl.append(adminSupportChatHost);
     adminSupportChatUnmount = mountAdminSupportChat(db, auth, adminSupportChatHost);
 
+    const panelGuestbookAdminEl = el("div", {
+      class: "admin-tab-panel",
+      role: "tabpanel",
+      id: "admin-tab-panel-guestbook",
+      hidden: true,
+    });
+    panelGuestbookAdminEl.setAttribute("aria-labelledby", "admin-tab-trigger-guestbook");
+    const adminGuestbookHost = el("div", { class: "admin-guestbook-host" });
+    panelGuestbookAdminEl.append(adminGuestbookHost);
+    adminGuestbookUnmount = mountAdminGuestbook(db, auth, adminGuestbookHost);
+
     const panelReportsEl = el("div", {
       class: "admin-tab-panel",
       role: "tabpanel",
@@ -4056,6 +4077,7 @@ function render() {
     tabMembers.setAttribute("aria-controls", "admin-tab-panel-members");
     tabAnnounce.setAttribute("aria-controls", "admin-tab-panel-announce");
     tabSupport.setAttribute("aria-controls", "admin-tab-panel-support");
+    tabGuestbookAdmin.setAttribute("aria-controls", "admin-tab-panel-guestbook");
     tabReports.setAttribute("aria-controls", "admin-tab-panel-reports");
 
     panelBookingsEl.append(adminStatus, tableHolder);
@@ -4069,20 +4091,30 @@ function render() {
       panelMembersEl,
       panelAnnounceEl,
       panelSupportEl,
+      panelGuestbookAdminEl,
       panelReportsEl,
     );
 
-    const adminTabButtons = [tabBookings, tabHiddenBookings, tabMembers, tabAnnounce, tabSupport, tabReports] as const;
+    const adminTabButtons = [
+      tabBookings,
+      tabHiddenBookings,
+      tabMembers,
+      tabAnnounce,
+      tabSupport,
+      tabGuestbookAdmin,
+      tabReports,
+    ] as const;
     const adminTabPanels = [
       panelBookingsEl,
       panelHiddenBookingsEl,
       panelMembersEl,
       panelAnnounceEl,
       panelSupportEl,
+      panelGuestbookAdminEl,
       panelReportsEl,
     ] as const;
 
-    function selectAdminTab(index: 0 | 1 | 2 | 3 | 4 | 5) {
+    function selectAdminTab(index: 0 | 1 | 2 | 3 | 4 | 5 | 6) {
       adminTabButtons.forEach((btn, i) => {
         const on = i === index;
         btn.setAttribute("aria-selected", String(on));
@@ -4093,7 +4125,7 @@ function render() {
         panel.hidden = i !== index;
         panel.classList.toggle("is-active", i === index);
       });
-      if (index === 5) void refreshAdminReports();
+      if (index === 6) void refreshAdminReports();
     }
 
     tabBookings.addEventListener("click", () => selectAdminTab(0));
@@ -4101,7 +4133,8 @@ function render() {
     tabMembers.addEventListener("click", () => selectAdminTab(2));
     tabAnnounce.addEventListener("click", () => selectAdminTab(3));
     tabSupport.addEventListener("click", () => selectAdminTab(4));
-    tabReports.addEventListener("click", () => selectAdminTab(5));
+    tabGuestbookAdmin.addEventListener("click", () => selectAdminTab(5));
+    tabReports.addEventListener("click", () => selectAdminTab(6));
 
     adminTablist.addEventListener("keydown", (ev) => {
       if (ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;
@@ -4111,7 +4144,7 @@ function render() {
       const delta = ev.key === "ArrowRight" ? 1 : -1;
       const n = adminTabButtons.length;
       const next = ((cur + delta) % n + n) % n;
-      selectAdminTab(next as 0 | 1 | 2 | 3 | 4 | 5);
+      selectAdminTab(next as 0 | 1 | 2 | 3 | 4 | 5 | 6);
       adminTabButtons[next].focus();
     });
 

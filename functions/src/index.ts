@@ -1501,6 +1501,8 @@ function FieldValueOrServerTimestamp(): Timestamp {
 
 const SUPPORT_CHAT_TEXT_MAX = 2000;
 const SUPPORT_CHAT_PREVIEW_MAX = 200;
+/** 與前台心得內文上限一致 */
+const GUESTBOOK_ADMIN_REPLY_MAX = 800;
 
 function supportChatPreview(text: string): string {
   const t = text.trim().replace(/\s+/g, " ");
@@ -1649,6 +1651,46 @@ export const setSupportThreadStatusAdmin = onCall(publicCall, async (request) =>
     status,
     updatedAt: FieldValueOrServerTimestamp(),
   });
+  return { ok: true };
+});
+
+/** 管理員設定／清除「心得與評價」單則公開回覆（寫入 Firestore，預約頁即時顯示） */
+export const setGuestbookPostAdminReply = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
+  }
+  await assertAdminByUid(uid, locale);
+  const postId = typeof request.data?.postId === "string" ? request.data.postId.trim() : "";
+  const textRaw = typeof request.data?.text === "string" ? request.data.text.trim() : "";
+  if (!postId) {
+    throw new HttpsError("invalid-argument", st(locale, "guestbook.needPostId", "缺少 postId"));
+  }
+  if (textRaw.length > GUESTBOOK_ADMIN_REPLY_MAX) {
+    throw new HttpsError(
+      "invalid-argument",
+      st(locale, "guestbook.replyTooLong", "回覆最長 {{max}} 字", { max: GUESTBOOK_ADMIN_REPLY_MAX }),
+    );
+  }
+  const ref = db.collection("guestbookPosts").doc(postId);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    throw new HttpsError("not-found", st(locale, "guestbook.postMissing", "找不到該則心得"));
+  }
+  if (textRaw.length < 1) {
+    await ref.update({
+      adminReply: FieldValue.delete(),
+      adminRepliedAt: FieldValue.delete(),
+      adminRepliedByUid: FieldValue.delete(),
+    });
+  } else {
+    await ref.update({
+      adminReply: textRaw,
+      adminRepliedAt: FieldValueOrServerTimestamp(),
+      adminRepliedByUid: uid,
+    });
+  }
   return { ok: true };
 });
 

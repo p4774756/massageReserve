@@ -3641,6 +3641,35 @@ body.wheel-spectacle-lock {
   line-height: 1.55;
 }
 
+.guestbook-card__reply {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.guestbook-card__reply-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.guestbook-card__reply-time {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.guestbook-card__reply-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
 .guestbook-write {
   display: flex;
   flex-direction: column;
@@ -4014,6 +4043,23 @@ body.wheel-spectacle-lock {
   margin-top: 4px;
   word-break: break-all;
   font-size: 0.82rem;
+}
+
+.admin-guestbook-post-meta {
+  margin-top: 6px;
+}
+
+.admin-guestbook-post-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.admin-guestbook-actions {
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 @media (prefers-reduced-motion: reduce) {
