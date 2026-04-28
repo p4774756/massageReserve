@@ -1969,6 +1969,62 @@ tbody tr:hover td {
   max-width: 880px;
 }
 
+.admin-reports__intro-short {
+  margin: 0 0 6px;
+  line-height: 1.5;
+}
+
+.admin-reports__details {
+  margin: 0 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  background: var(--surface-muted);
+}
+
+.admin-reports__details-summary {
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--ink);
+  list-style-position: outside;
+}
+
+.admin-reports__details-body {
+  margin: 10px 0 0;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+  line-height: 1.55;
+}
+
+.admin-reports__stats {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.admin-reports__section {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.admin-reports__section-title {
+  margin: 0 0 10px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+.admin-reports__section-title--charts {
+  margin-bottom: 12px;
+}
+
+.admin-reports__charts {
+  margin-top: 8px;
+}
+
 .admin-reports__toolbar {
   align-items: center;
   flex-wrap: wrap;
@@ -1981,17 +2037,17 @@ tbody tr:hover td {
 
 .admin-reports__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
-  gap: 12px;
-  margin-top: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(152px, 1fr));
+  gap: 10px;
+  margin-top: 0;
 }
 
 .admin-report-card {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 12px 14px;
-  background: var(--surface-muted);
-  min-height: 72px;
+  padding: 10px 12px;
+  background: var(--surface);
+  min-height: 68px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1999,14 +2055,14 @@ tbody tr:hover td {
 }
 
 .admin-report-card__label {
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   font-weight: 600;
   color: var(--muted);
   line-height: 1.25;
 }
 
 .admin-report-card__value {
-  font-size: 1.35rem;
+  font-size: 1.2rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
@@ -2014,10 +2070,10 @@ tbody tr:hover td {
 }
 
 .admin-reports__flash {
-  margin-top: 20px;
+  margin-top: 0;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
 }
 
 .admin-reports__donut-row {
@@ -2040,22 +2096,12 @@ tbody tr:hover td {
 
 .admin-report-chart-card {
   position: relative;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-lg);
-  padding: 16px 16px 12px;
-  background: linear-gradient(165deg, var(--surface) 0%, var(--surface-muted) 55%, var(--surface) 100%);
-  box-shadow: var(--shadow), 0 0 0 1px rgb(255 255 255 / 0.65) inset;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 14px 10px;
+  background: var(--surface-muted);
+  box-shadow: none;
   overflow: hidden;
-}
-
-.admin-report-chart-card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(120% 80% at 10% -20%, rgb(99 102 241 / 0.09), transparent 55%),
-    radial-gradient(90% 70% at 100% 100%, rgb(236 72 153 / 0.07), transparent 50%);
-  z-index: 0;
 }
 
 .admin-report-chart-card > * {

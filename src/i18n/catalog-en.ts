@@ -481,6 +481,26 @@ export const EN: Record<string, string> = {
   "admin.memberTab.wallet": "Top up",
   "admin.memberTab.list": "Member list",
 
+  "admin.reports.introShort":
+    "Numbers match the main Bookings list. “Refresh report” also loads visits, guestbook, and support.",
+  "admin.reports.detailsSummary": "Where this data comes from / chart notes",
+  "admin.reports.section.list": "Booking files & lists",
+  "admin.reports.section.volume": "Bookings by date range",
+  "admin.reports.section.visits": "Site visits",
+  "admin.reports.section.guestbook": "Guestbook",
+  "admin.reports.section.support": "Support chat",
+  "admin.reports.chartsHeading": "Charts",
+  "admin.reports.vol.today": "Today (calendar day)",
+  "admin.reports.vol.week": "This week (Mon–Sun)",
+  "admin.reports.vol.month": "This month",
+  "admin.reports.visit.today": "Today",
+  "admin.reports.visit.week": "This week",
+  "admin.reports.visit.total": "All time",
+  "admin.reports.gb.count": "Posts",
+  "admin.reports.gb.avgStars": "Avg. stars",
+  "admin.reports.sup.open": "Open",
+  "admin.reports.sup.closed": "Closed",
+
   "admin.reports.intro":
     "Booking figures use the same live snapshot as the Bookings tab. Visitor counts, guestbook, and support threads are read separately. Charts (Chart.js) load when you open this tab: doughnuts for status, payment mode, and support; bar charts for booking volume and visits; polar area for guestbook stars. Wait for the booking list to load, then refresh the report.",
   "admin.reports.refresh": "Refresh report",

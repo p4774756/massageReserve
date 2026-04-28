@@ -120,17 +120,31 @@ function statCard(label: string, value: string): HTMLElement {
   ]);
 }
 
+function statSection(title: string, cards: HTMLElement[]): HTMLElement {
+  const inner = el("div", { class: "admin-reports__grid" }, []);
+  for (const c of cards) inner.append(c);
+  return el("section", { class: "admin-reports__section" }, [
+    el("h4", { class: "admin-reports__section-title" }, [title]),
+    inner,
+  ]);
+}
+
 export function mountAdminReportsPanel(
   db: Firestore,
   getBookings: () => ReportBookingRow[],
 ): { root: HTMLElement; refresh: () => Promise<void> } {
   const statusLine = el("p", { class: "status-line" }, []);
   const updatedAt = el("span", { class: "admin-reports__updated hint" }, []);
-  const grid = el("div", { class: "admin-reports__grid" }, []);
+  const statsWrap = el("div", { class: "admin-reports__stats" }, []);
   const donutRow = el("div", { class: "admin-reports__donut-row" });
   const barRow = el("div", { class: "admin-reports__bar-row" });
   const polarWrap = el("div", { class: "admin-reports__polar-wrap" });
-  const flashCharts = el("div", { class: "admin-reports__flash" }, [donutRow, barRow, polarWrap]);
+  const flashCharts = el("div", { class: "admin-reports__charts" }, [
+    el("h4", { class: "admin-reports__section-title admin-reports__section-title--charts" }, [
+      t("admin.reports.chartsHeading", "圖表"),
+    ]),
+    el("div", { class: "admin-reports__flash" }, [donutRow, barRow, polarWrap]),
+  ]);
 
   const chartReg: ReportChartRegistry = { charts: [] };
 
@@ -140,23 +154,36 @@ export function mountAdminReportsPanel(
 
   const toolbar = el("div", { class: "admin-reports__toolbar row-actions" }, [refreshBtn, updatedAt]);
 
-  const root = el("div", { class: "admin-reports" }, [
-    el("p", { class: "hint" }, [
+  const introDetails = el("details", { class: "admin-reports__details" }, [
+    el("summary", { class: "admin-reports__details-summary" }, [
+      t("admin.reports.detailsSummary", "資料怎麼來的？／圖表說明"),
+    ]),
+    el("div", { class: "admin-reports__details-body hint" }, [
       t(
         "admin.reports.intro",
         "預約數字與「預約管理」分頁相同資料來源（即時快照）；訪次、心得與客服為額外讀取。下方圖表使用 Chart.js（切換至此分頁時才載入圖表程式）。若剛進後台，請待列表載入後再按重新整理。",
       ),
     ]),
+  ]);
+
+  const root = el("div", { class: "admin-reports" }, [
+    el("p", { class: "hint admin-reports__intro-short" }, [
+      t(
+        "admin.reports.introShort",
+        "數字與「預約管理」主列表一致；按「重新整理」會一併讀取訪次、心得與客服。",
+      ),
+    ]),
+    introDetails,
     toolbar,
     statusLine,
-    grid,
+    statsWrap,
     flashCharts,
   ]);
 
   async function refresh(): Promise<void> {
     statusLine.textContent = t("admin.reports.loading", "彙整中…");
     statusLine.className = "status-line";
-    grid.replaceChildren();
+    statsWrap.replaceChildren();
 
     const chartMod = await import("./adminReportCharts");
     chartMod.destroyReportCharts(chartReg);
@@ -229,20 +256,30 @@ export function mountAdminReportsPanel(
         else thOpen += 1;
       }
 
-      grid.append(
-        statCard(t("admin.reports.card.totalDocs", "預約文件總數"), fmtInt(total)),
-        statCard(t("admin.reports.card.mainList", "主列表筆數"), fmtInt(mainList.length)),
-        statCard(t("admin.reports.card.hiddenDeleted", "封存／已刪除"), fmtInt(hiddenOrDeleted)),
-        statCard(t("admin.reports.card.todayBookings", "今日預約（曆日）"), fmtInt(todayBookings.length)),
-        statCard(t("admin.reports.card.weekBookings", "本週預約（週一起算）"), fmtInt(weekBookings.length)),
-        statCard(t("admin.reports.card.monthBookings", "本月預約"), fmtInt(monthBookings.length)),
-        statCard(t("admin.reports.card.visitsToday", "網站訪次 · 今日"), dayVisits),
-        statCard(t("admin.reports.card.visitsWeek", "網站訪次 · 本週"), weekVisits),
-        statCard(t("admin.reports.card.visitsTotal", "網站訪次 · 累計"), totalVisits),
-        statCard(t("admin.reports.card.guestbookCount", "心得則數"), fmtInt(gbCount)),
-        statCard(t("admin.reports.card.guestbookAvg", "心得平均星等"), gbAvg),
-        statCard(t("admin.reports.card.supportOpen", "客服對話 · 進行中"), fmtInt(thOpen)),
-        statCard(t("admin.reports.card.supportClosed", "客服對話 · 已結束"), fmtInt(thClosed)),
+      statsWrap.append(
+        statSection(t("admin.reports.section.list", "預約文件與列表"), [
+          statCard(t("admin.reports.card.totalDocs", "預約文件總數"), fmtInt(total)),
+          statCard(t("admin.reports.card.mainList", "主列表筆數"), fmtInt(mainList.length)),
+          statCard(t("admin.reports.card.hiddenDeleted", "封存／已刪除"), fmtInt(hiddenOrDeleted)),
+        ]),
+        statSection(t("admin.reports.section.volume", "預約量（依日期區間）"), [
+          statCard(t("admin.reports.vol.today", "今日（曆日）"), fmtInt(todayBookings.length)),
+          statCard(t("admin.reports.vol.week", "本週（週一起算）"), fmtInt(weekBookings.length)),
+          statCard(t("admin.reports.vol.month", "本月"), fmtInt(monthBookings.length)),
+        ]),
+        statSection(t("admin.reports.section.visits", "網站訪次"), [
+          statCard(t("admin.reports.visit.today", "今日"), dayVisits),
+          statCard(t("admin.reports.visit.week", "本週"), weekVisits),
+          statCard(t("admin.reports.visit.total", "累計"), totalVisits),
+        ]),
+        statSection(t("admin.reports.section.guestbook", "心得與評價"), [
+          statCard(t("admin.reports.gb.count", "則數"), fmtInt(gbCount)),
+          statCard(t("admin.reports.gb.avgStars", "平均星等"), gbAvg),
+        ]),
+        statSection(t("admin.reports.section.support", "客服對話"), [
+          statCard(t("admin.reports.sup.open", "進行中"), fmtInt(thOpen)),
+          statCard(t("admin.reports.sup.closed", "已結束"), fmtInt(thClosed)),
+        ]),
       );
 
       const statusSorted = Object.entries(countByStatus(bookings, () => true)).sort((a, b) => b[1] - a[1]);
