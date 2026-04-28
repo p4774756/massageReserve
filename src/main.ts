@@ -76,7 +76,7 @@ type Booking = {
   cancelReason?: string;
   /** 與後端一致：該預約曆日所屬週的週一 dateKey */
   weekStart?: string;
-  /** 後台「自列表隱藏」；不改 status，會員端仍看真實狀態 */
+  /** 後台「封存」：自主列表移出（invisible）；不改 status，會員端仍看真實狀態 */
   invisible?: boolean;
   /** 後台標為完成時寫入（與 status done 一併出現） */
   completedAt?: { seconds: number };
@@ -3979,7 +3979,7 @@ function render() {
     ]);
     tabBookings.id = "admin-tab-trigger-bookings";
     const tabHiddenBookings = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
-      t("admin.tab.hidden", "已隱藏的預約"),
+      t("admin.tab.hidden", "封存的預約"),
     ]);
     tabHiddenBookings.id = "admin-tab-trigger-hidden";
     const tabMembers = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
@@ -4019,7 +4019,7 @@ function render() {
       el("p", { class: "hint" }, [
         t(
           "admin.hidden.intro",
-          "以下為自「預約管理」主列表隱藏之預約，或舊版於資料庫標記為已刪除之筆。額度與可預約時段與主列表相同，仍依預約狀態計算（僅影響後台列表是否顯示）。筆數多時每頁 10 筆，請用列表下方「上一頁／下一頁」切換。",
+          "以下為自「預約管理」主列表封存之預約，或舊版於資料庫標記為已刪除之筆。額度與可預約時段與主列表相同，仍依預約狀態計算（僅影響後台列表是否顯示）。筆數多時每頁 10 筆，請用列表下方「上一頁／下一頁」切換。",
         ),
       ]),
       hiddenBookingsStatus,
@@ -4258,7 +4258,7 @@ function render() {
           cancelBtn.removeAttribute("disabled");
         }
       });
-      const unhideBtn = el("button", { class: "ghost", type: "button" }, [t("admin.hidden.unhide", "取消隱藏")]);
+      const unhideBtn = el("button", { class: "ghost", type: "button" }, [t("admin.hidden.unhide", "取消封存")]);
       unhideBtn.addEventListener("click", async () => {
         hiddenBookingsStatus.textContent = t("admin.status.processing", "處理中…");
         hiddenBookingsStatus.className = "status-line";
@@ -4268,11 +4268,11 @@ function render() {
             invisible: false,
             updatedAt: serverTimestamp(),
           });
-          hiddenBookingsStatus.textContent = t("admin.status.unhidden", "已恢復至預約管理列表");
+          hiddenBookingsStatus.textContent = t("admin.status.unhidden", "已取消封存並回到預約管理主列表");
           hiddenBookingsStatus.classList.add("ok");
         } catch (e) {
           hiddenBookingsStatus.textContent =
-            e instanceof Error ? e.message : t("admin.status.unhideFail", "還原失敗（你是否已加入 admins 集合？）");
+            e instanceof Error ? e.message : t("admin.status.unhideFail", "取消封存失敗（你是否已加入 admins 集合？）");
           hiddenBookingsStatus.classList.add("error");
           unhideBtn.removeAttribute("disabled");
         }
@@ -4298,7 +4298,7 @@ function render() {
       if (total === 0) {
         hiddenTable.append(
           el("tr", {}, [
-            el("td", { class: "hint", colSpan: 6 }, [t("admin.hidden.empty", "目前沒有自列表隱藏或舊版已刪除之預約。")]),
+            el("td", { class: "hint", colSpan: 6 }, [t("admin.hidden.empty", "目前沒有封存中的預約，也沒有舊版已刪除資料。")]),
           ]),
         );
         hiddenPagePrev.disabled = true;
@@ -4443,36 +4443,36 @@ function render() {
               cancelBtn.removeAttribute("disabled");
             }
           });
-          const deleteBtn = el("button", { class: "ghost", type: "button" }, [t("admin.booking.hide", "隱藏")]);
-          deleteBtn.addEventListener("click", async () => {
+          const archiveBtn = el("button", { class: "ghost", type: "button" }, [t("admin.booking.hide", "封存")]);
+          archiveBtn.addEventListener("click", async () => {
             const confirmed = await showConfirmModal(
-              t("admin.booking.hideConfirmTitle", "確認自後台隱藏"),
+              t("admin.booking.hideConfirmTitle", "確認封存此筆預約"),
               t(
                 "admin.booking.hideConfirmBody",
-                "確定從後台列表隱藏這筆預約嗎？\n\n（不改變預約狀態；會員端仍顯示原狀態。額度與可預約時段仍依預約狀態計算，與主列表邏輯相同。）\n\n姓名：{{name}}\n日期：{{date}}\n開始時間：{{start}}",
+                "確定將此筆預約從後台主列表封存嗎？\n\n（不改變預約狀態；會員端仍顯示原狀態。額度與可預約時段仍依預約狀態計算，與主列表邏輯相同。封存後可至「封存的預約」分頁取消封存。）\n\n姓名：{{name}}\n日期：{{date}}\n開始時間：{{start}}",
                 { name: b.displayName ?? "", date: b.dateKey ?? "", start: b.startSlot ?? "" },
               ),
-              t("admin.booking.hideBtn", "隱藏"),
+              t("admin.booking.hideBtn", "封存"),
             );
             if (!confirmed) return;
-            adminStatus.textContent = t("admin.status.hiding", "隱藏中…");
+            adminStatus.textContent = t("admin.status.hiding", "封存中…");
             adminStatus.className = "status-line";
-            deleteBtn.setAttribute("disabled", "true");
+            archiveBtn.setAttribute("disabled", "true");
             try {
               await updateDoc(doc(db, "bookings", b.id), {
                 invisible: true,
                 updatedAt: serverTimestamp(),
               });
-              adminStatus.textContent = t("admin.status.hidden", "已自後台隱藏");
+              adminStatus.textContent = t("admin.status.hidden", "已封存（可至「封存的預約」查看）");
               adminStatus.classList.add("ok");
             } catch (e) {
               adminStatus.textContent =
-                e instanceof Error ? e.message : t("admin.status.hideFail", "隱藏失敗（你是否已加入 admins 集合？）");
+                e instanceof Error ? e.message : t("admin.status.hideFail", "封存失敗（你是否已加入 admins 集合？）");
               adminStatus.classList.add("error");
-              deleteBtn.removeAttribute("disabled");
+              archiveBtn.removeAttribute("disabled");
             }
           });
-          const actionCell = el("div", { class: "admin-booking-actions" }, [cancelBtn, deleteBtn]);
+          const actionCell = el("div", { class: "admin-booking-actions" }, [cancelBtn, archiveBtn]);
           table.append(
             el("tr", {}, [
               el("td", { class: "mono" }, [formatWhen(b)]),
@@ -4558,7 +4558,7 @@ function render() {
         )
       : t(
           "admin.backSubtitle",
-          "以分頁切換：預約管理、已隱藏的預約、會員與儲值、跑馬燈公告、客服對話、報表。",
+          "以分頁切換：預約管理、封存的預約、會員與儲值、跑馬燈公告、客服對話、心得回覆、報表。",
         );
     document.title = isBook ? t("meta.docTitle", "辦公室按摩預約") : t("admin.backTitle", "管理後台");
     panelBook.hidden = !isBook;

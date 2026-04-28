@@ -450,7 +450,7 @@ export const EN: Record<string, string> = {
   "admin.table.actions": "Actions",
 
   "admin.tab.bookings": "Bookings",
-  "admin.tab.hidden": "Hidden bookings",
+  "admin.tab.hidden": "Archived bookings",
   "admin.tab.members": "Members & top-up",
   "admin.tab.announce": "Marquee",
   "admin.tab.support": "Support chat",
@@ -491,7 +491,7 @@ export const EN: Record<string, string> = {
   "admin.reports.empty": "No data",
   "admin.reports.card.totalDocs": "Booking documents (total)",
   "admin.reports.card.mainList": "Main list rows",
-  "admin.reports.card.hiddenDeleted": "Hidden / deleted",
+  "admin.reports.card.hiddenDeleted": "Archived / deleted",
   "admin.reports.card.todayBookings": "Bookings · today (calendar)",
   "admin.reports.card.weekBookings": "Bookings · this week (Mon–Sun)",
   "admin.reports.card.monthBookings": "Bookings · this month",
@@ -524,7 +524,7 @@ export const EN: Record<string, string> = {
   "admin.reports.chart.star5": "5 stars",
 
   "admin.hidden.intro":
-    "Hidden from the main booking list, or legacy “deleted” in the database. Caps and slots still follow real status (only affects admin list). 10 per page — use Previous/Next below.",
+    "Archived from the main booking list, or legacy “deleted” in the database. Caps and slots still follow real status (only affects admin list). 10 per page — use Previous/Next below.",
 
   "admin.pager.prev": "Previous",
   "admin.pager.next": "Next",
@@ -589,19 +589,19 @@ export const EN: Record<string, string> = {
 
   "admin.hidden.deletedLabel": "Deleted (legacy)",
   "admin.hidden.dash": "—",
-  "admin.hidden.unhide": "Unhide",
+  "admin.hidden.unhide": "Unarchive",
   "admin.hidden.empty":
-    "No bookings hidden from the list or legacy-deleted.",
+    "No archived bookings or legacy-deleted rows.",
   "admin.hidden.cancelSummaryIntro": "You are about to cancel this booking. Reason can be empty.",
   "admin.hidden.cancelSummaryNone": "(none)",
   "admin.booking.cancel": "Cancel",
-  "admin.booking.hide": "Hide",
+  "admin.booking.hide": "Archive",
   "admin.booking.hideTitleDone": "Completed bookings cannot be cancelled",
   "admin.booking.hideTitleCancelled": "Already cancelled",
-  "admin.booking.hideConfirmTitle": "Confirm hide from admin list",
+  "admin.booking.hideConfirmTitle": "Archive this booking?",
   "admin.booking.hideConfirmBody":
-    "Hide this booking from the admin list?\n\n(Status is unchanged; members still see the real status. Caps behave the same as the main list.)\n\nName: {{name}}\nDate: {{date}}\nStart: {{start}}",
-  "admin.booking.hideBtn": "Hide",
+    "Archive this booking off the main admin list?\n\n(Status is unchanged; members still see the real status. Caps behave the same as the main list. You can unarchive from the “Archived bookings” tab.)\n\nName: {{name}}\nDate: {{date}}\nStart: {{start}}",
+  "admin.booking.hideBtn": "Archive",
   "admin.status.updating": "Updating…",
   "admin.status.updated": "Updated",
   "admin.status.updateFail": "Update failed (are you in the admins collection?)",
@@ -609,17 +609,17 @@ export const EN: Record<string, string> = {
   "admin.status.cancelled": "Cancelled",
   "admin.status.cancelFail": "Cancel failed",
   "admin.status.processing": "Processing…",
-  "admin.status.unhidden": "Restored to main booking list",
-  "admin.status.unhideFail": "Restore failed (are you in the admins collection?)",
-  "admin.status.hiding": "Hiding…",
-  "admin.status.hidden": "Hidden from admin list",
-  "admin.status.hideFail": "Hide failed (are you in the admins collection?)",
+  "admin.status.unhidden": "Unarchived — back on the main booking list",
+  "admin.status.unhideFail": "Unarchive failed (are you in the admins collection?)",
+  "admin.status.hiding": "Archiving…",
+  "admin.status.hidden": "Archived (see “Archived bookings” tab)",
+  "admin.status.hideFail": "Archive failed (are you in the admins collection?)",
   "admin.snapshot.loadFail":
     "Could not load bookings (rules, missing index, or admins doc).",
 
   "admin.backTitle": "Admin",
   "admin.backSubtitle":
-    "Use tabs: bookings, hidden bookings, members & top-up, marquee, support chat, reports.",
+    "Use tabs: bookings, archived bookings, members & top-up, marquee, support chat, guestbook replies, reports.",
 
   "booking.rulesFooter":
     "Rules: max {{dayCap}} same day, max {{weekCap}} same work week; cancelled do not count toward caps.",

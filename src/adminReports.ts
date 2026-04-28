@@ -232,7 +232,7 @@ export function mountAdminReportsPanel(
       grid.append(
         statCard(t("admin.reports.card.totalDocs", "預約文件總數"), fmtInt(total)),
         statCard(t("admin.reports.card.mainList", "主列表筆數"), fmtInt(mainList.length)),
-        statCard(t("admin.reports.card.hiddenDeleted", "隱藏／已刪除"), fmtInt(hiddenOrDeleted)),
+        statCard(t("admin.reports.card.hiddenDeleted", "封存／已刪除"), fmtInt(hiddenOrDeleted)),
         statCard(t("admin.reports.card.todayBookings", "今日預約（曆日）"), fmtInt(todayBookings.length)),
         statCard(t("admin.reports.card.weekBookings", "本週預約（週一起算）"), fmtInt(weekBookings.length)),
         statCard(t("admin.reports.card.monthBookings", "本月預約"), fmtInt(monthBookings.length)),
