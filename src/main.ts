@@ -2630,7 +2630,7 @@ function render() {
         grantDrawBtn.removeAttribute("disabled");
       }
     });
-    const announcementSection = el("div", { class: "admin-announce" }, []);
+    const announcementSection = el("div", { class: "admin-announce admin-announce--settings" }, []);
 
     const marqueeTextEnabled = el("input", { type: "checkbox" });
     const marqueeTextBody = el("input", {
@@ -3104,15 +3104,20 @@ function render() {
       }
     });
 
-    announcementSection.append(
-      el("h3", {}, [t("admin.announce.heading", "跑馬燈公告")]),
-      el("p", { class: "hint" }, [
+    const announceIntroDetails = el("details", { class: "admin-announce__details" }, [
+      el("summary", { class: "admin-announce__details-summary" }, [
+        t("admin.announce.detailsSummary", "Firestore 路徑與完整說明"),
+      ]),
+      el("div", { class: "admin-announce__details-body hint" }, [
         t(
           "admin.announce.intro",
           "頂部與底部分開設定：Firestore `siteSettings/marqueeText`、`siteSettings/marqueeLed`；兩者皆可設定捲動速度（像素／秒）。",
         ),
       ]),
-      el("h4", { class: "admin-subhead" }, [t("admin.announce.topHeading", "頂部 · 文字跑馬燈")]),
+    ]);
+
+    const marqueeTopSub = el("div", { class: "admin-announce__sub admin-announce__sub--top" }, [
+      el("h4", { class: "admin-announce__sub-title" }, [t("admin.announce.topHeading", "頂部 · 文字跑馬燈")]),
       el("label", { class: "field" }, [t("admin.announce.topLabel", "內容"), marqueeTextBody]),
       el("label", { class: "field led-speed-field" }, [
         t("admin.announce.speedLabel", "捲動速度"),
@@ -3127,7 +3132,10 @@ function render() {
       el("label", { class: "field checkbox-field" }, [marqueeTextEnabled, el("span", {}, [t("admin.announce.enable", "啟用")])]),
       el("div", { class: "row-actions" }, [saveMarqueeTextBtn]),
       marqueeTextStatus,
-      el("h4", { class: "admin-subhead" }, [t("admin.announce.bottomHeading", "底部 · LED 跑馬燈")]),
+    ]);
+
+    const marqueeBottomSub = el("div", { class: "admin-announce__sub admin-announce__sub--bottom" }, [
+      el("h4", { class: "admin-announce__sub-title" }, [t("admin.announce.bottomHeading", "底部 · LED 跑馬燈")]),
       el("label", { class: "field" }, [t("admin.announce.bottomLabel", "內容"), marqueeLedBody]),
       el("label", { class: "field led-speed-field" }, [
         t("admin.announce.speedLabel", "捲動速度"),
@@ -3142,6 +3150,22 @@ function render() {
       el("label", { class: "field checkbox-field" }, [marqueeLedEnabled, el("span", {}, [t("admin.announce.enable", "啟用")])]),
       el("div", { class: "row-actions" }, [saveMarqueeLedBtn]),
       marqueeLedStatus,
+    ]);
+
+    const blockMarquee = el("section", { class: "admin-announce__block admin-announce__block--marquee" }, [
+      el("h4", { class: "admin-announce__block-title" }, [t("admin.announce.blockMarquee", "跑馬燈（頂部／底部）")]),
+      el("p", { class: "hint admin-announce__block-lead" }, [
+        t("admin.announce.blockMarqueeLead", "分別設定橫幅文字與底部 LED；可調捲動速度與是否啟用。"),
+      ]),
+      marqueeTopSub,
+      marqueeBottomSub,
+    ]);
+
+    const blockPlay = el("section", { class: "admin-announce__block admin-announce__block--play" }, [
+      el("h4", { class: "admin-announce__block-title" }, [t("admin.announce.blockPlay", "輪盤與試玩")]),
+      el("p", { class: "hint admin-announce__block-lead" }, [
+        t("admin.announce.blockPlayLead", "前台試玩相關開關與獎項初始化（與跑馬燈無關）。"),
+      ]),
       el("h4", { class: "admin-subhead" }, [t("admin.announce.wheelHeading", "前台 · 輪盤特效預覽")]),
       el("p", { class: "hint" }, [
         t(
@@ -3183,6 +3207,13 @@ function render() {
       ]),
       el("div", { class: "row-actions" }, [saveLuckySlotDemoBtn]),
       luckySlotDemoStatus,
+    ]);
+
+    const blockRules = el("section", { class: "admin-announce__block admin-announce__block--rules" }, [
+      el("h4", { class: "admin-announce__block-title" }, [t("admin.announce.blockRules", "預約名額與時段")]),
+      el("p", { class: "hint admin-announce__block-lead" }, [
+        t("admin.announce.blockRulesLead", "名額上限與不開放時段；影響可預約邏輯。"),
+      ]),
       el("h4", { class: "admin-subhead" }, [t("admin.caps.heading", "預約名額上限")]),
       el("p", { class: "hint" }, [
         t("admin.caps.hintA", "控制「同一天」「同一工作週（週一至週五曆）」各最多幾筆有效預約（"),
@@ -3219,6 +3250,20 @@ function render() {
       bookingBlocksRows,
       el("div", { class: "row-actions" }, [addBookingBlockRowBtn, saveBookingBlocksBtn]),
       bookingBlocksStatus,
+    ]);
+
+    announcementSection.append(
+      el("h3", { class: "admin-announce__page-title" }, [t("admin.announce.heading", "跑馬燈公告")]),
+      el("p", { class: "hint admin-announce__page-lead" }, [
+        t(
+          "admin.announce.introShort",
+          "此分頁集中調整站內跑馬燈、試玩開關與預約規則；區塊已分組，技術路徑可展開查看。",
+        ),
+      ]),
+      announceIntroDetails,
+      blockMarquee,
+      blockPlay,
+      blockRules,
     );
     walletTopupSection.append(
       el("h3", {}, [t("admin.pricing.heading", "定價與點數兌換")]),

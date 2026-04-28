@@ -373,6 +373,15 @@ export const EN: Record<string, string> = {
   "admin.dayLabels": "Mon,Tue,Wed,Thu,Fri",
 
   "admin.announce.heading": "Marquee announcements",
+  "admin.announce.introShort":
+    "Marquee, demo toggles, and booking rules are grouped below. Expand “Firestore paths” for technical detail.",
+  "admin.announce.detailsSummary": "Firestore paths / full marquee note",
+  "admin.announce.blockMarquee": "Marquee (top & bottom)",
+  "admin.announce.blockMarqueeLead": "Separate text strip and LED strip; set speed and on/off.",
+  "admin.announce.blockPlay": "Wheel & demos",
+  "admin.announce.blockPlayLead": "Preview wheel, seed prizes, and demo slot tab (not related to marquee).",
+  "admin.announce.blockRules": "Booking caps & closed windows",
+  "admin.announce.blockRulesLead": "Limits and blocked time ranges affect what slots can be booked.",
   "admin.announce.intro":
     "Top and bottom are configured separately in Firestore: siteSettings/marqueeText and siteSettings/marqueeLed. Each supports text, enable, and scroll speed (px/s).",
   "admin.announce.topHeading": "Top · text marquee",
