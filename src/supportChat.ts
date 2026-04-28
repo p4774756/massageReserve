@@ -283,7 +283,13 @@ export function mountMemberSupportChat(db: Firestore, auth: Auth, mount: HTMLEle
 /** 後台：對話列表 + 回覆 */
 export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElement): SupportChatUnmount {
   const wrap = el("div", { class: "support-chat support-chat--admin" }, []);
-  const head = el("h3", {}, [t("supportUi.adminTitle", "客服對話")]);
+  const head = el("h3", {}, [t("supportUi.adminPanelHead", "一對一客服私訊")]);
+  const scopeNote = el("p", { class: "hint admin-scope-banner admin-scope-banner--support" }, [
+    t(
+      "supportUi.adminScopeNote",
+      "此為非公開一對一私訊（不會出現在預約頁心得板）；公開心得回覆請用同一主分頁內的「心得回覆」子分頁。",
+    ),
+  ]);
   const hint = el("p", { class: "hint" }, [
     t(
       "supportUi.adminIntroA",
@@ -374,7 +380,7 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
   log.hidden = true;
   inputRow.hidden = true;
 
-  wrap.append(head, hint, statusLine, split);
+  wrap.append(head, scopeNote, hint, statusLine, split);
   mount.append(wrap);
 
   let listUnsub: (() => void) | null = null;

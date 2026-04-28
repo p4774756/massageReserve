@@ -52,7 +52,6 @@ import { attachMusicMiniPlayerFloatDrag } from "./musicMiniPlayerFloatDock";
 import { mountAdminSupportChat, mountMemberSupportChat, type SupportChatUnmount } from "./supportChat";
 import { attachSupportChatFloatDrag } from "./supportChatFloatDock";
 import { createVisitorStatsLine } from "./visitorStats";
-import { mountLuckySlotMachine } from "./luckySlotMachine";
 import { allStartSlots } from "./slots";
 import { runWheelSpectacle } from "./wheelSpectacle";
 import {
@@ -2075,16 +2074,14 @@ function render() {
   const guestbookMount = el("div", { class: "guestbook-mount" });
   mountGuestbook(db, auth, guestbookMount);
 
-  let bookSubTab: "book" | "guestbook" | "wheel" | "luckyslot" | "mybookings" = "book";
-  /** 後台 `siteSettings/luckySlotDemo`；未建立或欄位缺省時視為顯示（與既有行為一致） */
-  let luckySlotBookTabEnabled = true;
+  let bookSubTab: "book" | "guestbook" | "wheel" | "mybookings" = "book";
 
   const bookTabList = el("div", { class: "book-tabs", role: "tablist" });
   bookTabList.setAttribute(
     "aria-label",
     t(
       "book.tabsAria",
-      "預約按摩、我的預約、心得與評價、抽輪盤、試玩老虎機（「我的預約／抽輪盤」於登入會員後顯示）",
+      "預約按摩、我的預約、心得與評價、抽輪盤（「我的預約／抽輪盤」於登入會員後顯示）",
     ),
   );
   const tabBook = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-book" }, [
@@ -2096,30 +2093,24 @@ function render() {
   const tabWheel = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-wheel" }, [
     t("book.tab.wheel", "抽輪盤"),
   ]);
-  const tabLuckySlot = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-lucky-slot" }, [
-    t("book.tab.luckySlot", "老虎機（試玩）"),
-  ]);
   const tabMyBookings = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-my-bookings" }, [
     t("book.tab.myBookings", "我的預約"),
   ]);
   tabBook.setAttribute("aria-controls", "book-tab-panel-book");
   tabGuestbook.setAttribute("aria-controls", "book-tab-panel-guestbook");
   tabWheel.setAttribute("aria-controls", "book-tab-panel-wheel");
-  tabLuckySlot.setAttribute("aria-controls", "book-tab-panel-lucky-slot");
   tabMyBookings.setAttribute("aria-controls", "book-tab-panel-my-bookings");
   tabBook.setAttribute("aria-selected", "true");
   tabGuestbook.setAttribute("aria-selected", "false");
   tabWheel.setAttribute("aria-selected", "false");
-  tabLuckySlot.setAttribute("aria-selected", "false");
   tabMyBookings.setAttribute("aria-selected", "false");
   tabBook.tabIndex = 0;
   tabGuestbook.tabIndex = -1;
   tabWheel.tabIndex = -1;
-  tabLuckySlot.tabIndex = -1;
   tabMyBookings.tabIndex = -1;
   tabMyBookings.hidden = memberExtrasWrap.hidden;
   tabWheel.hidden = memberExtrasWrap.hidden;
-  bookTabList.append(tabBook, tabMyBookings, tabGuestbook, tabWheel, tabLuckySlot);
+  bookTabList.append(tabBook, tabMyBookings, tabGuestbook, tabWheel);
 
   const bookPanelBook = el("div", {
     class: "book-tab-panel",
@@ -2183,15 +2174,6 @@ function render() {
   bookPanelWheel.setAttribute("aria-labelledby", "book-tab-wheel");
   bookPanelWheel.append(wheelRulesHint, wheelRow);
 
-  const bookPanelLuckySlot = el("div", {
-    class: "book-tab-panel book-tab-panel--lucky-slot",
-    id: "book-tab-panel-lucky-slot",
-    role: "tabpanel",
-    hidden: true,
-  });
-  bookPanelLuckySlot.setAttribute("aria-labelledby", "book-tab-lucky-slot");
-  mountLuckySlotMachine(bookPanelLuckySlot, t);
-
   const bookPanelMyBookings = el("div", {
     class: "book-tab-panel book-tab-panel--my-bookings",
     id: "book-tab-panel-my-bookings",
@@ -2201,29 +2183,24 @@ function render() {
   bookPanelMyBookings.setAttribute("aria-labelledby", "book-tab-my-bookings");
   bookPanelMyBookings.append(myBookingsSection);
 
-  function setBookSubTab(which: "book" | "guestbook" | "wheel" | "luckyslot" | "mybookings") {
+  function setBookSubTab(which: "book" | "guestbook" | "wheel" | "mybookings") {
     bookSubTab = which;
     tabBook.setAttribute("aria-selected", String(which === "book"));
     tabGuestbook.setAttribute("aria-selected", String(which === "guestbook"));
     tabWheel.setAttribute("aria-selected", String(which === "wheel"));
-    tabLuckySlot.setAttribute("aria-selected", String(which === "luckyslot"));
     tabMyBookings.setAttribute("aria-selected", String(which === "mybookings"));
     tabBook.tabIndex = which === "book" ? 0 : -1;
     tabGuestbook.tabIndex = which === "guestbook" ? 0 : -1;
     tabWheel.tabIndex = which === "wheel" ? 0 : -1;
-    tabLuckySlot.tabIndex = which === "luckyslot" ? 0 : -1;
     tabMyBookings.tabIndex = which === "mybookings" ? 0 : -1;
-    tabLuckySlot.hidden = !luckySlotBookTabEnabled;
     bookPanelBook.hidden = which !== "book";
     bookPanelGuestbook.hidden = which !== "guestbook";
     bookPanelWheel.hidden = which !== "wheel";
-    bookPanelLuckySlot.hidden = which !== "luckyslot" || !luckySlotBookTabEnabled;
     bookPanelMyBookings.hidden = which !== "mybookings";
   }
   tabBook.addEventListener("click", () => setBookSubTab("book"));
   tabGuestbook.addEventListener("click", () => setBookSubTab("guestbook"));
   tabWheel.addEventListener("click", () => setBookSubTab("wheel"));
-  tabLuckySlot.addEventListener("click", () => setBookSubTab("luckyslot"));
   tabMyBookings.addEventListener("click", () => setBookSubTab("mybookings"));
 
   syncBookMyBookingsTabVisibility = () => {
@@ -2238,30 +2215,11 @@ function render() {
   };
   syncBookMyBookingsTabVisibility();
 
-  const luckySlotDemoSettingsRef = doc(db, "siteSettings", "luckySlotDemo");
-  onSnapshot(
-    luckySlotDemoSettingsRef,
-    (snap) => {
-      const data = snap.data() as { showBookTab?: unknown } | undefined;
-      luckySlotBookTabEnabled = data?.showBookTab !== false;
-      if (!luckySlotBookTabEnabled && bookSubTab === "luckyslot") {
-        setBookSubTab("book");
-      } else {
-        setBookSubTab(bookSubTab);
-      }
-    },
-    () => {
-      luckySlotBookTabEnabled = true;
-      setBookSubTab(bookSubTab);
-    },
-  );
-
   panelBook.append(
     bookTabList,
     bookPanelBook,
     bookPanelGuestbook,
     bookPanelWheel,
-    bookPanelLuckySlot,
     bookPanelMyBookings,
   );
 
@@ -2277,7 +2235,6 @@ function render() {
   let adminMarqueeLedUnsub: (() => void) | null = null;
   let adminWheelSpectacleUnsub: (() => void) | null = null;
   let adminPricingUnsub: (() => void) | null = null;
-  let adminLuckySlotDemoUnsub: (() => void) | null = null;
   let adminBookingCapsUnsub: (() => void) | null = null;
   let adminBookingBlocksUnsub: (() => void) | null = null;
   let adminSupportChatUnmount: SupportChatUnmount | null = null;
@@ -2303,10 +2260,6 @@ function render() {
     if (adminPricingUnsub) {
       adminPricingUnsub();
       adminPricingUnsub = null;
-    }
-    if (adminLuckySlotDemoUnsub) {
-      adminLuckySlotDemoUnsub();
-      adminLuckySlotDemoUnsub = null;
     }
     if (adminBookingCapsUnsub) {
       adminBookingCapsUnsub();
@@ -2748,48 +2701,6 @@ function render() {
       }
     });
 
-    const luckySlotDemoDocRef = doc(db, "siteSettings", "luckySlotDemo");
-    const luckySlotShowBookTab = el("input", { type: "checkbox" });
-    const saveLuckySlotDemoBtn = el("button", { class: "ghost", type: "button" }, [
-      t("admin.luckySlotDemo.save", "儲存試玩老虎機分頁開關"),
-    ]);
-    const luckySlotDemoStatus = el("div", { class: "status-line" });
-
-    adminLuckySlotDemoUnsub = onSnapshot(
-      luckySlotDemoDocRef,
-      (snap) => {
-        const data = snap.data() as { showBookTab?: unknown } | undefined;
-        luckySlotShowBookTab.checked = data?.showBookTab !== false;
-      },
-      () => {
-        luckySlotDemoStatus.textContent = t("admin.snapshot.loadFailLuckySlot", "無法讀取試玩老虎機設定。");
-        luckySlotDemoStatus.className = "status-line error";
-      },
-    );
-
-    saveLuckySlotDemoBtn.addEventListener("click", async () => {
-      luckySlotDemoStatus.textContent = "";
-      luckySlotDemoStatus.className = "status-line";
-      saveLuckySlotDemoBtn.setAttribute("disabled", "true");
-      try {
-        await setDoc(
-          luckySlotDemoDocRef,
-          {
-            showBookTab: luckySlotShowBookTab.checked,
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true },
-        );
-        luckySlotDemoStatus.textContent = t("admin.status.updated", "已更新");
-        luckySlotDemoStatus.classList.add("ok");
-      } catch (e) {
-        luckySlotDemoStatus.textContent = e instanceof Error ? e.message : t("admin.memberList.saveFail", "儲存失敗");
-        luckySlotDemoStatus.classList.add("error");
-      } finally {
-        saveLuckySlotDemoBtn.removeAttribute("disabled");
-      }
-    });
-
     const bookingCapsDocRef = doc(db, "siteSettings", "bookingCaps");
     const capMaxPerDayInput = el("input", {
       type: "number",
@@ -3162,9 +3073,9 @@ function render() {
     ]);
 
     const blockPlay = el("section", { class: "admin-announce__block admin-announce__block--play" }, [
-      el("h4", { class: "admin-announce__block-title" }, [t("admin.announce.blockPlay", "輪盤與試玩")]),
+      el("h4", { class: "admin-announce__block-title" }, [t("admin.announce.blockPlay", "輪盤")]),
       el("p", { class: "hint admin-announce__block-lead" }, [
-        t("admin.announce.blockPlayLead", "前台試玩相關開關與獎項初始化（與跑馬燈無關）。"),
+        t("admin.announce.blockPlayLead", "前台輪盤預覽開關與獎項初始化（與跑馬燈無關）。"),
       ]),
       el("h4", { class: "admin-subhead" }, [t("admin.announce.wheelHeading", "前台 · 輪盤特效預覽")]),
       el("p", { class: "hint" }, [
@@ -3190,23 +3101,6 @@ function render() {
       ]),
       el("div", { class: "row-actions" }, [seedWheelPrizesBtn]),
       seedWheelPrizesStatus,
-      el("h4", { class: "admin-subhead" }, [t("admin.announce.luckySlotHeading", "前台 · 試玩老虎機分頁")]),
-      el("p", { class: "hint" }, [
-        t(
-          "admin.announce.luckySlotHintA",
-          "控制預約主卡是否顯示「老虎機（試玩）」分頁；關閉後訪客與會員皆看不到該分頁。Firestore：",
-        ),
-        el("code", {}, ["siteSettings/luckySlotDemo"]),
-        t("admin.announce.luckySlotHintB", " 欄位 "),
-        el("code", {}, ["showBookTab"]),
-        t("admin.announce.luckySlotHintC", "（布林；未建立或為 true 時顯示分頁）。"),
-      ]),
-      el("label", { class: "field checkbox-field" }, [
-        luckySlotShowBookTab,
-        el("span", {}, [t("admin.announce.luckySlotToggle", "顯示前台「老虎機（試玩）」分頁")]),
-      ]),
-      el("div", { class: "row-actions" }, [saveLuckySlotDemoBtn]),
-      luckySlotDemoStatus,
     ]);
 
     const blockRules = el("section", { class: "admin-announce__block admin-announce__block--rules" }, [
@@ -3253,11 +3147,11 @@ function render() {
     ]);
 
     announcementSection.append(
-      el("h3", { class: "admin-announce__page-title" }, [t("admin.announce.heading", "跑馬燈公告")]),
+      el("h3", { class: "admin-announce__page-title" }, [t("admin.announce.heading", "前台與預約規則")]),
       el("p", { class: "hint admin-announce__page-lead" }, [
         t(
           "admin.announce.introShort",
-          "此分頁集中調整站內跑馬燈、試玩開關與預約規則；區塊已分組，技術路徑可展開查看。",
+          "此分頁集中調整跑馬燈與 LED、輪盤預覽與獎項初始化，以及預約名額／不開放時段；區塊已分組，技術路徑可展開查看。",
         ),
       ]),
       announceIntroDetails,
@@ -4019,58 +3913,110 @@ function render() {
 
     selectMembersSubTab(0);
 
-    const tabBookings = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
-      t("admin.tab.bookings", "預約管理"),
+    const tabBookingsHub = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
+      t("admin.tab.bookingsHub", "預約與封存"),
     ]);
-    tabBookings.id = "admin-tab-trigger-bookings";
-    const tabHiddenBookings = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
-      t("admin.tab.hidden", "封存的預約"),
-    ]);
-    tabHiddenBookings.id = "admin-tab-trigger-hidden";
+    tabBookingsHub.id = "admin-tab-trigger-bookings-hub";
     const tabMembers = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
       t("admin.tab.members", "會員與儲值"),
     ]);
     tabMembers.id = "admin-tab-trigger-members";
     const tabAnnounce = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
-      t("admin.tab.announce", "跑馬燈公告"),
+      t("admin.tab.announce", "前台與預約規則"),
     ]);
     tabAnnounce.id = "admin-tab-trigger-announce";
-    const tabSupport = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
-      t("admin.tab.support", "客服對話"),
+    const tabEngage = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
+      t("admin.tab.engage", "客服與心得"),
     ]);
-    tabSupport.id = "admin-tab-trigger-support";
-    const tabGuestbookAdmin = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
-      t("admin.tab.guestbook", "心得回覆"),
-    ]);
-    tabGuestbookAdmin.id = "admin-tab-trigger-guestbook";
+    tabEngage.id = "admin-tab-trigger-engage";
     const tabReports = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
       t("admin.tab.reports", "報表"),
     ]);
     tabReports.id = "admin-tab-trigger-reports";
 
     const adminTablist = el("div", { class: "admin-tabs", role: "tablist" });
-    adminTablist.append(tabBookings, tabHiddenBookings, tabMembers, tabAnnounce, tabSupport, tabGuestbookAdmin, tabReports);
+    adminTablist.append(tabBookingsHub, tabMembers, tabAnnounce, tabEngage, tabReports);
 
-    const panelBookingsEl = el("div", { class: "admin-tab-panel", role: "tabpanel", id: "admin-tab-panel-bookings" });
-    panelBookingsEl.setAttribute("aria-labelledby", "admin-tab-trigger-bookings");
-    const panelHiddenBookingsEl = el("div", {
-      class: "admin-tab-panel",
+    const subBookingsActive = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
+      t("admin.tab.bookings", "預約管理"),
+    ]);
+    subBookingsActive.id = "admin-bookings-subtab-active";
+    const subBookingsArchived = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
+      t("admin.tab.hidden", "封存的預約"),
+    ]);
+    subBookingsArchived.id = "admin-bookings-subtab-archived";
+
+    const panelBookingsActiveSub = el("div", {
+      class: "admin-tab-panel admin-member-subpanel",
       role: "tabpanel",
-      id: "admin-tab-panel-hidden",
+      id: "admin-bookings-subpanel-active",
+    });
+    panelBookingsActiveSub.setAttribute("aria-labelledby", "admin-bookings-subtab-active");
+    const panelBookingsArchivedSub = el("div", {
+      class: "admin-tab-panel admin-member-subpanel",
+      role: "tabpanel",
+      id: "admin-bookings-subpanel-archived",
       hidden: true,
     });
-    panelHiddenBookingsEl.setAttribute("aria-labelledby", "admin-tab-trigger-hidden");
-    panelHiddenBookingsEl.append(
+    panelBookingsArchivedSub.setAttribute("aria-labelledby", "admin-bookings-subtab-archived");
+    panelBookingsArchivedSub.append(
       el("p", { class: "hint" }, [
         t(
           "admin.hidden.intro",
-          "以下為自「預約管理」主列表封存之預約，或舊版於資料庫標記為已刪除之筆。額度與可預約時段與主列表相同，仍依預約狀態計算（僅影響後台列表是否顯示）。筆數多時每頁 10 筆，請用列表下方「上一頁／下一頁」切換。",
+          "以下為自「預約管理」子分頁主列表封存之預約，或舊版於資料庫標記為已刪除之筆。額度與可預約時段與主列表相同，仍依預約狀態計算（僅影響後台列表是否顯示）。筆數多時每頁 10 筆，請用列表下方「上一頁／下一頁」切換。",
         ),
       ]),
       hiddenBookingsStatus,
       hiddenTableHolder,
       hiddenPager,
     );
+
+    subBookingsActive.setAttribute("aria-controls", "admin-bookings-subpanel-active");
+    subBookingsArchived.setAttribute("aria-controls", "admin-bookings-subpanel-archived");
+    const bookingsSubTablist = el("div", { class: "admin-tabs admin-member-subtabs", role: "tablist" });
+    bookingsSubTablist.append(subBookingsActive, subBookingsArchived);
+    const bookingsSubPanelsWrap = el("div", { class: "admin-member-subpanels" });
+    bookingsSubPanelsWrap.append(panelBookingsActiveSub, panelBookingsArchivedSub);
+
+    const bookingsSubTabButtons = [subBookingsActive, subBookingsArchived] as const;
+    const bookingsSubTabPanels = [panelBookingsActiveSub, panelBookingsArchivedSub] as const;
+
+    function selectBookingsSubTab(index: 0 | 1) {
+      bookingsSubTabButtons.forEach((btn, i) => {
+        const on = i === index;
+        btn.setAttribute("aria-selected", String(on));
+        btn.classList.toggle("is-active", on);
+        btn.tabIndex = on ? 0 : -1;
+      });
+      bookingsSubTabPanels.forEach((panel, i) => {
+        panel.hidden = i !== index;
+        panel.classList.toggle("is-active", i === index);
+      });
+    }
+
+    subBookingsActive.addEventListener("click", () => selectBookingsSubTab(0));
+    subBookingsArchived.addEventListener("click", () => selectBookingsSubTab(1));
+    bookingsSubTablist.addEventListener("keydown", (ev) => {
+      if (ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;
+      ev.preventDefault();
+      const cur = bookingsSubTabButtons.findIndex((b) => b.getAttribute("aria-selected") === "true");
+      if (cur < 0) return;
+      const delta = ev.key === "ArrowRight" ? 1 : -1;
+      const n = bookingsSubTabButtons.length;
+      const next = ((cur + delta) % n + n) % n;
+      selectBookingsSubTab(next as 0 | 1);
+      bookingsSubTabButtons[next].focus();
+    });
+    selectBookingsSubTab(0);
+
+    const panelBookingsHubEl = el("div", {
+      class: "admin-tab-panel",
+      role: "tabpanel",
+      id: "admin-tab-panel-bookings-hub",
+    });
+    panelBookingsHubEl.setAttribute("aria-labelledby", "admin-tab-trigger-bookings-hub");
+    panelBookingsHubEl.append(bookingsSubTablist, bookingsSubPanelsWrap);
+
     const panelMembersEl = el("div", {
       class: "admin-tab-panel",
       role: "tabpanel",
@@ -4085,27 +4031,83 @@ function render() {
       hidden: true,
     });
     panelAnnounceEl.setAttribute("aria-labelledby", "admin-tab-trigger-announce");
-    const panelSupportEl = el("div", {
-      class: "admin-tab-panel",
+
+    const subEngageSupport = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
+      t("admin.tab.support", "客服對話"),
+    ]);
+    subEngageSupport.id = "admin-engage-subtab-support";
+    const subEngageGuestbook = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
+      t("admin.tab.guestbook", "心得回覆"),
+    ]);
+    subEngageGuestbook.id = "admin-engage-subtab-guestbook";
+
+    const panelEngageSupportSub = el("div", {
+      class: "admin-tab-panel admin-member-subpanel",
       role: "tabpanel",
-      id: "admin-tab-panel-support",
-      hidden: true,
+      id: "admin-engage-subpanel-support",
     });
-    panelSupportEl.setAttribute("aria-labelledby", "admin-tab-trigger-support");
+    panelEngageSupportSub.setAttribute("aria-labelledby", "admin-engage-subtab-support");
     const adminSupportChatHost = el("div", { class: "admin-support-chat-host" });
-    panelSupportEl.append(adminSupportChatHost);
+    panelEngageSupportSub.append(adminSupportChatHost);
     adminSupportChatUnmount = mountAdminSupportChat(db, auth, adminSupportChatHost);
 
-    const panelGuestbookAdminEl = el("div", {
-      class: "admin-tab-panel",
+    const panelEngageGuestbookSub = el("div", {
+      class: "admin-tab-panel admin-member-subpanel",
       role: "tabpanel",
-      id: "admin-tab-panel-guestbook",
+      id: "admin-engage-subpanel-guestbook",
       hidden: true,
     });
-    panelGuestbookAdminEl.setAttribute("aria-labelledby", "admin-tab-trigger-guestbook");
+    panelEngageGuestbookSub.setAttribute("aria-labelledby", "admin-engage-subtab-guestbook");
     const adminGuestbookHost = el("div", { class: "admin-guestbook-host" });
-    panelGuestbookAdminEl.append(adminGuestbookHost);
+    panelEngageGuestbookSub.append(adminGuestbookHost);
     adminGuestbookUnmount = mountAdminGuestbook(db, auth, adminGuestbookHost);
+
+    subEngageSupport.setAttribute("aria-controls", "admin-engage-subpanel-support");
+    subEngageGuestbook.setAttribute("aria-controls", "admin-engage-subpanel-guestbook");
+    const engageSubTablist = el("div", { class: "admin-tabs admin-member-subtabs", role: "tablist" });
+    engageSubTablist.append(subEngageSupport, subEngageGuestbook);
+    const engageSubPanelsWrap = el("div", { class: "admin-member-subpanels" });
+    engageSubPanelsWrap.append(panelEngageSupportSub, panelEngageGuestbookSub);
+
+    const engageSubTabButtons = [subEngageSupport, subEngageGuestbook] as const;
+    const engageSubTabPanels = [panelEngageSupportSub, panelEngageGuestbookSub] as const;
+
+    function selectEngageSubTab(index: 0 | 1) {
+      engageSubTabButtons.forEach((btn, i) => {
+        const on = i === index;
+        btn.setAttribute("aria-selected", String(on));
+        btn.classList.toggle("is-active", on);
+        btn.tabIndex = on ? 0 : -1;
+      });
+      engageSubTabPanels.forEach((panel, i) => {
+        panel.hidden = i !== index;
+        panel.classList.toggle("is-active", i === index);
+      });
+    }
+
+    subEngageSupport.addEventListener("click", () => selectEngageSubTab(0));
+    subEngageGuestbook.addEventListener("click", () => selectEngageSubTab(1));
+    engageSubTablist.addEventListener("keydown", (ev) => {
+      if (ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;
+      ev.preventDefault();
+      const cur = engageSubTabButtons.findIndex((b) => b.getAttribute("aria-selected") === "true");
+      if (cur < 0) return;
+      const delta = ev.key === "ArrowRight" ? 1 : -1;
+      const n = engageSubTabButtons.length;
+      const next = ((cur + delta) % n + n) % n;
+      selectEngageSubTab(next as 0 | 1);
+      engageSubTabButtons[next].focus();
+    });
+    selectEngageSubTab(0);
+
+    const panelEngageEl = el("div", {
+      class: "admin-tab-panel",
+      role: "tabpanel",
+      id: "admin-tab-panel-engage",
+      hidden: true,
+    });
+    panelEngageEl.setAttribute("aria-labelledby", "admin-tab-trigger-engage");
+    panelEngageEl.append(engageSubTablist, engageSubPanelsWrap);
 
     const panelReportsEl = el("div", {
       class: "admin-tab-panel",
@@ -4117,49 +4119,23 @@ function render() {
     const { root: adminReportsInner, refresh: refreshAdminReports } = mountAdminReportsPanel(db, () => adminBookingsReportCache);
     panelReportsEl.append(adminReportsInner);
 
-    tabBookings.setAttribute("aria-controls", "admin-tab-panel-bookings");
-    tabHiddenBookings.setAttribute("aria-controls", "admin-tab-panel-hidden");
+    tabBookingsHub.setAttribute("aria-controls", "admin-tab-panel-bookings-hub");
     tabMembers.setAttribute("aria-controls", "admin-tab-panel-members");
     tabAnnounce.setAttribute("aria-controls", "admin-tab-panel-announce");
-    tabSupport.setAttribute("aria-controls", "admin-tab-panel-support");
-    tabGuestbookAdmin.setAttribute("aria-controls", "admin-tab-panel-guestbook");
+    tabEngage.setAttribute("aria-controls", "admin-tab-panel-engage");
     tabReports.setAttribute("aria-controls", "admin-tab-panel-reports");
 
-    panelBookingsEl.append(adminStatus, tableHolder);
+    panelBookingsActiveSub.append(adminStatus, tableHolder);
     panelMembersEl.append(membersSubTablist, membersSubPanelsWrap);
     panelAnnounceEl.append(announcementSection);
 
     const adminPanelsWrap = el("div", { class: "admin-tab-panels" });
-    adminPanelsWrap.append(
-      panelBookingsEl,
-      panelHiddenBookingsEl,
-      panelMembersEl,
-      panelAnnounceEl,
-      panelSupportEl,
-      panelGuestbookAdminEl,
-      panelReportsEl,
-    );
+    adminPanelsWrap.append(panelBookingsHubEl, panelMembersEl, panelAnnounceEl, panelEngageEl, panelReportsEl);
 
-    const adminTabButtons = [
-      tabBookings,
-      tabHiddenBookings,
-      tabMembers,
-      tabAnnounce,
-      tabSupport,
-      tabGuestbookAdmin,
-      tabReports,
-    ] as const;
-    const adminTabPanels = [
-      panelBookingsEl,
-      panelHiddenBookingsEl,
-      panelMembersEl,
-      panelAnnounceEl,
-      panelSupportEl,
-      panelGuestbookAdminEl,
-      panelReportsEl,
-    ] as const;
+    const adminTabButtons = [tabBookingsHub, tabMembers, tabAnnounce, tabEngage, tabReports] as const;
+    const adminTabPanels = [panelBookingsHubEl, panelMembersEl, panelAnnounceEl, panelEngageEl, panelReportsEl] as const;
 
-    function selectAdminTab(index: 0 | 1 | 2 | 3 | 4 | 5 | 6) {
+    function selectAdminTab(index: 0 | 1 | 2 | 3 | 4) {
       adminTabButtons.forEach((btn, i) => {
         const on = i === index;
         btn.setAttribute("aria-selected", String(on));
@@ -4170,16 +4146,14 @@ function render() {
         panel.hidden = i !== index;
         panel.classList.toggle("is-active", i === index);
       });
-      if (index === 6) void refreshAdminReports();
+      if (index === 4) void refreshAdminReports();
     }
 
-    tabBookings.addEventListener("click", () => selectAdminTab(0));
-    tabHiddenBookings.addEventListener("click", () => selectAdminTab(1));
-    tabMembers.addEventListener("click", () => selectAdminTab(2));
-    tabAnnounce.addEventListener("click", () => selectAdminTab(3));
-    tabSupport.addEventListener("click", () => selectAdminTab(4));
-    tabGuestbookAdmin.addEventListener("click", () => selectAdminTab(5));
-    tabReports.addEventListener("click", () => selectAdminTab(6));
+    tabBookingsHub.addEventListener("click", () => selectAdminTab(0));
+    tabMembers.addEventListener("click", () => selectAdminTab(1));
+    tabAnnounce.addEventListener("click", () => selectAdminTab(2));
+    tabEngage.addEventListener("click", () => selectAdminTab(3));
+    tabReports.addEventListener("click", () => selectAdminTab(4));
 
     adminTablist.addEventListener("keydown", (ev) => {
       if (ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;
@@ -4189,7 +4163,7 @@ function render() {
       const delta = ev.key === "ArrowRight" ? 1 : -1;
       const n = adminTabButtons.length;
       const next = ((cur + delta) % n + n) % n;
-      selectAdminTab(next as 0 | 1 | 2 | 3 | 4 | 5 | 6);
+      selectAdminTab(next as 0 | 1 | 2 | 3 | 4);
       adminTabButtons[next].focus();
     });
 
@@ -4494,7 +4468,7 @@ function render() {
               t("admin.booking.hideConfirmTitle", "確認封存此筆預約"),
               t(
                 "admin.booking.hideConfirmBody",
-                "確定將此筆預約從後台主列表封存嗎？\n\n（不改變預約狀態；會員端仍顯示原狀態。額度與可預約時段仍依預約狀態計算，與主列表邏輯相同。封存後可至「封存的預約」分頁取消封存。）\n\n姓名：{{name}}\n日期：{{date}}\n開始時間：{{start}}",
+                "確定將此筆預約從後台主列表封存嗎？\n\n（不改變預約狀態；會員端仍顯示原狀態。額度與可預約時段仍依預約狀態計算，與主列表邏輯相同。封存後可至「預約與封存」內「封存的預約」子分頁取消封存。）\n\n姓名：{{name}}\n日期：{{date}}\n開始時間：{{start}}",
                 { name: b.displayName ?? "", date: b.dateKey ?? "", start: b.startSlot ?? "" },
               ),
               t("admin.booking.hideBtn", "封存"),
@@ -4508,7 +4482,7 @@ function render() {
                 invisible: true,
                 updatedAt: serverTimestamp(),
               });
-              adminStatus.textContent = t("admin.status.hidden", "已封存（可至「封存的預約」查看）");
+              adminStatus.textContent = t("admin.status.hidden", "已封存（可至「預約與封存」→「封存的預約」查看）");
               adminStatus.classList.add("ok");
             } catch (e) {
               adminStatus.textContent =
@@ -4603,7 +4577,7 @@ function render() {
         )
       : t(
           "admin.backSubtitle",
-          "以分頁切換：預約管理、封存的預約、會員與儲值、跑馬燈公告、客服對話、心得回覆、報表。",
+          "以分頁切換：預約與封存（內含預約管理／封存的預約）、會員與儲值、前台與預約規則、客服與心得（內含客服對話／心得回覆）、報表。",
         );
     document.title = isBook ? t("meta.docTitle", "辦公室按摩預約") : t("admin.backTitle", "管理後台");
     panelBook.hidden = !isBook;

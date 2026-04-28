@@ -22,34 +22,12 @@ export const EN: Record<string, string> = {
   "booking.mode.member_beverage": "Member · drink credit",
 
   "book.tabsAria":
-    "Massage booking, my bookings (when signed in), reviews, wheel tab (when signed in), and demo slot machine (rightmost tab)",
+    "Massage booking, my bookings (when signed in), reviews, and wheel tab (when signed in)",
   "book.tab.booking": "Book massage",
   "book.tab.guestbook": "Reviews",
   "guestbook.shopReply": "Shop reply",
   "book.tab.wheel": "Wheel",
-  "book.tab.luckySlot": "Slot (demo)",
   "book.tab.myBookings": "My bookings",
-
-  "luckySlot.marqueeLed": "LET'S GO!!!",
-  "luckySlot.marqueeSub": "Demo spin · illustrative prizes",
-  "luckySlot.leverAria": "Pull lever to spin",
-  "luckySlot.reelAdHint": "Reward-ad slot (illustrative)",
-  "luckySlot.spin": "Spin",
-  "luckySlot.claim": "Claim",
-  "luckySlot.claimWithAd": "Watch ad & claim all",
-  "luckySlot.hint":
-    "Prizes are random client-side demos. Real rewarded ads need Ad Manager / IMA, etc.; if you set window.__MR_rewardedShow(), that implementation runs instead.",
-  "luckySlot.spinning": "Spinning…",
-  "luckySlot.stopped": "Stopped. Claim, or use the ad demo to “claim all”.",
-  "luckySlot.claimed": "Claimed (demo): ",
-  "luckySlot.needSpinFirst": "Spin once first.",
-  "luckySlot.adTitle": "Reward (demo)",
-  "luckySlot.adBody":
-    "A real rewarded video would play here. If window.__MR_rewardedShow is set, your SDK runs instead.",
-  "luckySlot.adComplete": "Simulate finished watching",
-  "luckySlot.adCancel": "Cancel",
-  "luckySlot.adCancelled": "Cancelled; nothing granted.",
-  "luckySlot.claimedAd": "After ad, claimed all (demo): ",
 
   "status.pending": "Pending",
   "status.confirmed": "Confirmed",
@@ -350,7 +328,6 @@ export const EN: Record<string, string> = {
   "admin.seedWheelPrizes.okSeeded": "Default prizes written ({{count}} rows).",
   "admin.seedWheelPrizes.skipped": "Nothing written: wheelPrizes already has data (seed runs only on an empty collection).",
   "admin.wheelSpectacle.save": "Save wheel preview toggle",
-  "admin.luckySlotDemo.save": "Save demo slot machine tab toggle",
   "admin.caps.save": "Save booking caps",
   "admin.blocks.addRow": "Add row",
   "admin.blocks.save": "Save closed booking windows",
@@ -372,14 +349,14 @@ export const EN: Record<string, string> = {
     "Each row end time must be later than start time. Intervals are [start, end).",
   "admin.dayLabels": "Mon,Tue,Wed,Thu,Fri",
 
-  "admin.announce.heading": "Marquee announcements",
+  "admin.announce.heading": "Front page & booking rules",
   "admin.announce.introShort":
-    "Marquee, demo toggles, and booking rules are grouped below. Expand “Firestore paths” for technical detail.",
+    "Marquees/LED, wheel preview & prize seeding, booking caps, and closed windows are grouped below. Expand “Firestore paths” for technical detail.",
   "admin.announce.detailsSummary": "Firestore paths / full marquee note",
   "admin.announce.blockMarquee": "Marquee (top & bottom)",
   "admin.announce.blockMarqueeLead": "Separate text strip and LED strip; set speed and on/off.",
-  "admin.announce.blockPlay": "Wheel & demos",
-  "admin.announce.blockPlayLead": "Preview wheel, seed prizes, and demo slot tab (not related to marquee).",
+  "admin.announce.blockPlay": "Wheel",
+  "admin.announce.blockPlayLead": "Preview wheel toggle and default prizes seeding (not related to marquee).",
   "admin.announce.blockRules": "Booking caps & closed windows",
   "admin.announce.blockRulesLead": "Limits and blocked time ranges affect what slots can be booked.",
   "admin.announce.intro":
@@ -397,15 +374,6 @@ export const EN: Record<string, string> = {
   "admin.announce.wheelHintA":
     "After enabling and saving, the booking page member area shows a “Preview wheel effect” button. It only plays animation, does not call spin API, and does not consume chances. Recommended off in production. Firestore: ",
   "admin.announce.wheelHintB": ".",
-
-  "admin.announce.luckySlotHeading": "Booking page · demo slot machine tab",
-  "admin.announce.luckySlotHintA":
-    "Controls whether the main booking card shows the “Slot machine (demo)” tab. When off, the tab is hidden for everyone. Firestore: ",
-  "admin.announce.luckySlotHintB": " field ",
-  "admin.announce.luckySlotHintC": " (boolean; missing doc or true = show tab).",
-  "admin.announce.luckySlotToggle": "Show “Slot machine (demo)” tab on the booking page",
-
-  "admin.snapshot.loadFailLuckySlot": "Could not load demo slot machine settings.",
 
   "admin.caps.heading": "Booking caps",
   "admin.caps.perDay": "Max bookings same day",
@@ -458,10 +426,12 @@ export const EN: Record<string, string> = {
   "admin.table.status": "Status",
   "admin.table.actions": "Actions",
 
+  "admin.tab.bookingsHub": "Bookings & archive",
   "admin.tab.bookings": "Bookings",
   "admin.tab.hidden": "Archived bookings",
   "admin.tab.members": "Members & top-up",
-  "admin.tab.announce": "Marquee",
+  "admin.tab.announce": "Front page & rules",
+  "admin.tab.engage": "Support & guestbook",
   "admin.tab.support": "Support chat",
   "admin.tab.guestbook": "Guestbook replies",
   "admin.tab.reports": "Reports",
@@ -554,7 +524,7 @@ export const EN: Record<string, string> = {
   "admin.reports.chart.star5": "5 stars",
 
   "admin.hidden.intro":
-    "Archived from the main booking list, or legacy “deleted” in the database. Caps and slots still follow real status (only affects admin list). 10 per page — use Previous/Next below.",
+    "Archived from the Bookings sub-tab’s main list, or legacy “deleted” in the database. Caps and slots still follow real status (only affects admin list). 10 per page — use Previous/Next below.",
 
   "admin.pager.prev": "Previous",
   "admin.pager.next": "Next",
@@ -630,7 +600,7 @@ export const EN: Record<string, string> = {
   "admin.booking.hideTitleCancelled": "Already cancelled",
   "admin.booking.hideConfirmTitle": "Archive this booking?",
   "admin.booking.hideConfirmBody":
-    "Archive this booking off the main admin list?\n\n(Status is unchanged; members still see the real status. Caps behave the same as the main list. You can unarchive from the “Archived bookings” tab.)\n\nName: {{name}}\nDate: {{date}}\nStart: {{start}}",
+    "Archive this booking off the main admin list?\n\n(Status is unchanged; members still see the real status. Caps behave the same as the main list. You can unarchive from Bookings & archive → “Archived bookings”.)\n\nName: {{name}}\nDate: {{date}}\nStart: {{start}}",
   "admin.booking.hideBtn": "Archive",
   "admin.status.updating": "Updating…",
   "admin.status.updated": "Updated",
@@ -642,14 +612,14 @@ export const EN: Record<string, string> = {
   "admin.status.unhidden": "Unarchived — back on the main booking list",
   "admin.status.unhideFail": "Unarchive failed (are you in the admins collection?)",
   "admin.status.hiding": "Archiving…",
-  "admin.status.hidden": "Archived (see “Archived bookings” tab)",
+  "admin.status.hidden": "Archived (Bookings & archive → Archived bookings)",
   "admin.status.hideFail": "Archive failed (are you in the admins collection?)",
   "admin.snapshot.loadFail":
     "Could not load bookings (rules, missing index, or admins doc).",
 
   "admin.backTitle": "Admin",
   "admin.backSubtitle":
-    "Use tabs: bookings, archived bookings, members & top-up, marquee, support chat, guestbook replies, reports.",
+    "Use tabs: bookings & archive (sub-tabs: main list / archived), members & top-up, front page & booking rules, support & guestbook (sub-tabs: chat / replies), reports.",
 
   "booking.rulesFooter":
     "Rules: max {{dayCap}} same day, max {{weekCap}} same work week; cancelled do not count toward caps.",
@@ -692,6 +662,8 @@ export const EN: Record<string, string> = {
   "supportUi.statusClosed": "Closed",
   "supportUi.failList": "Could not load thread list",
   "supportUi.adminTitle": "Support chat",
+  "supportUi.adminScopeNote":
+    "Private one-to-one chat (not shown on the booking guestbook). For public replies under reviews, use the “Guestbook replies” sub-tab in the same admin tab.",
   "supportUi.adminIntroA":
     "Left: member threads with tabs for Open vs Closed, each sorted by recent update. Select one to reply on the right. Firestore: ",
   "supportUi.threadListTabsAria": "Thread status tabs",
