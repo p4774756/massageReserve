@@ -38,6 +38,19 @@ jobs:
           npm ci --prefix functions
           npm run build --prefix functions
 
+      # defineString("RESEND_FROM") 在非互動 deploy 時須有 dotenv，否則 firebase-tools 會中止
+      # （與程式內 default 無關）。可選 GitHub secret RESEND_FROM；未設則與程式預設相同。
+      - name: Write Functions dotenv (RESEND_FROM)
+        run: |
+          set -euo pipefail
+          PROJECT_ID="${VITE_FIREBASE_PROJECT_ID:?VITE_FIREBASE_PROJECT_ID is required}"
+          DEFAULT_FROM='Massage預約 <onboarding@resend.dev>'
+          FROM="${RESEND_FROM:-$DEFAULT_FROM}"
+          printf '%s\n' "RESEND_FROM=$FROM" > "functions/.env.${PROJECT_ID}"
+        env:
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          RESEND_FROM: ${{ secrets.RESEND_FROM }}
+
       - name: Deploy to Firebase
         run: npx -y firebase-tools@latest deploy --non-interactive
         env:
