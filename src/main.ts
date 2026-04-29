@@ -37,7 +37,6 @@ import {
   searchMemberUsersCall,
   listMembersAdminCall,
   migrateLegacyWalletsAdminCall,
-  testSendMemberStatusTestEmailCall,
   sendMembersBroadcastAdminCall,
   updateMemberNicknameAdminCall,
   spinWheelCall,
@@ -135,17 +134,6 @@ function errorMessage(e: unknown): string {
     if (typeof m === "string" && m.length > 0) return m;
   }
   return t("errors.generic", "發生錯誤");
-}
-
-/** Resend 測試網域錯誤常為英文；在後台測試信結果附上一句與介面語系一致的處理說明 */
-function formatTestEmailCallableError(e: unknown): string {
-  const base = errorMessage(e);
-  if (!/only send testing emails/i.test(base)) return base;
-  const hint = t(
-    "admin.memberList.testEmailErrResendTestingRecipients",
-    "在 Resend 仍使用測試寄件者時，只能寄到該 Resend 帳號的信箱；要寄給其他會員請先於 Resend 驗證自有網域，並設定 Cloud Functions 參數 RESEND_FROM。",
-  );
-  return `${base}\n${hint}`;
 }
 
 /** 密碼輸入框右側「顯示／隱藏」切換（不改變 input 的 value） */
@@ -3493,18 +3481,6 @@ function render() {
     const memberListMigrateWalletBtn = el("button", { class: "ghost", type: "button" }, [
       t("admin.memberList.migrateWalletBtn", "折換未折抵金額→次數"),
     ]);
-    const memberListTestEmailBtn = el(
-      "button",
-      {
-        class: "ghost",
-        type: "button",
-        title: t(
-          "admin.memberList.testEmailTitle",
-          "依目前清單勾選會員，各寄一封【測試】預約狀態通知樣板信（不變更預約；需 RESEND_API_KEY）。若店家「新預約通知」能收信但會員收不到測試信，多半是 RESEND_FROM 仍為 Resend 預設 onboarding@resend.dev：請在 Resend 驗證自有網域並改設 RESEND_FROM。",
-        ),
-      },
-      [t("admin.memberList.testEmailBtn", "測試通知信")],
-    );
     const memberListBroadcastBtn = el(
       "button",
       {
@@ -3763,7 +3739,6 @@ function render() {
       memberListStatus.textContent = t("admin.memberList.loading", "載入會員清單中…");
       memberListStatus.className = "status-line";
       memberListRefreshBtn.setAttribute("disabled", "true");
-      memberListTestEmailBtn.setAttribute("disabled", "true");
       memberListBroadcastBtn.setAttribute("disabled", "true");
       try {
         const fn = listMembersAdminCall();
@@ -3793,7 +3768,6 @@ function render() {
         memberListStatus.classList.add("error");
       } finally {
         memberListRefreshBtn.removeAttribute("disabled");
-        memberListTestEmailBtn.removeAttribute("disabled");
         memberListBroadcastBtn.removeAttribute("disabled");
       }
     }
@@ -3807,7 +3781,6 @@ function render() {
       memberListStatus.className = "status-line";
       memberListMigrateWalletBtn.setAttribute("disabled", "true");
       memberListRefreshBtn.setAttribute("disabled", "true");
-      memberListTestEmailBtn.setAttribute("disabled", "true");
       memberListBroadcastBtn.setAttribute("disabled", "true");
       memberListStatus.textContent = t("admin.memberList.migrateRunning", "折換中…");
       try {
@@ -3833,7 +3806,6 @@ function render() {
       } finally {
         memberListMigrateWalletBtn.removeAttribute("disabled");
         memberListRefreshBtn.removeAttribute("disabled");
-        memberListTestEmailBtn.removeAttribute("disabled");
         memberListBroadcastBtn.removeAttribute("disabled");
       }
     });
@@ -4063,196 +4035,6 @@ function render() {
       subjectInput.focus();
     });
 
-    memberListTestEmailBtn.addEventListener("click", () => {
-      memberListStatus.textContent = "";
-      memberListStatus.className = "status-line";
-
-      const withEmail = [...memberListCache]
-        .filter((m) => (m.email ?? "").trim().length > 0)
-        .sort((a, b) =>
-          (a.email ?? "")
-            .toLowerCase()
-            .localeCompare((b.email ?? "").toLowerCase(), getLocale() === "en" ? "en" : "zh-Hant", {
-              numeric: true,
-            }),
-        );
-
-      if (memberListCache.length === 0) {
-        memberListStatus.textContent = t(
-          "admin.memberList.testEmailNeedLoad",
-          "請先按「重新載入會員清單」載入資料後再寄測試信。",
-        );
-        memberListStatus.classList.add("error");
-        return;
-      }
-      if (withEmail.length === 0) {
-        memberListStatus.textContent = t(
-          "admin.memberList.testEmailNoTargets",
-          "目前清單中沒有可寄送的會員（需在 Firebase Auth 有 Email）。",
-        );
-        memberListStatus.classList.add("error");
-        return;
-      }
-
-      const overlay = el("div", { class: "modal-overlay" });
-      const dialog = el("div", { class: "modal-card admin-member-test-email-dialog" });
-      dialog.setAttribute("role", "dialog");
-      dialog.setAttribute("aria-modal", "true");
-      const heading = el("h3", { id: "admin-member-test-email-title" }, [
-        t("admin.memberList.testEmailModalTitle", "測試通知信：選擇收件人"),
-      ]);
-      dialog.setAttribute("aria-labelledby", "admin-member-test-email-title");
-
-      const hint = el("p", { class: "hint admin-member-test-email-hint" }, [
-        t(
-          "admin.memberList.testEmailModalHint",
-          "僅列出目前有 Email 的會員。信內為【測試】樣板（待確認→已確認），不會改動任何預約。若會員實際收不到信，但店家新預約通知正常，請驗證寄件網域並設定 RESEND_FROM（見寄送結果下方提示）。",
-        ),
-      ]);
-
-      const listWrap = el("div", { class: "admin-member-test-email-list" });
-      const checks = new Map<string, HTMLInputElement>();
-      for (const m of withEmail) {
-        const cb = el("input", { type: "checkbox", name: "admin-test-email-target" });
-        cb.value = m.uid;
-        checks.set(m.uid, cb);
-        const label = el("label", { class: "admin-member-test-email-row" });
-        const line = `${m.email ?? ""} · ${m.nickname.trim() ? m.nickname : shortUidForDisplay(m.uid)}`;
-        label.append(cb, el("span", {}, [line]));
-        listWrap.append(label);
-      }
-
-      const toolbar = el("div", { class: "row-actions admin-member-test-email-toolbar" });
-      const selectAllBtn = el("button", { class: "ghost", type: "button" }, [
-        t("admin.memberList.testEmailSelectAll", "全選可寄送"),
-      ]);
-      const selectNoneBtn = el("button", { class: "ghost", type: "button" }, [
-        t("admin.memberList.testEmailSelectNone", "全部取消"),
-      ]);
-      toolbar.append(selectAllBtn, selectNoneBtn);
-
-      const sendBtn = el("button", { class: "primary", type: "button" }, [
-        t("admin.memberList.testEmailSend", "寄出測試信"),
-      ]);
-      const closeBtn = el("button", { class: "ghost", type: "button" }, [t("modal.close", "關閉")]);
-      const actions = el("div", { class: "modal-actions" }, [closeBtn, sendBtn]);
-      const modalStatus = el("div", { class: "status-line" });
-
-      function syncSendDisabled() {
-        const any = [...checks.values()].some((c) => c.checked);
-        if (any) sendBtn.removeAttribute("disabled");
-        else sendBtn.setAttribute("disabled", "true");
-      }
-
-      selectAllBtn.addEventListener("click", () => {
-        checks.forEach((c) => {
-          c.checked = true;
-        });
-        syncSendDisabled();
-      });
-      selectNoneBtn.addEventListener("click", () => {
-        checks.forEach((c) => {
-          c.checked = false;
-        });
-        syncSendDisabled();
-      });
-      checks.forEach((c) => c.addEventListener("change", syncSendDisabled));
-
-      const dismiss = () => {
-        document.removeEventListener("keydown", onKeyDown);
-        overlay.remove();
-      };
-      const onKeyDown = (ev: KeyboardEvent) => {
-        if (ev.key === "Escape") {
-          ev.preventDefault();
-          dismiss();
-        }
-      };
-
-      closeBtn.addEventListener("click", dismiss);
-      overlay.addEventListener("click", (ev) => {
-        if (ev.target === overlay) dismiss();
-      });
-      document.addEventListener("keydown", onKeyDown);
-
-      sendBtn.addEventListener("click", async () => {
-        const selected = [...checks.entries()]
-          .filter(([, c]) => c.checked)
-          .map(([id]) => id);
-        if (selected.length === 0) return;
-
-        const listLines = selected
-          .map((id) => {
-            const row = withEmail.find((x) => x.uid === id);
-            return row?.email ?? id;
-          })
-          .join("\n");
-        const confirmed = await showConfirmModal(
-          t("admin.memberList.testEmailConfirmTitle", "確認寄送測試通知信"),
-          t("admin.memberList.testEmailConfirmBody", "將對以下信箱各寄一封【測試】樣板信（不變更任何預約）：\n\n{{list}}\n\n共 {{n}} 封。", {
-            list: listLines,
-            n: selected.length,
-          }),
-          t("admin.memberList.testEmailConfirmOk", "確定寄出"),
-        );
-        if (!confirmed) return;
-
-        modalStatus.textContent = t("admin.memberList.testEmailSending", "寄送中…");
-        modalStatus.className = "status-line";
-        sendBtn.setAttribute("disabled", "true");
-        selectAllBtn.setAttribute("disabled", "true");
-        selectNoneBtn.setAttribute("disabled", "true");
-        checks.forEach((c) => c.setAttribute("disabled", "true"));
-        closeBtn.setAttribute("disabled", "true");
-
-        const mailLocale = getLocale() === "en" ? "en" : "zh-Hant";
-        const fn = testSendMemberStatusTestEmailCall();
-        const lines: string[] = [];
-        let deliverabilityWarning = "";
-        try {
-          for (const customerId of selected) {
-            try {
-              const res = await fn({ customerId, mailLocale, ...localeApiParam() });
-              const data = res.data as { sentTo?: string; deliverabilityWarning?: string };
-              const sentTo = data.sentTo ?? "";
-              if (typeof data.deliverabilityWarning === "string" && data.deliverabilityWarning.trim()) {
-                deliverabilityWarning = data.deliverabilityWarning.trim();
-              }
-              lines.push(
-                t("admin.memberList.testEmailLineOk", "✓ {{email}}", {
-                  email: sentTo || customerId,
-                }),
-              );
-            } catch (e) {
-              const row = withEmail.find((x) => x.uid === customerId);
-              lines.push(
-                t("admin.memberList.testEmailLineFail", "✗ {{email}}：{{err}}", {
-                  email: row?.email ?? customerId,
-                  err: formatTestEmailCallableError(e),
-                }),
-              );
-            }
-          }
-          dismiss();
-          memberListStatus.className = "status-line ok admin-member-test-email-summary";
-          memberListStatus.textContent = [
-            t("admin.memberList.testEmailResultHead", "測試信結果（{{n}} 筆）：", { n: selected.length }),
-            ...lines,
-            ...(deliverabilityWarning ? ["", deliverabilityWarning] : []),
-          ].join("\n");
-        } finally {
-          sendBtn.removeAttribute("disabled");
-        }
-      });
-
-      dialog.append(heading, hint, toolbar, listWrap, modalStatus, actions);
-      overlay.append(dialog);
-      document.body.append(overlay);
-      syncSendDisabled();
-      const firstCb = listWrap.querySelector("input[type=checkbox]") as HTMLInputElement | null;
-      (sendBtn.disabled ? firstCb ?? closeBtn : sendBtn).focus();
-    });
-
     memberListSection.append(
       el("h3", {}, [t("admin.memberList.title", "會員清單")]),
       el("p", { class: "hint" }, [
@@ -4272,7 +4054,6 @@ function render() {
       el("div", { class: "row-actions" }, [
         memberListRefreshBtn,
         memberListMigrateWalletBtn,
-        memberListTestEmailBtn,
         memberListBroadcastBtn,
       ]),
       memberListStatus,
