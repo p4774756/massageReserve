@@ -46,8 +46,6 @@ import {
   adjustSessionCreditsAdminCall,
   grantDrawChancesAdminCall,
 } from "./firebase";
-import { mountMusicMiniPlayer } from "./musicPlayer";
-import { attachMusicMiniPlayerFloatDrag } from "./musicMiniPlayerFloatDock";
 import { mountAdminSupportChat, mountMemberSupportChat, type SupportChatUnmount } from "./supportChat";
 import { attachSupportChatFloatDrag } from "./supportChatFloatDock";
 import { createVisitorStatsLine } from "./visitorStats";
@@ -497,10 +495,6 @@ function render() {
   ]);
   const visitorStats = createVisitorStatsLine(tabFromPath() !== "admin");
   const visitorStatsLine = visitorStats.element;
-  const musicMiniRoot = el("div", {
-    class: "music-mini-player-root music-mini-player-root--float",
-    id: "music-mini-player-root",
-  });
   const titleTextCol = el("div", { class: "page-head-text" }, [titleDesc, titleGuestHint, visitorStatsLine]);
 
   const memberEntryBtn = el("button", { class: "ghost member-entry", type: "button" }, [
@@ -565,113 +559,8 @@ function render() {
   ]);
 
   const shellStage = el("div", { class: "shell-stage" });
-  const shellTiltMotionOk =
-    typeof window !== "undefined" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  shellStage.classList.toggle("shell-stage--motion-ok", shellTiltMotionOk);
   shellStage.append(shell);
   root.append(shellStage);
-
-  let tiltX = 0;
-  let tiltY = 0;
-  let tiltTgtX = 0;
-  let tiltTgtY = 0;
-  let tiltRaf = 0;
-  const TILT_MAX_DEG_X = 16;
-  const TILT_MAX_DEG_Y = 11;
-
-  function pumpShellTilt() {
-    tiltRaf = 0;
-    if (tab !== "book" || !shellTiltMotionOk) return;
-    const k = 0.13;
-    tiltX += (tiltTgtX - tiltX) * k;
-    tiltY += (tiltTgtY - tiltY) * k;
-    shell.style.setProperty("--shell-tilt-rx", `${tiltY}deg`);
-    shell.style.setProperty("--shell-tilt-ry", `${tiltX}deg`);
-    if (Math.abs(tiltTgtX - tiltX) > 0.025 || Math.abs(tiltTgtY - tiltY) > 0.025) {
-      tiltRaf = requestAnimationFrame(pumpShellTilt);
-    }
-  }
-
-  function scheduleShellTiltFrame() {
-    if (tiltRaf !== 0) return;
-    tiltRaf = requestAnimationFrame(pumpShellTilt);
-  }
-
-  function updateShellStageTilt() {
-    const onBook = tab === "book";
-    const tiltOn = onBook && shellTiltMotionOk;
-    shellStage.classList.toggle("shell-stage--book-tilt", tiltOn);
-    if (!onBook) {
-      shellStage.classList.remove("shell-stage--entrance-active");
-    }
-    if (!tiltOn) {
-      tiltTgtX = tiltTgtY = tiltX = tiltY = 0;
-      shell.style.removeProperty("--shell-tilt-rx");
-      shell.style.removeProperty("--shell-tilt-ry");
-      if (tiltRaf !== 0) {
-        cancelAnimationFrame(tiltRaf);
-        tiltRaf = 0;
-      }
-      return;
-    }
-    if (!shellStage.classList.contains("shell-stage--entrance-done")) {
-      shellStage.classList.add("shell-stage--entrance-active");
-    }
-  }
-
-  shell.addEventListener("animationend", (ev: AnimationEvent) => {
-    if (ev.animationName !== "shell-tilt-entrance") return;
-    shellStage.classList.remove("shell-stage--entrance-active");
-    shellStage.classList.add("shell-stage--entrance-done");
-  });
-
-  window.addEventListener(
-    "pointermove",
-    (e: PointerEvent) => {
-      if (tab !== "book" || !shellTiltMotionOk) return;
-      if (shellStage.classList.contains("shell-stage--entrance-active")) return;
-      const nx = (e.clientX / Math.max(1, window.innerWidth)) * 2 - 1;
-      const ny = (e.clientY / Math.max(1, window.innerHeight)) * 2 - 1;
-      tiltTgtX = nx * TILT_MAX_DEG_X;
-      tiltTgtY = -ny * TILT_MAX_DEG_Y;
-      scheduleShellTiltFrame();
-    },
-    { passive: true },
-  );
-  root.append(musicMiniRoot);
-  musicMiniRoot.hidden = true;
-  let musicFloatDock: ReturnType<typeof attachMusicMiniPlayerFloatDrag> | null = null;
-  let musicPlayerHandle: ReturnType<typeof mountMusicMiniPlayer> | null = null;
-
-  function teardownMusicPlayerUi() {
-    musicFloatDock?.dispose();
-    musicFloatDock = null;
-    musicPlayerHandle?.dispose();
-    musicPlayerHandle = null;
-    musicMiniRoot.hidden = true;
-  }
-
-  /** 後台分頁不顯示浮動播放器；須與 Firestore 開關一併考量（snapshot 可能晚於 setTab 覆寫 hidden） */
-  function applyMusicMiniRootVisibility() {
-    if (!musicPlayerHandle) {
-      musicMiniRoot.hidden = true;
-      return;
-    }
-    musicMiniRoot.hidden = tab !== "book";
-  }
-
-  function syncMusicPlayerFromSiteSettings(enabledRemote: boolean) {
-    if (!enabledRemote) {
-      teardownMusicPlayerUi();
-      return;
-    }
-    if (musicPlayerHandle) return;
-    musicPlayerHandle = mountMusicMiniPlayer(musicMiniRoot, {
-      onBoundsChange: () => musicFloatDock?.relayout(),
-    });
-    musicFloatDock = attachMusicMiniPlayerFloatDrag(musicMiniRoot, musicPlayerHandle.floatDragTarget);
-    applyMusicMiniRootVisibility();
-  }
 
   /** 頂部：一般文字跑馬燈（與底部 LED 同一則公告） */
   const announcementTextStrip = el("div", {
@@ -778,18 +667,6 @@ function render() {
     },
     () => {
       syncAmbientWebglFromSiteSettings(false);
-    },
-  );
-
-  onSnapshot(
-    doc(db, "siteSettings", "musicPlayer"),
-    (snap) => {
-      const raw = snap.data() as { enabled?: unknown } | undefined;
-      const enabledRemote = typeof raw?.enabled === "boolean" ? raw.enabled : true;
-      syncMusicPlayerFromSiteSettings(enabledRemote);
-    },
-    () => {
-      syncMusicPlayerFromSiteSettings(false);
     },
   );
 
@@ -2503,7 +2380,6 @@ function render() {
   let adminBookingCapsUnsub: (() => void) | null = null;
   let adminBookingBlocksUnsub: (() => void) | null = null;
   let adminAmbientWebglUnsub: (() => void) | null = null;
-  let adminMusicPlayerUnsub: (() => void) | null = null;
   let adminSupportChatUnmount: SupportChatUnmount | null = null;
 
   function stopAdminListener() {
@@ -2538,10 +2414,6 @@ function render() {
     if (adminAmbientWebglUnsub) {
       adminAmbientWebglUnsub();
       adminAmbientWebglUnsub = null;
-    }
-    if (adminMusicPlayerUnsub) {
-      adminMusicPlayerUnsub();
-      adminMusicPlayerUnsub = null;
     }
     if (adminSupportChatUnmount) {
       adminSupportChatUnmount();
@@ -2962,12 +2834,6 @@ function render() {
       t("admin.ambient.save", "儲存背景 3D 開關"),
     ]);
     const ambientWebglStatus = el("div", { class: "status-line" });
-    const musicPlayerDocRef = doc(db, "siteSettings", "musicPlayer");
-    const musicPlayerEnabled = el("input", { type: "checkbox" });
-    const saveMusicPlayerBtn = el("button", { class: "ghost", type: "button" }, [
-      t("admin.musicPlayer.save", "儲存舒壓配樂開關"),
-    ]);
-    const musicPlayerStatus = el("div", { class: "status-line" });
     const wheelSpectacleDocRef = doc(db, "siteSettings", "wheelSpectacle");
     const wheelSpectacleShowTest = el("input", { type: "checkbox" });
     const saveWheelSpectacleBtn = el("button", { class: "ghost", type: "button" }, [t("admin.wheelSpectacle.save", "儲存輪盤預覽開關")]);
@@ -3335,38 +3201,6 @@ function render() {
       }
     });
 
-    adminMusicPlayerUnsub = onSnapshot(
-      musicPlayerDocRef,
-      (snap) => {
-        const data = snap.data() as { enabled?: unknown } | undefined;
-        musicPlayerEnabled.checked = typeof data?.enabled === "boolean" ? data.enabled : true;
-      },
-      () => {
-        musicPlayerStatus.textContent = t("admin.snapshot.loadFail", "無法讀取舒壓配樂設定。");
-        musicPlayerStatus.className = "status-line error";
-      },
-    );
-
-    saveMusicPlayerBtn.addEventListener("click", async () => {
-      musicPlayerStatus.textContent = "";
-      musicPlayerStatus.className = "status-line";
-      saveMusicPlayerBtn.setAttribute("disabled", "true");
-      try {
-        await setDoc(
-          musicPlayerDocRef,
-          { enabled: musicPlayerEnabled.checked, updatedAt: serverTimestamp() },
-          { merge: true },
-        );
-        musicPlayerStatus.textContent = t("admin.status.updated", "已更新");
-        musicPlayerStatus.classList.add("ok");
-      } catch (e) {
-        musicPlayerStatus.textContent = e instanceof Error ? e.message : t("admin.memberList.saveFail", "儲存失敗");
-        musicPlayerStatus.classList.add("error");
-      } finally {
-        saveMusicPlayerBtn.removeAttribute("disabled");
-      }
-    });
-
     saveMarqueeTextBtn.addEventListener("click", async () => {
       marqueeTextStatus.textContent = t("admin.status.processing", "處理中…");
       marqueeTextStatus.className = "status-line";
@@ -3495,27 +3329,6 @@ function render() {
       ]),
     ]);
 
-    const blockMusicPlayer = el("section", { class: "admin-announce__block admin-announce__block--music" }, [
-      el("h4", { class: "admin-announce__block-title" }, [t("admin.musicPlayer.blockTitle", "前台舒壓配樂")]),
-      el("p", { class: "hint admin-announce__block-lead" }, [
-        t(
-          "admin.musicPlayer.blockLead",
-          "左下角浮動播放器（Kevin MacLeod 等）；關閉後訪客與會員皆不顯示，也不載入音訊。未建立文件時預設為開啟。",
-        ),
-      ]),
-      el("label", { class: "field checkbox-field" }, [
-        musicPlayerEnabled,
-        el("span", {}, [t("admin.musicPlayer.enableLabel", "啟用前台舒壓配樂播放器")]),
-      ]),
-      el("div", { class: "row-actions" }, [saveMusicPlayerBtn]),
-      musicPlayerStatus,
-      el("p", { class: "hint" }, [
-        t("admin.musicPlayer.pathHintA", "Firestore："),
-        el("code", {}, ["siteSettings/musicPlayer"]),
-        t("admin.musicPlayer.pathHintB", " 欄位 enabled。"),
-      ]),
-    ]);
-
     const blockPlay = el("section", { class: "admin-announce__block admin-announce__block--play" }, [
       el("h4", { class: "admin-announce__block-title" }, [t("admin.announce.blockPlay", "輪盤")]),
       el("p", { class: "hint admin-announce__block-lead" }, [
@@ -3595,13 +3408,12 @@ function render() {
       el("p", { class: "hint admin-announce__page-lead" }, [
         t(
           "admin.announce.introShort",
-          "此分頁集中調整跑馬燈與 LED、全站背景 3D、舒壓配樂、輪盤預覽與獎項初始化，以及預約名額／不開放時段；區塊已分組，技術路徑可展開查看。",
+          "此分頁集中調整跑馬燈與 LED、全站背景 3D、輪盤預覽與獎項初始化，以及預約名額／不開放時段；區塊已分組，技術路徑可展開查看。",
         ),
       ]),
       announceIntroDetails,
       blockMarquee,
       blockAmbient3d,
-      blockMusicPlayer,
       blockPlay,
       blockRules,
     );
@@ -5024,11 +4836,9 @@ function render() {
     panelBook.hidden = !isBook;
     panelAdmin.hidden = isBook;
     hostPortrait.hidden = !isBook;
-    applyMusicMiniRootVisibility();
     supportChatFloat.hidden = !isBook;
     if (isBook) {
       supportChatFloatDock.relayout();
-      musicFloatDock?.relayout();
     }
     if (!isBook) {
       setSupportChatOpen(false);
@@ -5040,7 +4850,6 @@ function render() {
       void syncAdminView();
     }
     syncPageHeadSession();
-    updateShellStageTilt();
   }
 
   window.addEventListener("popstate", () => setTab(tabFromPath()));

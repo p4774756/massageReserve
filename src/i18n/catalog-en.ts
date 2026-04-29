@@ -153,25 +153,6 @@ export const EN: Record<string, string> = {
   "support.fab.hint":
     "Tap: open or close. Press and move slightly (~10px) to drag; release snaps to the bottom-left or bottom-right corner.",
 
-  "music.player.region":
-    "Ambient music mini player; use the top bar to drag it to another corner.",
-
-  "music.player.regionCollapsed":
-    "Ambient music mini player (collapsed); drag the left grip to move, tap right to expand.",
-
-  "music.float.dragHandle": "Move player: drag the left grip on the top bar",
-
-  "music.float.dragHandleHint":
-    "Press and drag to reposition; on release it snaps to the bottom-left or bottom-right corner.",
-
-  "music.float.collapse": "Collapse player",
-
-  "music.float.collapseHint": "Hide track list, progress, and volume; top bar stays for dragging.",
-
-  "music.float.expand": "Expand player",
-
-  "music.float.expandHint": "Show track info, progress, and controls again.",
-
   "booking.fillName": "Please enter your name.",
   "booking.pickDateSlot": "Please choose a date and start time.",
   "booking.noPastDate": "Cannot book dates before today.",
@@ -368,7 +349,7 @@ export const EN: Record<string, string> = {
 
   "admin.announce.heading": "Front page & booking rules",
   "admin.announce.introShort":
-    "Marquees/LED, site-wide 3D background, ambient music player, wheel preview & prize seeding, booking caps, and closed windows are grouped below. Expand “Firestore paths” for technical detail.",
+    "Marquees/LED, site-wide 3D background, wheel preview & prize seeding, booking caps, and closed windows are grouped below. Expand “Firestore paths” for technical detail.",
   "admin.announce.detailsSummary": "Firestore paths / full marquee note",
   "admin.announce.blockMarquee": "Marquee (top & bottom)",
   "admin.announce.blockMarqueeLead": "Separate text strip and LED strip; set speed and on/off.",
@@ -380,14 +361,6 @@ export const EN: Record<string, string> = {
   "admin.ambient.enableLabel": "Enable site-wide 3D background",
   "admin.ambient.pathHintA": "Firestore: ",
   "admin.ambient.pathHintB": " field enabled (defaults to on if the document is missing).",
-
-  "admin.musicPlayer.save": "Save ambient music toggle",
-  "admin.musicPlayer.blockTitle": "Ambient music player",
-  "admin.musicPlayer.blockLead":
-    "Floating player (bottom corner). When off, no audio is loaded for any visitor. Defaults to on if the document is missing.",
-  "admin.musicPlayer.enableLabel": "Enable floating ambient music player",
-  "admin.musicPlayer.pathHintA": "Firestore: ",
-  "admin.musicPlayer.pathHintB": " field enabled.",
 
   "admin.announce.blockPlay": "Wheel",
   "admin.announce.blockPlayLead": "Preview wheel toggle and default prizes seeding (not related to marquee).",
