@@ -564,7 +564,80 @@ function render() {
     panelAdmin,
   ]);
 
-  root.append(shell);
+  const shellStage = el("div", { class: "shell-stage" });
+  const shellTiltMotionOk =
+    typeof window !== "undefined" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  shellStage.classList.toggle("shell-stage--motion-ok", shellTiltMotionOk);
+  shellStage.append(shell);
+  root.append(shellStage);
+
+  let tiltX = 0;
+  let tiltY = 0;
+  let tiltTgtX = 0;
+  let tiltTgtY = 0;
+  let tiltRaf = 0;
+  const TILT_MAX_DEG_X = 16;
+  const TILT_MAX_DEG_Y = 11;
+
+  function pumpShellTilt() {
+    tiltRaf = 0;
+    if (tab !== "book" || !shellTiltMotionOk) return;
+    const k = 0.13;
+    tiltX += (tiltTgtX - tiltX) * k;
+    tiltY += (tiltTgtY - tiltY) * k;
+    shell.style.setProperty("--shell-tilt-rx", `${tiltY}deg`);
+    shell.style.setProperty("--shell-tilt-ry", `${tiltX}deg`);
+    if (Math.abs(tiltTgtX - tiltX) > 0.025 || Math.abs(tiltTgtY - tiltY) > 0.025) {
+      tiltRaf = requestAnimationFrame(pumpShellTilt);
+    }
+  }
+
+  function scheduleShellTiltFrame() {
+    if (tiltRaf !== 0) return;
+    tiltRaf = requestAnimationFrame(pumpShellTilt);
+  }
+
+  function updateShellStageTilt() {
+    const onBook = tab === "book";
+    const tiltOn = onBook && shellTiltMotionOk;
+    shellStage.classList.toggle("shell-stage--book-tilt", tiltOn);
+    if (!onBook) {
+      shellStage.classList.remove("shell-stage--entrance-active");
+    }
+    if (!tiltOn) {
+      tiltTgtX = tiltTgtY = tiltX = tiltY = 0;
+      shell.style.removeProperty("--shell-tilt-rx");
+      shell.style.removeProperty("--shell-tilt-ry");
+      if (tiltRaf !== 0) {
+        cancelAnimationFrame(tiltRaf);
+        tiltRaf = 0;
+      }
+      return;
+    }
+    if (!shellStage.classList.contains("shell-stage--entrance-done")) {
+      shellStage.classList.add("shell-stage--entrance-active");
+    }
+  }
+
+  shell.addEventListener("animationend", (ev: AnimationEvent) => {
+    if (ev.animationName !== "shell-tilt-entrance") return;
+    shellStage.classList.remove("shell-stage--entrance-active");
+    shellStage.classList.add("shell-stage--entrance-done");
+  });
+
+  window.addEventListener(
+    "pointermove",
+    (e: PointerEvent) => {
+      if (tab !== "book" || !shellTiltMotionOk) return;
+      if (shellStage.classList.contains("shell-stage--entrance-active")) return;
+      const nx = (e.clientX / Math.max(1, window.innerWidth)) * 2 - 1;
+      const ny = (e.clientY / Math.max(1, window.innerHeight)) * 2 - 1;
+      tiltTgtX = nx * TILT_MAX_DEG_X;
+      tiltTgtY = -ny * TILT_MAX_DEG_Y;
+      scheduleShellTiltFrame();
+    },
+    { passive: true },
+  );
   root.append(musicMiniRoot);
   musicMiniRoot.hidden = true;
   let musicFloatDock: ReturnType<typeof attachMusicMiniPlayerFloatDrag> | null = null;
@@ -4967,6 +5040,7 @@ function render() {
       void syncAdminView();
     }
     syncPageHeadSession();
+    updateShellStageTilt();
   }
 
   window.addEventListener("popstate", () => setTab(tabFromPath()));
