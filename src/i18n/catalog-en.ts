@@ -294,7 +294,7 @@ export const EN: Record<string, string> = {
   "admin.topup.ok": "Top-up successful",
   "admin.adjustSessions.heading": "Adjust bookable session count (+/−)",
   "admin.adjustSessions.hint":
-    "Uses the same member field as top-up. Change the bookable session balance by a non-zero integer (−50 to +50 per request). Wallet balance is folded into bookable sessions at the current session price before applying. Writes walletTransactions (type: admin_session_adjust).",
+    "Uses the member field above. Change the bookable session balance by a non-zero integer (−50 to +50 per request). Wallet balance is folded into bookable sessions at the current session price before applying. Writes walletTransactions (type: admin_session_adjust).",
   "admin.adjustSessions.deltaLabel": "Bookable sessions delta (−50…+50, e.g. −2 to deduct two)",
   "admin.adjustSessions.noteLabel": "Reason (required, 3–500 characters)",
   "admin.adjustSessions.notePlaceholder": "e.g. Walk-in 2 sessions on site, no booking",
@@ -305,7 +305,7 @@ export const EN: Record<string, string> = {
   "admin.adjustSessions.ok": "Updated. Member now has {{sessions}} bookable session(s).",
   "admin.grantDraw.heading": "Grant wheel spin chances",
   "admin.grantDraw.hint":
-    "Uses the same member field as above; does not change wallet balance or session credits. Up to 50 per request. Writes walletTransactions (type: admin_grant_draw) for audit.",
+    "Uses the member field above; does not change wallet balance or session credits. Up to 50 per request. Writes walletTransactions (type: admin_grant_draw) for audit.",
   "admin.grantDraw.deltaLabel": "Chances to add (1–50)",
   "admin.grantDraw.noteLabel": "Note (optional)",
   "admin.grantDraw.notePlaceholder": "Note (optional, max 200 characters)",
@@ -402,6 +402,10 @@ export const EN: Record<string, string> = {
   "admin.pricing.badSessionPrice": "On-site price must be an integer ≥ 1.",
   "admin.pricing.badPointsPer": "Redemption threshold must be an integer ≥ 2.",
   "admin.wallet.heading": "Member top-up",
+  "admin.wallet.opsHeading": "Member top-up & adjustments",
+  "admin.wallet.opsLead":
+    "The three actions below share one member field. Enter or select a member, then expand one action (only one panel open at a time).",
+  "admin.wallet.accordionTopup": "Top-up (sessions & amount)",
   "admin.wallet.memberLabel": "Member (email or UID)",
   "admin.wallet.searchHint":
     "Type at least 2 characters to match emails, or paste a UID directly.",

@@ -1632,19 +1632,103 @@ tbody tr:hover td {
   background: linear-gradient(135deg, rgb(74 122 181 / 0.08) 0%, var(--surface) 48%);
 }
 
-.admin-announce__wallet-segment--topup {
+.admin-announce__wallet-segment--member-ops {
+  border-left-color: #4a7ab5;
+  background: linear-gradient(135deg, rgb(74 122 181 / 0.06) 0%, var(--surface) 46%);
+}
+
+.admin-announce__wallet-ops-lead {
+  margin: 0 0 4px;
+  line-height: 1.5;
+}
+
+.admin-wallet-accordion-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.admin-wallet-accordion {
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.admin-wallet-accordion__trigger {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0;
+  padding: 11px 14px;
+  border: none;
+  border-left: 4px solid var(--border);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--ink);
+  text-align: left;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.55) 0%, rgb(250 248 246 / 0.4) 100%);
+  transition: background 0.12s ease;
+}
+
+.admin-wallet-accordion__trigger:hover {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.88) 0%, rgb(248 245 242 / 0.7) 100%);
+}
+
+.admin-wallet-accordion__trigger:focus-visible {
+  outline: 2px solid rgb(100 90 95 / 0.35);
+  outline-offset: 2px;
+  z-index: 1;
+}
+
+.admin-wallet-accordion__trigger--topup {
   border-left-color: #2f8f6f;
-  background: linear-gradient(135deg, rgb(47 143 111 / 0.09) 0%, var(--surface) 48%);
 }
 
-.admin-announce__wallet-segment--adjust {
+.admin-wallet-accordion__trigger--adjust {
   border-left-color: #c97a35;
-  background: linear-gradient(135deg, rgb(201 122 53 / 0.1) 0%, var(--surface) 48%);
 }
 
-.admin-announce__wallet-segment--grant {
+.admin-wallet-accordion__trigger--grant {
   border-left-color: #8b62b3;
-  background: linear-gradient(135deg, rgb(139 98 179 / 0.09) 0%, var(--surface) 48%);
+}
+
+.admin-wallet-accordion__title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.admin-wallet-accordion__chev {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  opacity: 0.65;
+  transition: transform 0.18s ease;
+}
+
+.admin-wallet-accordion--open .admin-wallet-accordion__chev {
+  transform: rotate(-180deg);
+}
+
+.admin-wallet-accordion__panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px 16px;
+  border-top: 1px dashed var(--border);
+  background: rgb(255 255 255 / 0.4);
+}
+
+/* 與 .grid[hidden] 相同：作者 display:grid 會蓋過部分瀏覽器對 [hidden] 的預設，摺疊時須強制隱藏 */
+.admin-wallet-accordion__panel[hidden] {
+  display: none !important;
+}
+
+.admin-wallet-accordion__panel > p.hint:first-child {
+  margin-top: 0;
 }
 
 .admin-announce--wallet .admin-announce__wallet-segment > h4.admin-subhead:first-child {

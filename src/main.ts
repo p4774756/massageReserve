@@ -3435,43 +3435,116 @@ function render() {
         pricingAdminStatus,
       ],
     );
-    const walletSegmentTopup = el("section", { class: "admin-announce__wallet-segment admin-announce__wallet-segment--topup" }, [
-      el("h3", {}, [t("admin.wallet.heading", "會員儲值")]),
+
+    function wireWalletAccordionsExclusive(roots: HTMLElement[]) {
+      for (const acc of roots) {
+        const btn = acc.querySelector<HTMLButtonElement>(".admin-wallet-accordion__trigger");
+        const panel = acc.querySelector<HTMLElement>(".admin-wallet-accordion__panel");
+        if (!btn || !panel) continue;
+        btn.addEventListener("click", () => {
+          const wasOpen = !panel.hidden;
+          for (const a of roots) {
+            const p = a.querySelector<HTMLElement>(".admin-wallet-accordion__panel");
+            const b = a.querySelector<HTMLButtonElement>(".admin-wallet-accordion__trigger");
+            if (p && b) {
+              p.hidden = true;
+              b.setAttribute("aria-expanded", "false");
+              a.classList.remove("admin-wallet-accordion--open");
+            }
+          }
+          if (!wasOpen) {
+            panel.hidden = false;
+            btn.setAttribute("aria-expanded", "true");
+            acc.classList.add("admin-wallet-accordion--open");
+          }
+        });
+      }
+    }
+
+    function walletAccordion(
+      variant: "topup" | "adjust" | "grant",
+      summary: string,
+      panelChildren: HTMLElement[],
+      defaultOpen: boolean,
+    ): HTMLElement {
+      const panelId = `admin-wallet-acc-${variant}`;
+      const titleEl = el("span", { class: "admin-wallet-accordion__title" }, [summary]);
+      const chev = el("span", { class: "admin-wallet-accordion__chev", ariaHidden: "true" }, ["▾"]);
+      const trigger = el("button", { type: "button", class: `admin-wallet-accordion__trigger admin-wallet-accordion__trigger--${variant}` }, [
+        titleEl,
+        chev,
+      ]);
+      trigger.setAttribute("aria-expanded", defaultOpen ? "true" : "false");
+      trigger.setAttribute("aria-controls", panelId);
+      const panel = el("div", {
+        class: `admin-wallet-accordion__panel admin-wallet-accordion__panel--${variant}`,
+        id: panelId,
+        hidden: !defaultOpen,
+      });
+      for (const c of panelChildren) panel.append(c);
+      const root = el("div", { class: `admin-wallet-accordion admin-wallet-accordion--${variant}` }, [trigger, panel]);
+      if (defaultOpen) root.classList.add("admin-wallet-accordion--open");
+      return root;
+    }
+
+    const accordionTopup = walletAccordion(
+      "topup",
+      t("admin.wallet.accordionTopup", "儲值（次數與金額）"),
+      [
+        el("label", { class: "field" }, [t("admin.wallet.sessions", "儲值次數（必填）"), topupSessions]),
+        el("label", { class: "field" }, [t("admin.wallet.amount", "儲值金額（必填）"), topupAmount]),
+        el("label", { class: "field" }, [t("admin.wallet.note", "備註（選填）"), topupNote]),
+        el("div", { class: "row-actions" }, [topupBtn]),
+        topupStatus,
+      ],
+      true,
+    );
+    const accordionAdjust = walletAccordion(
+      "adjust",
+      t("admin.adjustSessions.heading", "調整可預約次數（增／減）"),
+      [
+        el("p", { class: "hint" }, [
+          t(
+            "admin.adjustSessions.hint",
+            "使用上方會員欄位。每次可增減 −50～+50（非零整數）；會先依「現場單次金額」把儲值金餘額折成「可預約次數」再套用。寫入 walletTransactions（type：admin_session_adjust）供稽核。",
+          ),
+        ]),
+        el("label", { class: "field" }, [t("admin.adjustSessions.deltaLabel", "可預約次數增減（−50～+50，扣點填負數）"), adjustSessionDelta]),
+        el("label", { class: "field" }, [t("admin.adjustSessions.noteLabel", "備註（必填，3～500 字）"), adjustSessionNote]),
+        el("div", { class: "row-actions" }, [adjustSessionBtn]),
+        adjustSessionStatus,
+      ],
+      false,
+    );
+    const accordionGrant = walletAccordion(
+      "grant",
+      t("admin.grantDraw.heading", "贈送輪盤抽獎次數"),
+      [
+        el("p", { class: "hint" }, [
+          t(
+            "admin.grantDraw.hint",
+            "使用上方會員欄位；不影響儲值金額或可預約次數。單次最多 50 次；會寫入 walletTransactions（type：admin_grant_draw）供稽核。",
+          ),
+        ]),
+        el("label", { class: "field" }, [t("admin.grantDraw.deltaLabel", "贈送次數（1～50）"), grantDrawDelta]),
+        el("label", { class: "field" }, [t("admin.grantDraw.noteLabel", "備註（選填）"), grantDrawNote]),
+        el("div", { class: "row-actions" }, [grantDrawBtn]),
+        grantDrawStatus,
+      ],
+      false,
+    );
+    wireWalletAccordionsExclusive([accordionTopup, accordionAdjust, accordionGrant]);
+
+    const walletMemberOpsCard = el("section", { class: "admin-announce__wallet-segment admin-announce__wallet-segment--member-ops" }, [
+      el("h3", {}, [t("admin.wallet.opsHeading", "會員儲值與調整")]),
+      el("p", { class: "hint admin-announce__wallet-ops-lead" }, [
+        t("admin.wallet.opsLead", "以下三項共用同一「會員」欄位；請先輸入或選擇會員，再展開其中一項操作（同時僅能展開一項）。"),
+      ]),
       el("label", { class: "field" }, [t("admin.wallet.memberLabel", "會員（Email 或 UID）"), topupTypeaheadWrap]),
       el("div", { class: "hint" }, [t("admin.wallet.searchHint", "輸入至少 2 個字元會顯示符合的 Email；亦可直接貼上 UID。")]),
-      el("label", { class: "field" }, [t("admin.wallet.sessions", "儲值次數（必填）"), topupSessions]),
-      el("label", { class: "field" }, [t("admin.wallet.amount", "儲值金額（必填）"), topupAmount]),
-      el("label", { class: "field" }, [t("admin.wallet.note", "備註（選填）"), topupNote]),
-      el("div", { class: "row-actions" }, [topupBtn]),
-      topupStatus,
+      el("div", { class: "admin-wallet-accordion-stack" }, [accordionTopup, accordionAdjust, accordionGrant]),
     ]);
-    const walletSegmentAdjust = el("section", { class: "admin-announce__wallet-segment admin-announce__wallet-segment--adjust" }, [
-      el("h4", { class: "admin-subhead" }, [t("admin.adjustSessions.heading", "調整可預約次數（增／減）")]),
-      el("p", { class: "hint" }, [
-        t(
-          "admin.adjustSessions.hint",
-          "與上方「會員」同一欄位。每次可增減 −50～+50（非零整數）；會先依「現場單次金額」把儲值金餘額折成「可預約次數」再套用。寫入 walletTransactions（type：admin_session_adjust）供稽核。",
-        ),
-      ]),
-      el("label", { class: "field" }, [t("admin.adjustSessions.deltaLabel", "可預約次數增減（−50～+50，扣點填負數）"), adjustSessionDelta]),
-      el("label", { class: "field" }, [t("admin.adjustSessions.noteLabel", "備註（必填，3～500 字）"), adjustSessionNote]),
-      el("div", { class: "row-actions" }, [adjustSessionBtn]),
-      adjustSessionStatus,
-    ]);
-    const walletSegmentGrant = el("section", { class: "admin-announce__wallet-segment admin-announce__wallet-segment--grant" }, [
-      el("h4", { class: "admin-subhead" }, [t("admin.grantDraw.heading", "贈送輪盤抽獎次數")]),
-      el("p", { class: "hint" }, [
-        t(
-          "admin.grantDraw.hint",
-          "與上方「會員」為同一欄位；不影響儲值金額或可預約次數。單次最多 50 次；會寫入 walletTransactions（type：admin_grant_draw）供稽核。",
-        ),
-      ]),
-      el("label", { class: "field" }, [t("admin.grantDraw.deltaLabel", "贈送次數（1～50）"), grantDrawDelta]),
-      el("label", { class: "field" }, [t("admin.grantDraw.noteLabel", "備註（選填）"), grantDrawNote]),
-      el("div", { class: "row-actions" }, [grantDrawBtn]),
-      grantDrawStatus,
-    ]);
-    walletTopupSection.append(walletSegmentPricing, walletSegmentTopup, walletSegmentAdjust, walletSegmentGrant);
+    walletTopupSection.append(walletSegmentPricing, walletMemberOpsCard);
     const createMemberEmail = el("input", {
       type: "email",
       placeholder: t("admin.member.emailPh", "會員 Email"),
