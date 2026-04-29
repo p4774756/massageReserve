@@ -2776,16 +2776,23 @@ body.wheel-spectacle-lock {
   flex-wrap: wrap;
   gap: 10px;
   align-items: flex-end;
+  min-width: 0;
 }
 
 .support-chat-input {
-  flex: 1 1 200px;
+  /* min-width:0 讓 flex 子項可窄於內容寬，避免窄螢幕把同列按鈕推出 .shell（overflow:hidden） */
+  flex: 1 1 0;
+  min-width: 0;
   min-height: 44px;
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   font: inherit;
   resize: vertical;
+}
+
+.support-chat-input-row button.primary {
+  flex-shrink: 0;
 }
 
 .support-chat-reopen {
@@ -2797,11 +2804,29 @@ body.wheel-spectacle-lock {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
   gap: 16px;
   margin-top: 12px;
+  min-width: 0;
+}
+
+.support-chat-admin-list,
+.support-chat-admin-detail {
+  min-width: 0;
+}
+
+.admin-support-chat-host {
+  min-width: 0;
+}
+
+.support-chat--admin {
+  min-width: 0;
+}
+
+.support-chat--admin .hint code {
+  word-break: break-all;
 }
 
 @media (max-width: 640px) {
   .support-chat-admin-split {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
