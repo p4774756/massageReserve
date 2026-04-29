@@ -29,6 +29,9 @@ export default defineConfig({
           if (id.includes("node_modules/echarts")) {
             return "echarts";
           }
+          if (id.includes("node_modules/three")) {
+            return "three";
+          }
         },
       },
     },

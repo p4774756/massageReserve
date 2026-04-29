@@ -566,11 +566,39 @@ function render() {
 
   root.append(shell);
   root.append(musicMiniRoot);
+  musicMiniRoot.hidden = true;
   let musicFloatDock: ReturnType<typeof attachMusicMiniPlayerFloatDrag> | null = null;
-  const musicPlayerHandle = mountMusicMiniPlayer(musicMiniRoot, {
-    onBoundsChange: () => musicFloatDock?.relayout(),
-  });
-  musicFloatDock = attachMusicMiniPlayerFloatDrag(musicMiniRoot, musicPlayerHandle.floatDragTarget);
+  let musicPlayerHandle: ReturnType<typeof mountMusicMiniPlayer> | null = null;
+
+  function teardownMusicPlayerUi() {
+    musicFloatDock?.dispose();
+    musicFloatDock = null;
+    musicPlayerHandle?.dispose();
+    musicPlayerHandle = null;
+    musicMiniRoot.hidden = true;
+  }
+
+  /** 後台分頁不顯示浮動播放器；須與 Firestore 開關一併考量（snapshot 可能晚於 setTab 覆寫 hidden） */
+  function applyMusicMiniRootVisibility() {
+    if (!musicPlayerHandle) {
+      musicMiniRoot.hidden = true;
+      return;
+    }
+    musicMiniRoot.hidden = tab !== "book";
+  }
+
+  function syncMusicPlayerFromSiteSettings(enabledRemote: boolean) {
+    if (!enabledRemote) {
+      teardownMusicPlayerUi();
+      return;
+    }
+    if (musicPlayerHandle) return;
+    musicPlayerHandle = mountMusicMiniPlayer(musicMiniRoot, {
+      onBoundsChange: () => musicFloatDock?.relayout(),
+    });
+    musicFloatDock = attachMusicMiniPlayerFloatDrag(musicMiniRoot, musicPlayerHandle.floatDragTarget);
+    applyMusicMiniRootVisibility();
+  }
 
   /** 頂部：一般文字跑馬燈（與底部 LED 同一則公告） */
   const announcementTextStrip = el("div", {
@@ -647,6 +675,50 @@ function render() {
       applyTopTextMarqueeDuration(topMarqueeTrackEl, topMarqueeTextSpeedPxPerSec);
     }
   }
+
+  let ambientWebglCleanup: (() => void) | null = null;
+  let ambientWebglGen = 0;
+
+  function syncAmbientWebglFromSiteSettings(enabledRemote: boolean) {
+    ambientWebglGen++;
+    const token = ambientWebglGen;
+    ambientWebglCleanup?.();
+    ambientWebglCleanup = null;
+    if (!enabledRemote) return;
+    void import("./ambientWebgl").then((m) => {
+      if (token !== ambientWebglGen) return;
+      const dispose = m.mountAmbientWebgl();
+      if (token !== ambientWebglGen) {
+        dispose?.();
+        return;
+      }
+      if (dispose) ambientWebglCleanup = dispose;
+    });
+  }
+
+  onSnapshot(
+    doc(db, "siteSettings", "ambientWebgl"),
+    (snap) => {
+      const raw = snap.data() as { enabled?: unknown } | undefined;
+      const enabledRemote = typeof raw?.enabled === "boolean" ? raw.enabled : true;
+      syncAmbientWebglFromSiteSettings(enabledRemote);
+    },
+    () => {
+      syncAmbientWebglFromSiteSettings(false);
+    },
+  );
+
+  onSnapshot(
+    doc(db, "siteSettings", "musicPlayer"),
+    (snap) => {
+      const raw = snap.data() as { enabled?: unknown } | undefined;
+      const enabledRemote = typeof raw?.enabled === "boolean" ? raw.enabled : true;
+      syncMusicPlayerFromSiteSettings(enabledRemote);
+    },
+    () => {
+      syncMusicPlayerFromSiteSettings(false);
+    },
+  );
 
   onSnapshot(
     doc(db, "siteSettings", "marqueeText"),
@@ -2357,6 +2429,8 @@ function render() {
   let adminPricingUnsub: (() => void) | null = null;
   let adminBookingCapsUnsub: (() => void) | null = null;
   let adminBookingBlocksUnsub: (() => void) | null = null;
+  let adminAmbientWebglUnsub: (() => void) | null = null;
+  let adminMusicPlayerUnsub: (() => void) | null = null;
   let adminSupportChatUnmount: SupportChatUnmount | null = null;
 
   function stopAdminListener() {
@@ -2387,6 +2461,14 @@ function render() {
     if (adminBookingBlocksUnsub) {
       adminBookingBlocksUnsub();
       adminBookingBlocksUnsub = null;
+    }
+    if (adminAmbientWebglUnsub) {
+      adminAmbientWebglUnsub();
+      adminAmbientWebglUnsub = null;
+    }
+    if (adminMusicPlayerUnsub) {
+      adminMusicPlayerUnsub();
+      adminMusicPlayerUnsub = null;
     }
     if (adminSupportChatUnmount) {
       adminSupportChatUnmount();
@@ -2801,6 +2883,18 @@ function render() {
     const saveMarqueeLedBtn = el("button", { class: "ghost", type: "button" }, [t("admin.marquee.saveLed", "儲存底部 LED")]);
     const marqueeLedStatus = el("div", { class: "status-line" });
     const marqueeLedDocRef = doc(db, "siteSettings", "marqueeLed");
+    const ambientWebglDocRef = doc(db, "siteSettings", "ambientWebgl");
+    const ambientWebglEnabled = el("input", { type: "checkbox" });
+    const saveAmbientWebglBtn = el("button", { class: "ghost", type: "button" }, [
+      t("admin.ambient.save", "儲存背景 3D 開關"),
+    ]);
+    const ambientWebglStatus = el("div", { class: "status-line" });
+    const musicPlayerDocRef = doc(db, "siteSettings", "musicPlayer");
+    const musicPlayerEnabled = el("input", { type: "checkbox" });
+    const saveMusicPlayerBtn = el("button", { class: "ghost", type: "button" }, [
+      t("admin.musicPlayer.save", "儲存舒壓配樂開關"),
+    ]);
+    const musicPlayerStatus = el("div", { class: "status-line" });
     const wheelSpectacleDocRef = doc(db, "siteSettings", "wheelSpectacle");
     const wheelSpectacleShowTest = el("input", { type: "checkbox" });
     const saveWheelSpectacleBtn = el("button", { class: "ghost", type: "button" }, [t("admin.wheelSpectacle.save", "儲存輪盤預覽開關")]);
@@ -3136,6 +3230,70 @@ function render() {
       },
     );
 
+    adminAmbientWebglUnsub = onSnapshot(
+      ambientWebglDocRef,
+      (snap) => {
+        const data = snap.data() as { enabled?: unknown } | undefined;
+        ambientWebglEnabled.checked = typeof data?.enabled === "boolean" ? data.enabled : true;
+      },
+      () => {
+        ambientWebglStatus.textContent = t("admin.snapshot.loadFail", "無法讀取背景 3D 設定。");
+        ambientWebglStatus.className = "status-line error";
+      },
+    );
+
+    saveAmbientWebglBtn.addEventListener("click", async () => {
+      ambientWebglStatus.textContent = "";
+      ambientWebglStatus.className = "status-line";
+      saveAmbientWebglBtn.setAttribute("disabled", "true");
+      try {
+        await setDoc(
+          ambientWebglDocRef,
+          { enabled: ambientWebglEnabled.checked, updatedAt: serverTimestamp() },
+          { merge: true },
+        );
+        ambientWebglStatus.textContent = t("admin.status.updated", "已更新");
+        ambientWebglStatus.classList.add("ok");
+      } catch (e) {
+        ambientWebglStatus.textContent = e instanceof Error ? e.message : t("admin.memberList.saveFail", "儲存失敗");
+        ambientWebglStatus.classList.add("error");
+      } finally {
+        saveAmbientWebglBtn.removeAttribute("disabled");
+      }
+    });
+
+    adminMusicPlayerUnsub = onSnapshot(
+      musicPlayerDocRef,
+      (snap) => {
+        const data = snap.data() as { enabled?: unknown } | undefined;
+        musicPlayerEnabled.checked = typeof data?.enabled === "boolean" ? data.enabled : true;
+      },
+      () => {
+        musicPlayerStatus.textContent = t("admin.snapshot.loadFail", "無法讀取舒壓配樂設定。");
+        musicPlayerStatus.className = "status-line error";
+      },
+    );
+
+    saveMusicPlayerBtn.addEventListener("click", async () => {
+      musicPlayerStatus.textContent = "";
+      musicPlayerStatus.className = "status-line";
+      saveMusicPlayerBtn.setAttribute("disabled", "true");
+      try {
+        await setDoc(
+          musicPlayerDocRef,
+          { enabled: musicPlayerEnabled.checked, updatedAt: serverTimestamp() },
+          { merge: true },
+        );
+        musicPlayerStatus.textContent = t("admin.status.updated", "已更新");
+        musicPlayerStatus.classList.add("ok");
+      } catch (e) {
+        musicPlayerStatus.textContent = e instanceof Error ? e.message : t("admin.memberList.saveFail", "儲存失敗");
+        musicPlayerStatus.classList.add("error");
+      } finally {
+        saveMusicPlayerBtn.removeAttribute("disabled");
+      }
+    });
+
     saveMarqueeTextBtn.addEventListener("click", async () => {
       marqueeTextStatus.textContent = t("admin.status.processing", "處理中…");
       marqueeTextStatus.className = "status-line";
@@ -3243,6 +3401,48 @@ function render() {
       marqueeBottomSub,
     ]);
 
+    const blockAmbient3d = el("section", { class: "admin-announce__block admin-announce__block--ambient3d" }, [
+      el("h4", { class: "admin-announce__block-title" }, [t("admin.ambient.blockTitle", "全站背景 3D")]),
+      el("p", { class: "hint admin-announce__block-lead" }, [
+        t(
+          "admin.ambient.blockLead",
+          "前台粒子與線框裝飾；關閉後所有訪客不再載入 WebGL。網址加 ?webgl=0 可單機強制關閉；系統「減少動態效果」時也不載入。",
+        ),
+      ]),
+      el("label", { class: "field checkbox-field" }, [
+        ambientWebglEnabled,
+        el("span", {}, [t("admin.ambient.enableLabel", "啟用全站背景 3D 效果")]),
+      ]),
+      el("div", { class: "row-actions" }, [saveAmbientWebglBtn]),
+      ambientWebglStatus,
+      el("p", { class: "hint" }, [
+        t("admin.ambient.pathHintA", "Firestore："),
+        el("code", {}, ["siteSettings/ambientWebgl"]),
+        t("admin.ambient.pathHintB", " 欄位 enabled（未建立文件時預設為開啟）。"),
+      ]),
+    ]);
+
+    const blockMusicPlayer = el("section", { class: "admin-announce__block admin-announce__block--music" }, [
+      el("h4", { class: "admin-announce__block-title" }, [t("admin.musicPlayer.blockTitle", "前台舒壓配樂")]),
+      el("p", { class: "hint admin-announce__block-lead" }, [
+        t(
+          "admin.musicPlayer.blockLead",
+          "左下角浮動播放器（Kevin MacLeod 等）；關閉後訪客與會員皆不顯示，也不載入音訊。未建立文件時預設為開啟。",
+        ),
+      ]),
+      el("label", { class: "field checkbox-field" }, [
+        musicPlayerEnabled,
+        el("span", {}, [t("admin.musicPlayer.enableLabel", "啟用前台舒壓配樂播放器")]),
+      ]),
+      el("div", { class: "row-actions" }, [saveMusicPlayerBtn]),
+      musicPlayerStatus,
+      el("p", { class: "hint" }, [
+        t("admin.musicPlayer.pathHintA", "Firestore："),
+        el("code", {}, ["siteSettings/musicPlayer"]),
+        t("admin.musicPlayer.pathHintB", " 欄位 enabled。"),
+      ]),
+    ]);
+
     const blockPlay = el("section", { class: "admin-announce__block admin-announce__block--play" }, [
       el("h4", { class: "admin-announce__block-title" }, [t("admin.announce.blockPlay", "輪盤")]),
       el("p", { class: "hint admin-announce__block-lead" }, [
@@ -3322,11 +3522,13 @@ function render() {
       el("p", { class: "hint admin-announce__page-lead" }, [
         t(
           "admin.announce.introShort",
-          "此分頁集中調整跑馬燈與 LED、輪盤預覽與獎項初始化，以及預約名額／不開放時段；區塊已分組，技術路徑可展開查看。",
+          "此分頁集中調整跑馬燈與 LED、全站背景 3D、舒壓配樂、輪盤預覽與獎項初始化，以及預約名額／不開放時段；區塊已分組，技術路徑可展開查看。",
         ),
       ]),
       announceIntroDetails,
       blockMarquee,
+      blockAmbient3d,
+      blockMusicPlayer,
       blockPlay,
       blockRules,
     );
@@ -4749,7 +4951,7 @@ function render() {
     panelBook.hidden = !isBook;
     panelAdmin.hidden = isBook;
     hostPortrait.hidden = !isBook;
-    musicMiniRoot.hidden = !isBook;
+    applyMusicMiniRootVisibility();
     supportChatFloat.hidden = !isBook;
     if (isBook) {
       supportChatFloatDock.relayout();

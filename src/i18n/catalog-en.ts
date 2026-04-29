@@ -368,10 +368,27 @@ export const EN: Record<string, string> = {
 
   "admin.announce.heading": "Front page & booking rules",
   "admin.announce.introShort":
-    "Marquees/LED, wheel preview & prize seeding, booking caps, and closed windows are grouped below. Expand “Firestore paths” for technical detail.",
+    "Marquees/LED, site-wide 3D background, ambient music player, wheel preview & prize seeding, booking caps, and closed windows are grouped below. Expand “Firestore paths” for technical detail.",
   "admin.announce.detailsSummary": "Firestore paths / full marquee note",
   "admin.announce.blockMarquee": "Marquee (top & bottom)",
   "admin.announce.blockMarqueeLead": "Separate text strip and LED strip; set speed and on/off.",
+
+  "admin.ambient.save": "Save 3D background toggle",
+  "admin.ambient.blockTitle": "Site-wide 3D background",
+  "admin.ambient.blockLead":
+    "Particle + wireframe decoration for all visitors. When off, WebGL is not loaded. Add ?webgl=0 to the URL to force off for one session; respects “reduce motion”.",
+  "admin.ambient.enableLabel": "Enable site-wide 3D background",
+  "admin.ambient.pathHintA": "Firestore: ",
+  "admin.ambient.pathHintB": " field enabled (defaults to on if the document is missing).",
+
+  "admin.musicPlayer.save": "Save ambient music toggle",
+  "admin.musicPlayer.blockTitle": "Ambient music player",
+  "admin.musicPlayer.blockLead":
+    "Floating player (bottom corner). When off, no audio is loaded for any visitor. Defaults to on if the document is missing.",
+  "admin.musicPlayer.enableLabel": "Enable floating ambient music player",
+  "admin.musicPlayer.pathHintA": "Firestore: ",
+  "admin.musicPlayer.pathHintB": " field enabled.",
+
   "admin.announce.blockPlay": "Wheel",
   "admin.announce.blockPlayLead": "Preview wheel toggle and default prizes seeding (not related to marquee).",
   "admin.announce.blockRules": "Booking caps & closed windows",
