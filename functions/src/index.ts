@@ -6,9 +6,12 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { DateTime } from "luxon";
 import {
+  buildBroadcastEmailHtml,
   isResendOnboardingFromAddress,
+  sendBroadcastHtmlEmail,
   sendMemberBookingStatusChangedEmail,
   sendNewBookingEmailToOwner,
+  type EmailLocale,
 } from "./resendNotify";
 import {
   ACTIVE_STATUSES,
@@ -1339,6 +1342,201 @@ export const testSendMemberStatusTestEmail = onCall(
         )
       : undefined;
     return { ok: true as const, sentTo: to, ...(deliverabilityWarning ? { deliverabilityWarning } : {}) };
+  },
+);
+
+const BROADCAST_SUBJECT_MAX = 200;
+const BROADCAST_BODY_MIN = 3;
+const BROADCAST_BODY_MAX = 12_000;
+const BROADCAST_MAX_RECIPIENTS = 2000;
+const BROADCAST_LIST_PAGES_MAX = 50;
+const BROADCAST_SEND_DELAY_MS = 120;
+
+function normalizeBroadcastSubject(raw: string): string {
+  return raw.replace(/\r\n/g, " ").replace(/\n/g, " ").trim().slice(0, BROADCAST_SUBJECT_MAX);
+}
+
+async function collectBroadcastRecipients(onlyEmailVerified: boolean): Promise<{
+  recipients: { email: string; uid: string }[];
+  totalUsers: number;
+  withoutEmail: number;
+  disabledSkipped: number;
+  unverifiedSkipped: number;
+  duplicateSkipped: number;
+}> {
+  const auth = getAuth();
+  let totalUsers = 0;
+  let withoutEmail = 0;
+  let disabledSkipped = 0;
+  let unverifiedSkipped = 0;
+  let duplicateSkipped = 0;
+  const seen = new Set<string>();
+  const recipients: { email: string; uid: string }[] = [];
+  let pageToken: string | undefined;
+  for (let p = 0; p < BROADCAST_LIST_PAGES_MAX; p++) {
+    const res = await auth.listUsers(1000, pageToken);
+    for (const u of res.users) {
+      totalUsers++;
+      if (u.disabled === true) {
+        disabledSkipped++;
+        continue;
+      }
+      const email = (u.email ?? "").trim();
+      if (!email) {
+        withoutEmail++;
+        continue;
+      }
+      if (onlyEmailVerified && u.emailVerified !== true) {
+        unverifiedSkipped++;
+        continue;
+      }
+      const key = email.toLowerCase();
+      if (seen.has(key)) {
+        duplicateSkipped++;
+        continue;
+      }
+      seen.add(key);
+      recipients.push({ email, uid: u.uid });
+    }
+    pageToken = res.pageToken;
+    if (!pageToken) break;
+  }
+  return { recipients, totalUsers, withoutEmail, disabledSkipped, unverifiedSkipped, duplicateSkipped };
+}
+
+/**
+ * 管理員：對符合條件的 Auth 使用者群發自訂主旨／內文（純文字→HTML）。
+ * `dryRun: true` 僅回傳人數統計；實際寄送需 `confirmSend: true`。
+ */
+export const sendMembersBroadcastAdmin = onCall(
+  { ...publicCall, secrets: [resendApiKey], timeoutSeconds: 360 },
+  async (request) => {
+    const locale = parseLocale(request.data);
+    const uid = request.auth?.uid;
+    if (!uid) {
+      throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
+    }
+    await assertAdminByUid(uid, locale);
+
+    const dryRun = request.data?.dryRun === true;
+    const confirmSend = request.data?.confirmSend === true;
+    const onlyEmailVerified = request.data?.onlyEmailVerified !== false;
+
+    const subjectRaw = typeof request.data?.subject === "string" ? request.data.subject : "";
+    const bodyRaw = typeof request.data?.body === "string" ? request.data.body : "";
+    const subject = normalizeBroadcastSubject(subjectRaw);
+    const body = bodyRaw.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+
+    if (!subject) {
+      throw new HttpsError(
+        "invalid-argument",
+        st(locale, "broadcast.subjectRequired", "請填寫主旨（1～200 字，不可僅空白）。"),
+      );
+    }
+    if (body.length < BROADCAST_BODY_MIN) {
+      throw new HttpsError(
+        "invalid-argument",
+        st(locale, "broadcast.bodyTooShort", "內文至少 {{min}} 字。", { min: BROADCAST_BODY_MIN }),
+      );
+    }
+    if (body.length > BROADCAST_BODY_MAX) {
+      throw new HttpsError(
+        "invalid-argument",
+        st(locale, "broadcast.bodyTooLong", "內文不可超過 {{max}} 字。", { max: BROADCAST_BODY_MAX }),
+      );
+    }
+    if (!dryRun && !confirmSend) {
+      throw new HttpsError(
+        "invalid-argument",
+        st(locale, "broadcast.needConfirm", "實際寄送需勾選確認，或先使用「僅預覽人數」（dryRun）。"),
+      );
+    }
+
+    const stats = await collectBroadcastRecipients(onlyEmailVerified);
+    const { recipients, totalUsers, withoutEmail, disabledSkipped, unverifiedSkipped, duplicateSkipped } = stats;
+
+    if (recipients.length === 0) {
+      throw new HttpsError(
+        "failed-precondition",
+        st(locale, "broadcast.noRecipients", "沒有符合條件的收件人（請檢查是否僅限已驗證信箱，或專案內尚無帶 Email 的帳號）。"),
+      );
+    }
+    if (recipients.length > BROADCAST_MAX_RECIPIENTS) {
+      throw new HttpsError(
+        "failed-precondition",
+        st(
+          locale,
+          "broadcast.tooManyRecipients",
+          "收件人數（{{n}}）超過單次上限 {{max}}，請聯絡開發者分批或調整上限。",
+          { n: recipients.length, max: BROADCAST_MAX_RECIPIENTS },
+        ),
+      );
+    }
+
+    const mailLocale: EmailLocale = locale === "en" ? "en" : "zh-Hant";
+    const html = buildBroadcastEmailHtml(body, mailLocale);
+
+    if (dryRun) {
+      return {
+        ok: true as const,
+        dryRun: true as const,
+        totalUsers,
+        withoutEmail,
+        disabledSkipped,
+        unverifiedSkipped,
+        duplicateSkipped,
+        recipientCount: recipients.length,
+      };
+    }
+
+    const apiKey = resendApiKey.value().trim();
+    if (!apiKey) {
+      throw new HttpsError(
+        "failed-precondition",
+        st(locale, "testStatusEmail.noResendKey", "專案未設定 RESEND_API_KEY，無法寄信。"),
+      );
+    }
+    const from = resendFrom.value().trim() || "Massage預約 <onboarding@resend.dev>";
+
+    let sent = 0;
+    const failed: { email: string; error: string }[] = [];
+    for (let i = 0; i < recipients.length; i++) {
+      const { email } = recipients[i]!;
+      try {
+        await sendBroadcastHtmlEmail({ apiKey, from, to: email, subject, html });
+        sent++;
+      } catch (e) {
+        let msg = "send failed";
+        if (e instanceof HttpsError && e.message) msg = e.message;
+        else if (e instanceof Error && e.message) msg = e.message;
+        failed.push({ email, error: msg.slice(0, 400) });
+      }
+      if (i < recipients.length - 1 && BROADCAST_SEND_DELAY_MS > 0) {
+        await new Promise((r) => setTimeout(r, BROADCAST_SEND_DELAY_MS));
+      }
+    }
+
+    const deliverabilityWarning = isResendOnboardingFromAddress(from)
+      ? st(
+          locale,
+          "testStatusEmail.resendOnboardingFromWarning",
+          "目前寄件者仍為 Resend 測試用 onboarding@resend.dev：此模式下寄到一般會員信箱常實際收不到（但「新預約通知」寄到您設定的店家信箱仍可能正常）。若要讓會員收到狀態信與測試信，請至 Resend 驗證自有網域，並將 Functions 參數 RESEND_FROM 改為該網域下的寄件地址。",
+        )
+      : undefined;
+
+    return {
+      ok: true as const,
+      dryRun: false as const,
+      totalUsers,
+      withoutEmail,
+      disabledSkipped,
+      unverifiedSkipped,
+      duplicateSkipped,
+      recipientCount: recipients.length,
+      sent,
+      failed,
+      ...(deliverabilityWarning ? { deliverabilityWarning } : {}),
+    };
   },
 );
 

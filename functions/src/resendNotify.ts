@@ -223,3 +223,43 @@ export async function sendMemberBookingStatusChangedEmail(opts: {
     throwResendEmailError(error);
   }
 }
+
+function escapeHtmlForEmail(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/** 管理員群發：純文字轉為簡單 HTML（換行轉 &lt;br&gt;，其餘跳脫） */
+export function buildBroadcastEmailHtml(bodyPlain: string, locale: EmailLocale): string {
+  const safe = escapeHtmlForEmail(bodyPlain).replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const br = safe.split("\n").join("<br>\n");
+  const footer =
+    locale === "en"
+      ? "This message was sent by the shop using the booking system. Please contact the shop directly if you need a reply."
+      : "此信由店家透過預約系統發送；如需回覆請直接聯絡店家。";
+  const lang = locale === "en" ? "en" : "zh-Hant";
+  return `<!DOCTYPE html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#f6f6f6;"><div style="max-width:560px;margin:0 auto;padding:24px 20px;background:#fff;font-family:system-ui,-apple-system,'Segoe UI',Roboto,'Noto Sans TC',sans-serif;font-size:15px;line-height:1.6;color:#1a1a1a;"><div style="margin:0 0 12px;">${br}</div><hr style="border:none;border-top:1px solid #e8e8e8;margin:28px 0 16px;"><p style="margin:0;font-size:12px;color:#6b6b6b;">${footer}</p></div></body></html>`;
+}
+
+export async function sendBroadcastHtmlEmail(opts: {
+  apiKey: string;
+  from: string;
+  to: string;
+  subject: string;
+  html: string;
+}): Promise<void> {
+  const resend = new Resend(opts.apiKey);
+  const { error } = await resend.emails.send({
+    from: opts.from,
+    to: [opts.to],
+    subject: opts.subject,
+    html: opts.html,
+  });
+  if (error) {
+    throwResendEmailError(error);
+  }
+}

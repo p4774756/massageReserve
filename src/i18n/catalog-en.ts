@@ -443,7 +443,7 @@ export const EN: Record<string, string> = {
   "admin.tab.hidden": "Archived bookings",
   "admin.tab.members": "Members & top-up",
   "admin.tab.announce": "Front page & rules",
-  "admin.tab.engage": "Support",
+  "admin.tab.support": "Support",
   "admin.tab.reports": "Reports",
 
   "admin.memberTab.create": "Create account",
@@ -535,6 +535,29 @@ export const EN: Record<string, string> = {
   "admin.memberList.testEmailErrResendTestingRecipients":
     "While using Resend’s test sender, you can only mail the address tied to your Resend account. To reach other members, verify your domain in Resend and set the Cloud Functions param RESEND_FROM.",
   "admin.memberList.testEmailResultHead": "Test email results ({{n}}):",
+  "admin.memberList.broadcastBtn": "Email members",
+  "admin.memberList.broadcastTitle":
+    "Send a custom plain-text message as HTML to Firebase Auth users who match filters. Needs RESEND_API_KEY. Preview recipient count before sending.",
+  "admin.memberList.broadcastModalTitle": "Email members (broadcast)",
+  "admin.memberList.broadcastModalHint":
+    "Body is plain text (line breaks allowed); the server converts it to simple HTML. Check length limits on the server. Preview recipients first, then confirm to send. Configure RESEND_FROM for reliable delivery.",
+  "admin.memberList.broadcastSubjectPh": "Subject, e.g. Thank you for your support",
+  "admin.memberList.broadcastBodyPh": "Message body (plain text)…",
+  "admin.memberList.broadcastOnlyVerified": "Send only to members with verified email (recommended)",
+  "admin.memberList.broadcastConfirmLabel": "I confirm the subject and body are correct and I want to send",
+  "admin.memberList.broadcastPreview": "Preview recipient count",
+  "admin.memberList.broadcastSend": "Send broadcast",
+  "admin.memberList.broadcastPreviewOk":
+    "Preview: will send to {{recipients}} recipient(s) (Auth users: {{total}}; no email {{noEmail}}, disabled {{disabled}}, skipped unverified {{unver}}, duplicate email {{dup}}).",
+  "admin.memberList.broadcastSendConfirmTitle": "Confirm broadcast email",
+  "admin.memberList.broadcastSendConfirmBody":
+    "Each matching member will receive one email with the current subject and body. This cannot be undone.\n\n{{previewLine}}",
+  "admin.memberList.broadcastSendConfirmOk": "Send now",
+  "admin.memberList.broadcastSending": "Sending… please wait.",
+  "admin.memberList.broadcastDoneHead": "Done: sent {{sent}} / {{total}} successfully.",
+  "admin.memberList.broadcastFailedHead": "{{n}} failed (excerpt):",
+  "admin.memberList.broadcastSubjectLabel": "Subject",
+  "admin.memberList.broadcastBodyLabel": "Body (plain text)",
   "admin.memberList.migrateWalletBtn": "Fold legacy cash → sessions",
   "admin.memberList.migrateHint":
     "“Fold legacy cash → sessions” scans every Firestore customers document, uses admin pricing to move whole-session amounts from walletBalance into sessionCredits; any remainder under one session stays in the legacy cash column.",

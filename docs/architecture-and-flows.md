@@ -75,7 +75,7 @@ flowchart LR
 
 ## 4. Callable Functions 一覽
 
-所有可呼叫函式定義於 `functions/src/index.ts`，前端封裝於 `src/firebase.ts`（含 `seedWheelPrizesCall`、`migrateLegacyWalletsAdminCall`、`testSendMemberStatusTestEmailCall`、`adjustSessionCreditsAdminCall`、`grantDrawChancesAdminCall`：後台分別可初始化空獎項、折換全體 customers 未折抵金額、會員清單測試寄信、增減可預約次數（稽核）、贈送輪盤可抽次數）。
+所有可呼叫函式定義於 `functions/src/index.ts`，前端封裝於 `src/firebase.ts`（含 `seedWheelPrizesCall`、`migrateLegacyWalletsAdminCall`、`testSendMemberStatusTestEmailCall`、`sendMembersBroadcastAdminCall`、`adjustSessionCreditsAdminCall`、`grantDrawChancesAdminCall`：後台分別可初始化空獎項、折換全體 customers 未折抵金額、會員清單測試寄信、群發自訂郵件、增減可預約次數（稽核）、贈送輪盤可抽次數）。
 
 | 函式 | 誰可呼叫 | 用途摘要 |
 |------|-----------|----------|
@@ -91,6 +91,7 @@ flowchart LR
 | `grantDrawChancesAdmin` | 管理員 | 贈送輪盤 **`drawChances`**（1～50／次），並寫入 `walletTransactions`（`type: "admin_grant_draw"`） |
 | `createMemberAccount` | 管理員 | 建立 Auth 使用者 + `customers` 初始文件 |
 | `searchMemberUsers` / `listMembersAdmin` / `updateMemberNicknameAdmin` / `migrateLegacyWalletsAdmin` / `testSendMemberStatusTestEmail` | 管理員 | 會員搜尋、列表、暱稱；一鍵依定價折換 `customers` 未折抵金額→次數；依 UID 寄【測試】狀態通知樣板信 |
+| `sendMembersBroadcastAdmin` | 管理員 | 依 Auth 列舉會員信箱，**群發**自訂主旨／純文字內文（轉 HTML）；`dryRun` 僅統計人數，實寄需 `confirmSend: true`；需 **Resend**（`RESEND_API_KEY`） |
 | `listActiveWheelPrizes` | 已登入且 **Email 已驗證** | 列出啟用中獎項（供輪盤 UI） |
 | `spinWheel` | 已登入且 **Email 已驗證** | 消耗可抽次數、加權隨機獎項、更新餘額與紀錄 |
 | `seedWheelPrizes` | 需已登入且為 **admin** | 若 `wheelPrizes` 為空則寫入預設獎項 |

@@ -78,6 +78,12 @@ const EN: Record<string, string> = {
   "testStatusEmail.memberNotFound": "That member was not found or Firebase Auth could not read the user.",
   "testStatusEmail.resendOnboardingFromWarning":
     "Sender is still Resend’s test address (onboarding@resend.dev). In this mode, mail to arbitrary member inboxes often never arrives, while “new booking” mail to your configured owner address can still work. Verify your own domain in Resend and set Cloud Functions param RESEND_FROM to an address on that domain so members receive status and test emails.",
+  "broadcast.subjectRequired": "Subject is required (1–200 characters, not only whitespace).",
+  "broadcast.bodyTooShort": "Body must be at least {{min}} characters.",
+  "broadcast.bodyTooLong": "Body must be at most {{max}} characters.",
+  "broadcast.needConfirm": "To send for real, check the confirmation box, or use preview (dry run) first.",
+  "broadcast.noRecipients": "No recipients match the filters (e.g. verified-only while no verified emails).",
+  "broadcast.tooManyRecipients": "Recipient count ({{n}}) exceeds the per-run limit of {{max}}.",
 };
 
 function applyVars(s: string, vars?: Record<string, string | number>): string {
