@@ -22,7 +22,7 @@ export const EN: Record<string, string> = {
   "booking.mode.member_beverage": "Member · drink credit",
 
   "book.tabsAria":
-    "Massage booking, my bookings (when signed in), and wheel tab (when signed in)",
+    "Massage booking, my bookings (when signed in), and wheel tab including spin and points redemption (when signed in)",
   "book.tab.booking": "Book massage",
   "book.tab.wheel": "Wheel",
   "book.tab.myBookings": "My bookings",
@@ -127,6 +127,11 @@ export const EN: Record<string, string> = {
   "wheel.previewTitle": "Preview only — no real spin or deduction",
   "wheel.rules":
     "Wheel rules: after a member booking is marked completed in admin, you earn 1 spin (once per booking). Each spin uses 1 chance. Prizes are random by admin weights (points, extra spins, thanks, fun text, etc.). Points can be redeemed for sessions when you reach the threshold. Email verification is required.",
+  "wheel.statsNeedVerify": "Verify your email to see your points and draw chances here.",
+  "wheel.statsLoading": "Loading points and draw chances…",
+  "wheel.statsLoadFail": "Could not load points or draw chances: {{detail}}",
+  "wheel.statsOk":
+    "Wheel points: {{points}} (redeem 1 prepaid session at {{per}} points); draw chances: {{chances}}; prepaid sessions left: {{sessions}}. {{legacy}}",
   "wheel.spinNeedLogin": "Please sign in as a member.",
   "wheel.spinNeedVerify": "Please verify your email first.",
   "wheel.spinNoChances": "No spins available.",

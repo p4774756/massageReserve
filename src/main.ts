@@ -795,13 +795,19 @@ function render() {
   const wheelStatus = el("div", { class: "status-line" });
   const wheelResult = el("div", { class: "pill", hidden: true });
   const spinBtn = el("button", { class: "ghost", type: "button" }, [t("booking.spinWheel", "抽輪盤")]);
+  /** 抽輪盤分頁頂部：目前點數、可抽次數、預約次數等（與預約表單內會員列資料同源） */
+  const wheelStatsSummary = el("div", {
+    class: "wheel-stats-summary",
+    role: "status",
+    ariaLive: "polite",
+    hidden: true,
+  });
   /** 僅登入後顯示：餘額／抽輪盤（訪客預約不需此區） */
   const memberExtrasWrap = el("div", { class: "book-member-extras", hidden: true });
   const finalizeSection = el("div", { class: "book-step book-step--finalize" }, [
     el("div", { class: "grid" }, [
       el("label", { class: "field" }, [t("field.payment", "付款方式"), bookingModeSelect, bookingModeHint]),
     ]),
-    memberExtrasWrap,
     el("div", { class: "grid" }, [
       el("label", { class: "field" }, [
         t("field.note", "備註（選填）"),
@@ -809,6 +815,8 @@ function render() {
         el("span", { class: "hint" }, [t("field.noteHint", "可填寫需求，例如：頭痛、背部痠痛、腿部需要按壓等")]),
       ]),
     ]),
+    /** 會員餘額／驗證提示放在備註之後；點數兌換次數在「抽輪盤」分頁 */
+    memberExtrasWrap,
     el("div", { class: "row-actions" }, [submitBtn]),
     bookStatus,
   ]);
@@ -1515,6 +1523,62 @@ function render() {
   /** 與下方 `setBookSubTab` 一併指派：會員區隱藏時關閉「我的預約」分頁並切回預約表單 */
   let syncBookMyBookingsTabVisibility: () => void = () => {};
 
+  function resetWheelStatsSummary() {
+    wheelStatsSummary.hidden = true;
+    wheelStatsSummary.textContent = "";
+    wheelStatsSummary.className = "wheel-stats-summary";
+  }
+
+  type WheelStatsPanel =
+    | { kind: "hidden" }
+    | { kind: "need_verify" }
+    | { kind: "loading" }
+    | { kind: "ok"; legacyLine: string }
+    | { kind: "error"; detail: string };
+
+  function setWheelStatsPanel(panel: WheelStatsPanel) {
+    if (panel.kind === "hidden") {
+      resetWheelStatsSummary();
+      return;
+    }
+    if (panel.kind === "need_verify") {
+      wheelStatsSummary.hidden = false;
+      wheelStatsSummary.className = "wheel-stats-summary wheel-stats-summary--muted";
+      wheelStatsSummary.textContent = t(
+        "wheel.statsNeedVerify",
+        "完成信箱驗證後，此處會顯示目前點數與可抽獎次數。",
+      );
+      return;
+    }
+    if (panel.kind === "loading") {
+      wheelStatsSummary.hidden = false;
+      wheelStatsSummary.className = "wheel-stats-summary wheel-stats-summary--loading";
+      wheelStatsSummary.textContent = t("wheel.statsLoading", "讀取點數與抽獎次數中…");
+      return;
+    }
+    if (panel.kind === "error") {
+      wheelStatsSummary.hidden = false;
+      wheelStatsSummary.className = "wheel-stats-summary wheel-stats-summary--error";
+      wheelStatsSummary.textContent = t("wheel.statsLoadFail", "無法讀取點數與抽獎次數：{{detail}}", {
+        detail: panel.detail,
+      });
+      return;
+    }
+    wheelStatsSummary.hidden = false;
+    wheelStatsSummary.className = "wheel-stats-summary wheel-stats-summary--ok";
+    wheelStatsSummary.textContent = t(
+      "wheel.statsOk",
+      "目前輪盤點數 {{points}} 點（滿 {{per}} 點可手動換 1 次預約次數）；可抽獎 {{chances}} 次；預約次數餘額 {{sessions}} 次。{{legacy}}",
+      {
+        points: wheelPointsCount,
+        per: pointsPerMassageSetting,
+        chances: drawChances,
+        sessions: sessionCreditsCount,
+        legacy: panel.legacyLine,
+      },
+    );
+  }
+
   async function refreshWalletStatus() {
     try {
       const user = auth.currentUser;
@@ -1535,6 +1599,7 @@ function render() {
         wheelStatus.className = "status-line";
         wheelResult.hidden = true;
         syncRedeemPointsUi();
+        setWheelStatsPanel({ kind: "hidden" });
         syncPageHeadSession();
         return;
       }
@@ -1553,6 +1618,7 @@ function render() {
         wheelStatus.className = "status-line";
         wheelResult.hidden = true;
         syncRedeemPointsUi();
+        setWheelStatsPanel({ kind: "hidden" });
         syncPageHeadSession();
         return;
       }
@@ -1575,6 +1641,7 @@ function render() {
         wheelStatus.className = "status-line";
         wheelResult.hidden = true;
         syncRedeemPointsUi();
+        setWheelStatsPanel({ kind: "need_verify" });
         syncPageHeadSession();
         return;
       }
@@ -1582,6 +1649,7 @@ function render() {
       ensureMyBookingsListener(user.uid);
       walletStatus.textContent = t("member.walletLoading", "讀取會員餘額中…");
       walletStatus.className = "status-line";
+      setWheelStatsPanel({ kind: "loading" });
       redeemPointsStatus.textContent = "";
       redeemPointsStatus.className = "status-line";
       syncPageHeadSession(user.displayName?.trim() || user.email?.trim());
@@ -1637,6 +1705,7 @@ function render() {
         if (drawChances > 0) spinBtn.removeAttribute("disabled");
         else spinBtn.setAttribute("disabled", "true");
         syncRedeemPointsUi();
+        setWheelStatsPanel({ kind: "ok", legacyLine });
         syncPageHeadSession(profileNick);
       } catch (e) {
         walletBalance = 0;
@@ -1650,6 +1719,7 @@ function render() {
         wheelStatus.textContent = t("member.wheelStateFail", "無法讀取抽獎狀態。");
         wheelStatus.className = "status-line error";
         syncRedeemPointsUi();
+        setWheelStatsPanel({ kind: "error", detail: errorMessage(e) });
         syncPageHeadSession();
       }
     } finally {
@@ -1780,7 +1850,10 @@ function render() {
       slotSelect.append(o);
       i++;
     }
-    if (prev) {
+    if (disabled) {
+      /** 全日／全週額滿等會整個停用選單；勿沿用他日選過的時段，否則付款區仍會顯示 */
+      slotSelect.value = "";
+    } else if (prev) {
       const keep = [...slotSelect.options].some((o) => o.value === prev && !o.disabled);
       if (!keep) slotSelect.value = "";
       else slotSelect.value = prev;
@@ -1815,7 +1888,8 @@ function render() {
     slotFieldWrap.hidden = hideStartTimeRow;
 
     const slotPicked = Boolean(slotSelect.value);
-    finalizeSection.hidden = !slotPicked || !showSlotFields;
+    /** 與時段列一致：無可選時段／載入中／額滿時一併隱藏付款與送出 */
+    finalizeSection.hidden = !slotPicked || !showSlotFields || hideStartTimeRow;
     bookThenFinalizeHint.hidden = !(
       showSlotFields &&
       pickable &&
@@ -2079,7 +2153,7 @@ function render() {
     ),
   ]);
   const wheelRow = el("div", { class: "book-wheel-row" }, [spinBtn, wheelTestBtn, wheelStatus, wheelResult]);
-  memberExtrasWrap.append(emailVerifyBanner, walletStatus, redeemRow, redeemPointsStatus);
+  memberExtrasWrap.append(emailVerifyBanner, walletStatus);
   const bookSupportChatMount = el("div", { class: "book-support-chat" });
   mountMemberSupportChat(db, auth, bookSupportChatMount);
 
@@ -2177,7 +2251,7 @@ function render() {
     "aria-label",
     t(
       "book.tabsAria",
-      "預約按摩、我的預約、抽輪盤（「我的預約／抽輪盤」於登入會員後顯示）",
+      "預約按摩、我的預約、抽輪盤與點數兌換（「我的預約／抽輪盤」於登入會員後顯示）",
     ),
   );
   const tabBook = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-book" }, [
@@ -2234,7 +2308,8 @@ function render() {
     hidden: true,
   });
   bookPanelWheel.setAttribute("aria-labelledby", "book-tab-wheel");
-  bookPanelWheel.append(wheelRulesHint, wheelRow);
+  const wheelRedeemBlock = el("div", { class: "book-wheel-redeem" }, [redeemRow, redeemPointsStatus]);
+  bookPanelWheel.append(wheelStatsSummary, wheelRulesHint, wheelRedeemBlock, wheelRow);
 
   const bookPanelMyBookings = el("div", {
     class: "book-tab-panel book-tab-panel--my-bookings",
