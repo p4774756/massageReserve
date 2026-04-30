@@ -409,21 +409,6 @@ export const EN: Record<string, string> = {
   "admin.wallet.amount": "Payment amount for records (required, NTD)",
   "admin.wallet.note": "Note (optional)",
   "admin.topup.sessionsInt": "Sessions to add must be a positive integer.",
-  "admin.member.createBtn": "Create member account",
-  "admin.member.createTitle": "Create member account",
-  "admin.member.email": "Member email",
-  "admin.member.password": "Initial password",
-  "admin.member.nickname": "Display name (optional)",
-  "admin.member.nicknameHint":
-    "Saved to member profile; if the booking name is empty it may auto-fill; also updates Firebase Auth display name.",
-  "admin.member.selfRegisterHint":
-    "Members can also self-register on the booking page; they must verify email before wallet and member booking.",
-  "admin.member.needCreds": "Enter email and password.",
-  "admin.member.emailPh": "Member email",
-  "admin.member.passwordPh": "Initial password (min 6 characters)",
-  "admin.member.nicknamePh":
-    "e.g. Alex (optional; used as default booking name)",
-  "admin.member.created": "Created successfully, UID: {{uid}} (top-up field prefilled with email)",
 
   "admin.table.when": "When",
   "admin.table.name": "Name",
@@ -450,7 +435,6 @@ export const EN: Record<string, string> = {
   "admin.tab.announce": "Front page & rules",
   "admin.tab.support": "Support",
 
-  "admin.memberTab.create": "Create account",
   "admin.memberTab.wallet": "Top up",
   "admin.memberTab.list": "Member list",
 

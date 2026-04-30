@@ -24,7 +24,6 @@ import {
   cancelBookingCall,
   completeBookingCall,
   createBookingCall,
-  createMemberAccountCall,
   getAvailabilityCall,
   getAdminStatusCall,
   getBookingPricingCall,
@@ -2449,7 +2448,6 @@ function render() {
 
     const adminStatus = el("div", { class: "status-line" });
     const walletTopupSection = el("div", { class: "admin-announce admin-announce--wallet" }, []);
-    const accountCreateSection = el("div", { class: "admin-announce" }, []);
     const topupCustomerId = el("input", {
       type: "text",
       placeholder: t("admin.placeholder.memberId", "會員 Email（建議）或 UID"),
@@ -3396,65 +3394,6 @@ function render() {
       el("div", { class: "admin-wallet-accordion-stack" }, [accordionTopup, accordionAdjust, accordionGrant]),
     ]);
     walletTopupSection.append(walletSegmentPricing, walletMemberOpsCard);
-    const createMemberEmail = el("input", {
-      type: "email",
-      placeholder: t("admin.member.emailPh", "會員 Email"),
-    });
-    const createMemberPassword = el("input", {
-      type: "password",
-      placeholder: t("admin.member.passwordPh", "初始密碼（至少 6 碼）"),
-      autocomplete: "new-password",
-    });
-    const createMemberNickname = el("input", {
-      type: "text",
-      maxLength: 80,
-      placeholder: t("admin.member.nicknamePh", "例如：小陳（選填，會寫入預約姓名預設）"),
-      autocomplete: "off",
-    });
-    const createMemberBtn = el("button", { class: "ghost", type: "button" }, [
-      t("admin.member.createBtn", "建立會員帳號"),
-    ]);
-    const createMemberStatus = el("div", { class: "status-line" });
-    createMemberBtn.addEventListener("click", async () => {
-      createMemberStatus.textContent = "";
-      createMemberStatus.className = "status-line";
-      const email = createMemberEmail.value.trim();
-      const password = createMemberPassword.value;
-      const nickname = createMemberNickname.value.trim();
-      if (!email || !password) {
-        createMemberStatus.textContent = t("admin.member.needCreds", "請輸入 Email 與密碼。");
-        createMemberStatus.classList.add("error");
-        return;
-      }
-      createMemberBtn.setAttribute("disabled", "true");
-      try {
-        const fn = createMemberAccountCall();
-        const res = await fn({ email, password, nickname, ...localeApiParam() });
-        const data = res.data as { uid: string };
-        createMemberStatus.textContent = t("admin.member.created", "建立成功，UID：{{uid}}（儲值欄已帶入 Email）", {
-          uid: data.uid,
-        });
-        createMemberStatus.classList.add("ok");
-        createMemberPassword.value = "";
-        createMemberNickname.value = "";
-        topupCustomerId.value = email;
-      } catch (e) {
-        createMemberStatus.textContent = errorMessage(e);
-        createMemberStatus.classList.add("error");
-      } finally {
-        createMemberBtn.removeAttribute("disabled");
-      }
-    });
-    accountCreateSection.append(
-      el("h3", {}, [t("admin.member.createTitle", "建立會員帳號")]),
-      el("label", { class: "field" }, [t("admin.member.email", "會員 Email"), createMemberEmail]),
-      el("label", { class: "field" }, [t("admin.member.password", "初始密碼"), createMemberPassword]),
-      el("label", { class: "field" }, [t("admin.member.nickname", "稱呼（選填）"), createMemberNickname]),
-      el("div", { class: "hint" }, [t("admin.member.nicknameHint", "稱呼會存進會員資料，登入預約時若姓名欄為空會自動帶入；亦會寫入 Firebase Auth 顯示名稱。")]),
-      el("div", { class: "hint" }, [t("admin.member.selfRegisterHint", "會員也可於前台「會員登入／註冊」自行註冊；註冊後須完成信箱驗證才可使用儲值與會員預約。")]),
-      el("div", { class: "row-actions" }, [createMemberBtn]),
-      createMemberStatus,
-    );
     const tableHolder = el("div", { class: "table-wrap admin-bookings-table" });
     const table = el("table", {}, []);
     function adminBookingsHeaderRow(): HTMLTableRowElement {
@@ -4179,10 +4118,6 @@ function render() {
 
     paintMemberListTable();
 
-    const subTabMemberCreate = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
-      t("admin.memberTab.create", "建立帳號"),
-    ]);
-    subTabMemberCreate.id = "admin-member-subtab-create";
     const subTabMemberWallet = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
       t("admin.memberTab.wallet", "會員儲值"),
     ]);
@@ -4209,28 +4144,18 @@ function render() {
     panelMemberWalletSub.setAttribute("aria-labelledby", "admin-member-subtab-wallet");
     panelMemberWalletSub.append(walletTopupSection);
 
-    const panelMemberCreateSub = el("div", {
-      class: "admin-tab-panel admin-member-subpanel",
-      role: "tabpanel",
-      id: "admin-member-subpanel-create",
-      hidden: true,
-    });
-    panelMemberCreateSub.setAttribute("aria-labelledby", "admin-member-subtab-create");
-    panelMemberCreateSub.append(accountCreateSection);
-
     subTabMemberList.setAttribute("aria-controls", "admin-member-subpanel-list");
     subTabMemberWallet.setAttribute("aria-controls", "admin-member-subpanel-wallet");
-    subTabMemberCreate.setAttribute("aria-controls", "admin-member-subpanel-create");
 
     const membersSubTablist = el("div", { class: "admin-tabs admin-member-subtabs", role: "tablist" });
-    membersSubTablist.append(subTabMemberList, subTabMemberWallet, subTabMemberCreate);
+    membersSubTablist.append(subTabMemberList, subTabMemberWallet);
     const membersSubPanelsWrap = el("div", { class: "admin-member-subpanels" });
-    membersSubPanelsWrap.append(panelMemberListSub, panelMemberWalletSub, panelMemberCreateSub);
+    membersSubPanelsWrap.append(panelMemberListSub, panelMemberWalletSub);
 
-    const memberSubTabButtons = [subTabMemberList, subTabMemberWallet, subTabMemberCreate] as const;
-    const memberSubTabPanels = [panelMemberListSub, panelMemberWalletSub, panelMemberCreateSub] as const;
+    const memberSubTabButtons = [subTabMemberList, subTabMemberWallet] as const;
+    const memberSubTabPanels = [panelMemberListSub, panelMemberWalletSub] as const;
 
-    function selectMembersSubTab(index: 0 | 1 | 2) {
+    function selectMembersSubTab(index: 0 | 1) {
       memberSubTabButtons.forEach((btn, i) => {
         const on = i === index;
         btn.setAttribute("aria-selected", String(on));
@@ -4245,7 +4170,6 @@ function render() {
 
     subTabMemberList.addEventListener("click", () => selectMembersSubTab(0));
     subTabMemberWallet.addEventListener("click", () => selectMembersSubTab(1));
-    subTabMemberCreate.addEventListener("click", () => selectMembersSubTab(2));
 
     membersSubTablist.addEventListener("keydown", (ev) => {
       if (ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;
@@ -4255,7 +4179,7 @@ function render() {
       const delta = ev.key === "ArrowRight" ? 1 : -1;
       const n = memberSubTabButtons.length;
       const next = ((cur + delta) % n + n) % n;
-      selectMembersSubTab(next as 0 | 1 | 2);
+      selectMembersSubTab(next as 0 | 1);
       memberSubTabButtons[next].focus();
     });
 
