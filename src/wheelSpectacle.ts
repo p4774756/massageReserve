@@ -6,6 +6,7 @@ import {
   scheduleSpinTicksAtSliceCrossings,
   type PrefetchedWheelSfx,
 } from "./wheelSpectacleSfx";
+import { mountWheelSpectacleThree, type WheelSpectacleThreeHandle } from "./wheelSpectacleWebgl";
 
 export type SpinWheelSpectacleResult = {
   prize: { id?: string; name: string; type: string; value: number };
@@ -515,10 +516,14 @@ export function runWheelSpectacle(
       void audioCtx.resume();
     }
 
+    let threeHandle: WheelSpectacleThreeHandle | null = null;
+
     let settled = false;
     const tearDown = () => {
       if (settled) return;
       settled = true;
+      threeHandle?.dispose();
+      threeHandle = null;
       if (audioCtx && audioCtx.state !== "closed") {
         try {
           void audioCtx.close();
@@ -607,7 +612,13 @@ export function runWheelSpectacle(
       });
 
       const [, prizeList, sfx] = await Promise.all([sleep(openWaitMs), labelsPromise, sfxPromise]);
-      if (prizeList && prizeList.length > 0) {
+      threeHandle =
+        mountWheelSpectacleThree(wheel, {
+          prizes: prizeList && prizeList.length > 0 ? prizeList : null,
+          reduceMotion,
+          decorativeSlices: DECORATIVE_WHEEL_SLICES,
+        }) ?? null;
+      if (!threeHandle && prizeList && prizeList.length > 0) {
         mountPrizeWheelSvg(wheel, prizeList);
       }
 
@@ -675,8 +686,14 @@ export function runWheelSpectacle(
       const crossingAngles = computeSliceBoundaryCrossingAnglesDeg(finalDeg, prizeList);
 
       wheel.classList.add("is-rim-glow");
-      wheel.style.transition = `transform ${SPIN_TRANSITION_MS / 1000}s cubic-bezier(0.08, 0.82, 0.12, 1)`;
-      wheel.style.transform = `rotate(${finalDeg}deg)`;
+      threeHandle?.setRimGlow(true);
+      const spinPromise = threeHandle
+        ? threeHandle.spinTo(finalDeg, SPIN_TRANSITION_MS)
+        : null;
+      if (!threeHandle) {
+        wheel.style.transition = `transform ${SPIN_TRANSITION_MS / 1000}s cubic-bezier(0.08, 0.82, 0.12, 1)`;
+        wheel.style.transform = `rotate(${finalDeg}deg)`;
+      }
 
       if (audioCtx && reelBus) {
         const bus = reelBus;
@@ -693,19 +710,30 @@ export function runWheelSpectacle(
         }
       }
 
-      await sleep(SPIN_WAIT_MS);
+      if (spinPromise) {
+        await spinPromise;
+        await sleep(Math.max(0, SPIN_WAIT_MS - SPIN_TRANSITION_MS));
+      } else {
+        await sleep(SPIN_WAIT_MS);
+      }
 
       const wonId = data.prize.id;
       if (wonId) {
-        wheel.querySelectorAll("path.is-winner-slice").forEach((el) => el.classList.remove("is-winner-slice"));
-        const hit = wheel.querySelector(`path[data-prize-id="${wonId}"]`);
-        hit?.classList.add("is-winner-slice");
+        if (threeHandle) {
+          threeHandle.setWinnerByPrizeId(wonId);
+        } else {
+          wheel.querySelectorAll("path.is-winner-slice").forEach((el) => el.classList.remove("is-winner-slice"));
+          const hit = wheel.querySelector(`path[data-prize-id="${wonId}"]`);
+          hit?.classList.add("is-winner-slice");
+        }
       }
 
       wheel.classList.remove("is-rim-glow");
+      threeHandle?.setRimGlow(false);
       stopTicks?.();
       stopDrone?.();
       overlay.classList.add("is-win-burst");
+      threeHandle?.winBloomPulse();
 
       if (audioCtx && reelBus) {
         try {

@@ -2487,16 +2487,18 @@ body.wheel-spectacle-lock {
   width: min(78vmin, 320px);
   aspect-ratio: 1;
   margin-top: 4px;
+  border-radius: 50%;
+  border: 7px solid rgb(255 210 130 / 0.92);
+  box-shadow:
+    0 0 0 3px rgb(90 60 160 / 0.45),
+    0 18px 50px rgb(0 0 0 / 0.5);
+  overflow: hidden;
 }
 
 .wheel-spectacle-wheel-disk {
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  border: 7px solid rgb(255 210 130 / 0.92);
-  box-shadow:
-    0 0 0 3px rgb(90 60 160 / 0.45),
-    0 18px 50px rgb(0 0 0 / 0.5);
   background: conic-gradient(
     from -90deg,
     #e84d6a 0deg 32deg,
@@ -2513,7 +2515,11 @@ body.wheel-spectacle-lock {
   );
 }
 
-.wheel-spectacle-wheel-disk.has-prize-labels {
+.wheel-spectacle-wheel-disk.wheel-spectacle-wheel-disk--webgl {
+  background: transparent;
+}
+
+.wheel-spectacle-wheel-disk.has-prize-labels:not(.wheel-spectacle-wheel-disk--webgl) {
   background: radial-gradient(circle at 50% 48%, rgb(70 55 110 / 0.4) 0%, rgb(10 8 20) 78%);
 }
 
