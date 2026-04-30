@@ -449,60 +449,11 @@ export const EN: Record<string, string> = {
   "admin.tab.members": "Members & top-up",
   "admin.tab.announce": "Front page & rules",
   "admin.tab.support": "Support",
-  "admin.tab.reports": "Reports",
 
   "admin.memberTab.create": "Create account",
   "admin.memberTab.wallet": "Top up",
   "admin.memberTab.list": "Member list",
 
-  "admin.reports.introShort":
-    "This tab shows charts only. “Refresh report” loads visits and support, then redraws charts (same booking snapshot as Bookings).",
-  "admin.reports.detailsSummary": "Where this data comes from / chart notes",
-  "admin.reports.section.list": "Booking files & lists",
-  "admin.reports.section.volume": "Bookings by date range",
-  "admin.reports.section.visits": "Site visits",
-  "admin.reports.section.support": "Support chat",
-  "admin.reports.vol.today": "Today (calendar day)",
-  "admin.reports.vol.week": "This week (Mon–Sun)",
-  "admin.reports.vol.month": "This month",
-  "admin.reports.visit.today": "Today",
-  "admin.reports.visit.week": "This week",
-  "admin.reports.visit.total": "All time",
-  "admin.reports.sup.open": "Open",
-  "admin.reports.sup.closed": "Closed",
-
-  "admin.reports.intro":
-    "Charts: booking mix uses the same live snapshot as the Bookings tab. Visitor counters and support threads are read when you refresh. ECharts (with echarts-gl for 3D bars) loads on first refresh after opening this tab: pies for status, payment mode, and support; 3D bars for booking volume and visits.",
-  "admin.reports.refresh": "Refresh report",
-  "admin.reports.loading": "Crunching numbers…",
-  "admin.reports.ok": "Report updated.",
-  "admin.reports.fail": "Could not load report (permissions or network).",
-  "admin.reports.updatedAt": "Updated: {{t}}",
-  "admin.reports.empty": "No data",
-  "admin.reports.card.totalDocs": "Booking documents (total)",
-  "admin.reports.card.mainList": "Main list rows",
-  "admin.reports.card.hiddenDeleted": "Archived / deleted",
-  "admin.reports.card.todayBookings": "Bookings · today (calendar)",
-  "admin.reports.card.weekBookings": "Bookings · this week (Mon–Sun)",
-  "admin.reports.card.monthBookings": "Bookings · this month",
-  "admin.reports.card.visitsToday": "Site visits · today",
-  "admin.reports.card.visitsWeek": "Site visits · this week",
-  "admin.reports.card.visitsTotal": "Site visits · all time",
-  "admin.reports.card.supportOpen": "Support threads · open",
-  "admin.reports.card.supportClosed": "Support threads · closed",
-
-  "admin.reports.chart.bookingVolumeTitle": "Bookings · today / this week / this month",
-  "admin.reports.chart.visitsTitle": "Site visits · today / this week / all time",
-  "admin.reports.chart.labelToday": "Today",
-  "admin.reports.chart.labelWeek": "This week",
-  "admin.reports.chart.labelMonth": "This month",
-  "admin.reports.chart.labelTotal": "All time",
-  "admin.reports.chart.supportEmpty": "No support threads yet.",
-  "admin.reports.chart.legendOpen": "Open",
-  "admin.reports.chart.legendClosed": "Closed",
-  "admin.reports.chart.donutStatus": "Booking status",
-  "admin.reports.chart.donutMode": "Payment mode",
-  "admin.reports.chart.donutSupport": "Support threads",
   "admin.hidden.intro":
     "Archived from the Bookings sub-tab’s main list, or legacy “deleted” in the database. Caps and slots still follow real status (only affects admin list). 10 per page — use Previous/Next below.",
 
@@ -601,7 +552,7 @@ export const EN: Record<string, string> = {
 
   "admin.backTitle": "Admin",
   "admin.backSubtitle":
-    "Use tabs: bookings & archive (sub-tabs: main list / archived), members & top-up, front page & booking rules, support, reports.",
+    "Use tabs: bookings & archive (sub-tabs: main list / archived), members & top-up, front page & booking rules, support.",
 
   "booking.rulesFooter":
     "Rules: max {{dayCap}} same day, max {{weekCap}} same work week; cancelled do not count toward caps.",

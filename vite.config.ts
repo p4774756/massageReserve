@@ -23,12 +23,6 @@ export default defineConfig({
           if (id.includes("node_modules/@firebase") || id.includes("node_modules/firebase")) {
             return "firebase";
           }
-          if (id.includes("node_modules/echarts-gl")) {
-            return "echarts-gl";
-          }
-          if (id.includes("node_modules/echarts")) {
-            return "echarts";
-          }
           if (id.includes("node_modules/three")) {
             return "three";
           }

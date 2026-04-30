@@ -379,7 +379,8 @@ export function mountWheelSpectacleThree(
     raf = requestAnimationFrame(loop);
 
     const disposeMaterial = (m: THREE.Material) => {
-      if ("map" in m && m.map) m.map.dispose();
+      const tex = "map" in m ? (m as { map?: THREE.Texture }).map : undefined;
+      tex?.dispose();
       m.dispose();
     };
 
