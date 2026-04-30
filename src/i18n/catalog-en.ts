@@ -355,7 +355,7 @@ export const EN: Record<string, string> = {
   "admin.ambient.save": "Save 3D decoration toggle",
   "admin.ambient.blockTitle": "3D decoration (booking card)",
   "admin.ambient.blockLead":
-    "Stylized-but-realistic solar system as a viewport-fixed layer behind the booking page: lit spheres, point-cloud asteroid belts, Saturn-style thin rings (no thick tube toruses), subtle bloom; may bleed past edges while you scroll content. Shell and portrait sit above it. Not in admin. When off, visitors do not load WebGL. Add ?webgl=0 to force off for one session; respects “reduce motion”.",
+    "Stylized-but-realistic solar system as a viewport-fixed layer behind the booking page: lit spheres, point-cloud asteroid belts, Saturn-style thin rings, subtle bloom, plus original low-poly ships, a comet with tail, and a brief debris/bloom beat when it skims the belt. Shell and portrait sit above it. Not in admin. When off, visitors do not load WebGL. Add ?webgl=0 to force off for one session; respects “reduce motion”.",
   "admin.ambient.enableLabel": "Enable 3D decoration inside the booking card",
   "admin.ambient.pathHintA": "Firestore: ",
   "admin.ambient.pathHintB": " field enabled (defaults to on if the document is missing).",

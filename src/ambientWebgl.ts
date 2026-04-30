@@ -67,8 +67,8 @@ function bodyMat(
 
 /**
  * 偏寫實的太陽系裝飾：點光源、Standard 行星、土星薄環（Ring）、小行星帶為點雲。
- * 不使用粗 Torus「水管」線框。宿主為 `position: fixed` 視窗底層，頁面可捲動、背景固定。
- * 互動：指標／觸控視差、滾輪略推場景；passive 不攔截點擊。
+ * 原創剪影：小型太空船、彗星拖尾；掠過小行星帶時微粒＋短暫光暈（無第三方 IP 造型）。
+ * 宿主為 `position: fixed` 視窗底層。互動：指標／觸控視差、滾輪略推場景；passive。
  */
 export function mountAmbientWebgl(opts: MountAmbientWebglOptions): (() => void) | null {
   const { host, shellForTint } = opts;
@@ -296,6 +296,183 @@ export function mountAmbientWebgl(opts: MountAmbientWebglOptions): (() => void) 
   root.add(roguePivot);
   orbitals.push({ pivot: roguePivot, speed: 3.4, phase: 2.8 });
 
+  /** —— 原創剪影太空船、彗星與撞擊微粒（皆為程式化幾何）—— */
+  const extrasRoot = new THREE.Group();
+  root.add(extrasRoot);
+
+  function buildSpaceship(hull: number, accent: number, scale: number): THREE.Group {
+    const g = new THREE.Group();
+    const hullM = bodyMat(hull, { roughness: 0.42, metalness: 0.5 });
+    const accentM = bodyMat(accent, { roughness: 0.35, metalness: 0.55, emissive: accent, emissiveIntensity: 0.35 });
+    const fuselage = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.036, 0.06), hullM);
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.022, 0.065, 8), hullM);
+    nose.rotation.z = -Math.PI / 2;
+    nose.position.set(0.102, 0, 0);
+    const wingL = new THREE.Mesh(new THREE.BoxGeometry(0.048, 0.006, 0.11), hullM);
+    wingL.position.set(-0.02, 0, 0.068);
+    const wingR = wingL.clone();
+    wingR.position.z = -0.068;
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.028, 0.04), hullM);
+    tail.position.set(-0.095, 0, 0);
+    const port = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.01, 0.024), accentM);
+    port.position.set(0.02, 0.02, 0);
+    const glow = new THREE.Mesh(
+      new THREE.SphereGeometry(0.014, 8, 8),
+      new THREE.MeshStandardMaterial({
+        color: 0x66ccff,
+        emissive: 0x4488ff,
+        emissiveIntensity: 1.1,
+        roughness: 0.4,
+        metalness: 0.2,
+        transparent: true,
+        opacity: 0.9,
+      }),
+    );
+    glow.position.set(-0.11, 0, 0);
+    g.add(fuselage, nose, wingL, wingR, tail, port, glow);
+    g.scale.setScalar(scale);
+    return g;
+  }
+
+  const shipA = buildSpaceship(0x6a7588, 0x8899aa, 1);
+  const shipB = buildSpaceship(0x7a6048, 0xc9a070, 0.88);
+  const shipC = buildSpaceship(0x556070, 0x7090a8, 1.05);
+  extrasRoot.add(shipA, shipB, shipC);
+
+  const comet = new THREE.Group();
+  const cometHead = new THREE.Mesh(
+    new THREE.SphereGeometry(0.042, 12, 12),
+    new THREE.MeshStandardMaterial({
+      color: 0xd8ecff,
+      emissive: 0xaaddff,
+      emissiveIntensity: 0.55,
+      roughness: 0.35,
+      metalness: 0.08,
+    }),
+  );
+  const trailLen = 72;
+  const trailPos = new Float32Array(trailLen * 3);
+  const trailGeo = new THREE.BufferGeometry();
+  trailGeo.setAttribute("position", new THREE.BufferAttribute(trailPos, 3));
+  const trailMat = new THREE.PointsMaterial({
+    color: 0xb8dcff,
+    size: 0.028,
+    transparent: true,
+    opacity: 0.55,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    sizeAttenuation: true,
+  });
+  const cometTrail = new THREE.Points(trailGeo, trailMat);
+  comet.add(cometHead);
+  /* 拖尾用世界座標，與 comet 同層，避免跟著 group 變換重算 */
+  extrasRoot.add(comet, cometTrail);
+
+  const trailHist: THREE.Vector3[] = [];
+
+  const debrisN = 52;
+  const debrisPos = new Float32Array(debrisN * 3);
+  const debrisVel = new Float32Array(debrisN * 3);
+  const debrisLife = new Float32Array(debrisN);
+  const debrisGeo = new THREE.BufferGeometry();
+  debrisGeo.setAttribute("position", new THREE.BufferAttribute(debrisPos, 3));
+  const debrisMat = new THREE.PointsMaterial({
+    color: 0xffccaa,
+    size: 0.022,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    sizeAttenuation: true,
+  });
+  const debris = new THREE.Points(debrisGeo, debrisMat);
+  extrasRoot.add(debris);
+
+  let impactBloomBoost = 0;
+  let lastImpactT = -999;
+
+  function spawnDebrisBurst(at: THREE.Vector3) {
+    for (let i = 0; i < debrisN; i++) {
+      const ix = i * 3;
+      const rx = (Math.random() - 0.5) * 2;
+      const ry = (Math.random() - 0.5) * 2;
+      const rz = (Math.random() - 0.5) * 2;
+      const len = Math.max(0.08, Math.hypot(rx, ry, rz));
+      debrisVel[ix] = (rx / len) * (0.35 + Math.random() * 0.45);
+      debrisVel[ix + 1] = (ry / len) * (0.28 + Math.random() * 0.4);
+      debrisVel[ix + 2] = (rz / len) * (0.35 + Math.random() * 0.45);
+      debrisPos[ix] = at.x + (Math.random() - 0.5) * 0.06;
+      debrisPos[ix + 1] = at.y + (Math.random() - 0.5) * 0.06;
+      debrisPos[ix + 2] = at.z + (Math.random() - 0.5) * 0.06;
+      debrisLife[i] = 1;
+    }
+  }
+
+  function updateSpectacle(t: number, dt: number) {
+    const placeShip = (ship: THREE.Group, phase: number, lane: number) => {
+      const u = (t * 0.21 + phase) % 5.2;
+      const f = (u / 5.2) * 2 - 1;
+      const x = 2.45 * Math.cos(f * Math.PI * 0.5 + lane * 0.9);
+      const y = 0.32 * Math.sin(t * 0.48 + phase * 2) + lane * 0.1;
+      const z = 1.65 * Math.sin(f * Math.PI * 0.5 + lane * 0.55);
+      ship.position.set(x, y, z);
+      ship.lookAt(x + 0.55, y * 0.85, z + 0.22);
+    };
+    placeShip(shipA, 0.2, 0);
+    placeShip(shipB, 2.1, 0.35);
+    placeShip(shipC, 4.4, -0.28);
+
+    const cycle = 36;
+    const ct = t % cycle;
+    const ang = ct * 0.62 + 0.45;
+    const r = 2.55 - ct * 0.072;
+    const cx = r * Math.cos(ang);
+    const cy = 0.26 + 0.16 * Math.sin(ct * 0.75);
+    const cz = r * Math.sin(ang);
+    comet.position.set(cx, cy, cz);
+
+    trailHist.unshift(new THREE.Vector3(cx, cy, cz));
+    if (trailHist.length > trailLen) trailHist.length = trailLen;
+    const hi = Math.max(0, trailHist.length - 1);
+    const tailRef = trailHist[hi]!;
+    for (let i = 0; i < trailLen; i++) {
+      const p = trailHist[Math.min(i, hi)] ?? tailRef;
+      const ix = i * 3;
+      trailPos[ix] = p.x;
+      trailPos[ix + 1] = p.y;
+      trailPos[ix + 2] = p.z;
+    }
+    (trailGeo.getAttribute("position") as THREE.BufferAttribute).needsUpdate = true;
+
+    const beltHit = r > 0.74 && r < 1.12 && Math.abs(cy) < 0.22;
+    if (beltHit && t - lastImpactT > 5) {
+      lastImpactT = t;
+      impactBloomBoost = Math.min(1, impactBloomBoost + 0.42);
+      spawnDebrisBurst(new THREE.Vector3(cx, cy, cz));
+    }
+
+    let maxLife = 0;
+    for (let i = 0; i < debrisN; i++) {
+      const ix = i * 3;
+      if (debrisLife[i] <= 0) continue;
+      debrisLife[i] -= dt * 0.95;
+      if (debrisLife[i] <= 0) {
+        debrisLife[i] = 0;
+        continue;
+      }
+      maxLife = Math.max(maxLife, debrisLife[i]);
+      debrisPos[ix] += debrisVel[ix] * dt;
+      debrisPos[ix + 1] += debrisVel[ix + 1] * dt;
+      debrisPos[ix + 2] += debrisVel[ix + 2] * dt;
+      debrisVel[ix + 1] -= dt * 0.14;
+    }
+    (debrisGeo.getAttribute("position") as THREE.BufferAttribute).needsUpdate = true;
+    debrisMat.opacity = maxLife > 0 ? Math.min(0.9, 0.2 + maxLife * 0.65) : 0;
+
+    impactBloomBoost *= 0.9;
+    return impactBloomBoost;
+  }
+
   const disposables: { dispose(): void }[] = [];
   root.traverse((obj) => {
     if (obj instanceof THREE.Mesh || obj instanceof THREE.Points) {
@@ -427,9 +604,13 @@ export function mountAmbientWebgl(opts: MountAmbientWebglOptions): (() => void) 
 
   let raf = 0;
   const t0 = performance.now();
+  let prevFrame = performance.now();
   const tick = (now: number) => {
     raf = requestAnimationFrame(tick);
+    const dt = Math.min(0.09, (now - prevFrame) / 1000);
+    prevFrame = now;
     const t = (now - t0) * 0.001;
+    const spectacleBloom = updateSpectacle(t, dt);
     const parallaxBoost = 1 + motionEnergy * 0.45;
     aim.x += (aim.tx - aim.x) * 0.038;
     aim.y += (aim.ty - aim.y) * 0.038;
@@ -455,7 +636,8 @@ export function mountAmbientWebgl(opts: MountAmbientWebglOptions): (() => void) 
       o.pivot.rotation.y = t * o.speed + o.phase;
     }
 
-    bloomPass.strength = 0.18 + Math.sin(t * 0.4) * 0.06 + tapBloom * 0.14 + wheelImpulse * 0.06;
+    bloomPass.strength =
+      0.18 + Math.sin(t * 0.4) * 0.06 + tapBloom * 0.14 + wheelImpulse * 0.06 + spectacleBloom * 0.34;
     renderer.toneMappingExposure = 0.92 + Math.sin(t * 0.18) * 0.08 + tapBloom * 0.05;
     fog.density = 0.014 + Math.sin(t * 0.3) * 0.004;
     starMat.color.setHSL(((0.58 + t * 0.008) % 1 + 1) % 1, 0.12, 0.88);
