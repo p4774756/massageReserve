@@ -7,6 +7,7 @@ import {
   type PrefetchedWheelSfx,
 } from "./wheelSpectacleSfx";
 import { mountWheelSpectacleThree, type WheelSpectacleThreeHandle } from "./wheelSpectacleWebgl";
+import { WHEEL_SLICE_FILLS, wheelSliceLabelInk } from "./wheelSlicePalette";
 
 export type SpinWheelSpectacleResult = {
   prize: { id?: string; name: string; type: string; value: number };
@@ -41,21 +42,6 @@ const SPIN_TRANSITION_MS = 7200;
 const SPIN_WAIT_MS = SPIN_TRANSITION_MS + 250;
 /** 無獎項 SVG 時，與 `conic-gradient` 色塊數對齊（每塊約 32°） */
 const DECORATIVE_WHEEL_SLICES = 11;
-
-const SLICE_FILL = [
-  "#e84d6a",
-  "#f4a43c",
-  "#f7e05a",
-  "#6bcf7a",
-  "#4ecde0",
-  "#7b8cf7",
-  "#c56cf0",
-  "#f06292",
-  "#ffb74d",
-  "#90caf9",
-  "#b39ddb",
-  "#e57373",
-];
 
 function polarToXY(r: number, angleDeg: number): [number, number] {
   const rad = (angleDeg * Math.PI) / 180;
@@ -166,9 +152,10 @@ function mountPrizeWheelSvg(wheelEl: HTMLElement, prizes: WheelPrizeLabel[]) {
     const a1 = angle + sweep;
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
     path.setAttribute("d", donutWedgePath(rOut, rIn, a0, a1));
-    path.setAttribute("fill", SLICE_FILL[i % SLICE_FILL.length]);
-    path.setAttribute("stroke", "rgb(255 255 255 / 0.5)");
-    path.setAttribute("stroke-width", "0.012");
+    const fill = WHEEL_SLICE_FILLS[i % WHEEL_SLICE_FILLS.length]!;
+    path.setAttribute("fill", fill);
+    path.setAttribute("stroke", "rgb(255 252 248 / 0.55)");
+    path.setAttribute("stroke-width", "0.01");
     path.setAttribute("data-prize-id", p.id);
     svg.appendChild(path);
 
@@ -176,11 +163,12 @@ function mountPrizeWheelSvg(wheelEl: HTMLElement, prizes: WheelPrizeLabel[]) {
     const labelR = (rOut + rIn) / 2;
     const [tx, ty] = polarToXY(labelR, mid);
     const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    text.setAttribute("class", "wheel-spectacle-slice-label");
     text.setAttribute("x", String(tx));
     text.setAttribute("y", String(ty));
     text.setAttribute("text-anchor", "middle");
     text.setAttribute("dominant-baseline", "middle");
-    text.setAttribute("fill", "#1a1428");
+    text.setAttribute("fill", wheelSliceLabelInk(fill));
     text.setAttribute("font-size", fontSize);
     text.setAttribute("font-weight", "700");
     text.setAttribute("transform", `rotate(${mid + 90} ${tx} ${ty})`);

@@ -3,27 +3,13 @@
  */
 
 import * as THREE from "three";
+import { WHEEL_SLICE_FILLS, wheelSliceLabelInk } from "./wheelSlicePalette";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 
 const DPR_CAP = 2;
-
-const SLICE_FILL = [
-  "#e84d6a",
-  "#f4a43c",
-  "#f7e05a",
-  "#6bcf7a",
-  "#4ecde0",
-  "#7b8cf7",
-  "#c56cf0",
-  "#f06292",
-  "#ffb74d",
-  "#90caf9",
-  "#b39ddb",
-  "#e57373",
-];
 
 export type WheelPrizeLabelLite = { id: string; name: string; weight: number };
 
@@ -98,10 +84,16 @@ function makeLabelTexture(
   g.clearRect(0, 0, w, h);
   g.fillStyle = `${bgHex}00`;
   g.fillRect(0, 0, w, h);
-  g.fillStyle = "#1a1428";
   g.font = `800 ${Math.floor(h * 0.34)}px system-ui, -apple-system, sans-serif`;
   g.textAlign = "center";
   g.textBaseline = "middle";
+  g.lineJoin = "round";
+  const ink = wheelSliceLabelInk(bgHex);
+  const stroke = ink === "#fffdf8" ? "rgb(0 0 0 / 0.38)" : "rgb(255 255 255 / 0.52)";
+  g.lineWidth = Math.max(2, Math.floor(h * 0.046));
+  g.strokeStyle = stroke;
+  g.strokeText(text, w * 0.5, h * 0.52);
+  g.fillStyle = ink;
   g.fillText(text, w * 0.5, h * 0.52);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -219,7 +211,7 @@ export function mountWheelSpectacleThree(
           name: p.name,
           a0,
           a1,
-          colorHex: SLICE_FILL[i % SLICE_FILL.length]!,
+          colorHex: WHEEL_SLICE_FILLS[i % WHEEL_SLICE_FILLS.length]!,
         });
         angle = a1;
       }
@@ -235,7 +227,7 @@ export function mountWheelSpectacleThree(
           name: "",
           a0,
           a1,
-          colorHex: SLICE_FILL[i % SLICE_FILL.length]!,
+          colorHex: WHEEL_SLICE_FILLS[i % WHEEL_SLICE_FILLS.length]!,
         });
         angle = a1;
       }
