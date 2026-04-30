@@ -314,10 +314,8 @@ export const EN: Record<string, string> = {
   "admin.grantDraw.processing": "Processing…",
   "admin.grantDraw.ok": "Granted {{added}} chance(s); member can spin {{total}} time(s) now.",
 
-  "admin.marquee.saveText": "Save top marquee",
-  "admin.marquee.saveLed": "Save bottom LED",
-  "admin.marquee.placeholderText": "Top banner e.g. Wed 15:00–16:00 closed",
-  "admin.marquee.placeholderLed": "Bottom LED: can be longer, e.g. promo tagline",
+  "admin.marquee.saveLed": "Save LED marquee",
+  "admin.marquee.placeholderLed": "Top LED strip: can be longer, e.g. promo tagline",
 
   "admin.seedWheelPrizes.heading": "Wheel prizes (Firestore)",
   "admin.seedWheelPrizes.hint":
@@ -349,16 +347,16 @@ export const EN: Record<string, string> = {
 
   "admin.announce.heading": "Front page & booking rules",
   "admin.announce.introShort":
-    "Marquees/LED, site-wide 3D background, wheel preview & prize seeding, booking caps, and closed windows are grouped below. Expand “Firestore paths” for technical detail.",
+    "Top LED marquee, 3D decoration in the booking card, wheel preview & prize seeding, booking caps, and closed windows are grouped below. Expand “Firestore paths” for technical detail.",
   "admin.announce.detailsSummary": "Firestore paths / full marquee note",
-  "admin.announce.blockMarquee": "Marquee (top & bottom)",
-  "admin.announce.blockMarqueeLead": "Separate text strip and LED strip; set speed and on/off.",
+  "admin.announce.blockMarquee": "Top LED marquee",
+  "admin.announce.blockMarqueeLead": "Shown at the top of the booking page; set scroll speed and on/off.",
 
-  "admin.ambient.save": "Save 3D background toggle",
-  "admin.ambient.blockTitle": "Site-wide 3D background",
+  "admin.ambient.save": "Save 3D decoration toggle",
+  "admin.ambient.blockTitle": "3D decoration (booking card)",
   "admin.ambient.blockLead":
-    "Particle + wireframe decoration for all visitors. When off, WebGL is not loaded. Add ?webgl=0 to the URL to force off for one session; respects “reduce motion”.",
-  "admin.ambient.enableLabel": "Enable site-wide 3D background",
+    "Stylized-but-realistic solar system as a viewport-fixed layer behind the booking page: lit spheres, point-cloud asteroid belts, Saturn-style thin rings (no thick tube toruses), subtle bloom; may bleed past edges while you scroll content. Shell and portrait sit above it. Not in admin. When off, visitors do not load WebGL. Add ?webgl=0 to force off for one session; respects “reduce motion”.",
+  "admin.ambient.enableLabel": "Enable 3D decoration inside the booking card",
   "admin.ambient.pathHintA": "Firestore: ",
   "admin.ambient.pathHintB": " field enabled (defaults to on if the document is missing).",
 
@@ -367,12 +365,10 @@ export const EN: Record<string, string> = {
   "admin.announce.blockRules": "Booking caps & closed windows",
   "admin.announce.blockRulesLead": "Limits and blocked time ranges affect what slots can be booked.",
   "admin.announce.intro":
-    "Top and bottom are configured separately in Firestore: siteSettings/marqueeText and siteSettings/marqueeLed. Each supports text, enable, and scroll speed (px/s).",
-  "admin.announce.topHeading": "Top · text marquee",
-  "admin.announce.topLabel": "Content",
+    "The booking page shows one LED marquee at the top, configured in Firestore siteSettings/marqueeLed (text, enabled, scroll speed in px/s).",
+  "admin.announce.ledHeading": "Top · LED marquee",
+  "admin.announce.ledLabel": "Content",
   "admin.announce.enable": "Enable",
-  "admin.announce.bottomHeading": "Bottom · LED marquee",
-  "admin.announce.bottomLabel": "Content",
   "admin.announce.speedLabel": "Scroll speed",
   "admin.announce.speedHint":
     "About {{min}}–{{max}} (larger number = faster, unit: pixels/second).",

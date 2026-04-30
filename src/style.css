@@ -40,12 +40,80 @@
   box-sizing: border-box;
 }
 
-#ambient-webgl {
+/* WebGL：固定於視窗（頁面上下捲動時背景不跟著移）；可略超出視窗邊 */
+.app-ambient-webgl-host {
   position: fixed;
-  inset: 0;
   z-index: 0;
   pointer-events: none;
   overflow: hidden;
+  top: -28vh;
+  right: -18vw;
+  bottom: -36vh;
+  left: -28vw;
+}
+
+/* 文字與內容疊在 WebGL 之上 */
+.shell > .marquee,
+.shell > header.page-head,
+.shell > main.panel,
+.shell > footer.app-version-footer {
+  position: relative;
+  z-index: 1;
+}
+
+/* 主理人區：整塊與其他內容同層；勿整幅不透明底，否則會蓋死底下 WebGL */
+.shell > figure.host-atelier {
+  position: relative;
+  z-index: 1;
+}
+
+/* 僅相框與說明疊在 WebGL 上；figure 透明讓周邊仍看得到 3D */
+.shell.shell--ambient-webgl:not(.admin-mode) figure.host-atelier {
+  background: transparent;
+}
+
+.shell.shell--ambient-webgl:not(.admin-mode) .host-atelier__frame {
+  position: relative;
+  z-index: 2;
+  isolation: isolate;
+  box-shadow:
+    2px 2px 0 rgb(0 0 0 / 0.12),
+    inset 0 0 0 1px #c06090,
+    0 0 0 3px rgb(255 255 255 / 0.88),
+    0 12px 36px rgb(255 255 255 / 0.35);
+}
+
+.shell.shell--ambient-webgl:not(.admin-mode) .host-atelier__cap {
+  position: relative;
+  z-index: 2;
+  padding: 8px 12px 10px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.88) 0%, rgb(255 252 254 / 0.84) 100%);
+  box-shadow: 0 0 24px rgb(255 255 255 / 0.75);
+  text-shadow:
+    0 0 10px rgb(255 255 255 / 0.95),
+    0 1px 2px rgb(255 255 255 / 0.9);
+}
+
+/* 後台不掛載 WebGL；隱藏 #app 底層掛載區 */
+#app:has(.shell.admin-mode) .app-ambient-webgl-host {
+  display: none;
+}
+
+.app-ambient-webgl-host .ambient-webgl {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.shell.shell--ambient-webgl:not(.admin-mode) {
+  background: linear-gradient(
+    180deg,
+    rgb(255 255 255 / 0.98) 0%,
+    rgb(255 255 255 / 0.96) 26%,
+    rgb(255 252 254 / 0.9) 48%,
+    rgb(255 248 252 / 0.9) 100%
+  );
 }
 
 body {
@@ -103,6 +171,7 @@ a:hover {
 }
 
 .shell {
+  position: relative;
   background: var(--surface);
   border: 2px outset #f0d0e0;
   border-radius: var(--radius-lg);
@@ -151,14 +220,14 @@ a:hover {
   }
 }
 
-/* 公告改為 Canvas 點陣 LED 時覆蓋底色與內距；置於卡片底部時與上方內容分界 */
+/* 公告改為 Canvas 點陣 LED 時覆蓋底色與內距；置於 shell 頂部時與下方標題區分界 */
 .marquee.marquee-led {
   padding: 0;
   white-space: normal;
   background: #0a0a0a;
   color: transparent;
-  border-bottom: none;
-  border-top: 1px solid var(--border);
+  border-top: none;
+  border-bottom: 1px solid var(--border);
 }
 
 .marquee-led-host {
@@ -2984,43 +3053,11 @@ html.kuso-retro #app::after {
   display: none !important;
 }
 
-/* 預約頁主卡片外層；背景光暈僅在預約頁（:has 對應 .shell 無 .admin-mode） */
+/* 預約頁主卡片外層 */
 .shell-stage {
   position: relative;
   z-index: 1;
   width: 100%;
-}
-
-html.kuso-retro .shell-stage:has(.shell:not(.admin-mode))::before {
-  content: "";
-  position: absolute;
-  inset: -14px -12px;
-  z-index: -1;
-  border-radius: 22px;
-  pointer-events: none;
-  background:
-    radial-gradient(ellipse 95% 70% at 50% 22%, rgb(255 150 190 / 0.45), transparent 58%),
-    radial-gradient(ellipse 75% 55% at 85% 88%, rgb(170 200 255 / 0.22), transparent 52%);
-  animation: shell-stage-halo-breathe 4.2s ease-in-out infinite alternate;
-}
-
-@keyframes shell-stage-halo-breathe {
-  from {
-    opacity: 0.7;
-    transform: scale(0.97);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1.03);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  html.kuso-retro .shell-stage:has(.shell:not(.admin-mode))::before {
-    animation: none;
-    opacity: 0.85;
-    transform: none;
-  }
 }
 
 html.kuso-retro .shell:not(.admin-mode) {
@@ -3031,6 +3068,20 @@ html.kuso-retro .shell:not(.admin-mode) {
     0 4px 28px rgb(180 100 140 / 0.09),
     0 2px 8px rgb(0 0 0 / 0.04);
   background: var(--surface);
+}
+
+html.kuso-retro .shell:not(.admin-mode).shell--ambient-webgl {
+  background: linear-gradient(
+    180deg,
+    rgb(255 255 255 / 0.97) 0%,
+    rgb(255 255 255 / 0.94) 28%,
+    rgb(255 252 254 / 0.88) 50%,
+    rgb(255 250 252 / 0.88) 100%
+  );
+}
+
+html.kuso-retro .shell:not(.admin-mode).shell--ambient-webgl figure.host-atelier {
+  background: transparent;
 }
 
 html.kuso-retro .shell:not(.admin-mode) header.page-head {
@@ -3087,20 +3138,6 @@ html.kuso-retro .page-head h1 {
   text-shadow: none;
   filter: none;
   animation: none;
-}
-
-html.kuso-retro .marquee:not(.marquee-led) {
-  background: linear-gradient(90deg, #ffe8f4 0%, #ffddea 35%, #fff0f6 70%, #ffe4f0 100%);
-  color: #5c2840;
-  font-weight: 600;
-  text-shadow: none;
-  border-bottom: 1px solid rgb(200 120 150 / 0.55);
-  animation: none;
-  filter: none;
-}
-
-html.kuso-retro .marquee-track {
-  animation-duration: 22s;
 }
 
 html.kuso-retro figure.host-atelier {
@@ -3186,22 +3223,14 @@ html.kuso-retro:not(:has(.shell.admin-mode)) .modal-card h3 {
   letter-spacing: -0.02em;
 }
 
-/* LED 公告列須蓋過前台跑馬燈漸層 */
 html.kuso-retro .marquee.marquee-led {
   animation: none !important;
   filter: none !important;
   background: #0a0a0a;
   color: transparent;
   text-shadow: none;
-  border-bottom: none;
-  border-top: 1px solid var(--border);
-}
-
-/* 減少動態：前台跑馬燈改為靜態捲動關閉（保留文字跑馬可另議） */
-@media (prefers-reduced-motion: reduce) {
-  html.kuso-retro .marquee-track {
-    animation: none !important;
-  }
+  border-top: none;
+  border-bottom: 1px solid var(--border);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -3307,16 +3336,6 @@ html.kuso-retro .shell.admin-mode .tab[aria-selected="true"] {
   padding-inline: 12px;
   margin-bottom: -1px;
   box-shadow: 0 -4px 14px rgb(99 102 241 / 0.12);
-}
-
-html.kuso-retro .shell.admin-mode .marquee:not(.marquee-led) {
-  animation: none !important;
-  filter: none !important;
-  background: linear-gradient(90deg, #eff6ff 0%, #f5f3ff 48%, #fdf2f8 100%);
-  color: #475569;
-  font-weight: 600;
-  text-shadow: none;
-  border-bottom: 1px solid rgb(148 163 184 / 0.4);
 }
 
 html.kuso-retro .shell.admin-mode figure.host-atelier,

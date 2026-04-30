@@ -54,7 +54,6 @@ import { runWheelSpectacle } from "./wheelSpectacle";
 import {
   clampLedSpeed,
   createLedMarquee,
-  LED_SPEED_DEFAULT,
   LED_SPEED_MAX,
   LED_SPEED_MIN,
   type LedMarqueeHandle,
@@ -478,7 +477,12 @@ function render() {
   const auth = getFirebaseAuth();
   const db = getDb();
 
-  let tab: "book" | "admin" = "book";
+  function tabFromPath(): "book" | "admin" {
+    const path = (window.location.pathname.replace(/\/+$/, "") || "/").toLowerCase();
+    return path === "/admin" ? "admin" : "book";
+  }
+
+  let tab: "book" | "admin" = tabFromPath();
 
   const titleHeading = el("h1", {}, [t("home.title", "辦公室按摩預約")]);
   const titleDesc = el("p", {}, [
@@ -562,18 +566,11 @@ function render() {
   shellStage.append(shell);
   root.append(shellStage);
 
-  /** 頂部：一般文字跑馬燈（與底部 LED 同一則公告） */
-  const announcementTextStrip = el("div", {
-    class: "marquee marquee-text-announce",
-    hidden: true,
-    role: "status",
-    ariaLive: "polite",
-  });
-  shell.prepend(announcementTextStrip);
-
+  const appAmbientWebglHost = el("div", { class: "app-ambient-webgl-host" });
   const announcementBox = el("div", { class: "marquee marquee-led", hidden: true });
   const ledHost = el("div", { class: "marquee-led-host" });
   announcementBox.append(ledHost);
+  shell.prepend(announcementBox);
   let ledMarquee: LedMarqueeHandle | null = null;
 
   function disposeLedMarquee() {
@@ -581,42 +578,7 @@ function render() {
     ledMarquee = null;
   }
 
-  let topMarqueeOn = false;
-  let bottomMarqueeOn = false;
-
-  let topMarqueeTextResizeObs: ResizeObserver | null = null;
-  let topMarqueeTrackEl: HTMLElement | null = null;
-  let topMarqueeTextSpeedPxPerSec = LED_SPEED_DEFAULT;
-
-  function disposeTopTextMarqueeResizeObserver() {
-    topMarqueeTextResizeObs?.disconnect();
-    topMarqueeTextResizeObs = null;
-  }
-
-  /** 頂部文字跑馬燈：與底部 LED 相同 px/s，動畫一圈時間 ≈ 軌道寬 / 速度 */
-  function applyTopTextMarqueeDuration(track: HTMLElement, speedPxPerSec: number) {
-    const speed = clampLedSpeed(speedPxPerSec);
-    topMarqueeTextSpeedPxPerSec = speed;
-    const run = () => {
-      if (!track.isConnected) return;
-      const w = track.scrollWidth;
-      if (w <= 0) return;
-      const sec = Math.max(0.35, w / speed);
-      track.style.animationDuration = `${sec}s`;
-    };
-    requestAnimationFrame(() => requestAnimationFrame(run));
-  }
-
-  function wireTopTextMarqueeDuration(track: HTMLElement, speedPxPerSec: number) {
-    disposeTopTextMarqueeResizeObserver();
-    topMarqueeTrackEl = track;
-    applyTopTextMarqueeDuration(track, speedPxPerSec);
-    const ro = new ResizeObserver(() => {
-      applyTopTextMarqueeDuration(track, topMarqueeTextSpeedPxPerSec);
-    });
-    ro.observe(track);
-    topMarqueeTextResizeObs = ro;
-  }
+  let ledMarqueeOn = false;
 
   function parseMarqueeSettings(data: unknown): { text: string; enabled: boolean } {
     const o = data as { text?: unknown; enabled?: unknown } | undefined;
@@ -627,29 +589,27 @@ function render() {
 
   function syncMarqueeVisibilityForTab() {
     if (tab !== "book") {
-      announcementTextStrip.hidden = true;
       announcementBox.hidden = true;
       return;
     }
-    announcementTextStrip.hidden = !topMarqueeOn;
-    announcementBox.hidden = !bottomMarqueeOn;
-    if (topMarqueeOn && topMarqueeTrackEl?.isConnected) {
-      applyTopTextMarqueeDuration(topMarqueeTrackEl, topMarqueeTextSpeedPxPerSec);
-    }
+    announcementBox.hidden = !ledMarqueeOn;
   }
 
   let ambientWebglCleanup: (() => void) | null = null;
   let ambientWebglGen = 0;
+  /** Firestore 開關；實際是否掛載還需為預約頁（非後台） */
+  let ambientWebglRemoteEnabled = true;
 
-  function syncAmbientWebglFromSiteSettings(enabledRemote: boolean) {
+  function syncAmbientWebgl() {
     ambientWebglGen++;
     const token = ambientWebglGen;
     ambientWebglCleanup?.();
     ambientWebglCleanup = null;
-    if (!enabledRemote) return;
+    const shouldMount = ambientWebglRemoteEnabled && tab === "book";
+    if (!shouldMount) return;
     void import("./ambientWebgl").then((m) => {
       if (token !== ambientWebglGen) return;
-      const dispose = m.mountAmbientWebgl();
+      const dispose = m.mountAmbientWebgl({ host: appAmbientWebglHost, shellForTint: shell });
       if (token !== ambientWebglGen) {
         dispose?.();
         return;
@@ -662,44 +622,12 @@ function render() {
     doc(db, "siteSettings", "ambientWebgl"),
     (snap) => {
       const raw = snap.data() as { enabled?: unknown } | undefined;
-      const enabledRemote = typeof raw?.enabled === "boolean" ? raw.enabled : true;
-      syncAmbientWebglFromSiteSettings(enabledRemote);
+      ambientWebglRemoteEnabled = typeof raw?.enabled === "boolean" ? raw.enabled : true;
+      syncAmbientWebgl();
     },
     () => {
-      syncAmbientWebglFromSiteSettings(false);
-    },
-  );
-
-  onSnapshot(
-    doc(db, "siteSettings", "marqueeText"),
-    (snap) => {
-      if (tab !== "book") {
-        announcementTextStrip.hidden = true;
-        return;
-      }
-      const raw = snap.data() as { text?: unknown; enabled?: unknown; speed?: unknown } | undefined;
-      const { text, enabled } = parseMarqueeSettings(raw);
-      const speed = clampLedSpeed(raw?.speed);
-      disposeTopTextMarqueeResizeObserver();
-      topMarqueeTrackEl = null;
-      if (!enabled || !text) {
-        topMarqueeOn = false;
-        announcementTextStrip.replaceChildren();
-      } else {
-        topMarqueeOn = true;
-        const track = el("div", { class: "marquee-track" }, [text, "  •  ", text]);
-        announcementTextStrip.replaceChildren(track);
-        wireTopTextMarqueeDuration(track, speed);
-      }
-      syncMarqueeVisibilityForTab();
-    },
-    () => {
-      topMarqueeOn = false;
-      disposeTopTextMarqueeResizeObserver();
-      topMarqueeTrackEl = null;
-      announcementTextStrip.replaceChildren();
-      announcementTextStrip.hidden = true;
-      syncMarqueeVisibilityForTab();
+      ambientWebglRemoteEnabled = false;
+      syncAmbientWebgl();
     },
   );
 
@@ -716,12 +644,12 @@ function render() {
       const { text, enabled } = parseMarqueeSettings(raw);
       const speed = clampLedSpeed(raw?.speed);
       if (!enabled || !text) {
-        bottomMarqueeOn = false;
+        ledMarqueeOn = false;
         disposeLedMarquee();
         syncMarqueeVisibilityForTab();
         return;
       }
-      bottomMarqueeOn = true;
+      ledMarqueeOn = true;
       if (!ledMarquee) {
         ledMarquee = createLedMarquee(ledHost, { speed });
       } else {
@@ -731,13 +659,12 @@ function render() {
       syncMarqueeVisibilityForTab();
     },
     () => {
-      bottomMarqueeOn = false;
+      ledMarqueeOn = false;
       disposeLedMarquee();
       announcementBox.hidden = true;
       syncMarqueeVisibilityForTab();
     },
   );
-  shell.append(announcementBox);
 
   const appVersionFooter = el("footer", { class: "app-version-footer" }, []);
   appVersionFooter.textContent = t("footer.version", "版號 {{ver}} · 最後更新 {{date}}（台北）", {
@@ -2366,6 +2293,7 @@ function render() {
   );
 
   root.append(supportChatFloat);
+  root.prepend(appAmbientWebglHost);
   const supportChatFloatDock = attachSupportChatFloatDrag(supportChatFloat, supportChatFab);
 
   /** --- 管理後台 --- */
@@ -2373,7 +2301,6 @@ function render() {
   panelAdmin.append(adminWrap);
 
   let adminUnsub: (() => void) | null = null;
-  let adminMarqueeTextUnsub: (() => void) | null = null;
   let adminMarqueeLedUnsub: (() => void) | null = null;
   let adminWheelSpectacleUnsub: (() => void) | null = null;
   let adminPricingUnsub: (() => void) | null = null;
@@ -2386,10 +2313,6 @@ function render() {
     if (adminUnsub) {
       adminUnsub();
       adminUnsub = null;
-    }
-    if (adminMarqueeTextUnsub) {
-      adminMarqueeTextUnsub();
-      adminMarqueeTextUnsub = null;
     }
     if (adminMarqueeLedUnsub) {
       adminMarqueeLedUnsub();
@@ -2783,34 +2706,11 @@ function render() {
     });
     const announcementSection = el("div", { class: "admin-announce admin-announce--settings" }, []);
 
-    const marqueeTextEnabled = el("input", { type: "checkbox" });
-    const marqueeTextBody = el("input", {
-      type: "text",
-      maxLength: 240,
-      placeholder: t("admin.marquee.placeholderText", "頂部橫幅：例如本週三 15:00-16:00 暫停服務"),
-      autocomplete: "off",
-    });
-    const marqueeTextSpeed = el("input", {
-      type: "range",
-      min: String(LED_SPEED_MIN),
-      max: String(LED_SPEED_MAX),
-      step: "1",
-    });
-    const marqueeTextSpeedValue = el("span", { class: "led-speed-readout" }, [
-      String(clampLedSpeed(undefined)),
-    ]);
-    marqueeTextSpeed.addEventListener("input", () => {
-      marqueeTextSpeedValue.textContent = marqueeTextSpeed.value;
-    });
-    const saveMarqueeTextBtn = el("button", { class: "ghost", type: "button" }, [t("admin.marquee.saveText", "儲存頂部跑馬燈")]);
-    const marqueeTextStatus = el("div", { class: "status-line" });
-    const marqueeTextDocRef = doc(db, "siteSettings", "marqueeText");
-
     const marqueeLedEnabled = el("input", { type: "checkbox" });
     const marqueeLedBody = el("input", {
       type: "text",
       maxLength: 500,
-      placeholder: t("admin.marquee.placeholderLed", "底部 LED：可較長，例如活動標語"),
+      placeholder: t("admin.marquee.placeholderLed", "頂部 LED：可較長，例如活動標語"),
       autocomplete: "off",
     });
     const marqueeLedSpeed = el("input", {
@@ -2825,13 +2725,13 @@ function render() {
     marqueeLedSpeed.addEventListener("input", () => {
       marqueeLedSpeedValue.textContent = marqueeLedSpeed.value;
     });
-    const saveMarqueeLedBtn = el("button", { class: "ghost", type: "button" }, [t("admin.marquee.saveLed", "儲存底部 LED")]);
+    const saveMarqueeLedBtn = el("button", { class: "ghost", type: "button" }, [t("admin.marquee.saveLed", "儲存 LED 跑馬燈")]);
     const marqueeLedStatus = el("div", { class: "status-line" });
     const marqueeLedDocRef = doc(db, "siteSettings", "marqueeLed");
     const ambientWebglDocRef = doc(db, "siteSettings", "ambientWebgl");
     const ambientWebglEnabled = el("input", { type: "checkbox" });
     const saveAmbientWebglBtn = el("button", { class: "ghost", type: "button" }, [
-      t("admin.ambient.save", "儲存背景 3D 開關"),
+      t("admin.ambient.save", "儲存 3D 裝飾開關"),
     ]);
     const ambientWebglStatus = el("div", { class: "status-line" });
     const wheelSpectacleDocRef = doc(db, "siteSettings", "wheelSpectacle");
@@ -3138,21 +3038,6 @@ function render() {
       }
     });
 
-    adminMarqueeTextUnsub = onSnapshot(
-      marqueeTextDocRef,
-      (snap) => {
-        const data = snap.data() as { text?: unknown; enabled?: unknown; speed?: unknown } | undefined;
-        marqueeTextBody.value = typeof data?.text === "string" ? data.text : "";
-        marqueeTextEnabled.checked = typeof data?.enabled === "boolean" ? data.enabled : false;
-        const ts = clampLedSpeed(data?.speed);
-        marqueeTextSpeed.value = String(ts);
-        marqueeTextSpeedValue.textContent = String(ts);
-      },
-      () => {
-        marqueeTextStatus.textContent = t("admin.snapshot.loadFail", "無法讀取頂部跑馬燈設定。");
-        marqueeTextStatus.className = "status-line error";
-      },
-    );
     adminMarqueeLedUnsub = onSnapshot(
       marqueeLedDocRef,
       (snap) => {
@@ -3164,7 +3049,7 @@ function render() {
         marqueeLedSpeedValue.textContent = String(s);
       },
       () => {
-        marqueeLedStatus.textContent = t("admin.snapshot.loadFail", "無法讀取底部 LED 設定。");
+        marqueeLedStatus.textContent = t("admin.snapshot.loadFail", "無法讀取 LED 跑馬燈設定。");
         marqueeLedStatus.className = "status-line error";
       },
     );
@@ -3176,7 +3061,7 @@ function render() {
         ambientWebglEnabled.checked = typeof data?.enabled === "boolean" ? data.enabled : true;
       },
       () => {
-        ambientWebglStatus.textContent = t("admin.snapshot.loadFail", "無法讀取背景 3D 設定。");
+        ambientWebglStatus.textContent = t("admin.snapshot.loadFail", "無法讀取 3D 裝飾設定。");
         ambientWebglStatus.className = "status-line error";
       },
     );
@@ -3198,31 +3083,6 @@ function render() {
         ambientWebglStatus.classList.add("error");
       } finally {
         saveAmbientWebglBtn.removeAttribute("disabled");
-      }
-    });
-
-    saveMarqueeTextBtn.addEventListener("click", async () => {
-      marqueeTextStatus.textContent = t("admin.status.processing", "處理中…");
-      marqueeTextStatus.className = "status-line";
-      saveMarqueeTextBtn.setAttribute("disabled", "true");
-      try {
-        await setDoc(
-          marqueeTextDocRef,
-          {
-            text: marqueeTextBody.value.trim(),
-            enabled: marqueeTextEnabled.checked,
-            speed: clampLedSpeed(Number(marqueeTextSpeed.value)),
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true },
-        );
-        marqueeTextStatus.textContent = t("admin.status.updated", "已更新");
-        marqueeTextStatus.classList.add("ok");
-      } catch (e) {
-        marqueeTextStatus.textContent = e instanceof Error ? e.message : t("admin.memberList.saveFail", "儲存失敗");
-        marqueeTextStatus.classList.add("error");
-      } finally {
-        saveMarqueeTextBtn.removeAttribute("disabled");
       }
     });
 
@@ -3258,32 +3118,14 @@ function render() {
       el("div", { class: "admin-announce__details-body hint" }, [
         t(
           "admin.announce.intro",
-          "頂部與底部分開設定：Firestore `siteSettings/marqueeText`、`siteSettings/marqueeLed`；兩者皆可設定捲動速度（像素／秒）。",
+          "前台僅保留頂部 LED 跑馬燈，設定於 Firestore `siteSettings/marqueeLed`（內容、啟用、捲動速度／像素每秒）。",
         ),
       ]),
     ]);
 
-    const marqueeTopSub = el("div", { class: "admin-announce__sub admin-announce__sub--top" }, [
-      el("h4", { class: "admin-announce__sub-title" }, [t("admin.announce.topHeading", "頂部 · 文字跑馬燈")]),
-      el("label", { class: "field" }, [t("admin.announce.topLabel", "內容"), marqueeTextBody]),
-      el("label", { class: "field led-speed-field" }, [
-        t("admin.announce.speedLabel", "捲動速度"),
-        el("div", { class: "led-speed-row" }, [marqueeTextSpeed, marqueeTextSpeedValue]),
-        el("span", { class: "hint" }, [
-          t("admin.announce.speedHint", "約 {{min}}～{{max}}（數字愈大移動愈快，單位：像素／秒）。", {
-            min: LED_SPEED_MIN,
-            max: LED_SPEED_MAX,
-          }),
-        ]),
-      ]),
-      el("label", { class: "field checkbox-field" }, [marqueeTextEnabled, el("span", {}, [t("admin.announce.enable", "啟用")])]),
-      el("div", { class: "row-actions" }, [saveMarqueeTextBtn]),
-      marqueeTextStatus,
-    ]);
-
-    const marqueeBottomSub = el("div", { class: "admin-announce__sub admin-announce__sub--bottom" }, [
-      el("h4", { class: "admin-announce__sub-title" }, [t("admin.announce.bottomHeading", "底部 · LED 跑馬燈")]),
-      el("label", { class: "field" }, [t("admin.announce.bottomLabel", "內容"), marqueeLedBody]),
+    const marqueeLedSub = el("div", { class: "admin-announce__sub admin-announce__sub--top" }, [
+      el("h4", { class: "admin-announce__sub-title" }, [t("admin.announce.ledHeading", "頂部 · LED 跑馬燈")]),
+      el("label", { class: "field" }, [t("admin.announce.ledLabel", "內容"), marqueeLedBody]),
       el("label", { class: "field led-speed-field" }, [
         t("admin.announce.speedLabel", "捲動速度"),
         el("div", { class: "led-speed-row" }, [marqueeLedSpeed, marqueeLedSpeedValue]),
@@ -3300,25 +3142,24 @@ function render() {
     ]);
 
     const blockMarquee = el("section", { class: "admin-announce__block admin-announce__block--marquee" }, [
-      el("h4", { class: "admin-announce__block-title" }, [t("admin.announce.blockMarquee", "跑馬燈（頂部／底部）")]),
+      el("h4", { class: "admin-announce__block-title" }, [t("admin.announce.blockMarquee", "頂部 LED 跑馬燈")]),
       el("p", { class: "hint admin-announce__block-lead" }, [
-        t("admin.announce.blockMarqueeLead", "分別設定橫幅文字與底部 LED；可調捲動速度與是否啟用。"),
+        t("admin.announce.blockMarqueeLead", "顯示於預約頁最上方；可調捲動速度與是否啟用。"),
       ]),
-      marqueeTopSub,
-      marqueeBottomSub,
+      marqueeLedSub,
     ]);
 
     const blockAmbient3d = el("section", { class: "admin-announce__block admin-announce__block--ambient3d" }, [
-      el("h4", { class: "admin-announce__block-title" }, [t("admin.ambient.blockTitle", "全站背景 3D")]),
+      el("h4", { class: "admin-announce__block-title" }, [t("admin.ambient.blockTitle", "預約主卡片 3D 裝飾")]),
       el("p", { class: "hint admin-announce__block-lead" }, [
         t(
           "admin.ambient.blockLead",
-          "前台粒子與線框裝飾；關閉後所有訪客不再載入 WebGL。網址加 ?webgl=0 可單機強制關閉；系統「減少動態效果」時也不載入。",
+          "僅預約（前台）於視窗底層顯示偏寫實的太陽系（受光球體、點雲小行星帶、土星薄環、輕微光暈），畫面固定於視窗、頁面內容可照常上下捲動；可略超出邊界。主卡片與主理人圖／說明疊在特效上。管理後台不載入。關閉後訪客不再載入 WebGL。網址加 ?webgl=0 可單機強制關閉；系統「減少動態效果」時也不載入。",
         ),
       ]),
       el("label", { class: "field checkbox-field" }, [
         ambientWebglEnabled,
-        el("span", {}, [t("admin.ambient.enableLabel", "啟用全站背景 3D 效果")]),
+        el("span", {}, [t("admin.ambient.enableLabel", "啟用預約主卡片 3D 裝飾")]),
       ]),
       el("div", { class: "row-actions" }, [saveAmbientWebglBtn]),
       ambientWebglStatus,
@@ -3408,7 +3249,7 @@ function render() {
       el("p", { class: "hint admin-announce__page-lead" }, [
         t(
           "admin.announce.introShort",
-          "此分頁集中調整跑馬燈與 LED、全站背景 3D、輪盤預覽與獎項初始化，以及預約名額／不開放時段；區塊已分組，技術路徑可展開查看。",
+          "此分頁集中調整頂部 LED 跑馬燈、預約主卡片 3D 裝飾、輪盤預覽與獎項初始化，以及預約名額／不開放時段；區塊已分組，技術路徑可展開查看。",
         ),
       ]),
       announceIntroDetails,
@@ -4883,11 +4724,6 @@ function render() {
     void syncAdminView();
   });
 
-  function tabFromPath(): "book" | "admin" {
-    const path = (window.location.pathname.replace(/\/+$/, "") || "/").toLowerCase();
-    return path === "/admin" ? "admin" : "book";
-  }
-
   function setTab(next: "book" | "admin") {
     tab = next;
     const isBook = next === "book";
@@ -4917,6 +4753,7 @@ function render() {
       setSupportChatOpen(false);
     }
     syncMarqueeVisibilityForTab();
+    syncAmbientWebgl();
     if (isBook) {
       stopAdminListener();
     } else {
