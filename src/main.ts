@@ -40,7 +40,6 @@ import {
   updateMemberNicknameAdminCall,
   spinWheelCall,
   listActiveWheelPrizesCall,
-  seedWheelPrizesCall,
   topupWalletCall,
   adjustSessionCreditsAdminCall,
   grantDrawChancesAdminCall,
@@ -2747,38 +2746,6 @@ function render() {
     const wheelSpectacleShowTest = el("input", { type: "checkbox" });
     const saveWheelSpectacleBtn = el("button", { class: "ghost", type: "button" }, [t("admin.wheelSpectacle.save", "儲存輪盤預覽開關")]);
     const wheelSpectacleStatus = el("div", { class: "status-line" });
-    const seedWheelPrizesBtn = el("button", { class: "ghost", type: "button" }, [
-      t("admin.seedWheelPrizes.btn", "初始化輪盤獎項"),
-    ]);
-    const seedWheelPrizesStatus = el("div", { class: "status-line" });
-    seedWheelPrizesBtn.addEventListener("click", async () => {
-      seedWheelPrizesStatus.textContent = "";
-      seedWheelPrizesStatus.className = "status-line";
-      seedWheelPrizesBtn.setAttribute("disabled", "true");
-      try {
-        const fn = seedWheelPrizesCall();
-        const res = await fn({ ...localeApiParam() });
-        const data = res.data as { seeded?: boolean; message?: string; count?: number };
-        if (data.seeded === true) {
-          seedWheelPrizesStatus.textContent = t("admin.seedWheelPrizes.okSeeded", "已寫入預設獎項（{{count}} 筆）。", {
-            count: typeof data.count === "number" ? data.count : 0,
-          });
-          seedWheelPrizesStatus.classList.add("ok");
-        } else {
-          seedWheelPrizesStatus.textContent =
-            typeof data.message === "string" && data.message.trim()
-              ? data.message
-              : t("admin.seedWheelPrizes.skipped", "未寫入：wheelPrizes 已有資料（僅在集合為空時會初始化）。");
-          seedWheelPrizesStatus.className = "status-line";
-        }
-      } catch (e) {
-        seedWheelPrizesStatus.textContent = errorMessage(e);
-        seedWheelPrizesStatus.classList.add("error");
-      } finally {
-        seedWheelPrizesBtn.removeAttribute("disabled");
-      }
-    });
-
     adminWheelSpectacleUnsub = onSnapshot(
       wheelSpectacleDocRef,
       (snap) => {
@@ -3182,7 +3149,7 @@ function render() {
     const blockPlay = el("section", { class: "admin-announce__block admin-announce__block--play" }, [
       el("h4", { class: "admin-announce__block-title" }, [t("admin.announce.blockPlay", "輪盤")]),
       el("p", { class: "hint admin-announce__block-lead" }, [
-        t("admin.announce.blockPlayLead", "前台輪盤預覽開關與獎項初始化（與跑馬燈無關）。"),
+        t("admin.announce.blockPlayLead", "前台輪盤預覽開關（與跑馬燈無關）。"),
       ]),
       el("h4", { class: "admin-subhead" }, [t("admin.announce.wheelHeading", "前台 · 輪盤特效預覽")]),
       el("p", { class: "hint" }, [
@@ -3199,15 +3166,6 @@ function render() {
       ]),
       el("div", { class: "row-actions" }, [saveWheelSpectacleBtn]),
       wheelSpectacleStatus,
-      el("h4", { class: "admin-subhead" }, [t("admin.seedWheelPrizes.heading", "輪盤獎項（Firestore）")]),
-      el("p", { class: "hint" }, [
-        t(
-          "admin.seedWheelPrizes.hint",
-          "呼叫 Cloud Function「seedWheelPrizes」：僅在集合 wheelPrizes 完全沒有文件時寫入預設獎項；若已有資料則略過（請至 Console 編輯或先刪除既有獎項）。",
-        ),
-      ]),
-      el("div", { class: "row-actions" }, [seedWheelPrizesBtn]),
-      seedWheelPrizesStatus,
     ]);
 
     const blockRules = el("section", { class: "admin-announce__block admin-announce__block--rules" }, [
@@ -3258,7 +3216,7 @@ function render() {
       el("p", { class: "hint admin-announce__page-lead" }, [
         t(
           "admin.announce.introShort",
-          "此分頁集中調整頂部 LED 跑馬燈、預約主卡片 3D 裝飾、輪盤預覽與獎項初始化，以及預約名額／不開放時段；區塊已分組，技術路徑可展開查看。",
+          "此分頁集中調整頂部 LED 跑馬燈、預約主卡片 3D 裝飾、輪盤預覽，以及預約名額／不開放時段；區塊已分組，技術路徑可展開查看。",
         ),
       ]),
       announceIntroDetails,

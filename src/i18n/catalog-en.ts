@@ -317,12 +317,6 @@ export const EN: Record<string, string> = {
   "admin.marquee.saveLed": "Save LED marquee",
   "admin.marquee.placeholderLed": "Top LED strip: can be longer, e.g. promo tagline",
 
-  "admin.seedWheelPrizes.heading": "Wheel prizes (Firestore)",
-  "admin.seedWheelPrizes.hint":
-    "Calls the seedWheelPrizes Cloud Function: writes default prizes only when the wheelPrizes collection is completely empty; if any document exists, it skips (edit in Console or delete existing prizes first).",
-  "admin.seedWheelPrizes.btn": "Seed default wheel prizes",
-  "admin.seedWheelPrizes.okSeeded": "Default prizes written ({{count}} rows).",
-  "admin.seedWheelPrizes.skipped": "Nothing written: wheelPrizes already has data (seed runs only on an empty collection).",
   "admin.wheelSpectacle.save": "Save wheel preview toggle",
   "admin.caps.save": "Save booking caps",
   "admin.blocks.addRow": "Add row",
@@ -347,7 +341,7 @@ export const EN: Record<string, string> = {
 
   "admin.announce.heading": "Front page & booking rules",
   "admin.announce.introShort":
-    "Top LED marquee, 3D decoration in the booking card, wheel preview & prize seeding, booking caps, and closed windows are grouped below. Expand “Firestore paths” for technical detail.",
+    "Top LED marquee, 3D decoration in the booking card, wheel preview toggle, booking caps, and closed windows are grouped below. Expand “Firestore paths” for technical detail.",
   "admin.announce.detailsSummary": "Firestore paths / full marquee note",
   "admin.announce.blockMarquee": "Top LED marquee",
   "admin.announce.blockMarqueeLead": "Shown at the top of the booking page; set scroll speed and on/off.",
@@ -361,7 +355,7 @@ export const EN: Record<string, string> = {
   "admin.ambient.pathHintB": " field enabled (defaults to on if the document is missing).",
 
   "admin.announce.blockPlay": "Wheel",
-  "admin.announce.blockPlayLead": "Preview wheel toggle and default prizes seeding (not related to marquee).",
+  "admin.announce.blockPlayLead": "Preview wheel toggle (not related to marquee).",
   "admin.announce.blockRules": "Booking caps & closed windows",
   "admin.announce.blockRulesLead": "Limits and blocked time ranges affect what slots can be booked.",
   "admin.announce.intro":
