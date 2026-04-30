@@ -205,6 +205,18 @@ function taipeiLatestBookableDateKey(): string {
   return addDaysTaipeiDateKey(taipeiMondayOfSameWeek(taipeiTodayDateKey()), 13);
 }
 
+/** 後台名額預覽預設日期：從台北今日起往後找第一個仍在可預約視窗內的週一至週五 */
+function defaultAdminCapacityProbeDateKey(): string {
+  const minKey = taipeiTodayDateKey();
+  const maxKey = taipeiLatestBookableDateKey();
+  for (let i = 0; i < 16; i++) {
+    const dk = addDaysTaipeiDateKey(minKey, i);
+    if (dk > maxKey) break;
+    if (isDateKeyMonFri(dk)) return dk;
+  }
+  return taipeiMondayOfSameWeek(minKey);
+}
+
 /** 例如 2026-04-23（週三），供名額說明用 */
 function dateKeyLabelTaipei(dateKey: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
@@ -3461,6 +3473,111 @@ function render() {
     table.append(adminBookingsHeaderRow());
     tableHolder.append(table);
 
+    const adminCapacityDateInput = el("input", { type: "date" });
+    adminCapacityDateInput.min = taipeiTodayDateKey();
+    adminCapacityDateInput.max = taipeiLatestBookableDateKey();
+    adminCapacityDateInput.value = defaultAdminCapacityProbeDateKey();
+    const adminCapacityMeta = el("div", { class: "meta-pills admin-capacity-preview__pills", hidden: true });
+    const adminCapacityPreviewStatus = el("div", {
+      class: "status-line admin-capacity-preview__status",
+      role: "status",
+      ariaLive: "polite",
+    });
+    const adminCapacityRefreshBtn = el("button", { type: "button", class: "ghost" }, [
+      t("admin.bookings.capacityRefresh", "重新查詢名額"),
+    ]);
+    const adminCapacitySection = el("section", { class: "admin-capacity-preview" }, [
+      el("h4", { class: "admin-subhead" }, [t("admin.bookings.capacityHeading", "當日／本工作週名額")]),
+      el("p", { class: "hint" }, [
+        t(
+          "admin.bookings.capacityHint",
+          "與前台預約表單相同資料來源（getAvailability）：僅計入待確認／已確認／已完成；已取消不計。",
+        ),
+      ]),
+      el("label", { class: "field" }, [
+        t("admin.bookings.capacityDateLabel", "查詢日期（週一～週五）"),
+        adminCapacityDateInput,
+      ]),
+      el("div", { class: "row-actions" }, [adminCapacityRefreshBtn]),
+      adminCapacityMeta,
+      adminCapacityPreviewStatus,
+    ]);
+
+    async function refreshAdminCapacityPreview(): Promise<void> {
+      const dk = adminCapacityDateInput.value;
+      adminCapacityPreviewStatus.textContent = "";
+      adminCapacityPreviewStatus.className = "status-line admin-capacity-preview__status";
+      adminCapacityMeta.hidden = true;
+      adminCapacityMeta.innerHTML = "";
+      if (!dk || !isDateKeyMonFri(dk)) {
+        adminCapacityPreviewStatus.textContent = t(
+          "admin.bookings.capacityNeedWeekday",
+          "請選擇週一到週五的日期。",
+        );
+        adminCapacityPreviewStatus.classList.add("error");
+        return;
+      }
+      const minK = taipeiTodayDateKey();
+      const maxK = taipeiLatestBookableDateKey();
+      if (dk < minK || dk > maxK) {
+        adminCapacityPreviewStatus.textContent = t(
+          "admin.bookings.capacityDateOutOfRange",
+          "日期須在可預約視窗內。",
+        );
+        adminCapacityPreviewStatus.classList.add("error");
+        return;
+      }
+      adminCapacityPreviewStatus.textContent = t("admin.bookings.capacityLoading", "查詢中…");
+      try {
+        const fn = getAvailabilityCall();
+        const res = await fn({ dateKey: dk, ...localeApiParam() });
+        const data = res.data as {
+          dayCount: number;
+          weekCount: number;
+          dayCap: number;
+          weekCap: number;
+        };
+        const weekMon = taipeiMondayOfSameWeek(dk);
+        const weekFri = addDaysTaipeiDateKey(weekMon, 4);
+        adminCapacityMeta.append(
+          el("span", { class: "pill" }, [
+            t("booking.metaDay", "當日已預約 "),
+            el("strong", {}, [String(data.dayCount)]),
+            ` / ${data.dayCap}`,
+          ]),
+          el("span", { class: "pill" }, [
+            t("booking.metaWeek", "本工作週已預約 "),
+            el("strong", {}, [String(data.weekCount)]),
+            ` / ${data.weekCap}`,
+          ]),
+          el("div", { class: "meta-pills-note" }, [
+            t("booking.metaNoteLead", "「當日」＝您所選的這一天："),
+            el("strong", {}, [dateKeyLabelTaipei(dk)]),
+            t("booking.metaNoteMid", "。「本工作週」＝該日所屬曆週之週一至週五："),
+            el("strong", {}, [dateKeyLabelTaipei(weekMon)]),
+            "～",
+            el("strong", {}, [dateKeyLabelTaipei(weekFri)]),
+            t("booking.metaNoteTail", "（週一與後端 "),
+            el("code", {}, [t("booking.metaNoteCode", "weekStart")]),
+            t("booking.metaNoteEnd", " 相同，名額為該曆週內有效預約合計）。"),
+          ]),
+        );
+        adminCapacityMeta.hidden = false;
+        adminCapacityPreviewStatus.textContent = t("admin.bookings.capacityOk", "已更新。");
+        adminCapacityPreviewStatus.classList.add("ok");
+      } catch (e) {
+        adminCapacityPreviewStatus.textContent = errorMessage(e);
+        adminCapacityPreviewStatus.classList.add("error");
+      }
+    }
+
+    adminCapacityDateInput.addEventListener("change", () => {
+      void refreshAdminCapacityPreview();
+    });
+    adminCapacityRefreshBtn.addEventListener("click", () => {
+      void refreshAdminCapacityPreview();
+    });
+
     const hiddenBookingsStatus = el("div", { class: "status-line" });
     const hiddenTableHolder = el("div", { class: "table-wrap admin-bookings-table" });
     const hiddenTable = el("table", {}, []);
@@ -4225,6 +4342,7 @@ function render() {
         panel.hidden = i !== index;
         panel.classList.toggle("is-active", i === index);
       });
+      if (index === 0) void refreshAdminCapacityPreview();
     }
 
     subBookingsActive.addEventListener("click", () => selectBookingsSubTab(0));
@@ -4292,7 +4410,7 @@ function render() {
     tabSupport.setAttribute("aria-controls", "admin-tab-panel-support");
     tabReports.setAttribute("aria-controls", "admin-tab-panel-reports");
 
-    panelBookingsActiveSub.append(adminStatus, tableHolder);
+    panelBookingsActiveSub.append(adminCapacitySection, adminStatus, tableHolder);
     panelMembersEl.append(membersSubTablist, membersSubPanelsWrap);
     panelAnnounceEl.append(announcementSection);
 

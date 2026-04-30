@@ -1088,6 +1088,28 @@ button.ghost:disabled {
   min-width: 0;
 }
 
+/* 後台「預約管理」：與前台相同邏輯之名額預覽 */
+.admin-capacity-preview {
+  margin: 0 0 18px;
+  padding: 14px 16px 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--surface-muted) 0%, var(--surface) 100%);
+  box-shadow: var(--shadow-sm);
+}
+
+.admin-capacity-preview .admin-subhead {
+  margin-top: 0;
+}
+
+.admin-capacity-preview__pills {
+  margin-top: 10px;
+}
+
+.admin-capacity-preview__status {
+  margin-top: 8px;
+}
+
 .email-verify-banner {
   padding: 12px 14px;
   border-radius: var(--radius-sm);

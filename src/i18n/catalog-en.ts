@@ -433,6 +433,16 @@ export const EN: Record<string, string> = {
   "admin.table.status": "Status",
   "admin.table.actions": "Actions",
 
+  "admin.bookings.capacityHeading": "Per-day / per work-week quota",
+  "admin.bookings.capacityHint":
+    "Same source as the booking page (getAvailability): counts pending, confirmed, and done only; cancelled bookings do not count.",
+  "admin.bookings.capacityDateLabel": "Date (Mon–Fri)",
+  "admin.bookings.capacityRefresh": "Refresh quota",
+  "admin.bookings.capacityNeedWeekday": "Pick a Monday–Friday date.",
+  "admin.bookings.capacityDateOutOfRange": "Date must fall within the bookable window.",
+  "admin.bookings.capacityLoading": "Loading…",
+  "admin.bookings.capacityOk": "Updated.",
+
   "admin.tab.bookingsHub": "Bookings & archive",
   "admin.tab.bookings": "Bookings",
   "admin.tab.hidden": "Archived bookings",
