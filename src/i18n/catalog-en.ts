@@ -22,10 +22,13 @@ export const EN: Record<string, string> = {
   "booking.mode.member_beverage": "Member · drink credit",
 
   "book.tabsAria":
-    "Massage booking, my bookings (when signed in), and wheel tab including spin and points redemption (when signed in)",
+    "Massage booking, my bookings and wheel when signed in, plus a three.js WebGL tab for everyone",
   "book.tab.booking": "Book massage",
   "book.tab.wheel": "Wheel",
   "book.tab.myBookings": "My bookings",
+  "book.tab.threeSpectacle": "three.js",
+  "book.threeSpectacle.hint":
+    "Live WebGL (Three.js): solar system with drag-to-orbit, wheel or pinch-zoom, tap a body for a fact; includes procedural ships and a comet. Display only, no backend.",
 
   "status.pending": "Pending",
   "status.confirmed": "Confirmed",
@@ -341,18 +344,10 @@ export const EN: Record<string, string> = {
 
   "admin.announce.heading": "Front page & booking rules",
   "admin.announce.introShort":
-    "Top LED marquee, 3D decoration in the booking card, wheel preview toggle, booking caps, and closed windows are grouped below. Expand “Firestore paths” for technical detail.",
+    "Top LED marquee, wheel preview toggle, booking caps, and closed windows are grouped below. Expand “Firestore paths” for technical detail.",
   "admin.announce.detailsSummary": "Firestore paths / full marquee note",
   "admin.announce.blockMarquee": "Top LED marquee",
   "admin.announce.blockMarqueeLead": "Shown at the top of the booking page; set scroll speed and on/off.",
-
-  "admin.ambient.save": "Save 3D decoration toggle",
-  "admin.ambient.blockTitle": "3D decoration (booking card)",
-  "admin.ambient.blockLead":
-    "Stylized-but-realistic solar system as a viewport-fixed layer behind the booking page: lit spheres, point-cloud asteroid belts, Saturn-style thin rings, subtle bloom, plus original low-poly ships, a comet with tail, and a brief debris/bloom beat when it skims the belt. Shell and portrait sit above it. Not in admin. When off, visitors do not load WebGL. Add ?webgl=0 to force off for one session; respects “reduce motion”.",
-  "admin.ambient.enableLabel": "Enable 3D decoration inside the booking card",
-  "admin.ambient.pathHintA": "Firestore: ",
-  "admin.ambient.pathHintB": " field enabled (defaults to on if the document is missing).",
 
   "admin.announce.blockPlay": "Wheel",
   "admin.announce.blockPlayLead": "Preview wheel toggle (not related to marquee).",

@@ -57,6 +57,7 @@ import {
   type LedMarqueeHandle,
 } from "./ledMarquee";
 import { getLocale, initI18n, intlLocaleTag, localeApiParam, setLocale, t } from "./i18n";
+import { mountBookTabThreeSpectacle } from "./bookTabThreeSpectacle";
 
 type Booking = {
   id: string;
@@ -576,7 +577,6 @@ function render() {
   shellStage.append(shell);
   root.append(shellStage);
 
-  const appAmbientWebglHost = el("div", { class: "app-ambient-webgl-host" });
   const announcementBox = el("div", { class: "marquee marquee-led", hidden: true });
   const ledHost = el("div", { class: "marquee-led-host" });
   announcementBox.append(ledHost);
@@ -604,42 +604,6 @@ function render() {
     }
     announcementBox.hidden = !ledMarqueeOn;
   }
-
-  let ambientWebglCleanup: (() => void) | null = null;
-  let ambientWebglGen = 0;
-  /** Firestore 開關；實際是否掛載還需為預約頁（非後台） */
-  let ambientWebglRemoteEnabled = true;
-
-  function syncAmbientWebgl() {
-    ambientWebglGen++;
-    const token = ambientWebglGen;
-    ambientWebglCleanup?.();
-    ambientWebglCleanup = null;
-    const shouldMount = ambientWebglRemoteEnabled && tab === "book";
-    if (!shouldMount) return;
-    void import("./ambientWebgl").then((m) => {
-      if (token !== ambientWebglGen) return;
-      const dispose = m.mountAmbientWebgl({ host: appAmbientWebglHost, shellForTint: shell });
-      if (token !== ambientWebglGen) {
-        dispose?.();
-        return;
-      }
-      if (dispose) ambientWebglCleanup = dispose;
-    });
-  }
-
-  onSnapshot(
-    doc(db, "siteSettings", "ambientWebgl"),
-    (snap) => {
-      const raw = snap.data() as { enabled?: unknown } | undefined;
-      ambientWebglRemoteEnabled = typeof raw?.enabled === "boolean" ? raw.enabled : true;
-      syncAmbientWebgl();
-    },
-    () => {
-      ambientWebglRemoteEnabled = false;
-      syncAmbientWebgl();
-    },
-  );
 
   onSnapshot(
     doc(db, "siteSettings", "marqueeLed"),
@@ -1467,7 +1431,7 @@ function render() {
           );
   }
 
-  /** 與下方 `setBookSubTab` 一併指派：會員區隱藏時關閉「我的預約」分頁並切回預約表單 */
+  /** 與下方 `setBookSubTab` 一併指派：會員區隱藏時關閉「我的預約／抽輪盤」並切回預約表單（「three.js」分頁不受影響） */
   let syncBookMyBookingsTabVisibility: () => void = () => {};
 
   function resetWheelStatsSummary() {
@@ -2191,14 +2155,14 @@ function render() {
     }
   });
 
-  let bookSubTab: "book" | "wheel" | "mybookings" = "book";
+  let bookSubTab: "book" | "wheel" | "mybookings" | "three" = "book";
 
   const bookTabList = el("div", { class: "book-tabs", role: "tablist" });
   bookTabList.setAttribute(
     "aria-label",
     t(
       "book.tabsAria",
-      "預約按摩、我的預約、抽輪盤與點數兌換（「我的預約／抽輪盤」於登入會員後顯示）",
+      "預約按摩、我的預約、抽輪盤、three.js 展示；「我的預約／抽輪盤」於登入會員後顯示。",
     ),
   );
   const tabBook = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-book" }, [
@@ -2210,18 +2174,24 @@ function render() {
   const tabMyBookings = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-my-bookings" }, [
     t("book.tab.myBookings", "我的預約"),
   ]);
+  const tabThree = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-three" }, [
+    t("book.tab.threeSpectacle", "three.js"),
+  ]);
   tabBook.setAttribute("aria-controls", "book-tab-panel-book");
   tabWheel.setAttribute("aria-controls", "book-tab-panel-wheel");
   tabMyBookings.setAttribute("aria-controls", "book-tab-panel-my-bookings");
+  tabThree.setAttribute("aria-controls", "book-tab-panel-three");
   tabBook.setAttribute("aria-selected", "true");
   tabWheel.setAttribute("aria-selected", "false");
   tabMyBookings.setAttribute("aria-selected", "false");
+  tabThree.setAttribute("aria-selected", "false");
   tabBook.tabIndex = 0;
   tabWheel.tabIndex = -1;
   tabMyBookings.tabIndex = -1;
+  tabThree.tabIndex = -1;
   tabMyBookings.hidden = memberExtrasWrap.hidden;
   tabWheel.hidden = memberExtrasWrap.hidden;
-  bookTabList.append(tabBook, tabMyBookings, tabWheel);
+  bookTabList.append(tabBook, tabMyBookings, tabWheel, tabThree);
 
   const bookPanelBook = el("div", {
     class: "book-tab-panel",
@@ -2267,21 +2237,45 @@ function render() {
   bookPanelMyBookings.setAttribute("aria-labelledby", "book-tab-my-bookings");
   bookPanelMyBookings.append(myBookingsSection);
 
-  function setBookSubTab(which: "book" | "wheel" | "mybookings") {
+  const bookPanelThree = el("div", {
+    class: "book-tab-panel book-tab-panel--three",
+    id: "book-tab-panel-three",
+    role: "tabpanel",
+    hidden: true,
+  });
+  bookPanelThree.setAttribute("aria-labelledby", "book-tab-three");
+  const threeMount = el("div", { class: "book-tab-three-mount" });
+  threeMount.setAttribute("aria-hidden", "true");
+  bookPanelThree.append(
+    el("p", { class: "hint book-tab-three-intro" }, [
+      t(
+        "book.threeSpectacle.hint",
+        "即時 WebGL（Three.js）擬真太陽系：可拖曳旋轉、滾輪／雙指縮放，點天體看簡介；含程式化太空船與彗星。純展示、不連後端。",
+      ),
+    ]),
+    threeMount,
+  );
+  mountBookTabThreeSpectacle(threeMount);
+
+  function setBookSubTab(which: "book" | "wheel" | "mybookings" | "three") {
     bookSubTab = which;
     tabBook.setAttribute("aria-selected", String(which === "book"));
     tabWheel.setAttribute("aria-selected", String(which === "wheel"));
     tabMyBookings.setAttribute("aria-selected", String(which === "mybookings"));
+    tabThree.setAttribute("aria-selected", String(which === "three"));
     tabBook.tabIndex = which === "book" ? 0 : -1;
     tabWheel.tabIndex = which === "wheel" ? 0 : -1;
     tabMyBookings.tabIndex = which === "mybookings" ? 0 : -1;
+    tabThree.tabIndex = which === "three" ? 0 : -1;
     bookPanelBook.hidden = which !== "book";
     bookPanelWheel.hidden = which !== "wheel";
     bookPanelMyBookings.hidden = which !== "mybookings";
+    bookPanelThree.hidden = which !== "three";
   }
   tabBook.addEventListener("click", () => setBookSubTab("book"));
   tabWheel.addEventListener("click", () => setBookSubTab("wheel"));
   tabMyBookings.addEventListener("click", () => setBookSubTab("mybookings"));
+  tabThree.addEventListener("click", () => setBookSubTab("three"));
 
   syncBookMyBookingsTabVisibility = () => {
     const show = !memberExtrasWrap.hidden;
@@ -2300,10 +2294,10 @@ function render() {
     bookPanelBook,
     bookPanelWheel,
     bookPanelMyBookings,
+    bookPanelThree,
   );
 
   root.append(supportChatFloat);
-  root.prepend(appAmbientWebglHost);
   const supportChatFloatDock = attachSupportChatFloatDrag(supportChatFloat, supportChatFab);
 
   /** --- 管理後台 --- */
@@ -2316,7 +2310,6 @@ function render() {
   let adminPricingUnsub: (() => void) | null = null;
   let adminBookingCapsUnsub: (() => void) | null = null;
   let adminBookingBlocksUnsub: (() => void) | null = null;
-  let adminAmbientWebglUnsub: (() => void) | null = null;
   let adminSupportChatUnmount: SupportChatUnmount | null = null;
 
   function stopAdminListener() {
@@ -2343,10 +2336,6 @@ function render() {
     if (adminBookingBlocksUnsub) {
       adminBookingBlocksUnsub();
       adminBookingBlocksUnsub = null;
-    }
-    if (adminAmbientWebglUnsub) {
-      adminAmbientWebglUnsub();
-      adminAmbientWebglUnsub = null;
     }
     if (adminSupportChatUnmount) {
       adminSupportChatUnmount();
@@ -2736,12 +2725,6 @@ function render() {
     const saveMarqueeLedBtn = el("button", { class: "ghost", type: "button" }, [t("admin.marquee.saveLed", "儲存 LED 跑馬燈")]);
     const marqueeLedStatus = el("div", { class: "status-line" });
     const marqueeLedDocRef = doc(db, "siteSettings", "marqueeLed");
-    const ambientWebglDocRef = doc(db, "siteSettings", "ambientWebgl");
-    const ambientWebglEnabled = el("input", { type: "checkbox" });
-    const saveAmbientWebglBtn = el("button", { class: "ghost", type: "button" }, [
-      t("admin.ambient.save", "儲存 3D 裝飾開關"),
-    ]);
-    const ambientWebglStatus = el("div", { class: "status-line" });
     const wheelSpectacleDocRef = doc(db, "siteSettings", "wheelSpectacle");
     const wheelSpectacleShowTest = el("input", { type: "checkbox" });
     const saveWheelSpectacleBtn = el("button", { class: "ghost", type: "button" }, [t("admin.wheelSpectacle.save", "儲存輪盤預覽開關")]);
@@ -3030,38 +3013,6 @@ function render() {
       },
     );
 
-    adminAmbientWebglUnsub = onSnapshot(
-      ambientWebglDocRef,
-      (snap) => {
-        const data = snap.data() as { enabled?: unknown } | undefined;
-        ambientWebglEnabled.checked = typeof data?.enabled === "boolean" ? data.enabled : true;
-      },
-      () => {
-        ambientWebglStatus.textContent = t("admin.snapshot.loadFail", "無法讀取 3D 裝飾設定。");
-        ambientWebglStatus.className = "status-line error";
-      },
-    );
-
-    saveAmbientWebglBtn.addEventListener("click", async () => {
-      ambientWebglStatus.textContent = "";
-      ambientWebglStatus.className = "status-line";
-      saveAmbientWebglBtn.setAttribute("disabled", "true");
-      try {
-        await setDoc(
-          ambientWebglDocRef,
-          { enabled: ambientWebglEnabled.checked, updatedAt: serverTimestamp() },
-          { merge: true },
-        );
-        ambientWebglStatus.textContent = t("admin.status.updated", "已更新");
-        ambientWebglStatus.classList.add("ok");
-      } catch (e) {
-        ambientWebglStatus.textContent = e instanceof Error ? e.message : t("admin.memberList.saveFail", "儲存失敗");
-        ambientWebglStatus.classList.add("error");
-      } finally {
-        saveAmbientWebglBtn.removeAttribute("disabled");
-      }
-    });
-
     saveMarqueeLedBtn.addEventListener("click", async () => {
       marqueeLedStatus.textContent = t("admin.status.processing", "處理中…");
       marqueeLedStatus.className = "status-line";
@@ -3123,27 +3074,6 @@ function render() {
         t("admin.announce.blockMarqueeLead", "顯示於預約頁最上方；可調捲動速度與是否啟用。"),
       ]),
       marqueeLedSub,
-    ]);
-
-    const blockAmbient3d = el("section", { class: "admin-announce__block admin-announce__block--ambient3d" }, [
-      el("h4", { class: "admin-announce__block-title" }, [t("admin.ambient.blockTitle", "預約主卡片 3D 裝飾")]),
-      el("p", { class: "hint admin-announce__block-lead" }, [
-        t(
-          "admin.ambient.blockLead",
-          "僅預約（前台）於視窗底層顯示偏寫實的太陽系（受光球體、點雲小行星帶、土星薄環、輕微光暈），並含原創剪影太空船、彗星掠過與掠過小行星帶時的微粒與短暫光暈；畫面固定於視窗、頁面內容可照常上下捲動。主卡片與主理人圖／說明疊在特效上。管理後台不載入。關閉後訪客不再載入 WebGL。網址加 ?webgl=0 可單機強制關閉；系統「減少動態效果」時也不載入。",
-        ),
-      ]),
-      el("label", { class: "field checkbox-field" }, [
-        ambientWebglEnabled,
-        el("span", {}, [t("admin.ambient.enableLabel", "啟用預約主卡片 3D 裝飾")]),
-      ]),
-      el("div", { class: "row-actions" }, [saveAmbientWebglBtn]),
-      ambientWebglStatus,
-      el("p", { class: "hint" }, [
-        t("admin.ambient.pathHintA", "Firestore："),
-        el("code", {}, ["siteSettings/ambientWebgl"]),
-        t("admin.ambient.pathHintB", " 欄位 enabled（未建立文件時預設為開啟）。"),
-      ]),
     ]);
 
     const blockPlay = el("section", { class: "admin-announce__block admin-announce__block--play" }, [
@@ -3216,12 +3146,11 @@ function render() {
       el("p", { class: "hint admin-announce__page-lead" }, [
         t(
           "admin.announce.introShort",
-          "此分頁集中調整頂部 LED 跑馬燈、預約主卡片 3D 裝飾、輪盤預覽，以及預約名額／不開放時段；區塊已分組，技術路徑可展開查看。",
+          "此分頁集中調整頂部 LED 跑馬燈、輪盤預覽，以及預約名額／不開放時段；區塊已分組，技術路徑可展開查看。",
         ),
       ]),
       announceIntroDetails,
       blockMarquee,
-      blockAmbient3d,
       blockPlay,
       blockRules,
     );
@@ -5038,7 +4967,6 @@ function render() {
       setSupportChatOpen(false);
     }
     syncMarqueeVisibilityForTab();
-    syncAmbientWebgl();
     if (isBook) {
       stopAdminListener();
     } else {
