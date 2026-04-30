@@ -28,7 +28,7 @@ const EN: Record<string, string> = {
   "slot.beyond_booking_window": "Bookings only through the Sunday of next week.",
   "slot.not_weekday": "Only Monday–Friday",
   "slot.invalid_slot": "Start time is outside bookable hours",
-  "slot.ends_after_1800": "This start would end after the 18:00 limit",
+  "slot.ends_after_daily_close": "This start would end after the daily service end (17:00)",
   "slot.generic": "Cannot complete booking",
   "booking.blockedPrefix": "This slot is closed: ",
   "booking.blockedGeneric": "This slot is closed for booking",

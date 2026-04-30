@@ -308,7 +308,11 @@ export const createBooking = onCall(
       beyond_booking_window: st(locale, "slot.beyond_booking_window", "僅能預約至下週日為止。"),
       not_weekday: st(locale, "slot.not_weekday", "僅能預約週一到週五"),
       invalid_slot: st(locale, "slot.invalid_slot", "開始時間不在可預約範圍"),
-      ends_after_1800: st(locale, "slot.ends_after_1800", "此開始時間將超過 18:00 結束上限"),
+      ends_after_daily_close: st(
+        locale,
+        "slot.ends_after_daily_close",
+        "此開始時間將超過當日服務結束時間（17:00）",
+      ),
     };
     throw new HttpsError("failed-precondition", map[code] ?? st(locale, "slot.generic", "無法預約"));
   }

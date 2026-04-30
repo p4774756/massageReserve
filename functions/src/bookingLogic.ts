@@ -5,6 +5,9 @@ export const SLOT_STEP_MINUTES = 15;
 export const BOOKING_DURATION_MINUTES = 30;
 const LUNCH_START_MINUTES = 11 * 60 + 45;
 const LUNCH_END_MINUTES = 13 * 60 + 15;
+/** 單次服務結束不得晚於此時刻（台北當日）；最晚開始 = 此時刻 − BOOKING_DURATION（目前 16:30） */
+const SERVICE_DAY_END_HOUR = 17;
+const SERVICE_DAY_END_MINUTE = 0;
 /** 未設定 `siteSettings/bookingCaps` 時的預設值 */
 export const DEFAULT_MAX_PER_DAY = 2;
 export const DEFAULT_MAX_PER_WORK_WEEK = 4;
@@ -39,10 +42,11 @@ export function resolveBookingCaps(raw: unknown): { maxPerDay: number; maxPerWor
 
 export const ACTIVE_STATUSES = ["pending", "confirmed", "done"] as const;
 
-/** 可預約開始時間：08:00–17:30，每 15 分鐘一格（避開 11:45–13:15 午休） */
+/** 可預約開始時間：08:00–16:30，每 15 分鐘一格（避開 11:45–13:15 午休；開始時間須能在 SERVICE_DAY_END 前結束） */
 export function allStartSlots(): string[] {
   const slots: string[] = [];
-  const endMinutes = 17 * 60 + 30;
+  const dayEndMinutes = SERVICE_DAY_END_HOUR * 60 + SERVICE_DAY_END_MINUTE;
+  const endMinutes = dayEndMinutes - BOOKING_DURATION_MINUTES;
   for (let m = 8 * 60; m <= endMinutes; m += SLOT_STEP_MINUTES) {
     const slotEnd = m + BOOKING_DURATION_MINUTES;
     const overlapsLunch = m < LUNCH_END_MINUTES && slotEnd > LUNCH_START_MINUTES;
@@ -102,9 +106,14 @@ export function assertSlotAllowed(dateKey: string, startSlot: string): DateTime 
     throw new Error("past_slot");
   }
   const end = start.plus({ minutes: BOOKING_DURATION_MINUTES });
-  const dayEnd = day.set({ hour: 18, minute: 0, second: 0, millisecond: 0 });
+  const dayEnd = day.set({
+    hour: SERVICE_DAY_END_HOUR,
+    minute: SERVICE_DAY_END_MINUTE,
+    second: 0,
+    millisecond: 0,
+  });
   if (end > dayEnd) {
-    throw new Error("ends_after_1800");
+    throw new Error("ends_after_daily_close");
   }
   return start;
 }

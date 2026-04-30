@@ -59,7 +59,7 @@ export const EN: Record<string, string> = {
 
   "home.title": "Office massage booking",
   "home.subtitle":
-    "Mon–Fri · 15-minute start slots · session about 15–50 min depending on needs · lunch break 11:45–13:15 closed · latest start 17:30, ends before 18:00",
+    "Mon–Fri · 15-minute start slots · session about 15–50 min depending on needs · lunch break 11:45–13:15 closed · latest start 16:30, ends before 17:00",
   "home.guestHint":
     "No sign-up required: choose a guest payment option. Members can top up and join the wheel draw.",
   "home.hostCaption": "A moment of shadow and light is also blank space left for the body.",
@@ -335,7 +335,7 @@ export const EN: Record<string, string> = {
   "admin.blocks.reason": "Reason shown on the booking page",
   "admin.blocks.reasonPh": "e.g. therapist training, away",
   "admin.blocks.hintA":
-    "Disable booking by weekday/time window. If a service slot (~30 min) overlaps a blocked window, that start time is unavailable. Example: Mon/Thu 16:30-17:30 blocks starts at 16:30, 16:45, 17:00. Firestore: ",
+    "Disable booking by weekday/time window. If a service slot (~30 min) overlaps a blocked window, that start time is unavailable. Example: Mon/Thu 14:30-15:30 blocks starts at 14:30, 14:45, 15:00. Firestore: ",
   "admin.blocks.hintB": " field ",
   "admin.blocks.hintC": ". Interval is [start, end).",
   "admin.blocks.tooMany": "Maximum 40 rows. Remove some rows and save again.",
@@ -456,6 +456,11 @@ export const EN: Record<string, string> = {
   "admin.memberList.reload": "Reload member list",
   "admin.memberList.broadcastBtn": "Email members",
   "admin.memberList.directEmailBtn": "Email one member",
+  "admin.memberList.emailMenuBtn": "Member emails",
+  "admin.memberList.emailMenuTitle":
+    "Broadcast to matching Auth users or send one message to a verified member. Plain text becomes HTML. Needs RESEND_API_KEY and RESEND_FROM; preview recipients before broadcast.",
+  "admin.memberList.emailTabBroadcast": "Broadcast",
+  "admin.memberList.emailTabDirect": "One member",
   "admin.memberList.directEmailTitle":
     "Send one custom email to a single member (verified email only); needs RESEND_API_KEY.",
   "admin.memberList.directEmailModalTitle": "Email one member (verified)",
