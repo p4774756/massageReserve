@@ -3905,6 +3905,48 @@ function render() {
         autocomplete: "off",
         placeholder: t("admin.memberList.directEmailTargetPh", "會員 Email 或 UID"),
       });
+      const directTargetSuggestions = el("ul", {
+        class: "member-typeahead-list",
+        hidden: true,
+        role: "listbox",
+      });
+      const directTargetTypeaheadWrap = el("div", { class: "member-typeahead-wrap" });
+      directTargetTypeaheadWrap.append(memberTargetInput, directTargetSuggestions);
+
+      let directTargetSearchTimer: ReturnType<typeof setTimeout> | null = null;
+      async function runDirectTargetMemberSearch() {
+        const q = memberTargetInput.value.trim();
+        if (q.length < 2) {
+          directTargetSuggestions.hidden = true;
+          directTargetSuggestions.innerHTML = "";
+          return;
+        }
+        try {
+          const fn = searchMemberUsersCall();
+          const res = await fn({ prefix: q, ...localeApiParam() });
+          const users = (res.data as { users?: { uid: string; email: string }[] }).users ?? [];
+          directTargetSuggestions.innerHTML = "";
+          if (users.length === 0) {
+            directTargetSuggestions.hidden = true;
+            return;
+          }
+          for (const u of users) {
+            const li = el("li", { class: "member-typeahead-item", role: "option" }, [u.email]);
+            li.addEventListener("mousedown", (ev) => {
+              ev.preventDefault();
+              memberTargetInput.value = u.email;
+              directTargetSuggestions.hidden = true;
+              directTargetSuggestions.innerHTML = "";
+              invalidateVerify();
+            });
+            directTargetSuggestions.append(li);
+          }
+          directTargetSuggestions.hidden = false;
+        } catch {
+          directTargetSuggestions.hidden = true;
+        }
+      }
+
       const subjectInput = el("input", {
         type: "text",
         maxLength: 200,
@@ -3948,7 +3990,25 @@ function render() {
         verifyOk = false;
         syncSendEnabled();
       };
-      memberTargetInput.addEventListener("input", invalidateVerify);
+      memberTargetInput.addEventListener("input", () => {
+        invalidateVerify();
+        const raw = memberTargetInput.value.trim();
+        if (raw.length < 2) {
+          directTargetSuggestions.hidden = true;
+          directTargetSuggestions.innerHTML = "";
+          return;
+        }
+        if (directTargetSearchTimer) clearTimeout(directTargetSearchTimer);
+        directTargetSearchTimer = setTimeout(() => void runDirectTargetMemberSearch(), 280);
+      });
+      memberTargetInput.addEventListener("focus", () => {
+        void runDirectTargetMemberSearch();
+      });
+      memberTargetInput.addEventListener("blur", () => {
+        setTimeout(() => {
+          directTargetSuggestions.hidden = true;
+        }, 200);
+      });
       subjectInput.addEventListener("input", invalidateVerify);
       bodyTa.addEventListener("input", invalidateVerify);
 
@@ -4066,7 +4126,13 @@ function render() {
       dialog.append(
         heading,
         hint,
-        el("label", { class: "field" }, [t("admin.memberList.directEmailTargetLabel", "收件會員"), memberTargetInput]),
+        el("label", { class: "field" }, [
+          t("admin.memberList.directEmailTargetLabel", "收件會員"),
+          directTargetTypeaheadWrap,
+        ]),
+        el("div", { class: "hint" }, [
+          t("admin.wallet.searchHint", "輸入至少 2 個字元會顯示符合的 Email；亦可直接貼上 UID。"),
+        ]),
         el("label", { class: "field" }, [t("admin.memberList.broadcastSubjectLabel", "主旨"), subjectInput]),
         el("label", { class: "field" }, [t("admin.memberList.broadcastBodyLabel", "內文（純文字）"), bodyTa]),
         confirmLabel,
