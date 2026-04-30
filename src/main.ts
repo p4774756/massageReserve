@@ -36,6 +36,7 @@ import {
   listMembersAdminCall,
   migrateLegacyWalletsAdminCall,
   sendMembersBroadcastAdminCall,
+  sendMemberDirectEmailAdminCall,
   updateMemberNicknameAdminCall,
   spinWheelCall,
   listActiveWheelPrizesCall,
@@ -3548,6 +3549,18 @@ function render() {
       },
       [t("admin.memberList.broadcastBtn", "寄信給會員")],
     );
+    const memberListDirectEmailBtn = el(
+      "button",
+      {
+        class: "ghost",
+        type: "button",
+        title: t(
+          "admin.memberList.directEmailTitle",
+          "寄一封自訂信給單一會員（僅限 Email 已驗證）；需 RESEND_API_KEY。",
+        ),
+      },
+      [t("admin.memberList.directEmailBtn", "寄給單一會員")],
+    );
     const memberListStatus = el("div", { class: "status-line" });
     const memberListTableWrap = el("div", { class: "table-wrap admin-member-list-table" });
     const memberListTable = el("table", {}, []);
@@ -3795,6 +3808,7 @@ function render() {
       memberListStatus.className = "status-line";
       memberListRefreshBtn.setAttribute("disabled", "true");
       memberListBroadcastBtn.setAttribute("disabled", "true");
+      memberListDirectEmailBtn.setAttribute("disabled", "true");
       try {
         const fn = listMembersAdminCall();
         const res = await fn({ ...localeApiParam() });
@@ -3824,6 +3838,7 @@ function render() {
       } finally {
         memberListRefreshBtn.removeAttribute("disabled");
         memberListBroadcastBtn.removeAttribute("disabled");
+        memberListDirectEmailBtn.removeAttribute("disabled");
       }
     }
 
@@ -3837,6 +3852,7 @@ function render() {
       memberListMigrateWalletBtn.setAttribute("disabled", "true");
       memberListRefreshBtn.setAttribute("disabled", "true");
       memberListBroadcastBtn.setAttribute("disabled", "true");
+      memberListDirectEmailBtn.setAttribute("disabled", "true");
       memberListStatus.textContent = t("admin.memberList.migrateRunning", "折換中…");
       try {
         const fn = migrateLegacyWalletsAdminCall();
@@ -3862,7 +3878,204 @@ function render() {
         memberListMigrateWalletBtn.removeAttribute("disabled");
         memberListRefreshBtn.removeAttribute("disabled");
         memberListBroadcastBtn.removeAttribute("disabled");
+        memberListDirectEmailBtn.removeAttribute("disabled");
       }
+    });
+
+    memberListDirectEmailBtn.addEventListener("click", () => {
+      const overlay = el("div", { class: "modal-overlay" });
+      const dialog = el("div", { class: "modal-card admin-member-broadcast-dialog" });
+      dialog.setAttribute("role", "dialog");
+      dialog.setAttribute("aria-modal", "true");
+      const heading = el("h3", { id: "admin-member-direct-email-title" }, [
+        t("admin.memberList.directEmailModalTitle", "寄信給單一會員（已驗證）"),
+      ]);
+      dialog.setAttribute("aria-labelledby", "admin-member-direct-email-title");
+
+      const hint = el("p", { class: "hint" }, [
+        t(
+          "admin.memberList.directEmailModalHint",
+          "僅能寄給 Firebase Auth 中「Email 已驗證」的會員。請填 Email 或 UID；內文為純文字（可換行），與群發相同會轉成 HTML。需 RESEND_API_KEY 與適當的 RESEND_FROM。",
+        ),
+      ]);
+
+      const memberTargetInput = el("input", {
+        type: "text",
+        class: "admin-member-direct-target",
+        autocomplete: "off",
+        placeholder: t("admin.memberList.directEmailTargetPh", "會員 Email 或 UID"),
+      });
+      const subjectInput = el("input", {
+        type: "text",
+        maxLength: 200,
+        class: "admin-member-broadcast-subject",
+        autocomplete: "off",
+        placeholder: t("admin.memberList.broadcastSubjectPh", "主旨，例如：感謝大家支持"),
+      });
+      const bodyTa = el("textarea", {
+        class: "admin-member-broadcast-body",
+        rows: 10,
+        maxLength: 12000,
+        placeholder: t("admin.memberList.broadcastBodyPh", "內文（純文字）…"),
+      });
+
+      const confirmCb = el("input", { type: "checkbox" }) as HTMLInputElement;
+      const confirmLabel = el("label", { class: "admin-member-broadcast-check" });
+      confirmLabel.append(
+        confirmCb,
+        document.createTextNode(" "),
+        el("span", {}, [t("admin.memberList.directEmailConfirmLabel", "我確認主旨、內文與收件對象無誤，要實際寄出")]),
+      );
+
+      const verifyBtn = el("button", { class: "ghost", type: "button" }, [
+        t("admin.memberList.directEmailVerify", "確認對象（不寄出）"),
+      ]);
+      const sendBtn = el("button", { class: "primary", type: "button" }, [
+        t("admin.memberList.directEmailSend", "寄出一封信"),
+      ]);
+      sendBtn.setAttribute("disabled", "true");
+      const closeBtn = el("button", { class: "ghost", type: "button" }, [t("modal.close", "關閉")]);
+      const actions = el("div", { class: "modal-actions" }, [closeBtn, verifyBtn, sendBtn]);
+      const modalStatus = el("div", { class: "status-line" });
+
+      let verifyOk = false;
+      function syncSendEnabled() {
+        if (verifyOk && confirmCb.checked) sendBtn.removeAttribute("disabled");
+        else sendBtn.setAttribute("disabled", "true");
+      }
+      confirmCb.addEventListener("change", syncSendEnabled);
+      const invalidateVerify = () => {
+        verifyOk = false;
+        syncSendEnabled();
+      };
+      memberTargetInput.addEventListener("input", invalidateVerify);
+      subjectInput.addEventListener("input", invalidateVerify);
+      bodyTa.addEventListener("input", invalidateVerify);
+
+      const dismiss = () => {
+        document.removeEventListener("keydown", onKeyDown);
+        overlay.remove();
+      };
+      const onKeyDown = (ev: KeyboardEvent) => {
+        if (ev.key === "Escape") {
+          ev.preventDefault();
+          dismiss();
+        }
+      };
+      closeBtn.addEventListener("click", dismiss);
+      overlay.addEventListener("click", (ev) => {
+        if (ev.target === overlay) dismiss();
+      });
+      document.addEventListener("keydown", onKeyDown);
+
+      verifyBtn.addEventListener("click", async () => {
+        modalStatus.textContent = "";
+        modalStatus.className = "status-line";
+        verifyBtn.setAttribute("disabled", "true");
+        verifyOk = false;
+        syncSendEnabled();
+        try {
+          const fn = sendMemberDirectEmailAdminCall();
+          const res = await fn({
+            memberTarget: memberTargetInput.value,
+            subject: subjectInput.value,
+            body: bodyTa.value,
+            dryRun: true,
+            ...localeApiParam(),
+          });
+          const d = res.data as { email?: string; uid?: string; displayName?: string };
+          verifyOk = true;
+          syncSendEnabled();
+          modalStatus.className = "status-line ok";
+          modalStatus.textContent = t(
+            "admin.memberList.directEmailVerifyOk",
+            "對象有效：將寄至 {{email}}（UID：{{uid}}，{{name}}）。可勾選確認後按「寄出一封信」。",
+            {
+              email: typeof d.email === "string" ? d.email : "—",
+              uid: typeof d.uid === "string" ? d.uid : "—",
+              name: typeof d.displayName === "string" ? d.displayName : "—",
+            },
+          );
+        } catch (e) {
+          modalStatus.className = "status-line error";
+          modalStatus.textContent = errorMessage(e);
+        } finally {
+          verifyBtn.removeAttribute("disabled");
+        }
+      });
+
+      sendBtn.addEventListener("click", async () => {
+        if (!verifyOk || !confirmCb.checked) return;
+        const ok = await showConfirmModal(
+          t("admin.memberList.directEmailSendConfirmTitle", "確認寄出單筆郵件"),
+          t(
+            "admin.memberList.directEmailSendConfirmBody",
+            "將寄出一封自訂郵件至已驗證對象（無法撤回）。\n\n{{previewLine}}",
+            { previewLine: modalStatus.textContent || "" },
+          ),
+          t("admin.memberList.broadcastSendConfirmOk", "確定寄出"),
+        );
+        if (!ok) return;
+
+        modalStatus.textContent = t("admin.memberList.directEmailSending", "寄送中…");
+        modalStatus.className = "status-line";
+        sendBtn.setAttribute("disabled", "true");
+        verifyBtn.setAttribute("disabled", "true");
+        closeBtn.setAttribute("disabled", "true");
+        memberTargetInput.setAttribute("disabled", "true");
+        subjectInput.setAttribute("disabled", "true");
+        bodyTa.setAttribute("disabled", "true");
+        confirmCb.setAttribute("disabled", "true");
+        try {
+          const fn = sendMemberDirectEmailAdminCall();
+          const res = await fn({
+            memberTarget: memberTargetInput.value,
+            subject: subjectInput.value,
+            body: bodyTa.value,
+            confirmSend: true,
+            dryRun: false,
+            ...localeApiParam(),
+          });
+          const d = res.data as { email?: string; deliverabilityWarning?: string };
+          const lines = [
+            t("admin.memberList.directEmailDone", "已寄出 1 封至 {{email}}。", {
+              email: typeof d.email === "string" ? d.email : "",
+            }),
+          ];
+          if (typeof d.deliverabilityWarning === "string" && d.deliverabilityWarning.trim()) {
+            lines.push("", d.deliverabilityWarning.trim());
+          }
+          dismiss();
+          memberListStatus.className = "status-line ok admin-member-broadcast-summary";
+          memberListStatus.textContent = lines.join("\n");
+        } catch (e) {
+          modalStatus.className = "status-line error";
+          modalStatus.textContent = errorMessage(e);
+        } finally {
+          sendBtn.removeAttribute("disabled");
+          verifyBtn.removeAttribute("disabled");
+          closeBtn.removeAttribute("disabled");
+          memberTargetInput.removeAttribute("disabled");
+          subjectInput.removeAttribute("disabled");
+          bodyTa.removeAttribute("disabled");
+          confirmCb.removeAttribute("disabled");
+          syncSendEnabled();
+        }
+      });
+
+      dialog.append(
+        heading,
+        hint,
+        el("label", { class: "field" }, [t("admin.memberList.directEmailTargetLabel", "收件會員"), memberTargetInput]),
+        el("label", { class: "field" }, [t("admin.memberList.broadcastSubjectLabel", "主旨"), subjectInput]),
+        el("label", { class: "field" }, [t("admin.memberList.broadcastBodyLabel", "內文（純文字）"), bodyTa]),
+        confirmLabel,
+        modalStatus,
+        actions,
+      );
+      overlay.append(dialog);
+      document.body.append(overlay);
+      memberTargetInput.focus();
     });
 
     memberListBroadcastBtn.addEventListener("click", () => {
@@ -4110,6 +4323,7 @@ function render() {
         memberListRefreshBtn,
         memberListMigrateWalletBtn,
         memberListBroadcastBtn,
+        memberListDirectEmailBtn,
       ]),
       memberListStatus,
       memberListTableWrap,

@@ -455,6 +455,24 @@ export const EN: Record<string, string> = {
     "Click column headers to sort. Verified email is listed first by default; 10 rows per page.",
   "admin.memberList.reload": "Reload member list",
   "admin.memberList.broadcastBtn": "Email members",
+  "admin.memberList.directEmailBtn": "Email one member",
+  "admin.memberList.directEmailTitle":
+    "Send one custom email to a single member (verified email only); needs RESEND_API_KEY.",
+  "admin.memberList.directEmailModalTitle": "Email one member (verified)",
+  "admin.memberList.directEmailModalHint":
+    "Only members with a verified email in Firebase Auth. Enter email or UID; body is plain text and becomes HTML like broadcast. Needs RESEND_API_KEY and RESEND_FROM.",
+  "admin.memberList.directEmailTargetLabel": "Recipient member",
+  "admin.memberList.directEmailTargetPh": "Member email or UID",
+  "admin.memberList.directEmailConfirmLabel": "I confirm recipient, subject, and body — send for real",
+  "admin.memberList.directEmailVerify": "Verify recipient (do not send)",
+  "admin.memberList.directEmailSend": "Send one email",
+  "admin.memberList.directEmailVerifyOk":
+    "Recipient OK: will send to {{email}} (UID: {{uid}}, {{name}}). Check the box and tap “Send one email”.",
+  "admin.memberList.directEmailSendConfirmTitle": "Confirm single email",
+  "admin.memberList.directEmailSendConfirmBody":
+    "One message will be sent to the verified recipient (cannot undo).\n\n{{previewLine}}",
+  "admin.memberList.directEmailSending": "Sending…",
+  "admin.memberList.directEmailDone": "Sent 1 message to {{email}}.",
   "admin.memberList.broadcastTitle":
     "Send a custom plain-text message as HTML to Firebase Auth users who match filters. Needs RESEND_API_KEY. Preview recipient count before sending.",
   "admin.memberList.broadcastModalTitle": "Email members (broadcast)",

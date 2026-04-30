@@ -84,6 +84,13 @@ const EN: Record<string, string> = {
   "broadcast.needConfirm": "To send for real, check the confirmation box, or use preview (dry run) first.",
   "broadcast.noRecipients": "No recipients match the filters (e.g. verified-only while no verified emails).",
   "broadcast.tooManyRecipients": "Recipient count ({{n}}) exceeds the per-run limit of {{max}}.",
+  "directEmail.targetRequired": "Enter the member’s email or UID.",
+  "directEmail.userNotFound": "No member found for that email or UID.",
+  "directEmail.lookupFail": "Could not resolve that member identifier.",
+  "directEmail.accountDisabled": "That account is disabled — cannot send.",
+  "directEmail.noEmail": "That account has no email address.",
+  "directEmail.notVerified": "That member’s email is not verified. This action only sends to verified addresses.",
+  "directEmail.sendFailed": "Send failed: {{detail}}",
 };
 
 function applyVars(s: string, vars?: Record<string, string | number>): string {

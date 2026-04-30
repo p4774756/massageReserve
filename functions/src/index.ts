@@ -1540,6 +1540,160 @@ export const sendMembersBroadcastAdmin = onCall(
   },
 );
 
+/**
+ * 管理員：寄一封自訂主旨／內文給「單一」Firebase Auth 使用者；僅允許 Email 已驗證者。
+ * `dryRun: true` 僅驗證對象並回傳 email／uid；實際寄送需 `confirmSend: true`。
+ */
+export const sendMemberDirectEmailAdmin = onCall(
+  { ...publicCall, secrets: [resendApiKey], timeoutSeconds: 120 },
+  async (request) => {
+    const locale = parseLocale(request.data);
+    const adminUid = request.auth?.uid;
+    if (!adminUid) {
+      throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
+    }
+    await assertAdminByUid(adminUid, locale);
+
+    const dryRun = request.data?.dryRun === true;
+    const confirmSend = request.data?.confirmSend === true;
+    const memberTargetRaw = typeof request.data?.memberTarget === "string" ? request.data.memberTarget : "";
+    const memberTarget = memberTargetRaw.trim();
+
+    const subjectRaw = typeof request.data?.subject === "string" ? request.data.subject : "";
+    const bodyRaw = typeof request.data?.body === "string" ? request.data.body : "";
+    const subject = normalizeBroadcastSubject(subjectRaw);
+    const body = bodyRaw.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+
+    if (!memberTarget) {
+      throw new HttpsError(
+        "invalid-argument",
+        st(locale, "directEmail.targetRequired", "請填寫收件會員（Email 或 UID）。"),
+      );
+    }
+    if (!subject) {
+      throw new HttpsError(
+        "invalid-argument",
+        st(locale, "broadcast.subjectRequired", "請填寫主旨（1～200 字，不可僅空白）。"),
+      );
+    }
+    if (body.length < BROADCAST_BODY_MIN) {
+      throw new HttpsError(
+        "invalid-argument",
+        st(locale, "broadcast.bodyTooShort", "內文至少 {{min}} 字。", { min: BROADCAST_BODY_MIN }),
+      );
+    }
+    if (body.length > BROADCAST_BODY_MAX) {
+      throw new HttpsError(
+        "invalid-argument",
+        st(locale, "broadcast.bodyTooLong", "內文不可超過 {{max}} 字。", { max: BROADCAST_BODY_MAX }),
+      );
+    }
+
+    const auth = getAuth();
+    let record;
+    try {
+      record = memberTarget.includes("@")
+        ? await auth.getUserByEmail(memberTarget)
+        : await auth.getUser(memberTarget);
+    } catch (e: unknown) {
+      const code =
+        e && typeof e === "object" && "code" in e ? String((e as { code?: unknown }).code) : "";
+      if (code.includes("user-not-found")) {
+        throw new HttpsError(
+          "not-found",
+          st(locale, "directEmail.userNotFound", "找不到此會員（請確認 Email 或 UID）。"),
+        );
+      }
+      throw new HttpsError(
+        "invalid-argument",
+        st(locale, "directEmail.lookupFail", "無法解析會員識別，請確認格式。"),
+      );
+    }
+
+    if (record.disabled === true) {
+      throw new HttpsError(
+        "failed-precondition",
+        st(locale, "directEmail.accountDisabled", "此帳號已停用，無法寄信。"),
+      );
+    }
+    const toEmail = (record.email ?? "").trim();
+    if (!toEmail) {
+      throw new HttpsError(
+        "failed-precondition",
+        st(locale, "directEmail.noEmail", "該帳號沒有設定信箱，無法寄信。"),
+      );
+    }
+    if (record.emailVerified !== true) {
+      throw new HttpsError(
+        "failed-precondition",
+        st(locale, "directEmail.notVerified", "該會員尚未完成 Email 驗證；此功能僅能寄給「已驗證」使用者。"),
+      );
+    }
+
+    const displayName =
+      typeof record.displayName === "string" && record.displayName.trim()
+        ? record.displayName.trim()
+        : toEmail;
+
+    if (dryRun) {
+      return {
+        ok: true as const,
+        dryRun: true as const,
+        uid: record.uid,
+        email: toEmail,
+        displayName,
+      };
+    }
+
+    if (!confirmSend) {
+      throw new HttpsError(
+        "invalid-argument",
+        st(locale, "broadcast.needConfirm", "實際寄送需勾選確認，或先使用「僅預覽人數」（dryRun）。"),
+      );
+    }
+
+    const apiKey = resendApiKey.value().trim();
+    if (!apiKey) {
+      throw new HttpsError(
+        "failed-precondition",
+        st(locale, "testStatusEmail.noResendKey", "專案未設定 RESEND_API_KEY，無法寄信。"),
+      );
+    }
+    const from = resendFrom.value().trim() || "Massage預約 <onboarding@resend.dev>";
+    const mailLocale: EmailLocale = locale === "en" ? "en" : "zh-Hant";
+    const html = buildBroadcastEmailHtml(body, mailLocale);
+
+    try {
+      await sendBroadcastHtmlEmail({ apiKey, from, to: toEmail, subject, html });
+    } catch (e) {
+      let msg = "send failed";
+      if (e instanceof HttpsError && e.message) msg = e.message;
+      else if (e instanceof Error && e.message) msg = e.message;
+      throw new HttpsError(
+        "internal",
+        st(locale, "directEmail.sendFailed", "寄送失敗：{{detail}}", { detail: msg.slice(0, 400) }),
+      );
+    }
+
+    const deliverabilityWarning = isResendOnboardingFromAddress(from)
+      ? st(
+          locale,
+          "testStatusEmail.resendOnboardingFromWarning",
+          "目前寄件者仍為 Resend 測試用 onboarding@resend.dev：此模式下寄到一般會員信箱常實際收不到（但「新預約通知」寄到您設定的店家信箱仍可能正常）。若要讓會員收到狀態信與測試信，請至 Resend 驗證自有網域，並將 Functions 參數 RESEND_FROM 改為該網域下的寄件地址。",
+        )
+      : undefined;
+
+    return {
+      ok: true as const,
+      dryRun: false as const,
+      uid: record.uid,
+      email: toEmail,
+      sent: 1,
+      ...(deliverabilityWarning ? { deliverabilityWarning } : {}),
+    };
+  },
+);
+
 export const cancelBooking = onCall(publicCall, async (request) => {
   const locale = parseLocale(request.data);
   const uid = request.auth?.uid;

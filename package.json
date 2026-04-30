@@ -1,7 +1,7 @@
 {
   "name": "massage-reserve",
   "private": true,
-  "version": "1.11.3",
+  "version": "1.11.4",
   "type": "module",
   "scripts": {
     "bump:patch": "npm version patch --no-git-tag-version",
