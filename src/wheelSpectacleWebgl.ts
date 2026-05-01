@@ -306,7 +306,7 @@ export function mountWheelSpectacleThree(
     wheelGroup.add(hubPlate);
 
     const outerRim = new THREE.Mesh(
-      new THREE.TorusGeometry(rOut + 0.014, 0.022, 14, 64),
+      new THREE.TorusGeometry(rOut + 0.008, 0.012, 12, 64),
       new THREE.MeshStandardMaterial({
         color: 0xffd84a,
         emissive: 0xff9a00,
