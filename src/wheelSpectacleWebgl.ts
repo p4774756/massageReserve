@@ -189,8 +189,9 @@ export function mountWheelSpectacleThree(
     const wheelGroup = new THREE.Group();
     scene.add(wheelGroup);
 
-    const rOut = 0.93;
-    const rIn = 0.38;
+    /* 外圈略放大、內洞縮小 → 彩色扇環更寬；金 torus 管徑見 outerRim */
+    const rOut = 0.97;
+    const rIn = 0.3;
     const rLabel = (rOut + rIn) * 0.5;
     const extrudeDepth = opts.reduceMotion ? 0.045 : 0.072;
     const arcSegs = opts.reduceMotion ? 10 : 18;
@@ -305,7 +306,7 @@ export function mountWheelSpectacleThree(
     wheelGroup.add(hubPlate);
 
     const outerRim = new THREE.Mesh(
-      new THREE.TorusGeometry(rOut + 0.028, 0.038, 14, 64),
+      new THREE.TorusGeometry(rOut + 0.014, 0.022, 14, 64),
       new THREE.MeshStandardMaterial({
         color: 0xffd84a,
         emissive: 0xff9a00,
