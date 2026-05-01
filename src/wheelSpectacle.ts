@@ -243,11 +243,11 @@ function playCrackBang(ctx: AudioContext) {
   o2.stop(t + 0.25);
 }
 
-/** 短版揭曉合成音（約 0.55s 內結束，與取樣疊加時不拖長） */
+/** 揭曉合成層：約 1.9～2.2s，與歡呼取樣疊加後整段約 3～5 秒 */
 function playRevealFanfareSynth(ctx: AudioContext, destination: AudioNode, gainScale: number) {
   const base = ctx.currentTime + 0.02;
   const bus = ctx.createGain();
-  bus.gain.value = 0.88 * gainScale;
+  bus.gain.value = 0.9 * gainScale;
   bus.connect(destination);
 
   const tone = (
@@ -274,39 +274,55 @@ function playRevealFanfareSynth(ctx: AudioContext, destination: AudioNode, gainS
     src.connect(g);
     g.connect(bus);
     g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(peak, t + 0.014);
+    g.gain.linearRampToValueAtTime(peak, t + 0.016);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.start(t);
-    o.stop(t + dur + 0.04);
+    o.stop(t + dur + 0.05);
   };
 
   const sparkle = (t: number, freq: number, peak: number) => {
-    tone(t, freq, 0.07, peak, "sine", 4200);
+    tone(t, freq, 0.09, peak, "sine", 4200);
   };
 
-  tone(base, 55, 0.22, 0.11, "sine");
-  tone(base + 0.015, 98, 0.16, 0.06, "triangle", 240);
+  tone(base, 55, 0.3, 0.12, "sine");
+  tone(base + 0.02, 65.41, 0.26, 0.1, "sine");
+  tone(base + 0.03, 98, 0.2, 0.065, "triangle", 240);
 
-  const arp = [523.25, 659.25, 783.99, 987.77];
+  const arp = [523.25, 659.25, 783.99, 987.77, 1174.66];
   arp.forEach((f, i) => {
-    tone(base + 0.04 + i * 0.028, f, 0.12, 0.065, "triangle", 2800);
+    tone(base + 0.055 + i * 0.036, f, 0.16, 0.072, "triangle", 2800);
   });
 
-  const chordT = base + 0.18;
+  const chordT = base + 0.28;
   const chord = [
-    [261.63, 0.05],
-    [329.63, 0.055],
-    [392, 0.058],
-    [523.25, 0.062],
-    [659.25, 0.052],
+    [261.63, 0.055],
+    [329.63, 0.06],
+    [392, 0.065],
+    [523.25, 0.072],
+    [659.25, 0.062],
+    [783.99, 0.054],
   ] as const;
   for (const [f, v] of chord) {
-    tone(chordT, f, 0.26, v, "triangle", 5200);
-    tone(chordT + 0.003, f * 1.006, 0.22, v * 0.32, "sine", 6200);
+    tone(chordT, f, 0.48, v, "triangle", 5200);
+    tone(chordT + 0.004, f * 1.006, 0.42, v * 0.34, "sine", 6200);
   }
 
-  sparkle(chordT + 0.06, 2093, 0.07);
-  sparkle(chordT + 0.1, 3136, 0.055);
+  sparkle(chordT + 0.08, 2093, 0.078);
+  sparkle(chordT + 0.12, 2637, 0.072);
+  sparkle(chordT + 0.17, 3136, 0.065);
+
+  const echoT = chordT + 0.44;
+  for (const [f, v] of chord) {
+    tone(echoT, f * 0.5, 0.38, v * 0.28, "sine", 900);
+    tone(echoT + 0.006, f, 0.34, v * 0.2, "triangle", 3400);
+  }
+  sparkle(echoT + 0.12, 2793, 0.048);
+
+  const tail = echoT + 0.32;
+  const tailArp = [783.99, 987.77, 1174.66];
+  tailArp.forEach((f, i) => {
+    tone(tail + i * 0.045, f, 0.26, 0.04, "triangle", 4000);
+  });
 }
 
 function playRevealFanfareCombined(ctx: AudioContext, sfx: PrefetchedWheelSfx, destination: AudioNode) {
@@ -324,39 +340,47 @@ function playRevealFanfareCombined(ctx: AudioContext, sfx: PrefetchedWheelSfx, d
       sfx.winPunchlineDrum,
   );
 
-  /* 結尾音：數秒內收束——取樣只播前段、不重疊長尾，避免歡呼檔拖很久 */
+  /* 結尾音：整段體感約 3～5 秒——歡呼層拉長，卡通取樣仍短以免糊；合成號角填中後段 */
+  const cheerSec = 4.2;
+  const crowdSec = 3.8;
+
   if (sfx.winCymbalCrash) {
-    playBufferAt(ctx, sfx.winCymbalCrash, t0, 0.42, destination, 1, 0.2);
+    playBufferAt(ctx, sfx.winCymbalCrash, t0, 0.45, destination, 1, 0.32);
   }
   if (sfx.winMagicChime) {
-    playBufferAt(ctx, sfx.winMagicChime, t0 + 0.02, 0.36, destination, 1.04, 0.14);
+    playBufferAt(ctx, sfx.winMagicChime, t0 + 0.02, 0.34, destination, 1.02, 0.22);
   }
   if (sfx.winTeamCheer) {
-    playBufferAt(ctx, sfx.winTeamCheer, t0 + 0.03, 0.3, destination, 1, 0.42);
+    playBufferAt(ctx, sfx.winTeamCheer, t0 + 0.03, 0.28, destination, 1, cheerSec);
   } else if (sfx.winCrowdCelebration) {
-    playBufferAt(ctx, sfx.winCrowdCelebration, t0 + 0.04, 0.26, destination, 1.02, 0.38);
+    playBufferAt(ctx, sfx.winCrowdCelebration, t0 + 0.04, 0.24, destination, 1.02, crowdSec);
   }
 
   if (sfx.winHorn) {
-    playBufferAt(ctx, sfx.winHorn, t0 + 0.05, 0.38, destination, 1.06, 0.18);
+    playBufferAt(ctx, sfx.winHorn, t0 + 0.06, 0.36, destination, 1.04, 0.28);
   }
   if (sfx.winSlide) {
-    playBufferAt(ctx, sfx.winSlide, t0 + 0.08, 0.32, destination, 1.08, 0.2);
+    playBufferAt(ctx, sfx.winSlide, t0 + 0.09, 0.3, destination, 1.06, 0.32);
   }
   if (sfx.winBoing) {
-    playBufferAt(ctx, sfx.winBoing, t0 + 0.1, 0.38, destination, 1, 0.2);
+    playBufferAt(ctx, sfx.winBoing, t0 + 0.11, 0.34, destination, 1, 0.28);
   }
   if (sfx.winCowbell) {
-    playBufferAt(ctx, sfx.winCowbell, t0 + 0.12, 0.3, destination, 1.06, 0.14);
+    playBufferAt(ctx, sfx.winCowbell, t0 + 0.14, 0.28, destination, 1.04, 0.22);
   }
   if (sfx.winFlicks) {
-    playBufferAt(ctx, sfx.winFlicks, t0 + 0.14, 0.3, destination, 1.04, 0.16);
+    playBufferAt(ctx, sfx.winFlicks, t0 + 0.16, 0.28, destination, 1.03, 0.24);
   }
   if (sfx.winPunchlineDrum) {
-    playBufferAt(ctx, sfx.winPunchlineDrum, t0 + 0.16, 0.34, destination, 1, 0.22);
+    playBufferAt(ctx, sfx.winPunchlineDrum, t0 + 0.18, 0.32, destination, 1, 0.36);
   }
 
-  playRevealFanfareSynth(ctx, destination, anyWinSample ? 0.32 : 0.82);
+  /* 尾端再一記叮噹（落在約 2.8s，仍在 5s 內） */
+  if (sfx.winMagicChime) {
+    playBufferAt(ctx, sfx.winMagicChime, t0 + 2.75, 0.22, destination, 1.12, 0.16);
+  }
+
+  playRevealFanfareSynth(ctx, destination, anyWinSample ? 0.38 : 0.85);
 }
 
 function startSpinDrone(ctx: AudioContext, destination: AudioNode, gain = 0.014): () => void {
