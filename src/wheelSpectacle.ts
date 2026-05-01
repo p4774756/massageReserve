@@ -10,6 +10,7 @@ import {
   mountWheelSpectacleSolarIntro,
   type WheelSpectacleSolarIntroHandle,
 } from "./wheelSpectacleSolarIntro";
+import { chordWidthAtRadius, wheelSliceLabelRadius, wrapWheelLabelLinesByCharCount } from "./wheelLabelLayout";
 import { mountWheelSpectacleThree, type WheelSpectacleThreeHandle } from "./wheelSpectacleWebgl";
 import { WHEEL_SLICE_FILLS, wheelSliceLabelInk } from "./wheelSlicePalette";
 
@@ -64,13 +65,6 @@ function donutWedgePath(rOut: number, rIn: number, a0: number, a1: number): stri
   return `M ${x1} ${y1} A ${rOut} ${rOut} 0 ${large} 1 ${x2} ${y2} L ${x3} ${y3} A ${rIn} ${rIn} 0 ${large} 0 ${x4} ${y4} Z`;
 }
 
-function shortWheelLabel(name: string, nSlices: number): string {
-  const max = nSlices > 8 ? 5 : nSlices > 6 ? 6 : 8;
-  const s = name.trim();
-  if (s.length <= max) return s;
-  return `${s.slice(0, max - 1)}…`;
-}
-
 /** 累積旋轉角 θ∈(0,finalDeg] 每跨過一個扇區邊界的角度（含整圈 360°） */
 function computeSliceBoundaryCrossingAnglesDeg(
   finalDeg: number,
@@ -117,7 +111,7 @@ function computeSliceBoundaryCrossingAnglesDeg(
 }
 
 /**
- * 與 `mountPrizeWheelSvg` 相同的角度約定（極角為數學角：0° 為右、逆時針為正；-90° 為輪盤頂端，與指標對齊）。
+ * 與 `mountPrizeWheelSvg` 相同：極角 0° 為右、角遞增為順時針繞圈（SVG y 向下）；-90° 為輪盤頂端，與指標對齊。
  * 回傳中獎扇形中心角度（度），找不到則 null。
  */
 function winnerSliceCenterDeg(prizes: WheelPrizeLabel[], wonId: string): number | null {
@@ -148,7 +142,7 @@ function mountPrizeWheelSvg(wheelEl: HTMLElement, prizes: WheelPrizeLabel[]) {
 
   const totalW = prizes.reduce((s, p) => s + Math.max(0, p.weight), 0) || 1;
   const rOut = 1;
-  const rIn = 0.3;
+  const rIn = 0.26;
   const fontSize = prizes.length > 8 ? "0.074" : prizes.length > 5 ? "0.086" : "0.1";
 
   let angle = -90;
@@ -168,22 +162,41 @@ function mountPrizeWheelSvg(wheelEl: HTMLElement, prizes: WheelPrizeLabel[]) {
     svg.appendChild(path);
 
     const mid = (a0 + a1) / 2;
-    const labelR = (rOut + rIn) / 2;
+    const labelR = wheelSliceLabelRadius(rOut, rIn);
     const [tx, ty] = polarToXY(labelR, mid);
+    const chord = chordWidthAtRadius(labelR, sweep);
+    let fontSizeNum = parseFloat(fontSize);
+    const charUnit = fontSizeNum * 0.56;
+    let maxChars = Math.max(3, Math.floor((chord * 0.88) / charUnit));
+    let lines = wrapWheelLabelLinesByCharCount(p.name.trim(), maxChars);
+    while (lines.length > 7 && fontSizeNum > 0.054) {
+      fontSizeNum -= 0.007;
+      maxChars = Math.max(3, Math.floor((chord * 0.88) / (fontSizeNum * 0.56)));
+      lines = wrapWheelLabelLinesByCharCount(p.name.trim(), maxChars);
+    }
+
     const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
     text.setAttribute("class", "wheel-spectacle-slice-label");
     text.setAttribute("x", String(tx));
     text.setAttribute("y", String(ty));
     text.setAttribute("text-anchor", "middle");
-    text.setAttribute("dominant-baseline", "middle");
     text.setAttribute("fill", wheelSliceLabelInk(fill));
-    text.setAttribute("font-size", fontSize);
+    text.setAttribute("font-size", String(fontSizeNum));
     text.setAttribute("font-weight", "900");
     text.setAttribute("stroke", "#2a1830");
     text.setAttribute("stroke-width", "0.018");
     text.setAttribute("paint-order", "stroke fill");
     text.setAttribute("transform", `rotate(${mid + 90} ${tx} ${ty})`);
-    text.textContent = shortWheelLabel(p.name, prizes.length);
+
+    const lineStepEm = 1.08;
+    const startDyEm = -((lines.length - 1) * lineStepEm) / 2;
+    lines.forEach((ln, li) => {
+      const tspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+      tspan.setAttribute("x", String(tx));
+      tspan.setAttribute("dy", li === 0 ? `${startDyEm}em` : `${lineStepEm}em`);
+      tspan.textContent = ln;
+      text.appendChild(tspan);
+    });
     svg.appendChild(text);
 
     angle = a1;
@@ -340,9 +353,9 @@ function playRevealFanfareCombined(ctx: AudioContext, sfx: PrefetchedWheelSfx, d
       sfx.winPunchlineDrum,
   );
 
-  /* 結尾音：整段體感約 3～5 秒——歡呼層拉長，卡通取樣仍短以免糊；合成號角填中後段 */
-  const cheerSec = 4.2;
-  const crowdSec = 3.8;
+  /* 結尾音：歡呼／群眾層最多 10 秒；卡通取樣仍短以免糊；合成號角填開頭 */
+  const cheerSec = 10;
+  const crowdSec = 10;
 
   if (sfx.winCymbalCrash) {
     playBufferAt(ctx, sfx.winCymbalCrash, t0, 0.45, destination, 1, 0.32);
@@ -375,9 +388,9 @@ function playRevealFanfareCombined(ctx: AudioContext, sfx: PrefetchedWheelSfx, d
     playBufferAt(ctx, sfx.winPunchlineDrum, t0 + 0.18, 0.32, destination, 1, 0.36);
   }
 
-  /* 尾端再一記叮噹（落在約 2.8s，仍在 5s 內） */
+  /* 尾端再一記叮噹（落在約 8.4s，仍在 10s 歡呼窗內） */
   if (sfx.winMagicChime) {
-    playBufferAt(ctx, sfx.winMagicChime, t0 + 2.75, 0.22, destination, 1.12, 0.16);
+    playBufferAt(ctx, sfx.winMagicChime, t0 + 8.35, 0.22, destination, 1.12, 0.16);
   }
 
   playRevealFanfareSynth(ctx, destination, anyWinSample ? 0.38 : 0.85);
@@ -672,22 +685,22 @@ export function runWheelSpectacle(
       let stopDrone: (() => void) | null = null;
 
       const spins = 7 + Math.floor(Math.random() * 4);
-      /** 指標在輪盤正上方，對應極角 -90°（與 SVG 扇形起算一致） */
+      /** 指標在輪盤正上方，對應極角 -90°（與 SVG／Three 扇形起算一致） */
       const POINTER_DEG = -90;
       let finalDeg: number;
       if (data.prize.id && prizeList && prizeList.length > 0) {
         const midW = winnerSliceCenterDeg(prizeList, data.prize.id);
         if (midW != null) {
           /**
-           * CSS 對輪盤 `rotate(finalDeg)` 為順時針；輪上原在極角 midW 的點，在父層視為 midW - finalDeg（逆時針角）。
-           * 欲使該點落在指標處 (-90°)：midW - finalDeg ≡ POINTER_DEG → finalDeg ≡ midW - POINTER_DEG。
+           * `rotate(finalDeg)`／Three `rotation.z` 皆為順時針 finalDeg；扇心初值極角 midW 與父層同向累加，
+           * 停下時須 midW + finalDeg ≡ POINTER_DEG (mod 360) → **align ≡ POINTER_DEG - midW**。
            */
-          const align = (midW - POINTER_DEG + 360 * 10) % 360;
+          const align = (POINTER_DEG - midW + 360 * 10) % 360;
           const sliceW =
             (Math.max(0, prizeList.find((p) => p.id === data.prize.id)?.weight ?? 0) /
               (prizeList.reduce((s, p) => s + Math.max(0, p.weight), 0) || 1)) *
             360;
-          const wobble = (Math.random() - 0.5) * Math.min(28, sliceW * 0.35);
+          const wobble = (Math.random() - 0.5) * Math.min(22, sliceW * 0.28);
           finalDeg = spins * 360 + align + wobble;
         } else {
           finalDeg = spins * 360 + Math.random() * 360;

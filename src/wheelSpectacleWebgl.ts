@@ -3,6 +3,7 @@
  */
 
 import * as THREE from "three";
+import { chordWidthAtRadius, wheelSliceLabelRadius } from "./wheelLabelLayout";
 import { WHEEL_SLICE_FILLS, wheelSliceLabelInk } from "./wheelSlicePalette";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
@@ -19,13 +20,6 @@ export type MountWheelSpectacleThreeOpts = {
   /** 無獎項時與 `wheelSpectacle` 裝飾輪一致 */
   decorativeSlices: number;
 };
-
-function shortWheelLabel(name: string, nSlices: number): string {
-  const max = nSlices > 8 ? 5 : nSlices > 6 ? 6 : 8;
-  const s = name.trim();
-  if (s.length <= max) return s;
-  return `${s.slice(0, max - 1)}…`;
-}
 
 /** 與 SVG 輪盤一致：數學極角 a（度）→ Three XY（Y 軸向上、頂端為 -90°） */
 function wheelXY(r: number, aDeg: number): THREE.Vector2 {
@@ -66,11 +60,46 @@ function parseHexColor(hex: string): number {
   return parseInt(h.length === 3 ? h.split("").map((c) => c + c).join("") : h, 16);
 }
 
+function wrapCanvasLines(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
+  const t = text.trim();
+  if (!t) return [];
+  const words = t.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let cur = "";
+  const flush = () => {
+    if (cur) {
+      lines.push(cur);
+      cur = "";
+    }
+  };
+  for (const word of words) {
+    let rest = word;
+    while (rest.length) {
+      const test = cur ? `${cur} ${rest}` : rest;
+      if (ctx.measureText(test).width <= maxW) {
+        cur = test;
+        rest = "";
+      } else if (cur) {
+        flush();
+      } else {
+        let cut = 1;
+        while (cut < rest.length && ctx.measureText(rest.slice(0, cut + 1)).width <= maxW) cut++;
+        if (cut < 1) cut = 1;
+        lines.push(rest.slice(0, cut));
+        rest = rest.slice(cut);
+      }
+    }
+  }
+  flush();
+  return lines;
+}
+
 function makeLabelTexture(
   text: string,
   bgHex: string,
   w: number,
   h: number,
+  maxTextWidthPx: number,
 ): THREE.CanvasTexture {
   const c = document.createElement("canvas");
   c.width = w;
@@ -84,17 +113,34 @@ function makeLabelTexture(
   g.clearRect(0, 0, w, h);
   g.fillStyle = `${bgHex}00`;
   g.fillRect(0, 0, w, h);
-  g.font = `900 ${Math.floor(h * 0.34)}px "Noto Sans TC", system-ui, -apple-system, sans-serif`;
   g.textAlign = "center";
   g.textBaseline = "middle";
   g.lineJoin = "round";
   const ink = wheelSliceLabelInk(bgHex);
   const stroke = ink === "#fffdf8" ? "rgb(30 12 28 / 0.78)" : "rgb(255 255 255 / 0.9)";
-  g.lineWidth = Math.max(4, Math.floor(h * 0.072));
+
+  const maxW = Math.max(40, maxTextWidthPx);
+  let fontPx = Math.floor(h * 0.34);
+  let lines: string[] = [];
+  for (let pass = 0; pass < 8; pass++) {
+    g.font = `900 ${fontPx}px "Noto Sans TC", system-ui, -apple-system, sans-serif`;
+    lines = wrapCanvasLines(g, text, maxW);
+    if (lines.length <= 6 || fontPx <= 13) break;
+    fontPx = Math.max(13, Math.floor(fontPx * 0.9));
+  }
+
+  const lineGap = fontPx * 1.14;
+  const blockH = lines.length * lineGap;
+  const startY = h * 0.52 - blockH * 0.5 + lineGap * 0.5;
+  g.lineWidth = Math.max(3, Math.floor(fontPx * 0.16));
   g.strokeStyle = stroke;
-  g.strokeText(text, w * 0.5, h * 0.52);
   g.fillStyle = ink;
-  g.fillText(text, w * 0.5, h * 0.52);
+  lines.forEach((ln, i) => {
+    const y = startY + i * lineGap;
+    g.strokeText(ln, w * 0.5, y);
+    g.fillText(ln, w * 0.5, y);
+  });
+
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.needsUpdate = true;
@@ -161,7 +207,7 @@ export function mountWheelSpectacleThree(
     const scene = new THREE.Scene();
 
     const camera = new THREE.PerspectiveCamera(42, 1, 0.08, 20);
-    camera.position.set(0, 0.08, 3.45);
+    camera.position.set(0, 0.08, 2.94);
     camera.lookAt(0, 0, 0);
 
     scene.add(new THREE.AmbientLight(0x6a5c9a, opts.reduceMotion ? 0.42 : 0.28));
@@ -191,8 +237,8 @@ export function mountWheelSpectacleThree(
 
     /* rOut=1：彩色貼滿單位圓；略淺擠出減少圓周立面的「假金邊」 */
     const rOut = 1;
-    const rIn = 0.3;
-    const rLabel = (rOut + rIn) * 0.5;
+    const rIn = 0.26;
+    const rLabel = wheelSliceLabelRadius(rOut, rIn);
     const extrudeDepth = opts.reduceMotion ? 0.04 : 0.055;
     const arcSegs = opts.reduceMotion ? 10 : 18;
 
@@ -265,14 +311,12 @@ export function mountWheelSpectacleThree(
       if (s.name) {
         const mid = (s.a0 + s.a1) / 2;
         const p = wheelXY(rLabel, mid);
-        const labelTex = makeLabelTexture(
-          shortWheelLabel(s.name, slices.length),
-          s.colorHex,
-          512,
-          256,
-        );
-        const lw = 0.52;
-        const lh = 0.26;
+        const sweepDeg = s.a1 - s.a0;
+        const arcChord = chordWidthAtRadius(rLabel, sweepDeg);
+        const maxTextW = 640 * Math.min(0.92, Math.max(0.28, arcChord / 1.06));
+        const labelTex = makeLabelTexture(s.name.trim(), s.colorHex, 640, 288, maxTextW);
+        const lw = 0.58;
+        const lh = 0.34;
         const labelGeo = new THREE.PlaneGeometry(lw, lh);
         const labelMat = new THREE.MeshStandardMaterial({
           map: labelTex,
@@ -318,6 +362,9 @@ export function mountWheelSpectacleThree(
     );
     outerRim.position.z = extrudeDepth * 0.5 + 0.022;
     wheelGroup.add(outerRim);
+
+    /* 略放大＋拉近相機，減少圓形容器內「淺色外環」留白，扇形視覺更貼金邊 */
+    wheelGroup.scale.setScalar(1.035);
 
     let w = Math.max(1, host.clientWidth || 1);
     let h = Math.max(1, host.clientHeight || 1);

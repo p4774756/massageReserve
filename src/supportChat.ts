@@ -295,7 +295,7 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
       "supportUi.adminIntroA",
       "左側為會員對話列表，以分頁切換「進行中／已結束」，各分頁內依最近更新排序；點選後於右側回覆。Firestore：",
     ),
-    el("code", {}, [`${THREADS}/{會員UID}`]),
+    el("code", {}, [t("supportUi.adminFirestorePathCode", `${THREADS}/{會員UID}`)]),
     t("supportUi.adminIntroB", " 與子集合 "),
     el("code", {}, ["messages"]),
     t("supportUi.adminIntroC", "。"),
@@ -461,7 +461,7 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
         identityByCustomer.set(customerId, guest);
         return guest;
       }
-      const display = member.nickname || "會員";
+      const display = member.nickname || t("supportUi.memberLabel", "會員");
       const identity = { kind: "member" as const, label: display };
       identityByCustomer.set(customerId, identity);
       return identity;
@@ -493,11 +493,12 @@ export function mountAdminSupportChat(db: Firestore, auth: Auth, mount: HTMLElem
   function renderDetailHead(customerId: string, identity?: { kind: CustomerKind; label: string }) {
     const name = identity?.label || t("supportUi.resolving", "辨識中…");
     const role = identity ? (identity.kind === "member" ? t("supportUi.roleMember", "會員") : "") : "";
+    const roleWrapped = role ? t("supportUi.threadForRole", "（{{role}}）", { role }) : "";
     detailHead.replaceChildren(
       el("div", { class: "support-chat-admin-detail-title" }, [
         t("supportUi.threadFor", "對象 {{name}}{{role}}", {
           name,
-          role: role ? `（${role}）` : "",
+          role: roleWrapped,
         }),
       ]),
       el("code", { class: "mono support-chat-admin-uid" }, [`UID ${customerId}`]),

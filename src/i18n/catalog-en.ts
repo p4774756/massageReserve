@@ -591,6 +591,9 @@ export const EN: Record<string, string> = {
   "supportUi.statusClosed": "Closed",
   "supportUi.failList": "Could not load thread list",
   "supportUi.adminTitle": "Support chat",
+  "supportUi.adminPanelHead": "One-to-one support (private)",
+  "supportUi.adminFirestorePathCode": "supportThreads/{customerUid}",
+  "supportUi.threadForRole": " ({{role}})",
   "supportUi.adminScopeNote":
     "Private one-to-one chat — visible only in admin and to that member or guest.",
   "supportUi.adminIntroA":

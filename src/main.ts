@@ -1679,7 +1679,7 @@ function render() {
           const fn = spinWheelCall();
           const res = await fn({ ...localeApiParam() });
           return res.data as {
-            prize: { name: string; type: string; value: number };
+            prize: { id?: string; name: string; type: string; value: number };
             drawChances: number;
             walletBalance: number;
             wheelPoints: number;
