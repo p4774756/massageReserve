@@ -166,7 +166,7 @@ export function mountWheelSpectacleThree(
 
     scene.add(new THREE.AmbientLight(0x6a5c9a, opts.reduceMotion ? 0.42 : 0.28));
 
-    const keyLight = new THREE.DirectionalLight(0xfff5e6, opts.reduceMotion ? 1.05 : 1.35);
+    const keyLight = new THREE.DirectionalLight(0xfffaf7, opts.reduceMotion ? 0.98 : 1.08);
     keyLight.position.set(1.1, 2.2, 2.4);
     keyLight.castShadow = !opts.reduceMotion;
     keyLight.shadow.mapSize.set(1024, 1024);
@@ -176,7 +176,7 @@ export function mountWheelSpectacleThree(
     fillLight.position.set(-1.85, -0.6, 1.2);
     scene.add(fillLight);
 
-    const rimLight = new THREE.SpotLight(0xffd080, opts.reduceMotion ? 0.55 : 1.15, 9, 0.65, 0.35, 1);
+    const rimLight = new THREE.SpotLight(0xffeedd, opts.reduceMotion ? 0.42 : 0.68, 9, 0.65, 0.35, 1);
     rimLight.position.set(0.15, 2.85, 2.1);
     rimLight.target.position.set(0, 0, 0);
     scene.add(rimLight);
@@ -189,11 +189,11 @@ export function mountWheelSpectacleThree(
     const wheelGroup = new THREE.Group();
     scene.add(wheelGroup);
 
-    /* 彩色盡量貼滿；金邊僅頂面細環（避免 Extrude bevel 在圓周形成整圈厚金帶） */
-    const rOut = 0.996;
+    /* rOut=1：彩色貼滿單位圓；略淺擠出減少圓周立面的「假金邊」 */
+    const rOut = 1;
     const rIn = 0.3;
     const rLabel = (rOut + rIn) * 0.5;
-    const extrudeDepth = opts.reduceMotion ? 0.045 : 0.072;
+    const extrudeDepth = opts.reduceMotion ? 0.04 : 0.055;
     const arcSegs = opts.reduceMotion ? 10 : 18;
 
     type SliceDef = { id: string; name: string; a0: number; a1: number; colorHex: string };
@@ -252,7 +252,7 @@ export function mountWheelSpectacleThree(
         roughness: opts.reduceMotion ? 0.62 : 0.34,
         metalness: opts.reduceMotion ? 0.04 : 0.08,
         emissive: emCol,
-        emissiveIntensity: opts.reduceMotion ? 0.08 : 0.28,
+        emissiveIntensity: opts.reduceMotion ? 0.08 : 0.2,
         side: THREE.DoubleSide,
       });
       const mesh = new THREE.Mesh(geo, mat);
@@ -303,20 +303,20 @@ export function mountWheelSpectacleThree(
     hubPlate.position.z = extrudeDepth * 0.5 + 0.018;
     wheelGroup.add(hubPlate);
 
-    const rimInner = rOut - 0.0022;
-    const rimOuter = rOut + 0.0028;
+    const rimInner = rOut - 0.0014;
+    const rimOuter = rOut + 0.001;
     const outerRim = new THREE.Mesh(
       new THREE.RingGeometry(rimInner, rimOuter, 128),
       new THREE.MeshStandardMaterial({
-        color: 0xffd24a,
-        emissive: 0xffb020,
-        emissiveIntensity: opts.reduceMotion ? 0.14 : 0.32,
-        roughness: 0.42,
-        metalness: 0.22,
+        color: 0xf0c040,
+        emissive: 0xc87810,
+        emissiveIntensity: opts.reduceMotion ? 0.06 : 0.12,
+        roughness: 0.55,
+        metalness: 0.12,
         side: THREE.DoubleSide,
       }),
     );
-    outerRim.position.z = extrudeDepth * 0.5 + 0.024;
+    outerRim.position.z = extrudeDepth * 0.5 + 0.022;
     wheelGroup.add(outerRim);
 
     let w = Math.max(1, host.clientWidth || 1);
@@ -326,9 +326,9 @@ export function mountWheelSpectacleThree(
     const renderPass = new RenderPass(scene, camera);
     const bloomPass = new UnrealBloomPass(
       new THREE.Vector2(w, h),
-      opts.reduceMotion ? 0.12 : 0.34,
-      opts.reduceMotion ? 0.55 : 0.48,
-      opts.reduceMotion ? 0.92 : 0.84,
+      opts.reduceMotion ? 0.1 : 0.2,
+      opts.reduceMotion ? 0.5 : 0.42,
+      opts.reduceMotion ? 0.94 : 0.92,
     );
     for (let i = 0; i < bloomPass.bloomTintColors.length; i++) {
       bloomPass.bloomTintColors[i]!.set(1, 0.94 + i * 0.02, 0.99);
@@ -361,15 +361,15 @@ export function mountWheelSpectacleThree(
     const tick = () => {
       const t = performance.now() * 0.001;
       if (rimGlowOn) {
-        rimLight.intensity = (opts.reduceMotion ? 0.55 : 1.15) + Math.sin(t * 9) * (opts.reduceMotion ? 0.08 : 0.28);
+        rimLight.intensity = (opts.reduceMotion ? 0.42 : 0.72) + Math.sin(t * 9) * (opts.reduceMotion ? 0.06 : 0.18);
         (outerRim.material as THREE.MeshStandardMaterial).emissiveIntensity =
-          (opts.reduceMotion ? 0.22 : 0.48) + Math.sin(t * 8) * (opts.reduceMotion ? 0.06 : 0.42);
+          (opts.reduceMotion ? 0.06 : 0.12) + Math.sin(t * 8) * (opts.reduceMotion ? 0.04 : 0.14);
       } else {
-        rimLight.intensity = opts.reduceMotion ? 0.55 : 1.15;
-        (outerRim.material as THREE.MeshStandardMaterial).emissiveIntensity = opts.reduceMotion ? 0.22 : 0.48;
+        rimLight.intensity = opts.reduceMotion ? 0.42 : 0.72;
+        (outerRim.material as THREE.MeshStandardMaterial).emissiveIntensity = opts.reduceMotion ? 0.06 : 0.12;
       }
       winBloom *= 0.9;
-      bloomPass.strength = (opts.reduceMotion ? 0.12 : 0.34) + winBloom;
+      bloomPass.strength = (opts.reduceMotion ? 0.1 : 0.2) + winBloom;
       wheelGroup.rotation.z = currentRotZ;
       composer.render();
     };
@@ -450,7 +450,7 @@ export function mountWheelSpectacleThree(
         rimGlowOn = on;
       },
       winBloomPulse() {
-        winBloom = opts.reduceMotion ? 0.22 : 0.55;
+        winBloom = opts.reduceMotion ? 0.14 : 0.28;
       },
       dispose,
     };

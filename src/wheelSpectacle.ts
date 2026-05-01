@@ -147,7 +147,7 @@ function mountPrizeWheelSvg(wheelEl: HTMLElement, prizes: WheelPrizeLabel[]) {
   svg.setAttribute("aria-label", "輪盤獎項");
 
   const totalW = prizes.reduce((s, p) => s + Math.max(0, p.weight), 0) || 1;
-  const rOut = 0.996;
+  const rOut = 1;
   const rIn = 0.3;
   const fontSize = prizes.length > 8 ? "0.074" : prizes.length > 5 ? "0.086" : "0.1";
 
