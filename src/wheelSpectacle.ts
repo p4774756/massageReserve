@@ -161,8 +161,9 @@ function mountPrizeWheelSvg(wheelEl: HTMLElement, prizes: WheelPrizeLabel[]) {
     path.setAttribute("d", donutWedgePath(rOut, rIn, a0, a1));
     const fill = WHEEL_SLICE_FILLS[i % WHEEL_SLICE_FILLS.length]!;
     path.setAttribute("fill", fill);
-    path.setAttribute("stroke", "rgb(255 252 248 / 0.55)");
-    path.setAttribute("stroke-width", "0.01");
+    path.setAttribute("stroke", "rgb(45 24 52 / 0.92)");
+    path.setAttribute("stroke-width", "0.028");
+    path.setAttribute("stroke-linejoin", "round");
     path.setAttribute("data-prize-id", p.id);
     svg.appendChild(path);
 
@@ -177,7 +178,10 @@ function mountPrizeWheelSvg(wheelEl: HTMLElement, prizes: WheelPrizeLabel[]) {
     text.setAttribute("dominant-baseline", "middle");
     text.setAttribute("fill", wheelSliceLabelInk(fill));
     text.setAttribute("font-size", fontSize);
-    text.setAttribute("font-weight", "700");
+    text.setAttribute("font-weight", "900");
+    text.setAttribute("stroke", "#2a1830");
+    text.setAttribute("stroke-width", "0.018");
+    text.setAttribute("paint-order", "stroke fill");
     text.setAttribute("transform", `rotate(${mid + 90} ${tx} ${ty})`);
     text.textContent = shortWheelLabel(p.name, prizes.length);
     svg.appendChild(text);

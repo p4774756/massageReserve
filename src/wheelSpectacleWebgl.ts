@@ -84,13 +84,13 @@ function makeLabelTexture(
   g.clearRect(0, 0, w, h);
   g.fillStyle = `${bgHex}00`;
   g.fillRect(0, 0, w, h);
-  g.font = `800 ${Math.floor(h * 0.34)}px system-ui, -apple-system, sans-serif`;
+  g.font = `900 ${Math.floor(h * 0.34)}px "Noto Sans TC", system-ui, -apple-system, sans-serif`;
   g.textAlign = "center";
   g.textBaseline = "middle";
   g.lineJoin = "round";
   const ink = wheelSliceLabelInk(bgHex);
-  const stroke = ink === "#fffdf8" ? "rgb(0 0 0 / 0.38)" : "rgb(255 255 255 / 0.52)";
-  g.lineWidth = Math.max(2, Math.floor(h * 0.046));
+  const stroke = ink === "#fffdf8" ? "rgb(30 12 28 / 0.78)" : "rgb(255 255 255 / 0.9)";
+  g.lineWidth = Math.max(4, Math.floor(h * 0.072));
   g.strokeStyle = stroke;
   g.strokeText(text, w * 0.5, h * 0.52);
   g.fillStyle = ink;
@@ -247,12 +247,13 @@ export function mountWheelSpectacleThree(
       geo.translate(0, 0, -extrudeDepth * 0.5);
 
       const col = parseHexColor(s.colorHex);
+      const emCol = new THREE.Color(col).multiplyScalar(0.22);
       const mat = new THREE.MeshStandardMaterial({
         color: col,
-        roughness: opts.reduceMotion ? 0.72 : 0.48,
-        metalness: opts.reduceMotion ? 0.06 : 0.18,
-        emissive: 0x000000,
-        emissiveIntensity: 0,
+        roughness: opts.reduceMotion ? 0.62 : 0.34,
+        metalness: opts.reduceMotion ? 0.04 : 0.08,
+        emissive: emCol,
+        emissiveIntensity: opts.reduceMotion ? 0.08 : 0.28,
         side: THREE.DoubleSide,
       });
       const mesh = new THREE.Mesh(geo, mat);
@@ -293,11 +294,11 @@ export function mountWheelSpectacleThree(
     const hubPlate = new THREE.Mesh(
       new THREE.CircleGeometry(rIn * 0.98, 48),
       new THREE.MeshStandardMaterial({
-        color: 0x1a1028,
-        roughness: 0.85,
-        metalness: 0.12,
-        emissive: 0x2a1a44,
-        emissiveIntensity: 0.25,
+        color: 0xfff5fc,
+        roughness: 0.5,
+        metalness: 0.06,
+        emissive: 0xffc8e8,
+        emissiveIntensity: opts.reduceMotion ? 0.12 : 0.32,
       }),
     );
     hubPlate.position.z = extrudeDepth * 0.5 + 0.018;
@@ -306,11 +307,11 @@ export function mountWheelSpectacleThree(
     const outerRim = new THREE.Mesh(
       new THREE.TorusGeometry(rOut + 0.028, 0.038, 14, 64),
       new THREE.MeshStandardMaterial({
-        color: 0xffe8a8,
-        emissive: 0xffcc66,
-        emissiveIntensity: opts.reduceMotion ? 0.12 : 0.22,
-        roughness: 0.35,
-        metalness: 0.55,
+        color: 0xffd84a,
+        emissive: 0xff9a00,
+        emissiveIntensity: opts.reduceMotion ? 0.22 : 0.48,
+        roughness: 0.28,
+        metalness: 0.35,
       }),
     );
     outerRim.position.z = extrudeDepth * 0.5 + 0.01;
@@ -323,9 +324,9 @@ export function mountWheelSpectacleThree(
     const renderPass = new RenderPass(scene, camera);
     const bloomPass = new UnrealBloomPass(
       new THREE.Vector2(w, h),
-      opts.reduceMotion ? 0.12 : 0.28,
-      opts.reduceMotion ? 0.55 : 0.42,
-      opts.reduceMotion ? 0.92 : 0.86,
+      opts.reduceMotion ? 0.12 : 0.34,
+      opts.reduceMotion ? 0.55 : 0.48,
+      opts.reduceMotion ? 0.92 : 0.84,
     );
     for (let i = 0; i < bloomPass.bloomTintColors.length; i++) {
       bloomPass.bloomTintColors[i]!.set(1, 0.94 + i * 0.02, 0.99);
@@ -360,13 +361,13 @@ export function mountWheelSpectacleThree(
       if (rimGlowOn) {
         rimLight.intensity = (opts.reduceMotion ? 0.55 : 1.15) + Math.sin(t * 9) * (opts.reduceMotion ? 0.08 : 0.28);
         (outerRim.material as THREE.MeshStandardMaterial).emissiveIntensity =
-          (opts.reduceMotion ? 0.12 : 0.22) + Math.sin(t * 8) * (opts.reduceMotion ? 0.06 : 0.35);
+          (opts.reduceMotion ? 0.22 : 0.48) + Math.sin(t * 8) * (opts.reduceMotion ? 0.06 : 0.42);
       } else {
         rimLight.intensity = opts.reduceMotion ? 0.55 : 1.15;
-        (outerRim.material as THREE.MeshStandardMaterial).emissiveIntensity = opts.reduceMotion ? 0.12 : 0.22;
+        (outerRim.material as THREE.MeshStandardMaterial).emissiveIntensity = opts.reduceMotion ? 0.22 : 0.48;
       }
       winBloom *= 0.9;
-      bloomPass.strength = (opts.reduceMotion ? 0.12 : 0.28) + winBloom;
+      bloomPass.strength = (opts.reduceMotion ? 0.12 : 0.34) + winBloom;
       wheelGroup.rotation.z = currentRotZ;
       composer.render();
     };
