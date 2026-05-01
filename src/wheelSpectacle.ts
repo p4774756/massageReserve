@@ -6,6 +6,10 @@ import {
   scheduleSpinTicksAtSliceCrossings,
   type PrefetchedWheelSfx,
 } from "./wheelSpectacleSfx";
+import {
+  mountWheelSpectacleSolarIntro,
+  type WheelSpectacleSolarIntroHandle,
+} from "./wheelSpectacleSolarIntro";
 import { mountWheelSpectacleThree, type WheelSpectacleThreeHandle } from "./wheelSpectacleWebgl";
 import { WHEEL_SLICE_FILLS, wheelSliceLabelInk } from "./wheelSlicePalette";
 
@@ -35,6 +39,9 @@ function sleep(ms: number): Promise<void> {
 const CURTAIN_MOVE_MS = 1900;
 const CURTAIN_OPEN_WAIT_MS = CURTAIN_MOVE_MS + 180;
 const CURTAIN_CLOSE_WAIT_MS = CURTAIN_MOVE_MS + 320;
+
+/** 輪盤前：與預約分頁同源太陽系拉近動畫長度（ms） */
+const SOLAR_INTRO_MS = 3080;
 
 /** 與 CSS transition 秒數、`scheduleSpinTicksAtSliceCrossings` 一致 */
 const SPIN_TRANSITION_MS = 7200;
@@ -505,11 +512,14 @@ export function runWheelSpectacle(
     }
 
     let threeHandle: WheelSpectacleThreeHandle | null = null;
+    let solarIntroHandle: WheelSpectacleSolarIntroHandle | null = null;
 
     let settled = false;
     const tearDown = () => {
       if (settled) return;
       settled = true;
+      solarIntroHandle?.disposeWithoutFade();
+      solarIntroHandle = null;
       threeHandle?.dispose();
       threeHandle = null;
       if (audioCtx && audioCtx.state !== "closed") {
@@ -541,6 +551,16 @@ export function runWheelSpectacle(
       const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       const openWaitMs = reduceMotion ? 420 : CURTAIN_OPEN_WAIT_MS;
       const closeWaitMs = reduceMotion ? 360 : CURTAIN_CLOSE_WAIT_MS;
+
+      if (!reduceMotion) {
+        const solarHost = document.createElement("div");
+        solarHost.className = "wheel-spectacle-solar-intro";
+        overlay.append(solarHost);
+        solarIntroHandle = mountWheelSpectacleSolarIntro(solarHost);
+        if (!solarIntroHandle) {
+          solarHost.remove();
+        }
+      }
 
       /** 幕板慢慢闔上後再卸除（領取／關閉） */
       const closeCurtainsThen = (after: () => void) => {
@@ -599,7 +619,21 @@ export function runWheelSpectacle(
         }
       });
 
-      const [, prizeList, sfx] = await Promise.all([sleep(openWaitMs), labelsPromise, sfxPromise]);
+      const solarPromise =
+        solarIntroHandle != null ? solarIntroHandle.run(SOLAR_INTRO_MS) : Promise.resolve();
+
+      const [, prizeList, sfx] = await Promise.all([
+        sleep(openWaitMs),
+        labelsPromise,
+        sfxPromise,
+        solarPromise,
+      ]);
+
+      if (solarIntroHandle) {
+        await solarIntroHandle.fadeAndDispose(480);
+        solarIntroHandle = null;
+      }
+
       threeHandle =
         mountWheelSpectacleThree(wheel, {
           prizes: prizeList && prizeList.length > 0 ? prizeList : null,
