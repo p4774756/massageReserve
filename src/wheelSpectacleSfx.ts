@@ -96,6 +96,9 @@ export async function prefetchWheelSfx(ctx: AudioContext): Promise<PrefetchedWhe
   };
 }
 
+/**
+ * @param durationSec 若指定，只播放前段（秒），用於截斷較長的歡呼／號角等結尾音。
+ */
 export function playBufferAt(
   ctx: AudioContext,
   buffer: AudioBuffer,
@@ -103,6 +106,7 @@ export function playBufferAt(
   gain: number,
   destination: AudioNode,
   playbackRate = 1,
+  durationSec?: number,
 ): void {
   const src = ctx.createBufferSource();
   const g = ctx.createGain();
@@ -111,7 +115,13 @@ export function playBufferAt(
   g.gain.value = gain;
   src.connect(g);
   g.connect(destination);
-  src.start(when);
+  const rate = Math.abs(playbackRate) || 1;
+  const maxDur = buffer.duration / rate;
+  if (durationSec != null && durationSec > 0 && durationSec < maxDur) {
+    src.start(when, 0, durationSec);
+  } else {
+    src.start(when);
+  }
 }
 
 export type WheelSpinEasing = { p1x: number; p1y: number; p2x: number; p2y: number };

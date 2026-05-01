@@ -243,10 +243,11 @@ function playCrackBang(ctx: AudioContext) {
   o2.stop(t + 0.25);
 }
 
+/** 短版揭曉合成音（約 0.55s 內結束，與取樣疊加時不拖長） */
 function playRevealFanfareSynth(ctx: AudioContext, destination: AudioNode, gainScale: number) {
-  const base = ctx.currentTime + 0.04;
+  const base = ctx.currentTime + 0.02;
   const bus = ctx.createGain();
-  bus.gain.value = 0.92 * gainScale;
+  bus.gain.value = 0.88 * gainScale;
   bus.connect(destination);
 
   const tone = (
@@ -273,72 +274,39 @@ function playRevealFanfareSynth(ctx: AudioContext, destination: AudioNode, gainS
     src.connect(g);
     g.connect(bus);
     g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(peak, t + 0.018);
+    g.gain.linearRampToValueAtTime(peak, t + 0.014);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.start(t);
-    o.stop(t + dur + 0.06);
+    o.stop(t + dur + 0.04);
   };
 
   const sparkle = (t: number, freq: number, peak: number) => {
-    tone(t, freq, 0.11, peak, "sine", 4200);
+    tone(t, freq, 0.07, peak, "sine", 4200);
   };
 
-  // 低音「咚」+ 底鼓感
-  tone(base, 55, 0.38, 0.13, "sine");
-  tone(base, 65.41, 0.34, 0.12, "sine");
-  tone(base + 0.02, 98, 0.24, 0.07, "triangle", 240);
-  tone(base + 0.03, 130, 0.18, 0.045, "square", 420);
+  tone(base, 55, 0.22, 0.11, "sine");
+  tone(base + 0.015, 98, 0.16, 0.06, "triangle", 240);
 
-  // 快速上行琶音（遊戲秀感）
-  const arp = [523.25, 659.25, 783.99, 987.77, 1174.66, 1318.51];
+  const arp = [523.25, 659.25, 783.99, 987.77];
   arp.forEach((f, i) => {
-    tone(base + 0.055 + i * 0.04, f, 0.22, 0.078, "triangle", 2800);
+    tone(base + 0.04 + i * 0.028, f, 0.12, 0.065, "triangle", 2800);
   });
 
-  // 高八度再跑一遍（更亮）
-  arp.forEach((f, i) => {
-    tone(base + 0.05 + i * 0.032, f * 2, 0.14, 0.038, "sine", 6200);
-  });
-
-  // 主和弦齊奏（加八度堆疊）
-  const chordT = base + 0.32;
+  const chordT = base + 0.18;
   const chord = [
-    [261.63, 0.058],
-    [329.63, 0.064],
-    [392, 0.07],
-    [523.25, 0.076],
-    [659.25, 0.064],
-    [783.99, 0.056],
-    [1046.5, 0.05],
+    [261.63, 0.05],
+    [329.63, 0.055],
+    [392, 0.058],
+    [523.25, 0.062],
+    [659.25, 0.052],
   ] as const;
   for (const [f, v] of chord) {
-    tone(chordT, f, 0.68, v, "triangle", 5200);
-    tone(chordT + 0.004, f * 1.008, 0.62, v * 0.38, "sine", 6200);
-    tone(chordT + 0.008, f * 0.5, 0.55, v * 0.28, "square", 900);
+    tone(chordT, f, 0.26, v, "triangle", 5200);
+    tone(chordT + 0.003, f * 1.006, 0.22, v * 0.32, "sine", 6200);
   }
 
-  // 高音「叮叮叮」
-  sparkle(chordT + 0.07, 2093, 0.085);
-  sparkle(chordT + 0.1, 2637, 0.08);
-  sparkle(chordT + 0.14, 3136, 0.075);
-  sparkle(chordT + 0.19, 3520, 0.07);
-  sparkle(chordT + 0.24, 4186, 0.055);
-
-  // 延遲回聲和弦（較小聲）
-  const echoT = base + 0.5;
-  for (const [f, v] of chord) {
-    tone(echoT, f * 0.5, 0.5, v * 0.36, "sine", 900);
-    tone(echoT, f, 0.44, v * 0.26, "triangle", 3400);
-  }
-  sparkle(echoT + 0.11, 2093, 0.05);
-  sparkle(echoT + 0.18, 2793, 0.045);
-
-  // 尾韻再一輪弱琶音
-  const tail = echoT + 0.28;
-  const tailArp = [659.25, 783.99, 987.77, 1174.66];
-  tailArp.forEach((f, i) => {
-    tone(tail + i * 0.05, f, 0.35, 0.042, "triangle", 4000);
-  });
+  sparkle(chordT + 0.06, 2093, 0.07);
+  sparkle(chordT + 0.1, 3136, 0.055);
 }
 
 function playRevealFanfareCombined(ctx: AudioContext, sfx: PrefetchedWheelSfx, destination: AudioNode) {
@@ -356,45 +324,39 @@ function playRevealFanfareCombined(ctx: AudioContext, sfx: PrefetchedWheelSfx, d
       sfx.winPunchlineDrum,
   );
 
+  /* 結尾音：數秒內收束——取樣只播前段、不重疊長尾，避免歡呼檔拖很久 */
   if (sfx.winCymbalCrash) {
-    playBufferAt(ctx, sfx.winCymbalCrash, t0, 0.55, destination);
-    playBufferAt(ctx, sfx.winCymbalCrash, t0 + 1.02, 0.26, destination, 0.9);
+    playBufferAt(ctx, sfx.winCymbalCrash, t0, 0.42, destination, 1, 0.2);
   }
   if (sfx.winMagicChime) {
-    playBufferAt(ctx, sfx.winMagicChime, t0 + 0.04, 0.44, destination, 1.02);
-    playBufferAt(ctx, sfx.winMagicChime, t0 + 0.55, 0.24, destination, 1.14);
+    playBufferAt(ctx, sfx.winMagicChime, t0 + 0.02, 0.36, destination, 1.04, 0.14);
   }
   if (sfx.winTeamCheer) {
-    playBufferAt(ctx, sfx.winTeamCheer, t0 + 0.05, 0.46, destination);
-  }
-  if (sfx.winCrowdCelebration) {
-    playBufferAt(ctx, sfx.winCrowdCelebration, t0 + 0.2, 0.38, destination, 1.02);
+    playBufferAt(ctx, sfx.winTeamCheer, t0 + 0.03, 0.3, destination, 1, 0.42);
+  } else if (sfx.winCrowdCelebration) {
+    playBufferAt(ctx, sfx.winCrowdCelebration, t0 + 0.04, 0.26, destination, 1.02, 0.38);
   }
 
   if (sfx.winHorn) {
-    playBufferAt(ctx, sfx.winHorn, t0 + 0.08, 0.55, destination);
-    playBufferAt(ctx, sfx.winHorn, t0 + 0.86, 0.22, destination, 1.16);
+    playBufferAt(ctx, sfx.winHorn, t0 + 0.05, 0.38, destination, 1.06, 0.18);
   }
   if (sfx.winSlide) {
-    playBufferAt(ctx, sfx.winSlide, t0 + 0.1, 0.48, destination, 1.06);
+    playBufferAt(ctx, sfx.winSlide, t0 + 0.08, 0.32, destination, 1.08, 0.2);
   }
   if (sfx.winBoing) {
-    playBufferAt(ctx, sfx.winBoing, t0 + 0.14, 0.5, destination);
-    playBufferAt(ctx, sfx.winBoing, t0 + 0.48, 0.38, destination, 0.76);
+    playBufferAt(ctx, sfx.winBoing, t0 + 0.1, 0.38, destination, 1, 0.2);
   }
   if (sfx.winCowbell) {
-    playBufferAt(ctx, sfx.winCowbell, t0 + 0.22, 0.4, destination);
-    playBufferAt(ctx, sfx.winCowbell, t0 + 0.38, 0.34, destination, 1.14);
+    playBufferAt(ctx, sfx.winCowbell, t0 + 0.12, 0.3, destination, 1.06, 0.14);
   }
   if (sfx.winFlicks) {
-    playBufferAt(ctx, sfx.winFlicks, t0 + 0.28, 0.38, destination, 1.04);
+    playBufferAt(ctx, sfx.winFlicks, t0 + 0.14, 0.3, destination, 1.04, 0.16);
   }
   if (sfx.winPunchlineDrum) {
-    playBufferAt(ctx, sfx.winPunchlineDrum, t0 + 0.58, 0.46, destination);
-    playBufferAt(ctx, sfx.winPunchlineDrum, t0 + 1.32, 0.2, destination, 0.88);
+    playBufferAt(ctx, sfx.winPunchlineDrum, t0 + 0.16, 0.34, destination, 1, 0.22);
   }
 
-  playRevealFanfareSynth(ctx, destination, anyWinSample ? 0.45 : 1);
+  playRevealFanfareSynth(ctx, destination, anyWinSample ? 0.32 : 0.82);
 }
 
 function startSpinDrone(ctx: AudioContext, destination: AudioNode, gain = 0.014): () => void {
