@@ -189,8 +189,8 @@ export function mountWheelSpectacleThree(
     const wheelGroup = new THREE.Group();
     scene.add(wheelGroup);
 
-    /* 外圈略放大、內洞縮小 → 彩色扇環更寬；金 torus 管徑見 outerRim */
-    const rOut = 0.97;
+    /* 彩色盡量貼滿；金邊僅頂面細環（避免 Extrude bevel 在圓周形成整圈厚金帶） */
+    const rOut = 0.996;
     const rIn = 0.3;
     const rLabel = (rOut + rIn) * 0.5;
     const extrudeDepth = opts.reduceMotion ? 0.045 : 0.072;
@@ -239,10 +239,8 @@ export function mountWheelSpectacleThree(
       const shape = wedgeShape(s.a0, s.a1, rOut, rIn, arcSegs);
       const geo = new THREE.ExtrudeGeometry(shape, {
         depth: extrudeDepth,
-        bevelEnabled: !opts.reduceMotion,
-        bevelThickness: 0.014,
-        bevelSize: 0.012,
-        bevelSegments: 2,
+        /* bevel 會在 rOut 圓周擠出一整圈亮面，視覺上像超寬「金邊」（使用者標記處） */
+        bevelEnabled: false,
         curveSegments: arcSegs,
       });
       geo.translate(0, 0, -extrudeDepth * 0.5);
@@ -305,17 +303,20 @@ export function mountWheelSpectacleThree(
     hubPlate.position.z = extrudeDepth * 0.5 + 0.018;
     wheelGroup.add(hubPlate);
 
+    const rimInner = rOut - 0.0022;
+    const rimOuter = rOut + 0.0028;
     const outerRim = new THREE.Mesh(
-      new THREE.TorusGeometry(rOut + 0.008, 0.012, 12, 64),
+      new THREE.RingGeometry(rimInner, rimOuter, 128),
       new THREE.MeshStandardMaterial({
-        color: 0xffd84a,
-        emissive: 0xff9a00,
-        emissiveIntensity: opts.reduceMotion ? 0.22 : 0.48,
-        roughness: 0.28,
-        metalness: 0.35,
+        color: 0xffd24a,
+        emissive: 0xffb020,
+        emissiveIntensity: opts.reduceMotion ? 0.14 : 0.32,
+        roughness: 0.42,
+        metalness: 0.22,
+        side: THREE.DoubleSide,
       }),
     );
-    outerRim.position.z = extrudeDepth * 0.5 + 0.01;
+    outerRim.position.z = extrudeDepth * 0.5 + 0.024;
     wheelGroup.add(outerRim);
 
     let w = Math.max(1, host.clientWidth || 1);
