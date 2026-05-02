@@ -58,6 +58,7 @@ import {
 } from "./ledMarquee";
 import { getLocale, initI18n, intlLocaleTag, localeApiParam, setLocale, t } from "./i18n";
 import { mountBookTabThreeSpectacle } from "./bookTabThreeSpectacle";
+import { mountBookTabLittleMary } from "./bookTabLittleMary";
 
 type Booking = {
   id: string;
@@ -1431,7 +1432,7 @@ function render() {
           );
   }
 
-  /** 與下方 `setBookSubTab` 一併指派：會員區隱藏時關閉「我的預約／抽輪盤」並切回預約表單（「three.js」分頁不受影響） */
+  /** 與下方 `setBookSubTab` 一併指派：會員區隱藏時關閉「我的預約／抽輪盤」並切回預約表單（「太陽系／小瑪莉」分頁不受影響） */
   let syncBookMyBookingsTabVisibility: () => void = () => {};
 
   function resetWheelStatsSummary() {
@@ -2155,14 +2156,14 @@ function render() {
     }
   });
 
-  let bookSubTab: "book" | "wheel" | "mybookings" | "three" = "book";
+  let bookSubTab: "book" | "wheel" | "mybookings" | "three" | "littleMary" = "book";
 
   const bookTabList = el("div", { class: "book-tabs", role: "tablist" });
   bookTabList.setAttribute(
     "aria-label",
     t(
       "book.tabsAria",
-      "預約按摩、我的預約、抽輪盤、three.js 展示；「我的預約／抽輪盤」於登入會員後顯示。",
+      "預約按摩、我的預約、抽輪盤、太陽系、小瑪莉試玩；「我的預約／抽輪盤」於登入會員後顯示。",
     ),
   );
   const tabBook = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-book" }, [
@@ -2175,23 +2176,29 @@ function render() {
     t("book.tab.myBookings", "我的預約"),
   ]);
   const tabThree = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-three" }, [
-    t("book.tab.threeSpectacle", "three.js"),
+    t("book.tab.threeSpectacle", "太陽系"),
+  ]);
+  const tabLittleMary = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-little-mary" }, [
+    t("book.tab.littleMary", "小瑪莉"),
   ]);
   tabBook.setAttribute("aria-controls", "book-tab-panel-book");
   tabWheel.setAttribute("aria-controls", "book-tab-panel-wheel");
   tabMyBookings.setAttribute("aria-controls", "book-tab-panel-my-bookings");
   tabThree.setAttribute("aria-controls", "book-tab-panel-three");
+  tabLittleMary.setAttribute("aria-controls", "book-tab-panel-little-mary");
   tabBook.setAttribute("aria-selected", "true");
   tabWheel.setAttribute("aria-selected", "false");
   tabMyBookings.setAttribute("aria-selected", "false");
   tabThree.setAttribute("aria-selected", "false");
+  tabLittleMary.setAttribute("aria-selected", "false");
   tabBook.tabIndex = 0;
   tabWheel.tabIndex = -1;
   tabMyBookings.tabIndex = -1;
   tabThree.tabIndex = -1;
+  tabLittleMary.tabIndex = -1;
   tabMyBookings.hidden = memberExtrasWrap.hidden;
   tabWheel.hidden = memberExtrasWrap.hidden;
-  bookTabList.append(tabBook, tabMyBookings, tabWheel, tabThree);
+  bookTabList.append(tabBook, tabMyBookings, tabWheel, tabThree, tabLittleMary);
 
   const bookPanelBook = el("div", {
     class: "book-tab-panel",
@@ -2257,25 +2264,69 @@ function render() {
   );
   mountBookTabThreeSpectacle(threeMount);
 
-  function setBookSubTab(which: "book" | "wheel" | "mybookings" | "three") {
+  const bookPanelLittleMary = el("div", {
+    class: "book-tab-panel book-tab-panel--little-mary",
+    id: "book-tab-panel-little-mary",
+    role: "tabpanel",
+    hidden: true,
+  });
+  bookPanelLittleMary.setAttribute("aria-labelledby", "book-tab-little-mary");
+  const littleMaryMount = el("div", { class: "book-tab-lm-mount" });
+  littleMaryMount.setAttribute("aria-hidden", "true");
+  const littleMaryRules = el("div", { class: "book-tab-lm-rules", role: "region" }, [
+    el("p", { class: "book-tab-lm-rules__hl" }, ["規則 · Rules"]),
+    el("p", { class: "book-tab-lm-rules__zh", lang: "zh-Hant" }, [
+      t(
+        "book.littleMary.rulesZh",
+        "試玩分數開局；點圖示押注每次從「分數」扣 1 至該線。九種倍率：蘋果 5×、西瓜 20×、星星 30×、77 40×、BAR 50×、鈴鐺 20×、芒果 15×、橘子 10×、櫻桃 2×。須先押注才能按「開始」。跑燈隨機停格；若停在與你押注相同的圖示，得分 += 該線押注 × 倍率。「再來」直接 +8 分至分數（不經倍率）。每局結束押注歸零；已押未中不退，開局前可用「清空押注」退回。「得分轉分數」把得分併回試玩分數。純前端，無真實金流。",
+      ),
+    ]),
+    el("p", { class: "book-tab-lm-rules__en", lang: "en" }, [
+      t(
+        "book.littleMary.rulesEn",
+        "You start with demo credits. Each tap on a symbol bets 1 credit on that line (−1 from balance). Multipliers: Apple 5×, Watermelon 20×, Stars 30×, 77 40×, BAR 50×, Bell 20×, Mango 15×, Orange 10×, Cherry 2×. Bet at least once before Start. The light stops at random; if it matches a line you bet on, WIN += (bet on that line) × multiplier. “ONCE MORE” adds +8 credits (not via multiplier). After each round bets reset; stakes are not refunded unless you use Clear bets before spinning. Win → Credit merges WIN into your balance. Front-end only; no real money.",
+      ),
+    ]),
+  ]);
+  littleMaryRules.setAttribute("aria-label", "Little Mary rules · 小瑪莉規則");
+
+  bookPanelLittleMary.append(
+    el("div", { class: "book-tab-lm-intro-wrap" }, [
+      el("p", { class: "hint book-tab-lm-intro" }, [
+        t(
+          "book.littleMary.hint",
+          "試玩跑燈：點圖示押注後按「開始」（空白鍵同）。完整規則見下（繁中／English）。純前端、無真實金流。",
+        ),
+      ]),
+      littleMaryRules,
+    ]),
+    littleMaryMount,
+  );
+  mountBookTabLittleMary(littleMaryMount);
+
+  function setBookSubTab(which: "book" | "wheel" | "mybookings" | "three" | "littleMary") {
     bookSubTab = which;
     tabBook.setAttribute("aria-selected", String(which === "book"));
     tabWheel.setAttribute("aria-selected", String(which === "wheel"));
     tabMyBookings.setAttribute("aria-selected", String(which === "mybookings"));
     tabThree.setAttribute("aria-selected", String(which === "three"));
+    tabLittleMary.setAttribute("aria-selected", String(which === "littleMary"));
     tabBook.tabIndex = which === "book" ? 0 : -1;
     tabWheel.tabIndex = which === "wheel" ? 0 : -1;
     tabMyBookings.tabIndex = which === "mybookings" ? 0 : -1;
     tabThree.tabIndex = which === "three" ? 0 : -1;
+    tabLittleMary.tabIndex = which === "littleMary" ? 0 : -1;
     bookPanelBook.hidden = which !== "book";
     bookPanelWheel.hidden = which !== "wheel";
     bookPanelMyBookings.hidden = which !== "mybookings";
     bookPanelThree.hidden = which !== "three";
+    bookPanelLittleMary.hidden = which !== "littleMary";
   }
   tabBook.addEventListener("click", () => setBookSubTab("book"));
   tabWheel.addEventListener("click", () => setBookSubTab("wheel"));
   tabMyBookings.addEventListener("click", () => setBookSubTab("mybookings"));
   tabThree.addEventListener("click", () => setBookSubTab("three"));
+  tabLittleMary.addEventListener("click", () => setBookSubTab("littleMary"));
 
   syncBookMyBookingsTabVisibility = () => {
     const show = !memberExtrasWrap.hidden;
@@ -2295,6 +2346,7 @@ function render() {
     bookPanelWheel,
     bookPanelMyBookings,
     bookPanelThree,
+    bookPanelLittleMary,
   );
 
   root.append(supportChatFloat);

@@ -22,13 +22,20 @@ export const EN: Record<string, string> = {
   "booking.mode.member_beverage": "Member · drink credit",
 
   "book.tabsAria":
-    "Massage booking, my bookings and wheel when signed in, plus a three.js WebGL tab for everyone",
+    "Massage booking, my bookings and wheel when signed in, plus a Solar system WebGL tab and a Little Mary–style demo for everyone",
   "book.tab.booking": "Book massage",
   "book.tab.wheel": "Wheel",
   "book.tab.myBookings": "My bookings",
-  "book.tab.threeSpectacle": "three.js",
+  "book.tab.threeSpectacle": "Solar system",
+  "book.tab.littleMary": "Little Mary",
   "book.threeSpectacle.hint":
     "Live WebGL (Three.js): solar system with drag-to-orbit, wheel or pinch-zoom, tap a body for a fact; includes procedural ships and a comet. Display only, no backend.",
+  "book.littleMary.hint":
+    "Demo: bet on symbols, then Start (Space). Full rules below (EN + 繁中). No real money.",
+  "book.littleMary.rulesZh":
+    "試玩分數開局；點圖示押注每次從「分數」扣 1 至該線。九種倍率：蘋果 5×、西瓜 20×、星星 30×、77 40×、BAR 50×、鈴鐺 20×、芒果 15×、橘子 10×、櫻桃 2×。須先押注才能按「開始」。跑燈隨機停格；若停在與你押注相同的圖示，得分 += 該線押注 × 倍率。「再來」直接 +8 分至分數（不經倍率）。每局結束押注歸零；已押未中不退，開局前可用「清空押注」退回。「得分轉分數」把得分併回試玩分數。純前端，無真實金流。",
+  "book.littleMary.rulesEn":
+    "You start with demo credits. Each tap on a symbol bets 1 credit on that line (−1 from balance). Multipliers: Apple 5×, Watermelon 20×, Stars 30×, 77 40×, BAR 50×, Bell 20×, Mango 15×, Orange 10×, Cherry 2×. Bet at least once before Start. The light stops at random; if it matches a line you bet on, WIN += (bet on that line) × multiplier. “ONCE MORE” adds +8 credits (not via multiplier). After each round bets reset; stakes are not refunded unless you use Clear bets before spinning. Win → Credit merges WIN into your balance. Front-end only; no real money.",
 
   "status.pending": "Pending",
   "status.confirmed": "Confirmed",
