@@ -1,4 +1,4 @@
-圖示來源（除 bar.svg、seven.svg 為本專案自製 SVG 外）：
+圖示來源（除 bar.svg、seven.svg、lm-mascot.svg 為本專案自製 SVG 外；lm-center-hero.png 為本專案介面用素材）：
 
 Twemoji（Twitter / X 開源圖示）
 - 下載自：https://github.com/twitter/twemoji

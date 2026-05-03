@@ -191,12 +191,12 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
           hole.className = "lm-grid__hole lm-grid__hole--center";
           hole.style.gridRow = "2 / span 5";
           hole.style.gridColumn = "2 / span 5";
+          const heroSrc = lmIconSrc("lm-center-hero.png");
           hole.innerHTML = `
             <div class="lm-center">
               <div class="lm-center__title" lang="zh-Hant">小瑪莉</div>
-              <div class="lm-center__scene" aria-hidden="true">
-                <div class="lm-center__pipe"></div>
-                <div class="lm-center__char"></div>
+              <div class="lm-center__art">
+                <img class="lm-center-hero" src="${escAttr(heroSrc)}" width="512" height="512" alt="" decoding="async" draggable="false" />
               </div>
               <div class="lm-center__jp" aria-hidden="true">JP</div>
               <span class="lm-center__sub">${en ? "Demo" : "試玩"}</span>
