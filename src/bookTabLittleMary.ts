@@ -156,10 +156,10 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
   let spinToken = 0;
 
   const cabinet = document.createElement("div");
-  cabinet.className = "lm-cabinet";
+  cabinet.className = "lm-cabinet lm-cabinet--salon";
 
   const root = document.createElement("div");
-  root.className = "lm-root";
+  root.className = "lm-root lm-root--salon";
 
   const statusRow = document.createElement("div");
   statusRow.className = "lm-status lm-status--arcade";
@@ -199,7 +199,6 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
                 <img class="lm-center-hero" src="${escAttr(heroSrc)}" width="512" height="512" alt="" decoding="async" draggable="false" />
               </div>
               <div class="lm-center__jp" aria-hidden="true">JP</div>
-              <span class="lm-center__sub">${en ? "Demo" : "試玩"}</span>
             </div>`;
           grid.appendChild(hole);
         }

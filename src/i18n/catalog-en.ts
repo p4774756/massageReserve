@@ -29,7 +29,7 @@ export const EN: Record<string, string> = {
   "book.tab.threeSpectacle": "Solar system",
   "book.tab.littleMary": "Little Mary",
   "book.threeSpectacle.hint":
-    "Live WebGL (Three.js): solar system with drag-to-orbit, wheel or pinch-zoom, tap a body for a fact; includes procedural ships and a comet. Display only, no backend.",
+    "Live WebGL (Three.js): solar system with an Earth-night-sky style Milky Way band: a large star shell recenters on the camera (very little parallax), with a brighter plane, multiple dust rifts, mottling, a brighter “galactic core” direction, and a few bright knots—illustrative, not a full astronomical model; drag-to-orbit, wheel or pinch-zoom, tap a body for a fact; includes procedural ships and a comet. Display only, no backend.",
   "book.littleMary.hint":
     "Demo: bet on symbols, then Start (Space). Full rules below (EN + 繁中). No real money.",
   "book.littleMary.rulesZh":

@@ -2257,7 +2257,7 @@ function render() {
     el("p", { class: "hint book-tab-three-intro" }, [
       t(
         "book.threeSpectacle.hint",
-        "即時 WebGL（Three.js）擬真太陽系：可拖曳旋轉、滾輪／雙指縮放，點天體看簡介；含程式化太空船與彗星。純展示、不連後端。",
+        "即時 WebGL（Three.js）擬真太陽系：背景為類地球夜空之銀河帶（天球殼隨視角平移、大半徑減視差；盤向亮帶、多塵隙、斑駁與銀心較亮＋少量亮斑示意），非完整天文還原；可拖曳旋轉、滾輪／雙指縮放，點天體看簡介；含程式化太空船與彗星。純展示、不連後端。",
       ),
     ]),
     threeMount,

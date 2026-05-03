@@ -119,8 +119,187 @@ function buildShip(hull: number, accent: number, scale: number): THREE.Group {
   return g;
 }
 
+/** 決定性雜湊 → [0,1) */
+function hash01(n: number): number {
+  const x = Math.sin(n * 127.1 + 311.7) * 43758.5453123;
+  return x - Math.floor(x);
+}
+
+function clamp01(v: number): number {
+  return Math.max(0, Math.min(1, v));
+}
+
+function galacticBandBasis(galacticNorth: THREE.Vector3): { u: THREE.Vector3; v: THREE.Vector3; n: THREE.Vector3 } {
+  const n = galacticNorth.clone().normalize();
+  const aux = Math.abs(n.y) < 0.88 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
+  const u = new THREE.Vector3().copy(aux).cross(n).normalize();
+  const v = new THREE.Vector3().copy(n).cross(u).normalize();
+  return { u, v, n };
+}
+
 /**
- * 預約主面板 three.js 分頁：擬真太陽系＋可拖曳／縮放視角、點星球簡介、程式化太空船與彗星。
+ * 類地球夜空：天球殼層粒子在組件本地座標為「自觀測者向外的方向×距離」；
+ * 每幀將組件置於相機位置，使帶狀幾乎無視差（模擬極遠恆星）。
+ * 盤向集中＋多條塵隙＋斑駁＋銀心方向較亮，仍為示意非天文還原。
+ */
+function buildMilkyWayBandShell(count: number, shellR: number, galacticNorth: THREE.Vector3): THREE.Points {
+  const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  const { u, v, n } = galacticBandBasis(galacticNorth);
+  const sagT = 4.38;
+
+  for (let i = 0; i < count; i++) {
+    const h0 = hash01(i + 0.11);
+    const h1 = hash01(i + 1.23);
+    const h2 = hash01(i + 2.71);
+    const h3 = hash01(i + 3.52);
+    const h4 = hash01(i + 5.01);
+    const ix = i * 3;
+
+    if (h0 < 0.075) {
+      const th = h1 * Math.PI * 2;
+      const ph = Math.acos(2 * h2 - 1);
+      const sinP = Math.sin(ph);
+      const wx = sinP * Math.cos(th);
+      const wy = Math.cos(ph);
+      const wz = sinP * Math.sin(th);
+      const rr = shellR * (0.92 + h3 * 0.12);
+      positions[ix] = wx * rr;
+      positions[ix + 1] = wy * rr;
+      positions[ix + 2] = wz * rr;
+      const dim = (0.12 + h1 * 0.22) * (0.55 + 0.45 * h4);
+      colors[ix] = dim * 0.72;
+      colors[ix + 1] = dim * 0.78;
+      colors[ix + 2] = dim * 0.92;
+    } else {
+      const t = h1 * Math.PI * 2;
+      const bandW = 0.11 + h4 * 0.14;
+      const thick = (h2 - 0.5) * bandW;
+      const cosT = Math.cos(t);
+      const sinT = Math.sin(t);
+      let dx = u.x * cosT + v.x * sinT + n.x * thick;
+      let dy = u.y * cosT + v.y * sinT + n.y * thick;
+      let dz = u.z * cosT + v.z * sinT + n.z * thick;
+      const invLen = 1 / Math.hypot(dx, dy, dz);
+      dx *= invLen;
+      dy *= invLen;
+      dz *= invLen;
+
+      const d1 = Math.exp(-(Math.sin(t * 1.9 + 0.35) ** 2) * 7.2);
+      const d2 = Math.exp(-(Math.sin(t * 3.15 + 1.9) ** 2) * 4.8);
+      const d3 = Math.exp(-(Math.sin(t * 5.1 + 0.7) ** 2) * 3.2);
+      let dustDim = 0.38 + 0.62 * (1 - d1 * 0.62) * (1 - d2 * 0.38) * (1 - d3 * 0.22);
+
+      const wrap = Math.atan2(Math.sin(t - sagT), Math.cos(t - sagT));
+      const towardCore = Math.exp(-(wrap * wrap) / 0.42);
+      const warm = 1 + towardCore * 0.55;
+      const coreBright = 1 + towardCore * 0.95 * (0.45 + 0.55 * Math.abs(Math.cos(t * 6.2 + h3 * 4)));
+
+      const mottle =
+        0.38 +
+        0.62 *
+          clamp01(
+            0.35 + 0.28 * Math.sin(t * 5.5 + h2 * 11) + 0.22 * Math.sin(t * 2.1 + h4 * 7) + 0.35 * Math.abs(h3 - 0.5),
+          );
+      dustDim *= mottle;
+
+      const patch = 0.45 + 0.55 * Math.abs(Math.cos(t * 3.4 + h2 * 2.4));
+      let cr = (0.42 + 0.38 * patch) * dustDim * warm * coreBright;
+      let cg = (0.4 + 0.34 * patch) * dustDim * warm * coreBright;
+      let cb = (0.52 + 0.36 * patch) * dustDim * (0.92 + towardCore * 0.12);
+      cr = clamp01(cr * 1.05);
+      cg = clamp01(cg * 1.02);
+      cb = clamp01(cb * 1.08);
+
+      const rJ = shellR * (0.9 + h3 * 0.18);
+      positions[ix] = dx * rJ;
+      positions[ix + 1] = dy * rJ;
+      positions[ix + 2] = dz * rJ;
+      colors[ix] = cr;
+      colors[ix + 1] = cg;
+      colors[ix + 2] = cb;
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  const mat = new THREE.PointsMaterial({
+    vertexColors: true,
+    size: 0.031,
+    transparent: true,
+    opacity: 0.74,
+    depthWrite: false,
+    fog: false,
+    sizeAttenuation: true,
+    blending: THREE.NormalBlending,
+  });
+  return new THREE.Points(geo, mat);
+}
+
+/** 銀河帶內較亮團塊（類星團／雲氣聚區），疊在帶上增加長曝感 */
+function buildMilkyWayKnots(count: number, shellR: number, galacticNorth: THREE.Vector3): THREE.Points {
+  const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  const { u, v, n } = galacticBandBasis(galacticNorth);
+  const sagT = 4.38;
+
+  for (let i = 0; i < count; i++) {
+    const h1 = hash01(i + 1.9);
+    const h2 = hash01(i + 2.7);
+    const h3 = hash01(i + 4.1);
+    const t = h1 * Math.PI * 2;
+    const thick = (h2 - 0.5) * 0.07;
+    let dx = u.x * Math.cos(t) + v.x * Math.sin(t) + n.x * thick;
+    let dy = u.y * Math.cos(t) + v.y * Math.sin(t) + n.y * thick;
+    let dz = u.z * Math.cos(t) + v.z * Math.sin(t) + n.z * thick;
+    const invLen = 1 / Math.hypot(dx, dy, dz);
+    dx *= invLen;
+    dy *= invLen;
+    dz *= invLen;
+
+    const wrap = Math.atan2(Math.sin(t - sagT), Math.cos(t - sagT));
+    const towardCore = Math.exp(-(wrap * wrap) / 0.55);
+    if (towardCore < 0.18 && hash01(i + 6.2) > 0.35) {
+      dx += (h3 - 0.5) * 0.04;
+      dy += (hash01(i + 7) - 0.5) * 0.04;
+      dz += (hash01(i + 8) - 0.5) * 0.04;
+      const il = 1 / Math.hypot(dx, dy, dz);
+      dx *= il;
+      dy *= il;
+      dz *= il;
+    }
+
+    const rJ = shellR * (0.91 + h3 * 0.14);
+    const ix = i * 3;
+    positions[ix] = dx * rJ;
+    positions[ix + 1] = dy * rJ;
+    positions[ix + 2] = dz * rJ;
+    const b = 0.72 + towardCore * 0.28 + hash01(i + 0.3) * 0.12;
+    colors[ix] = clamp01(b * (0.95 + towardCore * 0.05));
+    colors[ix + 1] = clamp01(b * (0.82 + towardCore * 0.08));
+    colors[ix + 2] = clamp01(b * (0.62 + towardCore * 0.15));
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  const mat = new THREE.PointsMaterial({
+    vertexColors: true,
+    size: 0.054,
+    transparent: true,
+    opacity: 0.52,
+    depthWrite: false,
+    fog: false,
+    sizeAttenuation: true,
+    blending: THREE.AdditiveBlending,
+  });
+  return new THREE.Points(geo, mat);
+}
+
+/**
+ * 預約主面板 three.js 分頁：擬真太陽系＋可拖曳／縮放視角、點星球簡介、程式化太空船與彗星；
+ * 背景為類地球夜空：銀河帶天球殼隨相機平移（極遠視差）、盤內塵隙與斑駁示意（非完整天文模型）。
  */
 export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
   if (typeof window === "undefined") {
@@ -183,7 +362,7 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
     powerPreference: "low-power",
   });
   renderer.setPixelRatio(Math.min(DPR_CAP, window.devicePixelRatio || 1));
-  renderer.setClearColor(0x03060c, 1);
+  renderer.setClearColor(0x020511, 1);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.95;
@@ -202,6 +381,12 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
 
   const camera = new THREE.PerspectiveCamera(46, 1, 0.06, 90);
   const target = new THREE.Vector3(0.08, -0.06, 0);
+
+  const milkyWayShell = new THREE.Group();
+  const MW_SHELL_R = 118;
+  const galacticNorth = new THREE.Vector3(0.22, 0.89, 0.35).normalize();
+  milkyWayShell.add(buildMilkyWayBandShell(3800, MW_SHELL_R, galacticNorth), buildMilkyWayKnots(420, MW_SHELL_R, galacticNorth));
+  scene.add(milkyWayShell);
 
   const root = new THREE.Group();
   root.position.copy(target);
@@ -468,7 +653,7 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
   extrasRoot.add(comet, cometTrail);
   const trailHist: THREE.Vector3[] = [];
 
-  const disposables = collectDisposables(root);
+  const disposables = [...collectDisposables(milkyWayShell), ...collectDisposables(root)];
 
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
@@ -486,6 +671,7 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
     camera.lookAt(target);
   }
   updateCameraFromOrbit();
+  milkyWayShell.position.copy(camera.position);
 
   let dragging = false;
   let lastPx = 0;
@@ -690,6 +876,7 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
     }
 
     root.rotation.y = t * 0.004 + 0.28;
+    milkyWayShell.position.copy(camera.position);
 
     if (pointers.size === 0 && !dragging) {
       idleOrbitAcc += dt;
