@@ -867,19 +867,18 @@ main.panel[hidden] {
   width: 100%;
   min-height: min(56vh, 520px);
   max-height: 640px;
-  border-radius: 14px;
+  border-radius: 16px;
   overflow: auto;
-  border: 1px solid rgb(110 78 52 / 0.55);
+  border: 1px solid rgb(160 160 170 / 0.65);
   box-shadow:
-    inset 0 0 0 1px rgb(255 255 255 / 0.08),
-    0 12px 36px rgb(40 24 12 / 0.28);
-  background:
-    linear-gradient(165deg, rgb(72 48 32) 0%, rgb(38 24 16) 45%, rgb(22 14 10) 100%);
+    inset 0 2px 0 rgb(255 255 255 / 0.55),
+    0 10px 28px rgb(0 0 0 / 0.22);
+  background: linear-gradient(165deg, #e4e4ea 0%, #c8c8d4 38%, #b0b0bc 100%);
 }
 
 .book-tab-lm-mount--interactive {
   touch-action: manipulation;
-  padding: 10px 10px 12px;
+  padding: 12px 12px 14px;
 }
 
 .book-tab-lm-static {
@@ -895,11 +894,21 @@ main.panel[hidden] {
   background: linear-gradient(180deg, rgb(48 36 28) 0%, rgb(28 20 16) 100%);
 }
 
+/** 淺色機殼內框（黑底螢幕區） */
+.lm-cabinet {
+  border-radius: 12px;
+  padding: 8px;
+  background: linear-gradient(180deg, rgb(24 22 28) 0%, rgb(8 8 12) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgb(0 0 0 / 0.65),
+    inset 0 0 20px rgb(0 0 0 / 0.45);
+}
+
 .lm-root {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-width: 520px;
+  max-width: 480px;
   margin: 0 auto;
 }
 
@@ -911,6 +920,18 @@ main.panel[hidden] {
   padding: 6px 8px;
 }
 
+.lm-status--arcade {
+  gap: 12px 20px;
+  padding: 8px 10px 10px;
+  margin: 0 0 4px;
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 8px 8px 0 0;
+  background: linear-gradient(180deg, #0c0c10 0%, #050508 100%);
+  border: 1px solid rgb(40 40 52);
+  border-bottom: 1px solid rgb(20 20 28);
+}
+
 .lm-status__group {
   display: flex;
   align-items: baseline;
@@ -918,10 +939,14 @@ main.panel[hidden] {
 }
 
 .lm-status__label {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  color: rgb(200 180 150 / 0.85);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: rgb(200 190 210 / 0.88);
+}
+
+.lm-status--arcade .lm-status__label {
+  color: rgb(180 175 200 / 0.95);
 }
 
 .lm-led {
@@ -941,20 +966,17 @@ main.panel[hidden] {
   border-radius: 4px;
 }
 
+.lm-led--arcade {
+  font-family: ui-monospace, "Segoe UI Mono", "Cascadia Code", monospace;
+  box-shadow:
+    inset 0 1px 0 rgb(255 80 60 / 0.12),
+    0 0 12px rgb(255 30 10 / 0.25);
+}
+
 .lm-led--sm {
   min-width: 2ch;
   font-size: 0.85rem;
   padding: 2px 6px;
-}
-
-/** 押注格內小紅字（機台 LED） */
-.lm-led--bet {
-  min-width: 1.5ch;
-  padding: 1px 4px;
-  font-size: 0.68rem;
-  letter-spacing: 0.04em;
-  border-width: 1px;
-  border-radius: 2px;
 }
 
 .lm-board {
@@ -962,6 +984,20 @@ main.panel[hidden] {
   padding: 8px;
   background: linear-gradient(180deg, rgb(52 36 24 / 0.95) 0%, rgb(28 18 12) 100%);
   box-shadow: inset 0 0 24px rgb(0 0 0 / 0.45);
+}
+
+.lm-board--arcade {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 6px 8px 6px;
+  border-radius: 10px;
+  border: 1px solid rgb(40 40 52);
+  background: radial-gradient(ellipse 90% 70% at 50% 20%, rgb(18 20 40 / 0.35) 0%, transparent 55%),
+    linear-gradient(180deg, #080810 0%, #020208 100%);
+  box-shadow:
+    inset 0 0 0 1px rgb(0 0 0 / 0.8),
+    inset 0 0 40px rgb(0 0 0 / 0.5);
 }
 
 .lm-grid {
@@ -975,34 +1011,85 @@ main.panel[hidden] {
 
 .lm-grid__hole {
   border-radius: 4px;
-  background: rgb(0 0 0 / 0.12);
+  background: rgb(0 0 0 / 0.35);
 }
 
 .lm-grid__hole--center {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(ellipse at 50% 40%, rgb(30 48 72 / 0.5) 0%, rgb(12 16 24) 70%);
-  border: 2px solid rgb(80 120 160 / 0.35);
-  box-shadow: inset 0 0 20px rgb(0 0 0 / 0.5);
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 35%, rgb(80 40 120 / 0.35) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 100%, rgb(20 60 40 / 0.25) 0%, transparent 45%),
+    linear-gradient(180deg, #0a0a12 0%, #040408 100%);
+  border: 2px solid rgb(60 55 90 / 0.5);
+  box-shadow: inset 0 0 24px rgb(0 0 0 / 0.65);
 }
 
 .lm-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px;
   text-align: center;
+}
+
+.lm-center__title {
+  margin: 0;
+  font-family: "PingFang TC", "Microsoft JhengHei", "Heiti TC", sans-serif;
+  font-size: clamp(1.25rem, 5vw, 1.85rem);
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  line-height: 1.1;
+  color: #f0b028;
+  background: linear-gradient(180deg, #fff8a8 0%, #f0c030 35%, #c86820 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 0 rgb(80 20 10 / 0.9)) drop-shadow(0 0 8px rgb(255 200 60 / 0.35));
+}
+
+.lm-center__scene {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 6px;
+  height: 2.25rem;
+}
+
+.lm-center__pipe {
+  width: 1.35rem;
+  height: 2rem;
+  border-radius: 4px 4px 2px 2px;
+  background: linear-gradient(90deg, #0a6b2a 0%, #22b84a 45%, #0d5020 100%);
+  box-shadow:
+    inset 0 -4px 0 #0a1810,
+    0 2px 0 rgb(0 0 0 / 0.5);
+}
+
+.lm-center__char {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 4px 4px 2px 2px;
+  background: linear-gradient(180deg, #e83838 0%, #a01818 100%);
+  box-shadow: inset 0 -3px 0 rgb(0 0 0 / 0.25);
 }
 
 .lm-center__jp {
   display: block;
-  font-size: clamp(1.1rem, 3.5vw, 1.5rem);
+  font-size: clamp(0.75rem, 2.5vw, 0.95rem);
   font-weight: 800;
-  letter-spacing: 0.2em;
-  color: rgb(255 200 80);
-  text-shadow: 0 0 12px rgb(255 160 40 / 0.5);
+  letter-spacing: 0.18em;
+  color: rgb(255 210 100);
+  text-shadow: 0 0 10px rgb(255 160 40 / 0.45);
 }
 
 .lm-center__sub {
-  font-size: 0.72rem;
-  color: rgb(180 200 220 / 0.75);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  color: rgb(160 170 200 / 0.75);
 }
 
 .lm-slot {
@@ -1018,6 +1105,12 @@ main.panel[hidden] {
   border: 1px solid rgb(40 28 20);
   background: linear-gradient(180deg, rgb(70 52 38) 0%, rgb(36 26 18) 100%);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+}
+
+.lm-slot--arcade {
+  border-color: rgb(44 44 58);
+  background: linear-gradient(180deg, #14141c 0%, #0a0a10 100%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
 }
 
 .lm-slot__led {
@@ -1039,22 +1132,36 @@ main.panel[hidden] {
     inset 0 0 8px rgb(255 100 60 / 0.2);
 }
 
+.lm-slot--arcade.lm-slot--lit {
+  border-color: rgb(255 220 80);
+  background: radial-gradient(circle at 50% 30%, rgb(255 200 80 / 0.25) 0%, #12121c 65%);
+  box-shadow:
+    0 0 14px rgb(255 200 60 / 0.55),
+    inset 0 0 10px rgb(255 180 40 / 0.12);
+}
+
 .lm-slot--lit .lm-slot__led {
   background: #ff4422;
   box-shadow: 0 0 8px rgb(255 60 40 / 0.9);
 }
 
-.lm-slot__emoji {
-  font-size: clamp(0.65rem, 2.4vw, 0.95rem);
-  line-height: 1;
+.lm-ico {
+  display: block;
+  object-fit: contain;
+  pointer-events: none;
+  flex-shrink: 0;
 }
 
-.lm-slot__bar {
-  font-size: clamp(0.45rem, 1.6vw, 0.62rem);
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  color: rgb(240 220 180);
-  line-height: 1;
+.lm-ico--slot {
+  width: clamp(0.92rem, 3.5vw, 1.22rem);
+  height: clamp(0.92rem, 3.5vw, 1.22rem);
+  margin: 0 auto;
+  filter: saturate(1.08);
+}
+
+.lm-ico--bet {
+  width: clamp(1.05rem, 4vw, 1.42rem);
+  height: clamp(1.05rem, 4vw, 1.42rem);
 }
 
 .lm-slot__txt {
@@ -1065,6 +1172,44 @@ main.panel[hidden] {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.lm-slot--arcade .lm-slot__txt {
+  color: rgb(200 205 230 / 0.88);
+}
+
+/** 螢幕底押注小紅字列（對齊實機） */
+.lm-bet-ledrow {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  gap: 3px;
+  margin-top: 6px;
+  padding: 4px 2px 2px;
+  border-top: 1px solid rgb(40 40 55 / 0.6);
+}
+
+.lm-bet-ledcell {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.lm-bet-ledcell .lm-ico--bet {
+  width: clamp(0.68rem, 2.4vw, 0.9rem);
+  height: clamp(0.68rem, 2.4vw, 0.9rem);
+}
+
+.lm-led--mini {
+  min-width: 1ch;
+  padding: 0 2px;
+  font-size: 0.55rem;
+  letter-spacing: 0.02em;
+  border-width: 1px;
+  border-radius: 2px;
 }
 
 /** 機台式押注：黃框模組＋ 3×3 緊湊格 */
@@ -1082,10 +1227,31 @@ main.panel[hidden] {
     0 2px 8px rgb(0 0 0 / 0.4);
 }
 
+.lm-bets-strip--arcade {
+  padding: 8px 10px 10px;
+  border-radius: 8px;
+  border: 2px solid rgb(220 190 70 / 0.65);
+  background: linear-gradient(180deg, #1a1a22 0%, #0e0e14 100%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.05),
+    0 4px 0 rgb(0 0 0 / 0.35);
+}
+
 .lm-bets-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 5px;
+}
+
+.lm-bets-grid--arcade {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px 7px;
+}
+
+.lm-bet-tile--fullrow {
+  grid-column: 1 / -1;
+  max-width: 7.5rem;
+  margin-inline: auto;
 }
 
 .lm-bet-tile {
@@ -1108,6 +1274,28 @@ main.panel[hidden] {
   -webkit-tap-highlight-color: transparent;
 }
 
+.lm-bet-tile--arcade {
+  min-height: 2.55rem;
+  padding: 8px 4px 6px;
+  border: 2px outset rgb(230 230 238);
+  border-radius: 6px;
+  color: #1a1820;
+  background: linear-gradient(180deg, #fafafc 0%, #dcdce6 45%, #c4c4d0 100%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.95),
+    0 2px 0 rgb(0 0 0 / 0.2);
+}
+
+.lm-bet-tile--arcade:hover:not(:disabled) {
+  border-color: rgb(255 240 180);
+  background: linear-gradient(180deg, #ffffff 0%, #ececf4 50%, #d8d8e4 100%);
+}
+
+.lm-bet-tile--arcade:active:not(:disabled) {
+  transform: translateY(1px);
+  border-style: solid;
+}
+
 .lm-bet-tile:hover:not(:disabled) {
   border-color: rgb(220 180 100 / 0.45);
   background: linear-gradient(180deg, rgb(100 82 64) 0%, rgb(48 38 30) 100%);
@@ -1115,6 +1303,10 @@ main.panel[hidden] {
 
 .lm-bet-tile:active:not(:disabled) {
   transform: scale(0.97);
+}
+
+.lm-bet-tile--arcade:active:not(:disabled) {
+  transform: translateY(1px) scale(0.99);
 }
 
 .lm-bet-tile:disabled {
@@ -1133,24 +1325,9 @@ main.panel[hidden] {
   pointer-events: none;
 }
 
-.lm-bet-tile__icon {
-  font-size: clamp(1rem, 4.2vw, 1.35rem);
-  line-height: 1;
-  pointer-events: none;
-}
-
-.lm-bet-tile__bar {
-  font-size: clamp(0.55rem, 2.2vw, 0.72rem);
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  color: rgb(245 230 200);
-  line-height: 1;
-  pointer-events: none;
-}
-
-.lm-bet-tile .lm-led--bet {
-  margin-top: auto;
-  pointer-events: none;
+.lm-bet-tile--arcade .lm-bet-tile__mult {
+  color: rgb(160 60 20 / 0.95);
+  text-shadow: 0 1px 0 rgb(255 255 255 / 0.4);
 }
 
 .lm-controls {
@@ -1179,6 +1356,25 @@ main.panel[hidden] {
   min-width: 7rem;
   padding: 8px 12px;
   font-size: 0.85rem;
+}
+
+.lm-controls--arcade {
+  padding: 4px 2px 0;
+}
+
+.lm-controls--arcade .lm-controls__clear,
+.lm-controls--arcade .lm-controls__collect {
+  border: 2px outset rgb(200 200 210);
+  color: #1a1820;
+  background: linear-gradient(180deg, #f0f0f6 0%, #c8c8d4 100%);
+  box-shadow: 0 2px 0 rgb(0 0 0 / 0.15);
+}
+
+.lm-controls--arcade .lm-controls__start {
+  border: 2px outset rgb(100 160 255);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.25),
+    0 3px 0 rgb(10 30 70 / 0.45);
 }
 
 .lm-controls__start {
@@ -1217,6 +1413,10 @@ main.panel[hidden] {
   line-height: 1.35;
   text-align: center;
   color: rgb(200 185 170 / 0.95);
+}
+
+.lm-root .lm-msg {
+  color: rgb(180 180 200 / 0.88);
 }
 
 .grid {
@@ -3724,15 +3924,20 @@ html.kuso-retro:not(:has(.shell.admin-mode)) .lm-controls__start {
   box-shadow: 2px 2px 0 rgb(0 0 0 / 0.1);
 }
 
-html.kuso-retro:not(:has(.shell.admin-mode)) .lm-bet-tile {
-  border: 2px outset #e8dcc8;
-  color: #3a3028;
-  background: linear-gradient(180deg, #fffef8 0%, #f0e8d8 100%);
+html.kuso-retro:not(:has(.shell.admin-mode)) .lm-bet-tile--arcade {
+  border: 2px outset #fff8f0;
+  color: #3a2830;
+  background: linear-gradient(180deg, #fffef8 0%, #ffe8f0 100%);
 }
 
-html.kuso-retro:not(:has(.shell.admin-mode)) .lm-bets-strip {
-  border-color: #c4a060;
-  background: linear-gradient(180deg, #f5f0e6 0%, #e8dcc8 100%);
+html.kuso-retro:not(:has(.shell.admin-mode)) .lm-bets-strip--arcade {
+  border-color: #e8b8c8;
+  background: linear-gradient(180deg, #fff5f8 0%, #ffe8f0 100%);
+}
+
+html.kuso-retro:not(:has(.shell.admin-mode)) .lm-cabinet {
+  background: linear-gradient(180deg, #4a3048 0%, #2a1828 100%);
+  box-shadow: inset 0 0 0 2px rgb(255 200 220 / 0.12);
 }
 
 html.kuso-retro .marquee.marquee-led {

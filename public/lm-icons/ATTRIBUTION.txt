@@ -1,0 +1,8 @@
+圖示來源（除 bar.svg、seven.svg 為本專案自製 SVG 外）：
+
+Twemoji（Twitter / X 開源圖示）
+- 下載自：https://github.com/twitter/twemoji
+- 授權：Creative Commons Attribution 4.0 International (CC-BY 4.0)
+- 使用檔案：apple.svg, watermelon.svg, star.svg, bell.svg, orange.svg, cherry.svg, mango.svg, once.svg（對應 Twemoji 資產檔名經重新命名以利程式引用）
+
+依 CC-BY 4.0 需標示出處；本專案於此目錄保留本說明檔。
