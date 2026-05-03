@@ -10,11 +10,15 @@ import {
 
 const DPR_CAP = 2;
 
+/** 動畫時間縮放（<1 較慢）：公轉／自轉／銀河殼、太空船、彗星、閒置環景等 */
+const SPECTACLE_TIME_SCALE = 0.4;
+
 type BodyId =
   | "sun"
   | "mercury"
   | "venus"
   | "earth"
+  | "moon"
   | "mars"
   | "jupiter"
   | "saturn"
@@ -34,42 +38,121 @@ const BODY_LABELS: Record<
     en: { title: "Sun", blurb: "The star at the center of the Solar System—sizes here are illustrative." },
   },
   mercury: {
-    zh: { title: "水星", blurb: "距太陽最近、無大氣的小型岩質行星。" },
-    en: { title: "Mercury", blurb: "Smallest major planet, no real atmosphere, closest to the Sun." },
+    zh: { title: "水星", blurb: "距太陽最近、無大氣的小型岩質行星。飛近為示意地表貼圖。" },
+    en: {
+      title: "Mercury",
+      blurb: "Smallest major planet, no real atmosphere, closest to the Sun. Fly close for an illustrative surface map.",
+    },
   },
   venus: {
-    zh: { title: "金星", blurb: "厚雲與高溫高壓，太陽系最熱的行星表面之一。" },
-    en: { title: "Venus", blurb: "Thick clouds and a crushing, scorching surface." },
+    zh: { title: "金星", blurb: "厚雲與高溫高壓，太陽系最熱的行星表面之一。飛近為示意貼圖。" },
+    en: {
+      title: "Venus",
+      blurb: "Thick clouds and a crushing, scorching surface. Fly close for an illustrative texture.",
+    },
   },
   earth: {
-    zh: { title: "地球", blurb: "已知唯一有穩定液態水與生命的行星。" },
-    en: { title: "Earth", blurb: "The only world we know with stable liquid water and life." },
+    zh: { title: "地球", blurb: "已知唯一有穩定液態水與生命的行星。飛近時載入晝面貼圖，可見大陸與海洋示意（非測繪精度）。" },
+    en: {
+      title: "Earth",
+      blurb: "The only world we know with stable liquid water and life. Fly close to see an illustrative day map of continents and oceans (not survey-grade).",
+    },
+  },
+  moon: {
+    zh: { title: "月球", blurb: "地球的天然衛星；示意軌道與比例。飛近為 three.js 範例月球貼圖。" },
+    en: {
+      title: "Moon",
+      blurb: "Earth’s natural satellite—orbits and scale are illustrative. Fly close for the three.js example moon map.",
+    },
   },
   mars: {
-    zh: { title: "火星", blurb: "氧化鐵呈紅色；有稀薄大氣與季節性極冠。" },
-    en: { title: "Mars", blurb: "The “Red Planet,” thin air and seasonal polar caps." },
+    zh: { title: "火星", blurb: "氧化鐵呈紅色；有稀薄大氣與季節性極冠。飛近為示意地表貼圖。" },
+    en: {
+      title: "Mars",
+      blurb: "The “Red Planet,” thin air and seasonal polar caps. Fly close for an illustrative surface map.",
+    },
   },
   jupiter: {
-    zh: { title: "木星", blurb: "氣態巨行星，質量為其他行星總和的好幾倍。" },
-    en: { title: "Jupiter", blurb: "A gas giant heavier than all other planets combined." },
+    zh: { title: "木星", blurb: "氣態巨行星，質量為其他行星總和的好幾倍。飛近為示意雲帶貼圖。" },
+    en: {
+      title: "Jupiter",
+      blurb: "A gas giant heavier than all other planets combined. Fly close for illustrative cloud bands.",
+    },
   },
   saturn: {
-    zh: { title: "土星", blurb: "以壯觀的冰／岩石環系著稱的氣態巨行星。" },
-    en: { title: "Saturn", blurb: "A gas giant famous for its spectacular ring system." },
+    zh: { title: "土星", blurb: "以壯觀的冰／岩石環系著稱的氣態巨行星。飛近為示意雲帶貼圖。" },
+    en: {
+      title: "Saturn",
+      blurb: "A gas giant famous for its spectacular ring system. Fly close for illustrative cloud bands.",
+    },
   },
   uranus: {
-    zh: { title: "天王星", blurb: "冰巨行星，自轉軸極度傾斜。" },
-    en: { title: "Uranus", blurb: "An ice giant with an extreme axial tilt." },
+    zh: { title: "天王星", blurb: "冰巨行星，自轉軸極度傾斜。飛近為示意貼圖。" },
+    en: {
+      title: "Uranus",
+      blurb: "An ice giant with an extreme axial tilt. Fly close for an illustrative texture.",
+    },
   },
   neptune: {
-    zh: { title: "海王星", blurb: "太陽系已知最遠的主要行星，深藍色冰巨行星。" },
-    en: { title: "Neptune", blurb: "The farthest major planet—deep blue ice giant." },
+    zh: { title: "海王星", blurb: "太陽系已知最遠的主要行星，深藍色冰巨行星。飛近為示意貼圖。" },
+    en: {
+      title: "Neptune",
+      blurb: "The farthest major planet—deep blue ice giant. Fly close for an illustrative texture.",
+    },
   },
   pluto: {
-    zh: { title: "冥王星", blurb: "矮行星，位於古柏帶；軌道較橢且與海王星共振。" },
-    en: { title: "Pluto", blurb: "A Kuiper Belt dwarf planet with an eccentric orbit." },
+    zh: { title: "冥王星", blurb: "矮行星，位於古柏帶；軌道較橢且與海王星共振。飛近為示意貼圖。" },
+    en: {
+      title: "Pluto",
+      blurb: "A Kuiper Belt dwarf planet with an eccentric orbit. Fly close for an illustrative texture.",
+    },
   },
 };
+
+/** 導覽列順序：由內而外 */
+const TOUR_BODY_ORDER: BodyId[] = [
+  "sun",
+  "mercury",
+  "venus",
+  "earth",
+  "moon",
+  "mars",
+  "jupiter",
+  "saturn",
+  "uranus",
+  "neptune",
+  "pluto",
+];
+
+/** 飛到該天體附近時的相機距離（軌道球半徑），依示意比例調整 */
+function visitRadiusFor(id: BodyId): number {
+  switch (id) {
+    case "sun":
+      return 1.05;
+    case "mercury":
+      return 0.19;
+    case "venus":
+      return 0.24;
+    case "earth":
+      return 0.24;
+    case "moon":
+      return 0.072;
+    case "mars":
+      return 0.22;
+    case "jupiter":
+      return 0.62;
+    case "saturn":
+      return 0.52;
+    case "uranus":
+      return 0.38;
+    case "neptune":
+      return 0.36;
+    case "pluto":
+      return 0.13;
+    default:
+      return 0.35;
+  }
+}
 
 function bodyLabel(id: BodyId): { title: string; blurb: string } {
   const row = BODY_LABELS[id];
@@ -78,6 +161,50 @@ function bodyLabel(id: BodyId): { title: string; blurb: string } {
 
 function tagPickable(mesh: THREE.Mesh, id: BodyId) {
   mesh.userData.bodyId = id;
+}
+
+/** `public/solar/` 貼圖（與 Vite BASE_URL 對齊） */
+function solarTextureSrc(file: string): string {
+  const base = import.meta.env.BASE_URL ?? "/";
+  const norm = base.endsWith("/") ? base : `${base}/`;
+  return `${norm}solar/${file}`;
+}
+
+/** 八大行星＋冥王星＋月球貼圖檔名（earth／moon 為 three.js 範例；其餘見 public/solar/ATTRIBUTION.txt） */
+const SOLAR_PLANET_SURFACE_FILES: Partial<Record<BodyId, string>> = {
+  mercury: "mercurymap.jpg",
+  venus: "venusmap.jpg",
+  earth: "earth_day_4096.jpg",
+  mars: "marsmap.jpg",
+  jupiter: "jupitermap.jpg",
+  saturn: "saturnmap.jpg",
+  uranus: "uranusmap.jpg",
+  neptune: "neptunemap.jpg",
+  pluto: "plutomap.jpg",
+};
+
+function prepPlanetDiffuseTexture(tex: THREE.Texture, renderer: THREE.WebGLRenderer) {
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+}
+
+function loadSolarPlanetSurface(
+  mat: THREE.MeshStandardMaterial,
+  file: string,
+  renderer: THREE.WebGLRenderer,
+): void {
+  new THREE.TextureLoader().load(
+    solarTextureSrc(file),
+    (tex) => {
+      prepPlanetDiffuseTexture(tex, renderer);
+      mat.map = tex;
+      mat.needsUpdate = true;
+    },
+    undefined,
+    () => {
+      /* 貼圖載入失敗時保留白底材質 */
+    },
+  );
 }
 
 function buildShip(hull: number, accent: number, scale: number): THREE.Group {
@@ -319,8 +446,8 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
 
   const hudHint =
     getLocale() === "en"
-      ? "Drag to rotate · wheel or two-finger pinch to zoom · tap a body for a short fact"
-      : "拖曳旋轉視角 · 滾輪或雙指縮放 · 點太陽或行星看簡介";
+      ? "Use the top bar to fly the camera to each body, or Overview for the wide shot. Drag to orbit · wheel or pinch to zoom · tap a body for a short fact."
+      : "頂部導覽列可將鏡頭飛往各天體，「總覽」回到遠景。拖曳環繞 · 滾輪或雙指縮放 · 點天體看簡介。";
 
   const hud = document.createElement("div");
   hud.className = "book-tab-three-hud";
@@ -381,6 +508,8 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
 
   const camera = new THREE.PerspectiveCamera(46, 1, 0.06, 90);
   const target = new THREE.Vector3(0.08, -0.06, 0);
+  /** 軌道球心：預設為太陽系中心，飛行導覽時會移向各天體 */
+  const lookAtPoint = new THREE.Vector3().copy(target);
 
   const milkyWayShell = new THREE.Group();
   const MW_SHELL_R = 118;
@@ -482,6 +611,7 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
 
   type OrbitBody = { pivot: THREE.Group; speed: number; phase: number; mesh: THREE.Mesh; spin: number };
   const orbitals: OrbitBody[] = [];
+  let earthMoonOrbit: { moonPivot: THREE.Group; mesh: THREE.Mesh; speed: number; spin: number } | null = null;
 
   type PlanetDef = {
     id: BodyId;
@@ -542,48 +672,69 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
     arm.rotation.z = ((i % 4) - 1.5) * 0.055;
 
     let body: THREE.Mesh;
-    if (def.mega) {
-      body = new THREE.Mesh(
-        new THREE.SphereGeometry(def.size, 22, 22),
-        bodyMat(def.color, { roughness: def.roughness ?? 0.88, metalness: def.metalness ?? 0.02 }),
-      );
+    const surfaceFile = SOLAR_PLANET_SURFACE_FILES[def.id];
+    if (surfaceFile) {
+      const roughness = def.roughness ?? 0.82;
+      const metalness = def.metalness ?? 0.05;
+      const surfMat = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness,
+        metalness,
+      });
+      const segs = def.mega || def.rings ? 40 : 48;
+      body = new THREE.Mesh(new THREE.SphereGeometry(def.size, segs, segs), surfMat);
       tagPickable(body, def.id);
-      arm.add(body);
-    } else if (def.rings) {
-      body = new THREE.Mesh(
-        new THREE.SphereGeometry(def.size, 20, 20),
-        bodyMat(def.color, { roughness: def.roughness ?? 0.9, metalness: def.metalness ?? 0.02 }),
-      );
-      tagPickable(body, def.id);
-      const innerR = def.size * 1.38;
-      const ringA = new THREE.Mesh(
-        new THREE.RingGeometry(innerR, def.size * 2.15, 64),
-        new THREE.MeshStandardMaterial({
-          color: 0xc4b69a,
-          transparent: true,
-          opacity: 0.6,
-          side: THREE.DoubleSide,
-          roughness: 0.98,
-          metalness: 0,
-          depthWrite: false,
-        }),
-      );
-      ringA.rotation.x = Math.PI / 2.08;
-      const ringB = new THREE.Mesh(
-        new THREE.RingGeometry(def.size * 2.22, def.size * 2.62, 64),
-        new THREE.MeshStandardMaterial({
-          color: 0xa8b8c8,
-          transparent: true,
-          opacity: 0.36,
-          side: THREE.DoubleSide,
-          roughness: 0.98,
-          metalness: 0,
-          depthWrite: false,
-        }),
-      );
-      ringB.rotation.x = Math.PI / 2.12;
-      ringB.rotation.z = 0.08;
-      arm.add(body, ringA, ringB);
+      loadSolarPlanetSurface(surfMat, surfaceFile, renderer);
+      if (def.rings) {
+        const innerR = def.size * 1.38;
+        const ringA = new THREE.Mesh(
+          new THREE.RingGeometry(innerR, def.size * 2.15, 64),
+          new THREE.MeshStandardMaterial({
+            color: 0xc4b69a,
+            transparent: true,
+            opacity: 0.6,
+            side: THREE.DoubleSide,
+            roughness: 0.98,
+            metalness: 0,
+            depthWrite: false,
+          }),
+        );
+        ringA.rotation.x = Math.PI / 2.08;
+        const ringB = new THREE.Mesh(
+          new THREE.RingGeometry(def.size * 2.22, def.size * 2.62, 64),
+          new THREE.MeshStandardMaterial({
+            color: 0xa8b8c8,
+            transparent: true,
+            opacity: 0.36,
+            side: THREE.DoubleSide,
+            roughness: 0.98,
+            metalness: 0,
+            depthWrite: false,
+          }),
+        );
+        ringB.rotation.x = Math.PI / 2.12;
+        ringB.rotation.z = 0.08;
+        arm.add(body, ringA, ringB);
+      } else {
+        arm.add(body);
+        if (def.id === "earth") {
+          const moonPivot = new THREE.Group();
+          const moonR = def.size * 0.272;
+          const moonMat = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            roughness: 0.94,
+            metalness: 0.02,
+          });
+          const moonMesh = new THREE.Mesh(new THREE.SphereGeometry(moonR, 28, 28), moonMat);
+          tagPickable(moonMesh, "moon");
+          loadSolarPlanetSurface(moonMat, "moon_1024.jpg", renderer);
+          moonMesh.position.set(def.size * 2.42, def.size * 0.1, 0);
+          moonPivot.add(moonMesh);
+          arm.add(moonPivot);
+          pickables.push(moonMesh);
+          earthMoonOrbit = { moonPivot, mesh: moonMesh, speed: 4.6, spin: 1.55 };
+        }
+      }
     } else {
       body = new THREE.Mesh(
         new THREE.SphereGeometry(def.size, 16, 16),
@@ -604,11 +755,15 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
     });
   }
 
-  const dwarf = new THREE.Mesh(
-    new THREE.SphereGeometry(0.024, 10, 10),
-    bodyMat(0x6a5a52, { roughness: 1, metalness: 0 }),
-  );
+  const dwarfMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    roughness: 0.95,
+    metalness: 0,
+  });
+  const dwarf = new THREE.Mesh(new THREE.SphereGeometry(0.024, 28, 28), dwarfMat);
   tagPickable(dwarf, "pluto");
+  const plutoFile = SOLAR_PLANET_SURFACE_FILES.pluto;
+  if (plutoFile) loadSolarPlanetSurface(dwarfMat, plutoFile, renderer);
   pickables.push(dwarf);
   const dwarfPivot = new THREE.Group();
   dwarfPivot.add(dwarf);
@@ -655,6 +810,75 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
 
   const disposables = [...collectDisposables(milkyWayShell), ...collectDisposables(root)];
 
+  const meshByBody = new Map<BodyId, THREE.Object3D>();
+  for (const obj of pickables) {
+    const bid = (obj as THREE.Mesh).userData.bodyId as BodyId | undefined;
+    if (bid) meshByBody.set(bid, obj);
+  }
+
+  type FlyTarget = null | "overview" | BodyId;
+  let flyTarget: FlyTarget = null;
+  const flyDest = new THREE.Vector3();
+
+  const tourBar = document.createElement("div");
+  tourBar.className = "book-tab-three-tour";
+  tourBar.setAttribute("role", "toolbar");
+  tourBar.setAttribute(
+    "aria-label",
+    getLocale() === "en" ? "Fly camera to a celestial body" : "鏡頭前往天體",
+  );
+  const tourBtns = new Map<string, HTMLButtonElement>();
+
+  function syncTourAriaPressed() {
+    for (const [key, btn] of tourBtns) {
+      const on =
+        (key === "overview" && flyTarget === "overview") ||
+        (key !== "overview" && flyTarget === key);
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+    }
+  }
+
+  const overviewBtn = document.createElement("button");
+  overviewBtn.type = "button";
+  overviewBtn.className = "book-tab-three-tour__btn book-tab-three-tour__btn--overview";
+  overviewBtn.textContent = getLocale() === "en" ? "Overview" : "總覽";
+  overviewBtn.dataset.tour = "overview";
+  overviewBtn.setAttribute("aria-pressed", "false");
+  overviewBtn.title =
+    getLocale() === "en" ? "Return to the default wide view of the solar system" : "回到預設遠眺太陽系";
+  overviewBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    flyTarget = "overview";
+    hideHud();
+    syncTourAriaPressed();
+  });
+  tourBtns.set("overview", overviewBtn);
+  tourBar.appendChild(overviewBtn);
+
+  for (const id of TOUR_BODY_ORDER) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "book-tab-three-tour__btn";
+    b.textContent = bodyLabel(id).title;
+    b.dataset.tour = id;
+    b.setAttribute("aria-pressed", "false");
+    b.title =
+      getLocale() === "en"
+        ? `Fly near ${bodyLabel(id).title} (camera tracks the body)`
+        : `鏡頭飛近${bodyLabel(id).title}（會跟著天體移動）`;
+    b.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      flyTarget = id;
+      showHud(id);
+      syncTourAriaPressed();
+    });
+    tourBtns.set(id, b);
+    tourBar.appendChild(b);
+  }
+  host.appendChild(tourBar);
+
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
 
@@ -665,13 +889,16 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
 
   function updateCameraFromOrbit() {
     const sinP = Math.sin(camPhi);
-    camera.position.x = target.x + camRadius * sinP * Math.sin(camTheta);
-    camera.position.y = target.y + camRadius * Math.cos(camPhi);
-    camera.position.z = target.z + camRadius * sinP * Math.cos(camTheta);
-    camera.lookAt(target);
+    camera.position.x = lookAtPoint.x + camRadius * sinP * Math.sin(camTheta);
+    camera.position.y = lookAtPoint.y + camRadius * Math.cos(camPhi);
+    camera.position.z = lookAtPoint.z + camRadius * sinP * Math.cos(camTheta);
+    camera.lookAt(lookAtPoint);
   }
   updateCameraFromOrbit();
   milkyWayShell.position.copy(camera.position);
+  const defaultCamRadius = THREE.MathUtils.clamp(camRadius, 2.6, 24);
+  const defaultCamTheta = camTheta;
+  const defaultCamPhi = camPhi;
 
   let dragging = false;
   let lastPx = 0;
@@ -694,6 +921,8 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
 
   function onPointerDown(ev: PointerEvent) {
     if (ev.button !== undefined && ev.button > 1) return;
+    flyTarget = null;
+    syncTourAriaPressed();
     idleOrbitAcc = 0;
     pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
     if (pointers.size >= 2) gestureHadMulti = true;
@@ -721,6 +950,8 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
       if (d > 2) {
         // 與地圖／相簿一致：雙指張開＝拉近（半徑變小）、捏合＝拉遠
         camRadius = Math.max(2.6, Math.min(24, pinchStartRadius * (pinchStartDist / d)));
+        flyTarget = null;
+        syncTourAriaPressed();
         idleOrbitAcc = 0;
         updateCameraFromOrbit();
       }
@@ -787,6 +1018,8 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
     ev.preventDefault();
     const k = Math.exp(-ev.deltaY * 0.0011);
     camRadius = Math.max(2.6, Math.min(24, camRadius * k));
+    flyTarget = null;
+    syncTourAriaPressed();
     idleOrbitAcc = 0;
     updateCameraFromOrbit();
   }
@@ -868,20 +1101,56 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
     if (!visible) return;
 
     const dt = Math.min(0.05, clock.getDelta());
-    const t = clock.getElapsedTime();
+    const t = clock.getElapsedTime() * SPECTACLE_TIME_SCALE;
 
     for (const o of orbitals) {
       o.pivot.rotation.y = t * o.speed + o.phase;
       o.mesh.rotation.y = t * o.spin;
     }
+    if (earthMoonOrbit) {
+      earthMoonOrbit.moonPivot.rotation.y = t * earthMoonOrbit.speed;
+      earthMoonOrbit.mesh.rotation.y = t * earthMoonOrbit.spin;
+    }
 
     root.rotation.y = t * 0.004 + 0.28;
     milkyWayShell.position.copy(camera.position);
 
-    if (pointers.size === 0 && !dragging) {
+    if (flyTarget) {
+      if (flyTarget === "overview") {
+        flyDest.copy(target);
+        lookAtPoint.lerp(flyDest, 0.085);
+        camRadius = THREE.MathUtils.lerp(camRadius, defaultCamRadius, 0.075);
+        camTheta = THREE.MathUtils.lerp(camTheta, defaultCamTheta, 0.06);
+        camPhi = THREE.MathUtils.lerp(camPhi, defaultCamPhi, 0.06);
+        if (
+          lookAtPoint.distanceToSquared(flyDest) < 6e-5 &&
+          Math.abs(camRadius - defaultCamRadius) < 0.18 &&
+          Math.abs(camTheta - defaultCamTheta) < 0.05 &&
+          Math.abs(camPhi - defaultCamPhi) < 0.05
+        ) {
+          flyTarget = null;
+          lookAtPoint.copy(target);
+          camRadius = defaultCamRadius;
+          camTheta = defaultCamTheta;
+          camPhi = defaultCamPhi;
+          syncTourAriaPressed();
+        }
+      } else {
+        const m = meshByBody.get(flyTarget);
+        if (m) {
+          m.getWorldPosition(flyDest);
+          lookAtPoint.lerp(flyDest, 0.32);
+          camRadius = THREE.MathUtils.lerp(camRadius, visitRadiusFor(flyTarget), 0.14);
+        }
+      }
+      syncTourAriaPressed();
+      updateCameraFromOrbit();
+    }
+
+    if (pointers.size === 0 && !dragging && !flyTarget) {
       idleOrbitAcc += dt;
       if (idleOrbitAcc > 1.4) {
-        camTheta += dt * 0.055;
+        camTheta += dt * 0.055 * SPECTACLE_TIME_SCALE;
         updateCameraFromOrbit();
       }
     }
@@ -938,6 +1207,7 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
     }
     renderer.dispose();
     canvas.remove();
+    tourBar.remove();
     hud.remove();
     host.classList.remove("book-tab-three-mount--interactive");
   };

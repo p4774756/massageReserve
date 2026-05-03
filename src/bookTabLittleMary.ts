@@ -3,42 +3,44 @@ import { createLittleMarySfx } from "./bookTabLittleMaryAudio";
 
 /** 外圈 24 格：順時針由左上起，與 7×7 邊框格索引一致 */
 export type LittleMarySymbol =
-  | "apple"
+  | "cherry"
+  | "lemon"
+  | "orange"
   | "watermelon"
+  | "bell"
   | "star"
   | "seven"
-  | "bar"
-  | "bell"
-  | "mango"
-  | "orange"
-  | "cherry"
-  | "once_more";
+  | "bar";
 
+/**
+ * 外圈符號格數：櫻桃 5、檸檬 4、橘子 4、西瓜 3、鈴鐺 3、星星 2、７７ 2、BAR 1（合計 24）。
+ * 順序依周邊索引打散，避免同圖過度連鄰。
+ */
 const LOOP_24: LittleMarySymbol[] = [
+  "cherry",
   "orange",
-  "bell",
+  "lemon",
   "watermelon",
+  "bell",
+  "star",
   "bar",
-  "apple",
-  "watermelon",
-  "mango",
-  "apple",
-  "once_more",
-  "watermelon",
-  "star",
-  "mango",
-  "watermelon",
-  "apple",
   "seven",
+  "cherry",
+  "orange",
+  "lemon",
   "watermelon",
   "bell",
-  "orange",
-  "watermelon",
-  "apple",
-  "once_more",
-  "apple",
   "star",
-  "mango",
+  "seven",
+  "cherry",
+  "orange",
+  "lemon",
+  "watermelon",
+  "bell",
+  "cherry",
+  "orange",
+  "lemon",
+  "cherry",
 ];
 
 type BetLine = {
@@ -48,19 +50,19 @@ type BetLine = {
   en: string;
 };
 
+/** 倍率與外圈格數大致成反比；檸檬 4 格取 12×（介於櫻桃與橘子之間） */
 const BET_LINES: BetLine[] = [
-  { id: "apple", mult: 5, zh: "蘋果", en: "Apple" },
+  { id: "cherry", mult: 2, zh: "櫻桃", en: "Cherry" },
+  { id: "lemon", mult: 12, zh: "檸檬", en: "Lemon" },
+  { id: "orange", mult: 10, zh: "橘子", en: "Orange" },
   { id: "watermelon", mult: 20, zh: "西瓜", en: "Melon" },
+  { id: "bell", mult: 20, zh: "鈴鐺", en: "Bell" },
   { id: "star", mult: 30, zh: "星星", en: "Stars" },
   { id: "seven", mult: 40, zh: "７７", en: "77" },
   { id: "bar", mult: 50, zh: "BAR", en: "BAR" },
-  { id: "bell", mult: 20, zh: "鈴鐺", en: "Bell" },
-  { id: "mango", mult: 15, zh: "芒果", en: "Mango" },
-  { id: "orange", mult: 10, zh: "橘子", en: "Orange" },
-  { id: "cherry", mult: 2, zh: "櫻桃", en: "Cherry" },
 ];
 
-/** `public/lm-icons/`：Twemoji SVG（CC-BY 4.0）＋自製 bar／seven */
+/** `public/lm-icons/`：Twemoji SVG（CC-BY 4.0）＋自製 seven；bar 為使用者提供 PNG */
 function lmIconSrc(file: string): string {
   const base = import.meta.env.BASE_URL ?? "/";
   const norm = base.endsWith("/") ? base : `${base}/`;
@@ -68,16 +70,14 @@ function lmIconSrc(file: string): string {
 }
 
 const SYM_TO_FILE: Record<LittleMarySymbol, string> = {
-  apple: "apple.svg",
+  cherry: "cherry.svg",
+  lemon: "lemon.svg",
+  orange: "orange.svg",
   watermelon: "watermelon.svg",
+  bell: "bell.svg",
   star: "star.svg",
   seven: "seven.svg",
-  bar: "bar.svg",
-  bell: "bell.svg",
-  mango: "mango.svg",
-  orange: "orange.svg",
-  cherry: "cherry.svg",
-  once_more: "once.svg",
+  bar: "bar.png",
 };
 
 function escAttr(s: string): string {
@@ -94,8 +94,8 @@ function betTileIconHtml(line: BetLine, en: boolean): string {
   return symIconHtml(line.id, en ? line.en : line.zh, "lm-ico lm-ico--bet");
 }
 
-/** 實機控制台：上排 BAR→77→星→瓜，下排鈴→芒→橘→蘋，底排櫻桃 */
-const BET_TILE_ORDER = [4, 3, 2, 1, 5, 6, 7, 0, 8] as const;
+/** 押注格 4×2：上 BAR→77→星→瓜，下 鈴→橘→檸→櫻 */
+const BET_TILE_ORDER = [7, 6, 5, 3, 4, 2, 1, 0] as const;
 
 function buildPerimeterMap(): (number | null)[][] {
   const m: (number | null)[][] = Array.from({ length: 7 }, () => Array(7).fill(null));
@@ -110,7 +110,6 @@ function buildPerimeterMap(): (number | null)[][] {
 const PERIMETER_MAP = buildPerimeterMap();
 
 function symbolLabel(sym: LittleMarySymbol, en: boolean): string {
-  if (sym === "once_more") return en ? "ONCE MORE" : "再來";
   const row = BET_LINES.find((b) => b.id === sym);
   if (row) return en ? row.en : row.zh;
   return sym;
@@ -154,6 +153,9 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
   let lightIdx = 0;
   let spinning = false;
   let spinToken = 0;
+  /** 中獎後可選「比大小」；`stake` 為本局剛入帳之得分（可加倍或扣回） */
+  let gamblePending: { stake: number } | null = null;
+  let hiloResolving = false;
 
   const cabinet = document.createElement("div");
   cabinet.className = "lm-cabinet lm-cabinet--salon";
@@ -212,7 +214,8 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
       cell.dataset.slotIndex = String(si);
       const lab = symbolLabel(sym, en);
       const icon = symIconHtml(sym, lab, "lm-ico lm-ico--slot");
-      cell.innerHTML = `<span class="lm-slot__led" aria-hidden="true"></span>${icon}<span class="lm-slot__txt">${escAttr(lab)}</span>`;
+      cell.setAttribute("aria-label", lab);
+      cell.innerHTML = `<span class="lm-slot__led" aria-hidden="true"></span>${icon}`;
       if (si === lightIdx) cell.classList.add("lm-slot--lit");
       slotEls[si] = cell;
       grid.appendChild(cell);
@@ -225,7 +228,9 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
   betLedRow.className = "lm-bet-ledrow";
   betLedRow.setAttribute("role", "group");
   betLedRow.setAttribute("aria-label", en ? "Bet amount per symbol (read the red digits under each icon)" : "各圖示押注分數（圖示下方紅字）");
-  const betMiniLedEls: (HTMLElement | undefined)[] = Array(9);
+  const betMiniLedEls: (HTMLElement | undefined)[] = Array.from({
+    length: BET_LINES.length,
+  }) as (HTMLElement | undefined)[];
   for (const lineIndex of BET_TILE_ORDER) {
     const line = BET_LINES[lineIndex]!;
     const cell = document.createElement("div");
@@ -248,18 +253,11 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
 
   const betTiles: HTMLButtonElement[] = [];
 
-  function setBetTilesDisabled(dis: boolean) {
-    for (const b of betTiles) {
-      b.disabled = dis;
-    }
-  }
-
   for (const lineIndex of BET_TILE_ORDER) {
     const line = BET_LINES[lineIndex]!;
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "lm-bet-tile lm-bet-tile--arcade";
-    if (lineIndex === 8) btn.classList.add("lm-bet-tile--fullrow");
     btn.dataset.betIndex = String(lineIndex);
     btn.innerHTML = `
       <span class="lm-bet-tile__mult">${line.mult}x</span>
@@ -273,6 +271,46 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
   }
   betStrip.appendChild(betGrid);
   betRow.appendChild(betStrip);
+
+  const hiLoPanel = document.createElement("div");
+  hiLoPanel.className = "lm-hilo-panel lm-hilo-panel--arcade lm-hilo-panel--hidden";
+  hiLoPanel.setAttribute("role", "region");
+  hiLoPanel.setAttribute("aria-label", en ? "Double-or-nothing rules & result" : "比大小說明與開點");
+  const hiloRule = document.createElement("p");
+  hiloRule.className = "lm-hilo__rule";
+  const hiloDice = document.createElement("div");
+  hiloDice.className = "lm-hilo__dice";
+  hiloDice.setAttribute("aria-live", "polite");
+  hiLoPanel.append(hiloRule, hiloDice);
+
+  const hiLoBar = document.createElement("div");
+  hiLoBar.className = "lm-hilo-bar lm-hilo-bar--arcade";
+  hiLoBar.setAttribute("role", "group");
+  hiLoBar.setAttribute("aria-label", en ? "Double-or-nothing: pick HIGH, LOW, or Skip" : "比大小：選大、小或不賭");
+  const hiLoBarTitle = document.createElement("div");
+  hiLoBarTitle.className = "lm-hilo-bar__title";
+  hiLoBarTitle.textContent = en ? "Double-or-nothing" : "比大小";
+  const btnHiloBig = document.createElement("button");
+  btnHiloBig.type = "button";
+  btnHiloBig.className = "lm-hilo__pick lm-hilo__pick--big";
+  btnHiloBig.textContent = en ? "High" : "大";
+  btnHiloBig.setAttribute(
+    "aria-label",
+    en ? "High: win if the next roll is 7–12." : "大：再開點數 7～12 為大。",
+  );
+  const btnHiloSmall = document.createElement("button");
+  btnHiloSmall.type = "button";
+  btnHiloSmall.className = "lm-hilo__pick lm-hilo__pick--small";
+  btnHiloSmall.textContent = en ? "Low" : "小";
+  btnHiloSmall.setAttribute(
+    "aria-label",
+    en ? "Low: win if the next roll is 1–6." : "小：再開點數 1～6 為小。",
+  );
+  const btnHiloSkip = document.createElement("button");
+  btnHiloSkip.type = "button";
+  btnHiloSkip.className = "lm-hilo__skip";
+  btnHiloSkip.textContent = en ? "Skip" : "不賭";
+  hiLoBar.append(hiLoBarTitle, btnHiloBig, btnHiloSmall, btnHiloSkip);
 
   const controls = document.createElement("div");
   controls.className = "lm-controls lm-controls--bar lm-controls--arcade";
@@ -288,15 +326,26 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
   btnClear.type = "button";
   btnClear.className = "lm-controls__clear";
   btnClear.textContent = en ? "Clear bets" : "清空押注";
+  const btnBetAll = document.createElement("button");
+  btnBetAll.type = "button";
+  btnBetAll.className = "lm-controls__betall";
+  btnBetAll.textContent = en ? "Bet all" : "全押";
+  btnBetAll.title = en
+    ? "Spend all credits on bets, +1 per line round-robin until balance is 0."
+    : "將剩餘分數全數押入：依八條線輪流每次 +1，直到分數用盡。";
+  btnBetAll.setAttribute(
+    "aria-label",
+    en ? "Bet all credits in round-robin across eight lines" : "全押：剩餘分數輪流押滿八條線",
+  );
 
-  controls.append(btnClear, btnCollect, btnStart);
+  controls.append(btnClear, btnBetAll, btnCollect, btnStart);
 
   const msg = document.createElement("p");
   msg.className = "lm-msg";
   msg.setAttribute("aria-live", "polite");
   msg.textContent = en ? "Tap a symbol, then Start." : "點圖示押注，再按開始。";
 
-  root.append(board, betRow, controls, msg);
+  root.append(board, betRow, hiLoPanel, hiLoBar, controls, msg);
   cabinet.appendChild(root);
   host.appendChild(cabinet);
 
@@ -310,11 +359,84 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
   function syncDisplays() {
     elWin.textContent = pad4(winPile);
     elCredit.textContent = pad4(credit);
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < BET_LINES.length; i++) {
       const v = String(bets[i] ?? 0);
       const mini = betMiniLedEls[i];
       if (mini) mini.textContent = v;
     }
+  }
+
+  function updateInteractiveLock() {
+    const g = gamblePending !== null;
+    const tilesOff = spinning || g;
+    for (const b of betTiles) {
+      b.disabled = tilesOff;
+    }
+    btnStart.disabled = spinning || g || totalBet() === 0;
+    btnClear.disabled = spinning || g || totalBet() === 0;
+    btnBetAll.disabled = spinning || g || credit <= 0;
+    btnCollect.disabled = winPile <= 0;
+    const hiloBtnsOff = !g || hiloResolving;
+    btnHiloBig.disabled = hiloBtnsOff;
+    btnHiloSmall.disabled = hiloBtnsOff;
+    btnHiloSkip.disabled = hiloBtnsOff;
+  }
+
+  function dismissHiLoPanel() {
+    gamblePending = null;
+    hiLoPanel.classList.add("lm-hilo-panel--hidden");
+    hiloRule.textContent = "";
+    hiloDice.textContent = "";
+  }
+
+  function offerHiLo(stake: number) {
+    gamblePending = { stake };
+    hiLoPanel.classList.remove("lm-hilo-panel--hidden");
+    hiloRule.textContent = en
+      ? `Double-or-nothing on this win (+${stake}): roll 1–12. HIGH = 7–12, LOW = 1–6 (fair split). Win → +${stake} bonus; lose → −${stake} from bonus. Skip keeps bonus.`
+      : `本局獎 +${stake} 可選比大小：再開 1～12 點，大＝7～12、小＝1～6（各半機率）。猜中再 +${stake} 得分；猜錯從得分扣 ${stake}。「不賭」保留現狀。`;
+    hiloDice.textContent = "";
+    updateInteractiveLock();
+    btnHiloSkip.focus();
+  }
+
+  function skipHiLo() {
+    if (!gamblePending || hiloResolving) return;
+    dismissHiLoPanel();
+    updateInteractiveLock();
+    msg.textContent = en ? "Skipped double-or-nothing." : "已略過比大小，得分不變。";
+  }
+
+  function resolveHiLo(guessHigh: boolean) {
+    if (!gamblePending || hiloResolving) return;
+    const { stake } = gamblePending;
+    hiloResolving = true;
+    updateInteractiveLock();
+    const roll = Math.floor(Math.random() * 12) + 1;
+    const isHigh = roll >= 7;
+    const hit = guessHigh ? isHigh : !isHigh;
+    if (hit) {
+      winPile = Math.min(9999, winPile + stake);
+      sfx.playWin(stake);
+      hiloDice.textContent = en
+        ? `Rolled ${roll} (${isHigh ? "HIGH" : "LOW"}). Hit! +${stake} bonus.`
+        : `開出 ${roll} 點（${isHigh ? "大" : "小"}）。中！再 +${stake} 得分。`;
+      msg.textContent = en ? `Hi-lo hit! Bonus +${stake}.` : `比大小猜中！再 +${stake} 得分。`;
+    } else {
+      winPile = Math.max(0, winPile - stake);
+      sfx.playMiss();
+      hiloDice.textContent = en
+        ? `Rolled ${roll} (${isHigh ? "HIGH" : "LOW"}). Missed −${stake} from this win.`
+        : `開出 ${roll} 點（${isHigh ? "大" : "小"}）。未中，本局 ${stake} 得分自得分欄扣回。`;
+      msg.textContent = en ? `Hi-lo miss. −${stake} from bonus.` : `比大小未中，自得分扣 ${stake}。`;
+    }
+    gamblePending = null;
+    hiLoPanel.classList.add("lm-hilo-panel--hidden");
+    hiloRule.textContent = "";
+    hiloDice.textContent = "";
+    hiloResolving = false;
+    syncDisplays();
+    updateInteractiveLock();
   }
 
   function setLight(i: number) {
@@ -330,6 +452,11 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
 
   function addBet(lineIndex: number) {
     if (spinning) return;
+    if (gamblePending) {
+      sfx.playError();
+      msg.textContent = en ? "Finish or skip double-or-nothing first." : "請先完成比大小，或按「不賭」。";
+      return;
+    }
     if (credit <= 0) {
       sfx.playNoCredit();
       msg.textContent = en ? "No credit." : "分數不足。";
@@ -339,56 +466,99 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
     bets[lineIndex] = (bets[lineIndex] ?? 0) + 1;
     sfx.playBet();
     syncDisplays();
+    updateInteractiveLock();
     msg.textContent = en ? "Bet placed." : "已押注。";
   }
 
   function clearBets() {
     if (spinning) return;
+    if (gamblePending) return;
     const sum = totalBet();
     if (sum === 0) return;
     credit += sum;
     bets.fill(0);
     sfx.playClear();
     syncDisplays();
+    updateInteractiveLock();
     msg.textContent = en ? "Bets cleared." : "已退回押注。";
+  }
+
+  function betAll() {
+    if (spinning) return;
+    if (gamblePending) {
+      sfx.playError();
+      msg.textContent = en ? "Finish or skip double-or-nothing first." : "請先完成比大小，或按「不賭」。";
+      return;
+    }
+    if (credit <= 0) {
+      sfx.playNoCredit();
+      msg.textContent = en ? "No credit." : "分數不足。";
+      return;
+    }
+    const order = [...BET_TILE_ORDER];
+    let placed = 0;
+    while (credit > 0) {
+      for (const lineIndex of order) {
+        if (credit <= 0) break;
+        credit -= 1;
+        bets[lineIndex] = (bets[lineIndex] ?? 0) + 1;
+        placed += 1;
+      }
+    }
+    sfx.playBet();
+    syncDisplays();
+    updateInteractiveLock();
+    msg.textContent = en
+      ? `All-in: ${placed} credit(s) placed round-robin on all lines.`
+      : `已全押：共 ${placed} 分，依八條線輪流各 +1 直到分數用盡。`;
   }
 
   function collectWin() {
     if (spinning) return;
     if (winPile <= 0) return;
+    if (gamblePending) {
+      dismissHiLoPanel();
+      updateInteractiveLock();
+    }
     credit += winPile;
     winPile = 0;
     sfx.playCollect();
     syncDisplays();
+    updateInteractiveLock();
     msg.textContent = en ? "Credited." : "已轉入分數。";
   }
 
   function resolveStop(stopIdx: number) {
     const sym = LOOP_24[stopIdx]!;
-    if (sym === "once_more") {
-      credit += 8;
-      sfx.playOnceMore();
-      msg.textContent = en ? "ONCE MORE — +8 credit!" : "再來！獲得 8 分。";
+    const line = BET_LINES.findIndex((b) => b.id === sym);
+    const b = line >= 0 ? bets[line] ?? 0 : 0;
+    const mult = line >= 0 ? BET_LINES[line]!.mult : 0;
+    let hitGain = 0;
+    if (b > 0 && mult > 0) {
+      hitGain = b * mult;
+      winPile += hitGain;
+      sfx.playWin(hitGain);
+      msg.textContent = en ? `Hit ${BET_LINES[line]!.en}! +${hitGain}` : `開出 ${BET_LINES[line]!.zh}！+${hitGain} 得分`;
     } else {
-      const line = BET_LINES.findIndex((b) => b.id === sym);
-      const b = line >= 0 ? bets[line] ?? 0 : 0;
-      const mult = line >= 0 ? BET_LINES[line]!.mult : 0;
-      if (b > 0 && mult > 0) {
-        const gain = b * mult;
-        winPile += gain;
-        sfx.playWin(gain);
-        msg.textContent = en ? `Hit ${BET_LINES[line]!.en}! +${gain}` : `開出 ${BET_LINES[line]!.zh}！+${gain} 得分`;
-      } else {
-        sfx.playMiss();
-        msg.textContent = en ? `Stopped on ${symbolLabel(sym, true)}.` : `停在「${symbolLabel(sym, false)}」。`;
-      }
+      sfx.playMiss();
+      msg.textContent = en ? `Stopped on ${symbolLabel(sym, true)}.` : `停在「${symbolLabel(sym, false)}」。`;
     }
     bets.fill(0);
     syncDisplays();
+    if (hitGain > 0) {
+      offerHiLo(hitGain);
+    } else {
+      updateInteractiveLock();
+    }
   }
 
   function runSpin() {
     if (spinning) return;
+    if (gamblePending) {
+      sfx.playError();
+      msg.textContent = en ? "Finish or skip double-or-nothing first." : "請先完成比大小，或按「不賭」。";
+      return;
+    }
     if (totalBet() === 0) {
       sfx.playError();
       msg.textContent = en ? "Place a bet first." : "請先押注。";
@@ -396,7 +566,7 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
     }
     sfx.playSpinStart();
     spinning = true;
-    setBetTilesDisabled(true);
+    updateInteractiveLock();
     const myToken = ++spinToken;
     const target = Math.floor(Math.random() * 24);
     const minLaps = 3;
@@ -416,7 +586,6 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
       sfx.playSpinTick(step / Math.max(1, totalSteps));
       if (step >= totalSteps) {
         spinning = false;
-        setBetTilesDisabled(false);
         resolveStop(lightIdx);
         return;
       }
@@ -430,6 +599,10 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
   btnStart.addEventListener("click", runSpin);
   btnCollect.addEventListener("click", collectWin);
   btnClear.addEventListener("click", clearBets);
+  btnBetAll.addEventListener("click", betAll);
+  btnHiloBig.addEventListener("click", () => resolveHiLo(true));
+  btnHiloSmall.addEventListener("click", () => resolveHiLo(false));
+  btnHiloSkip.addEventListener("click", () => skipHiLo());
 
   let panelVisible = false;
   const io = new IntersectionObserver(
@@ -446,6 +619,7 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
     const t = ev.target as HTMLElement | null;
     if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT")) return;
     if (ev.code === "Space") {
+      if (gamblePending) return;
       ev.preventDefault();
       runSpin();
     }
@@ -453,6 +627,7 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
   window.addEventListener("keydown", onKey);
 
   syncDisplays();
+  updateInteractiveLock();
 
   return () => {
     spinToken += 1;

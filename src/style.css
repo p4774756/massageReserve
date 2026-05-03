@@ -733,6 +733,56 @@ main.panel[hidden] {
   touch-action: none;
 }
 
+/** 太陽系分頁：頂部捷徑，鏡頭飛近各天體／總覽 */
+.book-tab-three-tour {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 5px 6px;
+  padding: 7px 8px 8px;
+  pointer-events: auto;
+  background: linear-gradient(180deg, rgb(6 10 22 / 0.88) 0%, rgb(4 8 18 / 0.45) 72%, transparent 100%);
+  border-bottom: 1px solid rgb(140 170 255 / 0.12);
+}
+
+.book-tab-three-tour__btn {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 4px 8px;
+  border: 1px solid rgb(160 190 255 / 0.28);
+  border-radius: 6px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  color: rgb(220 232 255 / 0.95);
+  background: rgb(255 255 255 / 0.08);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.book-tab-three-tour__btn:hover {
+  border-color: rgb(200 220 255 / 0.45);
+  background: rgb(255 255 255 / 0.14);
+  color: #fff;
+}
+
+.book-tab-three-tour__btn[aria-pressed="true"] {
+  border-color: rgb(255 210 160 / 0.55);
+  background: rgb(255 200 140 / 0.18);
+  color: #fff8f0;
+}
+
+.book-tab-three-tour__btn--overview {
+  font-weight: 700;
+}
+
 .book-tab-three-hud {
   position: absolute;
   left: 10px;
@@ -849,18 +899,11 @@ main.panel[hidden] {
   color: rgb(230 215 200 / 0.95);
 }
 
-.book-tab-lm-rules__zh,
-.book-tab-lm-rules__en {
-  margin: 0 0 10px;
+.book-tab-lm-rules__body {
+  margin: 0;
   font-size: 0.78rem;
   line-height: 1.55;
   color: rgb(215 200 188 / 0.95);
-}
-
-.book-tab-lm-rules__en {
-  margin-bottom: 0;
-  padding-top: 8px;
-  border-top: 1px dashed rgb(255 255 255 / 0.12);
 }
 
 .book-tab-lm-mount {
@@ -931,6 +974,10 @@ main.panel[hidden] {
 
 .lm-root--salon {
   gap: 12px;
+  /** 與押注白鍵列對齊：高、內距、欄距（比大小／控制列沿用） */
+  --lm-arcade-tile-min-h: 4.35rem;
+  --lm-arcade-strip-pad: 10px 12px 12px;
+  --lm-arcade-grid-gap: 8px;
 }
 
 .lm-status {
@@ -973,14 +1020,16 @@ main.panel[hidden] {
   color: rgb(200 170 195 / 0.88);
 }
 
+/* 小瑪莉數字：DSEG7 七段字型（SIL OFL，見 node_modules/@fontsource/dseg7） */
 .lm-led {
   display: inline-block;
-  min-width: 4.2ch;
+  min-width: 4.6ch;
   padding: 5px 10px;
-  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-family: "DSEG7", ui-monospace, "Cascadia Code", monospace;
   font-size: 1.12rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  font-variant-numeric: tabular-nums;
   color: #ff5538;
   text-shadow:
     0 0 8px rgb(255 60 40 / 0.55),
@@ -993,7 +1042,8 @@ main.panel[hidden] {
 }
 
 .lm-led--arcade {
-  font-family: ui-monospace, "Segoe UI Mono", "Cascadia Code", monospace;
+  font-family: "DSEG7", "Segoe UI Mono", ui-monospace, monospace;
+  letter-spacing: 0.12em;
   box-shadow:
     inset 0 1px 0 rgb(255 100 80 / 0.1),
     inset 0 -1px 0 rgb(0 0 0 / 0.4),
@@ -1170,6 +1220,7 @@ main.panel[hidden] {
 .lm-slot--arcade {
   min-height: 0;
   overflow: hidden;
+  padding: 3px 2px;
   border-color: rgb(55 48 68 / 0.95);
   background: linear-gradient(165deg, #18141f 0%, #0c0a12 100%);
   box-shadow:
@@ -1177,16 +1228,21 @@ main.panel[hidden] {
     inset 0 -1px 0 rgb(0 0 0 / 0.35);
 }
 
+/* 外圈格頂：實體機台式方型 LED 窗（非圓形燈泡） */
 .lm-slot__led {
   position: absolute;
-  top: 4px;
+  top: 3px;
   left: 50%;
-  width: 5px;
-  height: 5px;
-  margin-left: -2.5px;
-  border-radius: 50%;
-  background: rgb(30 22 35);
-  box-shadow: inset 0 0 3px rgb(0 0 0 / 0.85);
+  box-sizing: border-box;
+  width: clamp(7px, 22%, 10px);
+  height: clamp(5px, 14%, 7px);
+  transform: translateX(-50%);
+  border-radius: 1px;
+  border: 1px solid rgb(0 0 0 / 0.55);
+  background: linear-gradient(180deg, rgb(42 26 28) 0%, rgb(16 9 11) 100%);
+  box-shadow:
+    inset 0 2px 3px rgb(0 0 0 / 0.82),
+    inset 0 -1px 0 rgb(255 255 255 / 0.04);
 }
 
 .lm-slot--lit {
@@ -1200,19 +1256,22 @@ main.panel[hidden] {
 .lm-slot--arcade.lm-slot--lit {
   border-color: rgb(255 210 130);
   background:
-    radial-gradient(circle at 50% 28%, rgb(255 200 140 / 0.22) 0%, transparent 58%),
+    linear-gradient(180deg, rgb(255 200 140 / 0.12) 0%, transparent 22%),
     linear-gradient(165deg, #1e1828 0%, #0e0c14 100%);
   box-shadow:
-    0 0 18px rgb(255 200 100 / 0.45),
-    0 0 32px rgb(255 100 160 / 0.12),
-    inset 0 0 12px rgb(255 200 120 / 0.08);
+    0 0 14px rgb(255 80 50 / 0.35),
+    0 0 22px rgb(255 40 30 / 0.12),
+    inset 0 0 10px rgb(255 200 120 / 0.06);
 }
 
 .lm-slot--lit .lm-slot__led {
-  background: radial-gradient(circle at 30% 30%, #fff8e0, #ff6630);
+  border-color: rgb(55 6 6 / 0.9);
+  background: linear-gradient(180deg, #ffd2c8 0%, #ff3824 38%, #7c0808 100%);
   box-shadow:
-    0 0 8px rgb(255 100 40 / 0.95),
-    0 0 14px rgb(255 60 80 / 0.5);
+    0 0 8px rgb(255 70 45 / 0.98),
+    0 0 14px rgb(255 30 20 / 0.55),
+    inset 0 1px 0 rgb(255 248 240 / 0.7),
+    inset 0 -3px 5px rgb(90 8 6 / 0.45);
 }
 
 .lm-ico {
@@ -1223,10 +1282,10 @@ main.panel[hidden] {
 }
 
 .lm-ico--slot {
-  width: clamp(0.92rem, 3.5vw, 1.22rem);
-  height: clamp(0.92rem, 3.5vw, 1.22rem);
-  max-width: 100%;
-  max-height: min(55%, 1.35rem);
+  width: clamp(1.1rem, 5.8vw, 1.72rem);
+  height: clamp(1.1rem, 5.8vw, 1.72rem);
+  max-width: min(100%, 2.1rem);
+  max-height: min(100%, 2.1rem);
   margin: 0 auto;
   flex-shrink: 1;
   object-fit: contain;
@@ -1238,38 +1297,37 @@ main.panel[hidden] {
   height: clamp(1.05rem, 4vw, 1.42rem);
 }
 
-.lm-slot__txt {
-  font-size: clamp(0.45rem, 1.5vw, 0.58rem);
-  line-height: 1.1;
-  color: rgb(210 190 170 / 0.92);
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* 4×2 押注白鍵：圖示大於上方 LED 總覽列，減少留白（靠 container + cqw 隨寬放大） */
+.lm-bets-strip--arcade .lm-ico--bet {
+  width: clamp(1.42rem, 8.2vw, 2.2rem);
+  height: clamp(1.42rem, 8.2vw, 2.2rem);
+  max-width: min(100%, 2.55rem);
+  max-height: min(72%, 2.55rem);
 }
 
-.lm-slot--arcade .lm-slot__txt {
-  color: rgb(210 205 228 / 0.9);
-  font-weight: 600;
-  letter-spacing: 0.02em;
+@container lm-bets-strip (min-width: 0px) {
+  .lm-bets-strip--arcade .lm-ico--bet {
+    width: clamp(1.42rem, 19cqw, 2.45rem);
+    height: clamp(1.42rem, 19cqw, 2.45rem);
+  }
 }
 
-/** 螢幕底押注小紅字列：九等分填滿寬度，圖示／紅字隨列寬比例縮放（container + cqw，舊瀏覽器用 vw） */
+/** 螢幕底押注小紅字列：單排 8 欄（下方押注鈕仍為 4×2），圖示／紅字隨列寬比例縮放（container + cqw，舊瀏覽器用 vw） */
 .lm-bet-ledrow {
   --lm-led-gap: clamp(3px, 1.4vw, 8px);
   position: relative;
   z-index: 0;
   display: grid;
-  grid-template-columns: repeat(9, minmax(0, 1fr));
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   column-gap: var(--lm-led-gap);
   align-items: center;
   justify-items: stretch;
   container-type: inline-size;
   container-name: lm-bet-led;
   flex-shrink: 0;
-  min-height: clamp(2.85rem, 10vw, 3.4rem);
+  min-height: clamp(3.05rem, 11vw, 3.65rem);
   margin-top: 2px;
-  padding: 10px clamp(4px, 2vw, 10px) 9px;
+  padding: 10px clamp(4px, 1.6vw, 10px) 9px;
   border-top: 1px solid rgb(200 152 184 / 0.15);
   background: linear-gradient(180deg, rgb(12 8 18 / 0.99) 0%, rgb(6 4 10 / 1) 100%);
   border-radius: 0 0 10px 10px;
@@ -1281,42 +1339,43 @@ main.panel[hidden] {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: clamp(2px, 0.6vw, 4px);
+  gap: clamp(3px, 0.75vw, 5px);
   min-width: 0;
   width: 100%;
-  padding: 3px 1px;
+  padding: 4px 2px;
   border-radius: 6px;
   background: rgb(0 0 0 / 0.2);
 }
 
-/* 與列寬連動：無 CQ 時用 vw；有 container 時用 cqw 更貼近實際棋盤寬 */
+/* 與列寬連動：無 CQ 時用 vw；有 container 時用 cqw（8 欄時易偏小，下限與 cqw 係數略抬高） */
 .lm-bet-ledcell .lm-ico--bet {
-  width: clamp(0.78rem, 3.4vw, 1.18rem);
-  height: clamp(0.78rem, 3.4vw, 1.18rem);
+  width: clamp(0.95rem, 4.8vw, 1.42rem);
+  height: clamp(0.95rem, 4.8vw, 1.42rem);
 }
 
 @container lm-bet-led (min-width: 0px) {
   .lm-bet-ledcell .lm-ico--bet {
-    width: clamp(0.78rem, 8.8cqw, 1.22rem);
-    height: clamp(0.78rem, 8.8cqw, 1.22rem);
+    width: clamp(0.95rem, 12cqw, 1.52rem);
+    height: clamp(0.95rem, 12cqw, 1.52rem);
   }
 }
 
 .lm-led--mini {
   min-width: 1ch;
   padding: 1px 3px;
-  letter-spacing: 0.02em;
+  font-family: "DSEG7", ui-monospace, monospace;
+  letter-spacing: 0.06em;
   border-width: 1px;
   border-radius: 2px;
 }
 
 .lm-bet-ledrow .lm-led--mini {
-  font-size: clamp(0.54rem, 2.5vw, 0.72rem);
+  font-size: clamp(0.62rem, 2.9vw, 0.82rem);
 }
 
 @container lm-bet-led (min-width: 0px) {
   .lm-bet-ledrow .lm-led--mini {
-    font-size: clamp(0.54rem, 3.6cqw, 0.74rem);
+    font-size: clamp(0.62rem, 4.2cqw, 0.85rem);
   }
 }
 
@@ -1335,7 +1394,7 @@ main.panel[hidden] {
   .lm-bet-ledrow {
     --lm-led-gap: clamp(2px, 1.2vw, 6px);
     padding-inline: 3px;
-    min-height: clamp(2.7rem, 12vw, 3.1rem);
+    min-height: clamp(2.9rem, 13vw, 3.35rem);
     margin-top: 6px;
   }
 
@@ -1343,6 +1402,30 @@ main.panel[hidden] {
     box-shadow:
       0 0 8px rgb(255 200 60 / 0.45),
       inset 0 0 6px rgb(255 180 40 / 0.1);
+  }
+
+  .lm-root--salon {
+    --lm-arcade-tile-min-h: 4rem;
+    --lm-arcade-strip-pad: 8px 10px 10px;
+    --lm-arcade-grid-gap: 6px;
+  }
+
+  .lm-controls--arcade.lm-controls--bar .lm-controls__clear,
+  .lm-controls--arcade.lm-controls--bar .lm-controls__betall,
+  .lm-controls--arcade.lm-controls--bar .lm-controls__collect,
+  .lm-controls--arcade.lm-controls--bar .lm-controls__start {
+    font-size: clamp(0.5rem, 3.2vw, 0.6rem);
+    padding: 3px 2px;
+  }
+
+  .lm-bet-tile--arcade {
+    padding: 3px 2px;
+  }
+
+  .lm-hilo-bar--arcade .lm-hilo__pick,
+  .lm-hilo-bar--arcade .lm-hilo__skip {
+    font-size: clamp(0.5rem, 3.2vw, 0.6rem);
+    padding: 3px 2px;
   }
 }
 
@@ -1363,8 +1446,10 @@ main.panel[hidden] {
 }
 
 .lm-bets-strip--arcade {
-  padding: 10px 12px 12px;
-  border-radius: 12px;
+  container-type: inline-size;
+  container-name: lm-bets-strip;
+  padding: var(--lm-arcade-strip-pad, 10px 12px 12px);
+  border-radius: 0;
   border: 1px solid rgb(240 200 160 / 0.35);
   background: linear-gradient(180deg, rgb(28 20 34) 0%, rgb(10 8 14) 100%);
   box-shadow:
@@ -1380,14 +1465,13 @@ main.panel[hidden] {
 }
 
 .lm-bets-grid--arcade {
+  width: 100%;
+  box-sizing: border-box;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px 7px;
-}
-
-.lm-bet-tile--fullrow {
-  grid-column: 1 / -1;
-  max-width: 8.5rem;
-  margin-inline: auto;
+  grid-auto-rows: minmax(var(--lm-arcade-tile-min-h, 4.35rem), auto);
+  align-items: stretch;
+  justify-items: stretch;
+  gap: var(--lm-arcade-grid-gap, 8px);
 }
 
 .lm-bet-tile {
@@ -1411,17 +1495,23 @@ main.panel[hidden] {
 }
 
 .lm-bet-tile--arcade {
-  min-height: 2.65rem;
-  padding: 9px 5px 7px;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  min-height: var(--lm-arcade-tile-min-h, 4.35rem);
+  padding: 4px 2px;
   border: 1px solid rgb(255 255 255 / 0.45);
-  border-radius: 10px;
+  border-radius: 0;
   color: #1e1422;
   background: linear-gradient(165deg, #fffefb 0%, #ece4f0 42%, #d4c8dc 100%);
   box-shadow:
     inset 0 2px 0 rgb(255 255 255 / 0.9),
     inset 0 -2px 6px rgb(160 120 150 / 0.12),
-    0 3px 0 rgb(40 30 50 / 0.35),
-    0 8px 16px rgb(60 30 70 / 0.12);
+    0 4px 0 rgb(32 26 44 / 0.55),
+    3px 3px 0 rgb(18 14 24 / 0.62),
+    5px 6px 12px rgb(0 0 0 / 0.22);
 }
 
 .lm-bet-tile--arcade:hover:not(:disabled) {
@@ -1429,8 +1519,10 @@ main.panel[hidden] {
   background: linear-gradient(165deg, #ffffff 0%, #f4eef8 48%, #e2d8ec 100%);
   box-shadow:
     inset 0 2px 0 rgb(255 255 255 / 1),
-    0 3px 0 rgb(40 30 50 / 0.28),
-    0 0 20px rgb(255 200 220 / 0.25);
+    0 4px 0 rgb(32 26 44 / 0.45),
+    3px 3px 0 rgb(18 14 24 / 0.48),
+    5px 6px 14px rgb(0 0 0 / 0.18),
+    0 0 18px rgb(255 200 220 / 0.22);
 }
 
 .lm-bet-tile--arcade:active:not(:disabled) {
@@ -1438,7 +1530,8 @@ main.panel[hidden] {
   border-style: solid;
   box-shadow:
     inset 0 2px 4px rgb(0 0 0 / 0.08),
-    0 1px 0 rgb(40 30 50 / 0.35);
+    0 1px 0 rgb(40 30 50 / 0.35),
+    1px 2px 0 rgb(18 14 24 / 0.45);
 }
 
 .lm-bet-tile:hover:not(:disabled) {
@@ -1492,14 +1585,15 @@ main.panel[hidden] {
   padding: 2px 0;
 }
 
-.lm-controls--bar .lm-controls__clear,
-.lm-controls--bar .lm-controls__collect {
+.lm-controls--bar:not(.lm-controls--arcade) .lm-controls__clear,
+.lm-controls--bar:not(.lm-controls--arcade) .lm-controls__betall,
+.lm-controls--bar:not(.lm-controls--arcade) .lm-controls__collect {
   flex: 0 1 auto;
   padding: 7px 10px;
   font-size: 0.76rem;
 }
 
-.lm-controls--bar .lm-controls__start {
+.lm-controls--bar:not(.lm-controls--arcade) .lm-controls__start {
   flex: 1 1 44%;
   min-width: 7rem;
   padding: 8px 12px;
@@ -1510,12 +1604,57 @@ main.panel[hidden] {
   padding: 6px 4px 2px;
 }
 
-/* 與押注格 lm-bet-tile--arcade 同系的立體白鈕 */
+/** 小瑪莉機台：控制列四鍵與押注列同欄寬／同列高（內距與 gap 與 lm-bets-strip--arcade 一致） */
+.lm-controls.lm-controls--bar.lm-controls--arcade {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: minmax(var(--lm-arcade-tile-min-h, 4.35rem), auto);
+  align-items: stretch;
+  justify-items: stretch;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: var(--lm-arcade-strip-pad, 10px 12px 12px);
+  gap: var(--lm-arcade-grid-gap, 8px);
+  /* 與比大小列同系承盤：避免白鍵／藍鍵的右下陰影貼在機殼最深處而消失 */
+  margin-top: 2px;
+  border-radius: 0;
+  border: 1px solid rgb(240 200 160 / 0.26);
+  background: linear-gradient(180deg, rgb(58 48 72 / 0.96) 0%, rgb(40 34 54 / 0.99) 100%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.07),
+    0 4px 12px rgb(0 0 0 / 0.26);
+}
+
+.lm-controls--arcade.lm-controls--bar .lm-controls__clear,
+.lm-controls--arcade.lm-controls--bar .lm-controls__betall,
+.lm-controls--arcade.lm-controls--bar .lm-controls__collect,
+.lm-controls--arcade.lm-controls--bar .lm-controls__start {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  min-height: var(--lm-arcade-tile-min-h, 4.35rem);
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  text-wrap: balance;
+  padding: 4px 3px;
+  font-size: clamp(0.52rem, 2.5vw, 0.66rem);
+  line-height: 1.12;
+}
+
+/* 與押注格 lm-bet-tile--arcade 同系：實體機式方角厚鍵帽 */
 .lm-controls--arcade .lm-controls__clear,
+.lm-controls--arcade .lm-controls__betall,
 .lm-controls--arcade .lm-controls__collect,
 .lm-controls--arcade .lm-controls__start {
+  -webkit-appearance: none;
+  appearance: none;
   border: 1px solid rgb(255 255 255 / 0.45);
-  border-radius: 10px;
+  border-radius: 0;
   color: #1e1422;
   font-weight: 700;
   cursor: pointer;
@@ -1523,8 +1662,9 @@ main.panel[hidden] {
   box-shadow:
     inset 0 2px 0 rgb(255 255 255 / 0.9),
     inset 0 -2px 6px rgb(160 120 150 / 0.12),
-    0 3px 0 rgb(40 30 50 / 0.35),
-    0 8px 16px rgb(60 30 70 / 0.12);
+    0 4px 0 rgb(32 26 44 / 0.55),
+    3px 3px 0 rgb(18 14 24 / 0.62),
+    5px 6px 12px rgb(0 0 0 / 0.22);
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -1535,6 +1675,7 @@ main.panel[hidden] {
 }
 
 .lm-controls--arcade .lm-controls__clear:hover,
+.lm-controls--arcade .lm-controls__betall:hover,
 .lm-controls--arcade .lm-controls__collect:hover,
 .lm-controls--arcade .lm-controls__start:hover {
   border-color: rgb(255 230 200);
@@ -1542,18 +1683,22 @@ main.panel[hidden] {
   box-shadow:
     inset 0 2px 0 rgb(255 255 255 / 1),
     inset 0 -2px 6px rgb(160 120 150 / 0.1),
-    0 3px 0 rgb(40 30 50 / 0.28),
-    0 0 20px rgb(255 200 220 / 0.22);
+    0 4px 0 rgb(32 26 44 / 0.45),
+    3px 3px 0 rgb(18 14 24 / 0.48),
+    5px 6px 14px rgb(0 0 0 / 0.18),
+    0 0 18px rgb(255 200 220 / 0.22);
 }
 
 .lm-controls--arcade .lm-controls__clear:active,
+.lm-controls--arcade .lm-controls__betall:active,
 .lm-controls--arcade .lm-controls__collect:active,
 .lm-controls--arcade .lm-controls__start:active {
   transform: translateY(2px);
   border-style: solid;
   box-shadow:
     inset 0 2px 4px rgb(0 0 0 / 0.08),
-    0 1px 0 rgb(40 30 50 / 0.35);
+    0 1px 0 rgb(40 30 50 / 0.35),
+    1px 2px 0 rgb(18 14 24 / 0.45);
 }
 
 .lm-controls__start {
@@ -1582,6 +1727,7 @@ main.panel[hidden] {
 .lm-controls__start:focus-visible,
 .lm-bet-tile:focus-visible,
 .lm-controls__collect:focus-visible,
+.lm-controls__betall:focus-visible,
 .lm-controls__clear:focus-visible {
   outline: 2px solid rgb(255 200 120 / 0.85);
   outline-offset: 2px;
@@ -1599,6 +1745,7 @@ main.panel[hidden] {
 }
 
 .lm-controls__collect,
+.lm-controls__betall,
 .lm-controls__clear {
   padding: 9px 14px;
   font-size: 0.8rem;
@@ -1623,6 +1770,164 @@ main.panel[hidden] {
 .lm-root .lm-msg {
   color: rgb(190 175 205 / 0.9);
   font-family: ui-monospace, "Cascadia Code", system-ui, sans-serif;
+}
+
+/** 比大小：說明＋開點（僅中獎待選時顯示） */
+.lm-hilo-panel--hidden {
+  display: none !important;
+}
+
+.lm-hilo-panel--arcade {
+  margin: 0 0 6px;
+  padding: 10px 12px 12px;
+  border-radius: 12px;
+  border: 1px solid rgb(255 200 120 / 0.35);
+  /* 略淺於機殼內底，否則鍵帽右下硬陰影會融進背景 */
+  background: linear-gradient(180deg, rgb(52 42 66 / 0.98) 0%, rgb(34 28 48 / 1) 100%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.06),
+    0 4px 14px rgb(0 0 0 / 0.35);
+}
+
+/** 比大小按鍵列：常駐獨立一排（未開局時鈕為 disabled） */
+.lm-hilo-bar--arcade {
+  display: grid;
+  /* 與押注 4 欄同寬度基準：大／小／不賭占前三欄，第 4 欄留白，單鍵寬＝押注鍵 */
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: auto minmax(var(--lm-arcade-tile-min-h, 4.35rem), auto);
+  align-items: stretch;
+  justify-items: stretch;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  gap: var(--lm-arcade-grid-gap, 8px);
+  margin: 0 0 10px;
+  padding: var(--lm-arcade-strip-pad, 10px 12px 12px);
+  border-radius: 0;
+  border: 1px solid rgb(240 200 160 / 0.28);
+  /* 承盤提亮：與鍵帽硬陰影（深紫灰）拉開對比 */
+  background: linear-gradient(180deg, rgb(58 48 72 / 0.96) 0%, rgb(40 34 54 / 0.99) 100%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.07),
+    0 4px 12px rgb(0 0 0 / 0.28);
+}
+
+.lm-hilo-bar__title {
+  grid-column: 1 / -1;
+  margin: 0 0 2px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-align: center;
+  text-transform: uppercase;
+  color: rgb(230 200 160 / 0.88);
+  align-self: center;
+}
+
+.lm-hilo-bar--arcade .lm-hilo__pick,
+.lm-hilo-bar--arcade .lm-hilo__skip {
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  min-height: var(--lm-arcade-tile-min-h, 4.35rem);
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-wrap: balance;
+  padding: 4px 3px;
+  font-size: clamp(0.52rem, 2.5vw, 0.66rem);
+  line-height: 1.12;
+}
+
+.lm-hilo__rule {
+  margin: 0 0 8px;
+  font-size: 0.68rem;
+  line-height: 1.45;
+  color: rgb(210 195 225 / 0.92);
+  text-align: center;
+}
+
+.lm-hilo__dice {
+  min-height: 1.5em;
+  margin-bottom: 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: center;
+  color: rgb(255 220 160 / 0.95);
+  font-family: ui-monospace, "Cascadia Code", system-ui, sans-serif;
+}
+
+.lm-hilo__pick,
+.lm-hilo__skip {
+  touch-action: manipulation;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 0;
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 8px 14px;
+  border: 1px solid rgb(255 255 255 / 0.2);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.lm-hilo__pick {
+  color: #1e1422;
+  background: linear-gradient(165deg, #fffefb 0%, #ece4f0 48%, #d4c8dc 100%);
+  box-shadow:
+    inset 0 2px 0 rgb(255 255 255 / 0.85),
+    inset 0 -2px 5px rgb(160 120 150 / 0.1),
+    0 4px 0 rgb(32 26 44 / 0.5),
+    3px 3px 0 rgb(18 14 24 / 0.6),
+    5px 6px 12px rgb(0 0 0 / 0.2);
+}
+
+.lm-hilo__pick:hover:not(:disabled) {
+  border-color: rgb(255 230 200);
+}
+
+.lm-hilo__pick:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 2px 4px rgb(0 0 0 / 0.08),
+    0 2px 0 rgb(32 26 44 / 0.45),
+    1px 2px 0 rgb(18 14 24 / 0.42);
+}
+
+.lm-hilo__skip:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 2px 4px rgb(0 0 0 / 0.2),
+    0 2px 0 rgb(12 8 18 / 0.65),
+    1px 2px 0 rgb(4 2 8 / 0.55);
+}
+
+.lm-hilo__pick:disabled,
+.lm-hilo__skip:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.lm-hilo__skip {
+  color: rgb(220 210 230);
+  background: linear-gradient(180deg, rgb(52 42 62) 0%, rgb(28 22 36) 100%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 4px 0 rgb(12 8 18 / 0.75),
+    3px 3px 0 rgb(4 2 10 / 0.78),
+    5px 6px 12px rgb(0 0 0 / 0.28);
+}
+
+.lm-hilo__skip:hover:not(:disabled) {
+  border-color: rgb(255 255 255 / 0.35);
+}
+
+.lm-hilo__pick:focus-visible,
+.lm-hilo__skip:focus-visible {
+  outline: 2px solid rgb(255 200 120 / 0.85);
+  outline-offset: 2px;
 }
 
 .grid {
@@ -4114,26 +4419,26 @@ html.kuso-retro:not(:has(.shell.admin-mode)) .book-tab-lm-rules {
 }
 
 html.kuso-retro:not(:has(.shell.admin-mode)) .book-tab-lm-rules__hl,
-html.kuso-retro:not(:has(.shell.admin-mode)) .book-tab-lm-rules__zh,
-html.kuso-retro:not(:has(.shell.admin-mode)) .book-tab-lm-rules__en {
+html.kuso-retro:not(:has(.shell.admin-mode)) .book-tab-lm-rules__body {
   color: #4a3830;
-}
-
-html.kuso-retro:not(:has(.shell.admin-mode)) .book-tab-lm-rules__en {
-  border-top-color: rgb(0 0 0 / 0.12);
 }
 
 html.kuso-retro:not(:has(.shell.admin-mode)) .lm-controls__start {
   border: 2px outset #a8c8e8;
   color: #1a2840;
   background: linear-gradient(180deg, #c8e0ff 0%, #88b0e0 100%);
-  box-shadow: 2px 2px 0 rgb(0 0 0 / 0.1);
+  box-shadow:
+    3px 3px 0 rgb(40 56 80 / 0.28),
+    5px 5px 10px rgb(0 0 0 / 0.12);
 }
 
 html.kuso-retro:not(:has(.shell.admin-mode)) .lm-bet-tile--arcade {
   border: 2px outset #fff8f0;
   color: #3a2830;
   background: linear-gradient(180deg, #fffef8 0%, #ffe8f0 100%);
+  box-shadow:
+    3px 3px 0 rgb(80 56 64 / 0.22),
+    5px 5px 10px rgb(0 0 0 / 0.12);
 }
 
 html.kuso-retro:not(:has(.shell.admin-mode)) .lm-bets-strip--arcade {

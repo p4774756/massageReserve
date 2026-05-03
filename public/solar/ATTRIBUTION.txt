@@ -1,0 +1,26 @@
+地球晝面貼圖（earth_day_4096.jpg）
+- 來源：three.js 官方範例 textures/planets（與 three.js 同儲存庫）
+  https://github.com/mrdoob/three.js/tree/dev/examples/textures/planets
+- 用途：預約主面板 WebGL 太陽系「飛近地球」時顯示大陸／海洋示意；非天文測量級還原。
+
+月球表面貼圖（moon_1024.jpg）
+- 來源：同上 three.js examples/textures/planets
+- 用途：地球衛星月球球體之示意貼圖。
+
+水星／金星／火星／木星／土星／天王星／海王星／冥王星 圓柱投影示意貼圖
+（mercurymap.jpg、venusmap.jpg、marsmap.jpg、jupitermap.jpg、saturnmap.jpg、uranusmap.jpg、neptunemap.jpg、plutomap.jpg）
+- 來源：ofrohn/threex.planets 之 images/maps（衍生自 NASA／USGS／Björn Jónsson／Solar System Scope 等，見該專案 README）
+  https://github.com/ofrohn/threex.planets/tree/master/images/maps
+- 用途：預約主面板「飛近」各天體時顯示示意表面；非即時觀測、非測繪級還原。
+
+Earth day texture (earth_day_4096.jpg)
+- Source: three.js example textures/planets (same repository as three.js).
+- Use: illustrative land/ocean on the Earth mesh in the booking “Solar system” tab.
+
+Moon texture (moon_1024.jpg)
+- Source: same three.js `examples/textures/planets` folder.
+- Use: illustrative surface on the Moon mesh orbiting Earth in the booking solar tab.
+
+Other planet / Pluto cylindrical maps (*.jpg in this folder, except earth_day_4096.jpg)
+- Source: ofrohn/threex.planets `images/maps` (see project README for NASA/USGS/Björn Jónsson/Solar System Scope credits).
+- Use: illustrative surfaces when flying the camera close to each body in the booking solar tab.

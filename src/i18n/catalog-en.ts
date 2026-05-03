@@ -29,13 +29,13 @@ export const EN: Record<string, string> = {
   "book.tab.threeSpectacle": "Solar system",
   "book.tab.littleMary": "Little Mary",
   "book.threeSpectacle.hint":
-    "Live WebGL (Three.js): solar system with an Earth-night-sky style Milky Way band: a large star shell recenters on the camera (very little parallax), with a brighter plane, multiple dust rifts, mottling, a brighter “galactic core” direction, and a few bright knots—illustrative, not a full astronomical model; drag-to-orbit, wheel or pinch-zoom, tap a body for a fact; includes procedural ships and a comet. Display only, no backend.",
+    "Live WebGL (Three.js): solar system with an Earth-night-sky style Milky Way band: a large star shell recenters on the camera (very little parallax), with a brighter plane, multiple dust rifts, mottling, a brighter “galactic core” direction, and a few bright knots—illustrative, not a full astronomical model. Use the bar atop the canvas for Overview or to fly near each body; drag to orbit, wheel or pinch-zoom, tap a body for a fact; includes procedural ships and a comet. Display only, no backend.",
   "book.littleMary.hint":
-    "Demo: bet on symbols, then Start (Space). Full rules below (EN + 繁中). No real money.",
-  "book.littleMary.rulesZh":
-    "試玩分數開局；點圖示押注每次從「分數」扣 1 至該線。九種倍率：蘋果 5×、西瓜 20×、星星 30×、77 40×、BAR 50×、鈴鐺 20×、芒果 15×、橘子 10×、櫻桃 2×。須先押注才能按「開始」。跑燈隨機停格；若停在與你押注相同的圖示，得分 += 該線押注 × 倍率。「再來」直接 +8 分至分數（不經倍率）。每局結束押注歸零；已押未中不退，開局前可用「清空押注」退回。「得分轉分數」把得分併回試玩分數。純前端，無真實金流。",
-  "book.littleMary.rulesEn":
-    "You start with demo credits. Each tap on a symbol bets 1 credit on that line (−1 from balance). Multipliers: Apple 5×, Watermelon 20×, Stars 30×, 77 40×, BAR 50×, Bell 20×, Mango 15×, Orange 10×, Cherry 2×. Bet at least once before Start. The light stops at random; if it matches a line you bet on, WIN += (bet on that line) × multiplier. “ONCE MORE” adds +8 credits (not via multiplier). After each round bets reset; stakes are not refunded unless you use Clear bets before spinning. Win → Credit merges WIN into your balance. Front-end only; no real money.",
+    "Demo: bet on symbols, then Start (Space). Full rules below. Front-end only; no real money.",
+  "book.littleMary.rulesTitle": "Rules",
+  "book.littleMary.rulesAria": "Little Mary demo rules",
+  "book.littleMary.rules":
+    "You start with demo credits. Each tap on a symbol bets 1 credit on that line (−1 from balance). Bet all spends every remaining credit: +1 per line in round-robin order across all eight lines until balance is zero. Eight multipliers: Cherry 2×, Lemon 12×, Orange 10×, Melon 20×, Bell 20×, Stars 30×, 77 40×, BAR 50×. The outer ring has 24 cells with fixed symbol counts (Cherry 5, Lemon 4, Orange 4, Melon 3, Bell 3, Stars 2, 77 2, BAR 1). Bet at least once before Start. The light stops at random; if it matches a symbol you bet on, WIN += (bet on that line) × multiplier. After a win you may play double-or-nothing: roll 1–12, HIGH = 7–12, LOW = 1–6; correct adds that win again to WIN, wrong removes that hit from WIN, Skip leaves WIN unchanged; Win → Credit also skips double-or-nothing. Bets reset each round; losing stakes are not refunded—use Clear bets before spinning to recover unspent stakes. Win → Credit merges WIN into your balance. Front-end only; no real money.",
 
   "status.pending": "Pending",
   "status.confirmed": "Confirmed",

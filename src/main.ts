@@ -1,4 +1,5 @@
 import "./style.css";
+import "@fontsource/dseg7/classic-400.css";
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
@@ -2257,7 +2258,7 @@ function render() {
     el("p", { class: "hint book-tab-three-intro" }, [
       t(
         "book.threeSpectacle.hint",
-        "即時 WebGL（Three.js）擬真太陽系：背景為類地球夜空之銀河帶（天球殼隨視角平移、大半徑減視差；盤向亮帶、多塵隙、斑駁與銀心較亮＋少量亮斑示意），非完整天文還原；可拖曳旋轉、滾輪／雙指縮放，點天體看簡介；含程式化太空船與彗星。純展示、不連後端。",
+        "即時 WebGL（Three.js）擬真太陽系：背景為類地球夜空之銀河帶（天球殼隨視角平移、大半徑減視差；盤向亮帶、多塵隙、斑駁與銀心較亮＋少量亮斑示意），非完整天文還原。畫面上方可切換「總覽」或飛近各天體；拖曳環繞、滾輪／雙指縮放，點天體看簡介；含程式化太空船與彗星。純展示、不連後端。",
       ),
     ]),
     threeMount,
@@ -2274,28 +2275,22 @@ function render() {
   const littleMaryMount = el("div", { class: "book-tab-lm-mount" });
   littleMaryMount.setAttribute("aria-hidden", "true");
   const littleMaryRules = el("div", { class: "book-tab-lm-rules", role: "region" }, [
-    el("p", { class: "book-tab-lm-rules__hl" }, ["規則 · Rules"]),
-    el("p", { class: "book-tab-lm-rules__zh", lang: "zh-Hant" }, [
+    el("p", { class: "book-tab-lm-rules__hl" }, [t("book.littleMary.rulesTitle", "規則")]),
+    el("p", { class: "book-tab-lm-rules__body", lang: getLocale() === "en" ? "en" : "zh-Hant" }, [
       t(
-        "book.littleMary.rulesZh",
-        "試玩分數開局；點圖示押注每次從「分數」扣 1 至該線。九種倍率：蘋果 5×、西瓜 20×、星星 30×、77 40×、BAR 50×、鈴鐺 20×、芒果 15×、橘子 10×、櫻桃 2×。須先押注才能按「開始」。跑燈隨機停格；若停在與你押注相同的圖示，得分 += 該線押注 × 倍率。「再來」直接 +8 分至分數（不經倍率）。每局結束押注歸零；已押未中不退，開局前可用「清空押注」退回。「得分轉分數」把得分併回試玩分數。純前端，無真實金流。",
-      ),
-    ]),
-    el("p", { class: "book-tab-lm-rules__en", lang: "en" }, [
-      t(
-        "book.littleMary.rulesEn",
-        "You start with demo credits. Each tap on a symbol bets 1 credit on that line (−1 from balance). Multipliers: Apple 5×, Watermelon 20×, Stars 30×, 77 40×, BAR 50×, Bell 20×, Mango 15×, Orange 10×, Cherry 2×. Bet at least once before Start. The light stops at random; if it matches a line you bet on, WIN += (bet on that line) × multiplier. “ONCE MORE” adds +8 credits (not via multiplier). After each round bets reset; stakes are not refunded unless you use Clear bets before spinning. Win → Credit merges WIN into your balance. Front-end only; no real money.",
+        "book.littleMary.rules",
+        "試玩分數開局；點圖示押注每次從「分數」扣 1 至該線；「全押」則將剩餘分數依八條線輪流每次 +1，直到分數用盡。八種倍率：櫻桃 2×、檸檬 12×、橘子 10×、西瓜 20×、鈴鐺 20×、星星 30×、７７ 40×、BAR 50×。外圈 24 格依圖示出現次數配置（櫻桃 5、檸檬 4、橘子 4、西瓜 3、鈴鐺 3、星星 2、７７ 2、BAR 1）。須先押注才能按「開始」。跑燈隨機停格；若停在與你押注相同的圖示，得分 += 該線押注 × 倍率。中獎後可選「比大小」：再開 1～12 點，大＝7～12、小＝1～6；猜中再加分、猜錯扣回該筆、「不賭」保留；按「得分轉分數」亦視為略過比大小。每局結束押注歸零；已押未中不退，開局前可用「清空押注」退回。「得分轉分數」把得分併回試玩分數。純前端，無真實金流。",
       ),
     ]),
   ]);
-  littleMaryRules.setAttribute("aria-label", "Little Mary rules · 小瑪莉規則");
+  littleMaryRules.setAttribute("aria-label", t("book.littleMary.rulesAria", "小瑪莉試玩規則"));
 
   bookPanelLittleMary.append(
     el("div", { class: "book-tab-lm-intro-wrap" }, [
       el("p", { class: "hint book-tab-lm-intro" }, [
         t(
           "book.littleMary.hint",
-          "試玩跑燈：點圖示押注後按「開始」（空白鍵同）。完整規則見下（繁中／English）。純前端、無真實金流。",
+          "試玩跑燈：點圖示押注後按「開始」（空白鍵同）。完整規則見下。純前端、無真實金流。",
         ),
       ]),
       littleMaryRules,

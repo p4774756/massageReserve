@@ -1,7 +1,7 @@
 {
   "name": "massage-reserve",
   "private": true,
-  "version": "1.12.7",
+  "version": "1.13.0",
   "type": "module",
   "scripts": {
     "bump:patch": "npm version patch --no-git-tag-version",
@@ -19,6 +19,7 @@
     "three": "^0.184.0"
   },
   "devDependencies": {
+    "@fontsource/dseg7": "^4.5.4",
     "@playwright/test": "^1.59.1",
     "@types/three": "^0.184.0",
     "typescript": "~5.7.2",
