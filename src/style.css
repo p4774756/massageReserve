@@ -997,10 +997,12 @@ main.panel[hidden] {
 
 .lm-status--arcade {
   flex-shrink: 0;
-  gap: 14px 28px;
-  padding: 10px 14px 12px;
+  flex-wrap: nowrap;
+  gap: clamp(6px, 3.2vw, 28px);
+  padding: clamp(6px, 1.8vw, 10px) clamp(6px, 2.4vw, 14px) clamp(8px, 2vw, 12px);
   margin: 0 0 2px;
   width: 100%;
+  min-width: 0;
   box-sizing: border-box;
   border-radius: 10px 10px 0 0;
   background: linear-gradient(180deg, rgb(26 18 32 / 0.98) 0%, rgb(10 8 16) 100%);
@@ -1025,6 +1027,42 @@ main.panel[hidden] {
 
 .lm-status--arcade .lm-status__label {
   color: rgb(200 170 195 / 0.88);
+  font-size: clamp(0.52rem, 2.8vw, 0.65rem);
+  letter-spacing: clamp(0.06em, 0.5vw, 0.14em);
+}
+
+.lm-status--arcade .lm-status__group {
+  flex: 1 1 0;
+  min-width: 0;
+  justify-content: center;
+  gap: clamp(4px, 2vw, 10px);
+}
+
+/** 得分列七段字：窄螢幕維持單列，先 vw fallback 再 cqw（@container 須在後） */
+.lm-status--arcade .lm-led--arcade {
+  font-size: clamp(0.68rem, 4.2vw, 1.12rem);
+  padding: clamp(2px, 0.9vw, 5px) clamp(4px, 2.4vw, 10px);
+  letter-spacing: clamp(0.05em, 0.45vw, 0.12em);
+  min-width: clamp(3.2ch, 12vw, 4.6ch);
+}
+
+@container lm-board-arcade (min-width: 0px) {
+  .lm-status--arcade {
+    gap: clamp(6px, 5cqw, 28px);
+    padding: clamp(6px, 2.2cqw, 10px) clamp(6px, 3cqw, 14px) clamp(8px, 2.5cqw, 12px);
+  }
+
+  .lm-status--arcade .lm-status__label {
+    font-size: clamp(0.52rem, 4cqw, 0.65rem);
+    letter-spacing: clamp(0.06em, 0.8cqw, 0.14em);
+  }
+
+  .lm-status--arcade .lm-led--arcade {
+    font-size: clamp(0.68rem, 6.2cqw, 1.12rem);
+    padding: clamp(2px, 1.1cqw, 5px) clamp(4px, 3.2cqw, 10px);
+    letter-spacing: clamp(0.05em, 0.6cqw, 0.12em);
+    min-width: clamp(3.2ch, 18cqw, 4.6ch);
+  }
 }
 
 /* 小瑪莉數字：DSEG7 七段字型（SIL OFL，見 node_modules/@fontsource/dseg7） */
@@ -1087,6 +1125,9 @@ main.panel[hidden] {
     inset 0 0 0 1px rgb(0 0 0 / 0.65),
     inset 0 0 48px rgb(0 0 0 / 0.45),
     0 1px 0 rgb(255 255 255 / 0.04);
+  /** 得分列字級／間距可跟機台內寬（cqw）縮放 */
+  container-type: inline-size;
+  container-name: lm-board-arcade;
 }
 
 .lm-grid {
