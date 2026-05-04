@@ -570,7 +570,6 @@ function render() {
 
   const shell = el("div", { class: "shell" }, [
     el("header", { class: "page-head" }, [pageHeadBody]),
-    hostPortrait,
     panelBook,
     panelAdmin,
   ]);
@@ -1433,7 +1432,7 @@ function render() {
           );
   }
 
-  /** 與下方 `setBookSubTab` 一併指派：會員區隱藏時關閉「我的預約／抽輪盤」並切回預約表單（「星空／小瑪莉」分頁不受影響） */
+  /** 與下方 `setBookSubTab` 一併指派：會員區隱藏時關閉「我的預約／抽輪盤」並切回預約表單（「畫廊／星空／小瑪莉」分頁不受影響） */
   let syncBookMyBookingsTabVisibility: () => void = () => {};
 
   function resetWheelStatsSummary() {
@@ -2157,18 +2156,21 @@ function render() {
     }
   });
 
-  let bookSubTab: "book" | "wheel" | "mybookings" | "three" | "littleMary" = "book";
+  let bookSubTab: "book" | "gallery" | "wheel" | "mybookings" | "three" | "littleMary" = "book";
 
   const bookTabList = el("div", { class: "book-tabs", role: "tablist" });
   bookTabList.setAttribute(
     "aria-label",
     t(
       "book.tabsAria",
-      "預約按摩、我的預約、抽輪盤、星空、小瑪莉試玩；「我的預約／抽輪盤」於登入會員後顯示。",
+      "預約按摩、畫廊、我的預約、抽輪盤、星空、小瑪莉試玩；「我的預約／抽輪盤」於登入會員後顯示。",
     ),
   );
   const tabBook = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-book" }, [
     t("book.tab.booking", "預約按摩"),
+  ]);
+  const tabGallery = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-gallery" }, [
+    t("book.tab.gallery", "畫廊"),
   ]);
   const tabWheel = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-wheel" }, [
     t("book.tab.wheel", "抽輪盤"),
@@ -2183,23 +2185,26 @@ function render() {
     t("book.tab.littleMary", "小瑪莉"),
   ]);
   tabBook.setAttribute("aria-controls", "book-tab-panel-book");
+  tabGallery.setAttribute("aria-controls", "book-tab-panel-gallery");
   tabWheel.setAttribute("aria-controls", "book-tab-panel-wheel");
   tabMyBookings.setAttribute("aria-controls", "book-tab-panel-my-bookings");
   tabThree.setAttribute("aria-controls", "book-tab-panel-three");
   tabLittleMary.setAttribute("aria-controls", "book-tab-panel-little-mary");
   tabBook.setAttribute("aria-selected", "true");
+  tabGallery.setAttribute("aria-selected", "false");
   tabWheel.setAttribute("aria-selected", "false");
   tabMyBookings.setAttribute("aria-selected", "false");
   tabThree.setAttribute("aria-selected", "false");
   tabLittleMary.setAttribute("aria-selected", "false");
   tabBook.tabIndex = 0;
+  tabGallery.tabIndex = -1;
   tabWheel.tabIndex = -1;
   tabMyBookings.tabIndex = -1;
   tabThree.tabIndex = -1;
   tabLittleMary.tabIndex = -1;
   tabMyBookings.hidden = memberExtrasWrap.hidden;
   tabWheel.hidden = memberExtrasWrap.hidden;
-  bookTabList.append(tabBook, tabMyBookings, tabWheel, tabThree, tabLittleMary);
+  bookTabList.append(tabBook, tabGallery, tabMyBookings, tabWheel, tabThree, tabLittleMary);
 
   const bookPanelBook = el("div", {
     class: "book-tab-panel",
@@ -2225,6 +2230,15 @@ function render() {
     finalizeSection,
     bookFooterNote,
   );
+
+  const bookPanelGallery = el("div", {
+    class: "book-tab-panel book-tab-panel--gallery",
+    id: "book-tab-panel-gallery",
+    role: "tabpanel",
+    hidden: true,
+  });
+  bookPanelGallery.setAttribute("aria-labelledby", "book-tab-gallery");
+  bookPanelGallery.append(hostPortrait);
 
   const bookPanelWheel = el("div", {
     class: "book-tab-panel book-tab-panel--wheel",
@@ -2299,25 +2313,29 @@ function render() {
   );
   mountBookTabLittleMary(littleMaryMount);
 
-  function setBookSubTab(which: "book" | "wheel" | "mybookings" | "three" | "littleMary") {
+  function setBookSubTab(which: "book" | "gallery" | "wheel" | "mybookings" | "three" | "littleMary") {
     bookSubTab = which;
     tabBook.setAttribute("aria-selected", String(which === "book"));
+    tabGallery.setAttribute("aria-selected", String(which === "gallery"));
     tabWheel.setAttribute("aria-selected", String(which === "wheel"));
     tabMyBookings.setAttribute("aria-selected", String(which === "mybookings"));
     tabThree.setAttribute("aria-selected", String(which === "three"));
     tabLittleMary.setAttribute("aria-selected", String(which === "littleMary"));
     tabBook.tabIndex = which === "book" ? 0 : -1;
+    tabGallery.tabIndex = which === "gallery" ? 0 : -1;
     tabWheel.tabIndex = which === "wheel" ? 0 : -1;
     tabMyBookings.tabIndex = which === "mybookings" ? 0 : -1;
     tabThree.tabIndex = which === "three" ? 0 : -1;
     tabLittleMary.tabIndex = which === "littleMary" ? 0 : -1;
     bookPanelBook.hidden = which !== "book";
+    bookPanelGallery.hidden = which !== "gallery";
     bookPanelWheel.hidden = which !== "wheel";
     bookPanelMyBookings.hidden = which !== "mybookings";
     bookPanelThree.hidden = which !== "three";
     bookPanelLittleMary.hidden = which !== "littleMary";
   }
   tabBook.addEventListener("click", () => setBookSubTab("book"));
+  tabGallery.addEventListener("click", () => setBookSubTab("gallery"));
   tabWheel.addEventListener("click", () => setBookSubTab("wheel"));
   tabMyBookings.addEventListener("click", () => setBookSubTab("mybookings"));
   tabThree.addEventListener("click", () => setBookSubTab("three"));
@@ -2338,6 +2356,7 @@ function render() {
   panelBook.append(
     bookTabList,
     bookPanelBook,
+    bookPanelGallery,
     bookPanelWheel,
     bookPanelMyBookings,
     bookPanelThree,

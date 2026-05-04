@@ -22,8 +22,9 @@ export const EN: Record<string, string> = {
   "booking.mode.member_beverage": "Member · drink credit",
 
   "book.tabsAria":
-    "Massage booking, my bookings and wheel when signed in, plus a Starry sky WebGL tab and a Little Mary–style demo for everyone",
+    "Massage booking, a portrait gallery tab, my bookings and wheel when signed in, plus a Starry sky WebGL tab and a Little Mary–style demo for everyone",
   "book.tab.booking": "Book massage",
+  "book.tab.gallery": "Gallery",
   "book.tab.wheel": "Wheel",
   "book.tab.myBookings": "My bookings",
   "book.tab.threeSpectacle": "Starry sky",

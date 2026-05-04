@@ -713,6 +713,12 @@ main.panel[hidden] {
   gap: 10px;
 }
 
+/* 畫廊：主理人肖像帶與 main.panel 左右內距對齊後全寬鋪滿 */
+.book-tab-panel--gallery {
+  gap: 0;
+  margin-inline: -22px;
+}
+
 .book-tab-three-intro {
   margin: 0;
 }
@@ -3270,6 +3276,10 @@ label.field.checkbox-field {
 
   main.panel {
     padding: 24px 16px 28px;
+  }
+
+  .book-tab-panel--gallery {
+    margin-inline: -16px;
   }
 
   .grid {
