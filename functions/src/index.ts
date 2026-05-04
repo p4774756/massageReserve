@@ -25,7 +25,12 @@ import {
   resolveBookingCaps,
   TIMEZONE,
 } from "./bookingLogic";
-import { foldWalletBalanceIntoSessions, resolvePointsPerMassage, resolveSessionPriceNtd } from "./pricing";
+import {
+  foldWalletBalanceIntoSessions,
+  resolveArcadePointsPerMassage,
+  resolvePointsPerMassage,
+  resolveSessionPriceNtd,
+} from "./pricing";
 import { parseLocale, st, type ServerLocale } from "./serverI18n";
 
 initializeApp();
@@ -494,16 +499,19 @@ export const getMyWallet = onCall(publicCall, async (request) => {
     const pricingSnap = await tx.get(db.collection("siteSettings").doc("pricing"));
     const sessionPriceNtd = resolveSessionPriceNtd(pricingSnap.data());
     const pointsPerMassage = resolvePointsPerMassage(pricingSnap.data());
+    const arcadePointsPerMassage = resolveArcadePointsPerMassage(pricingSnap.data());
     const snap = await tx.get(customerRef);
     const walletBalanceRaw = snap.exists ? snap.get("walletBalance") : 0;
     const drawChancesRaw = snap.exists ? snap.get("drawChances") : 0;
     const nicknameRaw = snap.exists ? snap.get("nickname") : "";
     const sessionCreditsRaw = snap.exists ? snap.get("sessionCredits") : 0;
     const wheelPointsRaw = snap.exists ? snap.get("wheelPoints") : 0;
+    const arcadePointsRaw = snap.exists ? snap.get("arcadePoints") : 0;
     const nickname = typeof nicknameRaw === "string" ? nicknameRaw.trim() : "";
     let walletBalance = typeof walletBalanceRaw === "number" ? walletBalanceRaw : 0;
     let sessionCredits = typeof sessionCreditsRaw === "number" ? sessionCreditsRaw : 0;
     const wheelPoints = typeof wheelPointsRaw === "number" ? wheelPointsRaw : 0;
+    const arcadePoints = typeof arcadePointsRaw === "number" ? arcadePointsRaw : 0;
     const drawChances = typeof drawChancesRaw === "number" ? drawChancesRaw : 0;
     const folded = foldWalletBalanceIntoSessions(walletBalance, sessionCredits, sessionPriceNtd);
     if (folded.walletBalance !== walletBalance || folded.sessionCredits !== sessionCredits) {
@@ -516,6 +524,7 @@ export const getMyWallet = onCall(publicCall, async (request) => {
           sessionCredits,
           drawChances,
           wheelPoints,
+          arcadePoints,
           updatedAt: FieldValueOrServerTimestamp(),
         },
         { merge: true },
@@ -525,10 +534,12 @@ export const getMyWallet = onCall(publicCall, async (request) => {
       walletBalance,
       sessionCredits,
       wheelPoints,
+      arcadePoints,
       drawChances,
       nickname,
       sessionPriceNtd,
       pointsPerMassage,
+      arcadePointsPerMassage,
     };
   });
   return out;
@@ -541,6 +552,7 @@ export const getBookingPricing = onCall(publicCall, async (request) => {
   return {
     sessionPriceNtd: resolveSessionPriceNtd(snap.data()),
     pointsPerMassage: resolvePointsPerMassage(snap.data()),
+    arcadePointsPerMassage: resolveArcadePointsPerMassage(snap.data()),
   };
 });
 
@@ -946,6 +958,7 @@ export const createMemberAccount = onCall(publicCall, async (request) => {
         walletBalance: 0,
         sessionCredits: 0,
         wheelPoints: 0,
+        arcadePoints: 0,
         drawChances: 0,
         ...(nickname ? { nickname } : {}),
         createdAt: FieldValueOrServerTimestamp(),
@@ -1005,6 +1018,7 @@ type ListMembersAdminRow = {
   walletBalance: number;
   sessionCredits: number;
   wheelPoints: number;
+  arcadePoints: number;
   drawChances: number;
 };
 
@@ -1040,6 +1054,7 @@ export const listMembersAdmin = onCall(publicCall, async (request) => {
         walletBalance: typeof d.walletBalance === "number" ? d.walletBalance : 0,
         sessionCredits: typeof d.sessionCredits === "number" ? d.sessionCredits : 0,
         wheelPoints: typeof d.wheelPoints === "number" ? d.wheelPoints : 0,
+        arcadePoints: typeof d.arcadePoints === "number" ? d.arcadePoints : 0,
         drawChances: typeof d.drawChances === "number" ? d.drawChances : 0,
       });
     }
@@ -2196,3 +2211,12 @@ export const notifyMemberBookingStatusChange = onDocumentUpdated(
     }
   },
 );
+
+export {
+  exchangeSessionForArcadePoints,
+  littleMaryHiLoAccount,
+  littleMaryHiLoRoll,
+  littleMarySpin,
+  littleMarySpinAccount,
+  redeemArcadePointsForSession,
+} from "./littleMary";

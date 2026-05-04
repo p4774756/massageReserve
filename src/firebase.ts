@@ -60,6 +60,12 @@ export const sendSupportChatMessageCall = () => httpsCallable(getFns(), "sendSup
 export const sendSupportChatAdminReplyCall = () => httpsCallable(getFns(), "sendSupportChatAdminReply");
 export const setSupportThreadStatusAdminCall = () => httpsCallable(getFns(), "setSupportThreadStatusAdmin");
 export const recordSiteVisitCall = () => httpsCallable(getFns(), "recordSiteVisit");
+export const littleMarySpinCall = () => httpsCallable(getFns(), "littleMarySpin");
+export const littleMaryHiLoRollCall = () => httpsCallable(getFns(), "littleMaryHiLoRoll");
+export const littleMarySpinAccountCall = () => httpsCallable(getFns(), "littleMarySpinAccount");
+export const littleMaryHiLoAccountCall = () => httpsCallable(getFns(), "littleMaryHiLoAccount");
+export const exchangeSessionForArcadePointsCall = () => httpsCallable(getFns(), "exchangeSessionForArcadePoints");
+export const redeemArcadePointsForSessionCall = () => httpsCallable(getFns(), "redeemArcadePointsForSession");
 
 export function getDb() {
   return getFirestore(getFirebaseApp());

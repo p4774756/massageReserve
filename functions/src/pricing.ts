@@ -4,6 +4,8 @@ import type { DocumentData } from "firebase-admin/firestore";
 
 export const DEFAULT_SESSION_PRICE_NTD = 50;
 export const DEFAULT_POINTS_PER_MASSAGE = 10;
+/** 小瑪莉「遊戲點」：每 1 次按摩次數可兌換／兌回之點數（與輪盤 wheelPoints 門檻分開） */
+export const DEFAULT_ARCADE_POINTS_PER_MASSAGE = 100;
 
 export function resolveSessionPriceNtd(raw: DocumentData | undefined): number {
   if (!raw || typeof raw !== "object") return DEFAULT_SESSION_PRICE_NTD;
@@ -20,6 +22,15 @@ export function resolvePointsPerMassage(raw: DocumentData | undefined): number {
   const v = o.pointsPerMassage;
   const n = typeof v === "number" && Number.isFinite(v) ? Math.round(v) : Number(v);
   if (!Number.isInteger(n) || n < 2 || n > 1000) return DEFAULT_POINTS_PER_MASSAGE;
+  return n;
+}
+
+export function resolveArcadePointsPerMassage(raw: DocumentData | undefined): number {
+  if (!raw || typeof raw !== "object") return DEFAULT_ARCADE_POINTS_PER_MASSAGE;
+  const o = raw as Record<string, unknown>;
+  const v = o.arcadePointsPerMassage;
+  const n = typeof v === "number" && Number.isFinite(v) ? Math.round(v) : Number(v);
+  if (!Number.isInteger(n) || n < 1 || n > 50_000) return DEFAULT_ARCADE_POINTS_PER_MASSAGE;
   return n;
 }
 

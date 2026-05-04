@@ -1,5 +1,20 @@
+import { onAuthStateChanged } from "firebase/auth";
 import { getLocale } from "./i18n";
 import { createLittleMarySfx } from "./bookTabLittleMaryAudio";
+import {
+  getFirebaseAuth,
+  getMyWalletCall,
+  isFirebaseConfigured,
+  littleMaryHiLoAccountCall,
+  littleMaryHiLoRollCall,
+  littleMarySpinAccountCall,
+  littleMarySpinCall,
+} from "./firebase";
+
+export type MountBookTabLittleMaryOptions = {
+  /** 會員遊戲點於伺服端變動後（開獎／比大小／兌換）通知外層刷新錢包列 */
+  onArcadeBalanceMutated?: () => void | Promise<void>;
+};
 
 /** 外圈 24 格：順時針由左上起，與 7×7 邊框格索引一致 */
 export type LittleMarySymbol =
@@ -124,9 +139,10 @@ function symbolLabel(sym: LittleMarySymbol, en: boolean): string {
 }
 
 /**
- * 預約主面板分頁：復古「小瑪莉」跑燈（純前端、無真實金流／後端）。
+ * 預約主面板分頁：復古「小瑪莉」跑燈。
+ * 訪客／未驗證信箱：試玩分數於瀏覽器；已驗證會員且已設定 Firebase：遊戲點與開獎由 Cloud Functions 結算。
  */
-export function mountBookTabLittleMary(host: HTMLElement): () => void {
+export function mountBookTabLittleMary(host: HTMLElement, options?: MountBookTabLittleMaryOptions): () => void {
   if (typeof window === "undefined") {
     return () => {};
   }
@@ -146,6 +162,13 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
   const en = getLocale() === "en";
   host.classList.add("book-tab-lm-mount--interactive");
 
+  const onArcadeBalanceMutated = options?.onArcadeBalanceMutated;
+  let accountPlay = false;
+  /** 伺服器端目前遊戲點總額（含得分欄已入帳部分） */
+  let lastServerArcade = 0;
+  /** 本局伺服器結算之中獎分（供 resolveStop 與試玩邏輯對齊）；-1 表示用本地計算 */
+  let pendingSpinHitGain = -1;
+
   const sfx = createLittleMarySfx();
   host.addEventListener(
     "pointerdown",
@@ -158,6 +181,16 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
   let credit = 32;
   let winPile = 0;
   const bets: number[] = BET_LINES.map(() => 0);
+
+  function applyDemoDefaults() {
+    accountPlay = false;
+    credit = 32;
+    winPile = 0;
+    lastServerArcade = 0;
+    pendingSpinHitGain = -1;
+    bets.fill(0);
+  }
+
   let lightIdx = 0;
   let spinning = false;
   let spinToken = 0;
@@ -420,6 +453,39 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
     btnHiloOk.disabled = spinning || !result || hiloResolving;
   }
 
+  async function refreshAccountArcadeFromWallet(): Promise<void> {
+    if (!isFirebaseConfigured()) {
+      applyDemoDefaults();
+      syncDisplays();
+      updateInteractiveLock();
+      return;
+    }
+    const user = getFirebaseAuth().currentUser;
+    if (!user?.emailVerified) {
+      applyDemoDefaults();
+      syncDisplays();
+      updateInteractiveLock();
+      return;
+    }
+    try {
+      const res = await getMyWalletCall()({ locale: en ? "en" : "zh-Hant" });
+      const data = res.data as { arcadePoints?: unknown };
+      const ap = typeof data.arcadePoints === "number" && Number.isFinite(data.arcadePoints) ? Math.floor(data.arcadePoints) : 0;
+      accountPlay = true;
+      lastServerArcade = Math.min(999_999, Math.max(0, ap));
+      credit = Math.max(0, lastServerArcade - winPile);
+    } catch {
+      applyDemoDefaults();
+    }
+    syncDisplays();
+    updateInteractiveLock();
+  }
+
+  const unsubAuth = onAuthStateChanged(getFirebaseAuth(), () => {
+    void refreshAccountArcadeFromWallet();
+  });
+  void refreshAccountArcadeFromWallet();
+
   function closeHiLoModalUi() {
     hiLoModal.classList.add("lm-hilo-modal--hidden");
     hiLoModal.setAttribute("aria-hidden", "true");
@@ -464,15 +530,55 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
     if (!gamblePending || gamblePending.phase !== "result") return;
     gamblePending = null;
     closeHiLoModalUi();
+    if (accountPlay) {
+      credit = Math.max(0, lastServerArcade - winPile);
+    }
     updateInteractiveLock();
   }
 
-  function resolveHiLo(guessHigh: boolean) {
+  async function resolveHiLo(guessHigh: boolean) {
     if (!gamblePending || gamblePending.phase !== "offer" || hiloResolving) return;
     const { stake } = gamblePending;
     hiloResolving = true;
     updateInteractiveLock();
-    const roll = Math.floor(Math.random() * 12) + 1;
+    const localePayload = en ? "en" : "zh-Hant";
+    let roll: number;
+    try {
+      if (accountPlay) {
+        const res = await littleMaryHiLoAccountCall()({ stake, guessHigh, locale: localePayload });
+        const d = res.data as { roll?: unknown; arcadePoints?: unknown };
+        const r = typeof d.roll === "number" ? Math.trunc(d.roll) : NaN;
+        if (!Number.isFinite(r) || r < 1 || r > 12) throw new Error("bad roll");
+        roll = r;
+        if (typeof d.arcadePoints === "number") {
+          lastServerArcade = Math.min(999_999, Math.max(0, Math.floor(d.arcadePoints)));
+          void onArcadeBalanceMutated?.();
+        }
+      } else if (isFirebaseConfigured()) {
+        const res = await littleMaryHiLoRollCall()({ stake, locale: localePayload });
+        const data = res.data as { roll?: unknown };
+        const r = typeof data.roll === "number" ? Math.trunc(data.roll) : NaN;
+        if (!Number.isFinite(r) || r < 1 || r > 12) throw new Error("bad roll");
+        roll = r;
+      } else {
+        roll = Math.floor(Math.random() * 12) + 1;
+      }
+    } catch {
+      hiloResolving = false;
+      updateInteractiveLock();
+      sfx.playError();
+      setLmMsg(
+        en
+          ? accountPlay
+            ? "Could not settle hi-lo on the server. Try again."
+            : "Could not roll hi-lo on the server. Try again."
+          : accountPlay
+            ? "比大小結算失敗，請稍後再試。"
+            : "比大小開點失敗，請稍後再試。",
+        "danger",
+      );
+      return;
+    }
     const isHigh = roll >= 7;
     const hit = guessHigh ? isHigh : !isHigh;
     if (hit) {
@@ -499,6 +605,9 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
     hiloChoiceActions.hidden = true;
     hiloResultActions.hidden = false;
     hiloResolving = false;
+    if (accountPlay) {
+      credit = Math.max(0, lastServerArcade - winPile);
+    }
     syncDisplays();
     updateInteractiveLock();
     btnHiloOk.focus();
@@ -598,7 +707,11 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
       abandonHiLoIfOpen();
       updateInteractiveLock();
     }
-    credit += winPile;
+    if (accountPlay) {
+      credit = lastServerArcade;
+    } else {
+      credit += winPile;
+    }
     winPile = 0;
     sfx.playCollect();
     syncDisplays();
@@ -612,7 +725,28 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
     const b = line >= 0 ? bets[line] ?? 0 : 0;
     const mult = line >= 0 ? BET_LINES[line]!.mult : 0;
     let hitGain = 0;
-    if (b > 0 && mult > 0) {
+    if (accountPlay && pendingSpinHitGain >= 0) {
+      hitGain = pendingSpinHitGain;
+      pendingSpinHitGain = -1;
+      if (hitGain > 0) {
+        winPile = hitGain;
+        sfx.playWin(hitGain);
+        const hitLine = BET_LINES.findIndex((x) => x.id === sym);
+        if (hitLine >= 0) {
+          setLmMsg(
+            en ? `Hit ${BET_LINES[hitLine]!.en}! +${hitGain}` : `開出 ${BET_LINES[hitLine]!.zh}！+${hitGain} 得分`,
+            "success",
+          );
+        } else {
+          setLmMsg(en ? `Hit +${hitGain}` : `中獎 +${hitGain} 得分`, "success");
+        }
+      } else {
+        winPile = 0;
+        sfx.playMiss();
+        setLmMsg(en ? `Stopped on ${symbolLabel(sym, true)}.` : `停在「${symbolLabel(sym, false)}」。`, "info");
+      }
+      credit = Math.max(0, lastServerArcade - winPile);
+    } else if (b > 0 && mult > 0) {
       hitGain = b * mult;
       winPile += hitGain;
       sfx.playWin(hitGain);
@@ -651,40 +785,94 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
     spinning = true;
     updateInteractiveLock();
     const myToken = ++spinToken;
-    const target = Math.floor(Math.random() * 24);
-    const minLaps = 3;
-    const startL = lightIdx;
-    const totalSteps = minLaps * 24 + ((target - startL + 24) % 24);
+    const localePayload = en ? "en" : "zh-Hant";
 
-    function easeDelay(progress: number): number {
-      const x = progress * progress * progress;
-      return 28 + x * 380;
-    }
-
-    let step = 0;
-    function stepOnce() {
-      if (myToken !== spinToken) return;
-      setLight(lightIdx + 1);
-      step += 1;
-      sfx.playSpinTick(step / Math.max(1, totalSteps));
-      if (step >= totalSteps) {
+    void (async () => {
+      let target: number;
+      try {
+        if (accountPlay) {
+          const res = await littleMarySpinAccountCall()({
+            bets: bets.slice(),
+            locale: localePayload,
+          });
+          const d = res.data as { stopIndex?: unknown; hitGain?: unknown; arcadePoints?: unknown };
+          const t = typeof d.stopIndex === "number" ? Math.trunc(d.stopIndex) : NaN;
+          const hg = typeof d.hitGain === "number" ? Math.trunc(d.hitGain) : 0;
+          const ap = typeof d.arcadePoints === "number" ? Math.floor(d.arcadePoints) : 0;
+          if (!Number.isFinite(t) || t < 0 || t > 23) throw new Error("bad stopIndex");
+          pendingSpinHitGain = hg;
+          lastServerArcade = Math.min(999_999, Math.max(0, ap));
+          target = t;
+          void onArcadeBalanceMutated?.();
+        } else if (isFirebaseConfigured()) {
+          const res = await littleMarySpinCall()({
+            bets: bets.slice(),
+            locale: localePayload,
+          });
+          const data = res.data as { stopIndex?: unknown };
+          const t = typeof data.stopIndex === "number" ? Math.trunc(data.stopIndex) : NaN;
+          if (!Number.isFinite(t) || t < 0 || t > 23) throw new Error("bad stopIndex");
+          target = t;
+        } else {
+          target = Math.floor(Math.random() * 24);
+        }
+      } catch {
+        if (myToken !== spinToken) return;
         spinning = false;
-        resolveStop(lightIdx);
+        updateInteractiveLock();
+        sfx.playError();
+        setLmMsg(
+          en
+            ? accountPlay
+              ? "Could not settle spin on the server. Check network or deploy littleMarySpinAccount."
+              : "Could not get spin from the server. Check network or deploy littleMarySpin."
+            : accountPlay
+              ? "無法從伺服器結算小瑪莉，請檢查網路或是否已部署 littleMarySpinAccount。"
+              : "無法從伺服器取得開獎結果，請檢查網路或是否已部署 littleMarySpin。",
+          "danger",
+        );
         return;
       }
-      const delay = easeDelay(step / totalSteps);
-      window.setTimeout(stepOnce, delay);
-    }
 
-    window.setTimeout(stepOnce, easeDelay(0));
+      if (myToken !== spinToken) {
+        spinning = false;
+        return;
+      }
+
+      const minLaps = 3;
+      const startL = lightIdx;
+      const totalSteps = minLaps * 24 + ((target - startL + 24) % 24);
+
+      function easeDelay(progress: number): number {
+        const x = progress * progress * progress;
+        return 28 + x * 380;
+      }
+
+      let step = 0;
+      function stepOnce() {
+        if (myToken !== spinToken) return;
+        setLight(lightIdx + 1);
+        step += 1;
+        sfx.playSpinTick(step / Math.max(1, totalSteps));
+        if (step >= totalSteps) {
+          spinning = false;
+          resolveStop(lightIdx);
+          return;
+        }
+        const delay = easeDelay(step / totalSteps);
+        window.setTimeout(stepOnce, delay);
+      }
+
+      window.setTimeout(stepOnce, easeDelay(0));
+    })();
   }
 
   btnStart.addEventListener("click", runSpin);
   btnCollect.addEventListener("click", collectWin);
   btnClear.addEventListener("click", clearBets);
   btnBetAll.addEventListener("click", betAll);
-  btnHiloBig.addEventListener("click", () => resolveHiLo(true));
-  btnHiloSmall.addEventListener("click", () => resolveHiLo(false));
+  btnHiloBig.addEventListener("click", () => void resolveHiLo(true));
+  btnHiloSmall.addEventListener("click", () => void resolveHiLo(false));
   btnHiloSkip.addEventListener("click", () => skipHiLo());
   btnHiloOk.addEventListener("click", () => finishHiLoResultOk());
 
@@ -721,6 +909,7 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
 
   return () => {
     spinToken += 1;
+    unsubAuth();
     io.disconnect();
     window.removeEventListener("keydown", onKey);
     sfx.dispose();

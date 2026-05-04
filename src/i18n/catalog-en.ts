@@ -32,11 +32,11 @@ export const EN: Record<string, string> = {
   "book.threeSpectacle.hint":
     "Live WebGL (Three.js): solar system with an Earth-night-sky style Milky Way band: a large star shell recenters on the camera (very little parallax), with a brighter plane, multiple dust rifts, mottling, a brighter “galactic core” direction, and a few bright knots—illustrative, not a full astronomical model. Use the bar atop the canvas for Overview or to fly near each body; drag to orbit, wheel or pinch-zoom, tap a body for a fact; includes procedural ships and a comet. Display only, no backend.",
   "book.littleMary.hint":
-    "Demo: bet on symbols, then Start (Space). Full rules below. Front-end only; no real money.",
+    "Demo: bet on symbols, then Start (Space). Full rules below. With Firebase + deployed Functions, outcomes come from the server; otherwise local demo RNG. No real money.",
   "book.littleMary.rulesTitle": "Rules",
   "book.littleMary.rulesAria": "Little Mary demo rules",
   "book.littleMary.rules":
-    "You start with demo credits. Each tap on a symbol bets 1 credit on that line (−1 from balance). Bet all spends every remaining credit: +1 per line in round-robin order across all eight lines until balance is zero. Eight multipliers: Cherry 2×, Lemon 12×, Orange 10×, Melon 20×, Bell 20×, Stars 30×, 77 40×, BAR 50×. The outer ring has 24 cells with fixed symbol counts (Cherry 5, Lemon 4, Orange 4, Melon 3, Bell 3, Stars 2, 77 2, BAR 1). Bet at least once before Start. The light stops at random; if it matches a symbol you bet on, WIN += (bet on that line) × multiplier. After a win, a double-or-nothing pop-up appears: roll 1–12, HIGH = 7–12, LOW = 1–6; correct adds that win again to WIN, wrong removes that hit from WIN; Skip (or Esc) leaves WIN unchanged; after you roll, press OK to close. Win → Credit also closes the dialog and skips double-or-nothing. Bets reset each round; losing stakes are not refunded—use Clear bets before spinning to recover unspent stakes. Win → Credit merges WIN into your balance. Front-end only; no real money.",
+    "You start with demo credits. Each tap on a symbol bets 1 credit on that line (−1 from balance). Bet all spends every remaining credit: +1 per line in round-robin order across all eight lines until balance is zero. Eight multipliers: Cherry 2×, Lemon 12×, Orange 10×, Melon 20×, Bell 20×, Stars 30×, 77 40×, BAR 50×. The outer ring has 24 cells with fixed symbol counts (Cherry 5, Lemon 4, Orange 4, Melon 3, Bell 3, Stars 2, 77 2, BAR 1). Bet at least once before Start. If Firebase is configured and Cloud Functions are deployed (`littleMarySpin` / `littleMaryHiLoRoll`), the stop cell and hi-lo roll are chosen by the server; otherwise the browser uses local demo RNG. The lamp animation always lands on that cell; if it matches a symbol you bet on, WIN += (bet on that line) × multiplier. After a win, a double-or-nothing pop-up appears: roll 1–12, HIGH = 7–12, LOW = 1–6; correct adds that win again to WIN, wrong removes that hit from WIN; Skip (or Esc) leaves WIN unchanged; after you roll, press OK to close. Win → Credit also closes the dialog and skips double-or-nothing. Bets reset each round; losing stakes are not refunded—use Clear bets before spinning to recover unspent stakes. Win → Credit merges WIN into your balance. Demo state is mostly client-side; RNG for outcomes may be server-side as above. No real money.",
 
   "status.pending": "Pending",
   "status.confirmed": "Confirmed",
@@ -215,6 +215,10 @@ export const EN: Record<string, string> = {
   "member.wheelNone": "No spins right now.",
   "member.wheelStateFail": "Could not read spin state.",
   "member.wheelNeedVerifyFirst": "Verify your email before spinning the wheel.",
+  "member.arcadeExchangeBtn": "1 session → {{n}} arcade points",
+  "member.arcadeRedeemBtn": "{{n}} arcade points → 1 session",
+  "member.arcadeExchangeOk": "Converted to arcade points.",
+  "member.arcadeRedeemOk": "Converted to a bookable session.",
 
   "member.verifyResent":
     "Verification email sent again — check inbox (and spam).",
@@ -386,14 +390,17 @@ export const EN: Record<string, string> = {
     ", integer 1-50; if doc is missing backend defaults to 2 and 4).",
 
   "admin.pricing.heading": "Pricing & point redemption",
-  "admin.pricing.hint": "Controls the cash amount shown for guests/members, the rate to fold legacy wallet cash into sessions, and how many wheel points redeem for 1 session. Firestore:",
+  "admin.pricing.hint":
+    "Controls the cash amount shown for guests/members, the rate to fold legacy wallet cash into sessions, how many wheel points redeem for 1 session, and how many Little Mary arcade points swap with 1 session. Firestore:",
   "admin.pricing.hintEnd": "",
   "admin.pricing.sessionPrice": "On-site price per session (NTD)",
-  "admin.pricing.pointsPer": "Points needed for 1 session",
+  "admin.pricing.pointsPer": "Wheel: points needed for 1 session",
+  "admin.pricing.arcadePer": "Little Mary: arcade points ↔ 1 session",
   "admin.pricing.save": "Save pricing",
   "admin.pricing.loadFail": "Could not load pricing settings.",
   "admin.pricing.badSessionPrice": "On-site price must be an integer ≥ 1.",
   "admin.pricing.badPointsPer": "Redemption threshold must be an integer ≥ 2.",
+  "admin.pricing.badArcadePer": "Little Mary arcade threshold must be an integer ≥ 1 (points per session).",
   "admin.wallet.heading": "Member top-up",
   "admin.wallet.opsHeading": "Member top-up & adjustments",
   "admin.wallet.opsLead":
@@ -515,7 +522,8 @@ export const EN: Record<string, string> = {
   "admin.memberList.th.uid": "UID",
   "admin.memberList.th.nickname": "Display name",
   "admin.memberList.th.sessions": "Bookable sessions",
-  "admin.memberList.th.points": "Points",
+  "admin.memberList.th.points": "Wheel points",
+  "admin.memberList.th.arcadePoints": "Little Mary arcade pts",
   "admin.memberList.th.wallet": "Legacy cash (NTD)",
   "admin.memberList.th.draws": "Spin chances",
   "admin.memberList.th.actions": "Actions",

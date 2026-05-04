@@ -91,6 +91,13 @@ const EN: Record<string, string> = {
   "directEmail.noEmail": "That account has no email address.",
   "directEmail.notVerified": "That member’s email is not verified. This action only sends to verified addresses.",
   "directEmail.sendFailed": "Send failed: {{detail}}",
+  "lm.badBets":
+    "Bets must be 8 non-negative integers; total 1–8000; at most 999 per line.",
+  "lm.badStake": "Hi-lo stake must be an integer from 1 to 9999.",
+  "lm.arcadeShort": "Not enough arcade points for that bet.",
+  "lm.arcadeHiloUnderflow": "Not enough arcade points to settle hi-lo.",
+  "lm.noSessionToExchange": "No prepaid sessions left to exchange for arcade points.",
+  "lm.arcadeRedeemShort": "Not enough arcade points to redeem a session.",
 };
 
 function applyVars(s: string, vars?: Record<string, string | number>): string {
