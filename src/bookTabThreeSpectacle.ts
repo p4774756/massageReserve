@@ -4,6 +4,7 @@ import {
   SHARED_SOLAR_PLANET_DEFS,
   bodyMat,
   collectDisposables,
+  createSoftStarPointSpriteTexture,
   fillAsteroidBelt,
   fillStarField,
 } from "./solarSpectacleShared";
@@ -269,7 +270,12 @@ function galacticBandBasis(galacticNorth: THREE.Vector3): { u: THREE.Vector3; v:
  * 每幀將組件置於相機位置，使帶狀幾乎無視差（模擬極遠恆星）。
  * 盤向集中＋多條塵隙＋斑駁＋銀心方向較亮，仍為示意非天文還原。
  */
-function buildMilkyWayBandShell(count: number, shellR: number, galacticNorth: THREE.Vector3): THREE.Points {
+function buildMilkyWayBandShell(
+  count: number,
+  shellR: number,
+  galacticNorth: THREE.Vector3,
+  pointSprite: THREE.Texture,
+): THREE.Points {
   const positions = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
   const { u, v, n } = galacticBandBasis(galacticNorth);
@@ -352,10 +358,11 @@ function buildMilkyWayBandShell(count: number, shellR: number, galacticNorth: TH
   geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
   const mat = new THREE.PointsMaterial({
+    map: pointSprite,
     vertexColors: true,
-    size: 0.031,
+    size: 0.038,
     transparent: true,
-    opacity: 0.74,
+    opacity: 0.76,
     depthWrite: false,
     fog: false,
     sizeAttenuation: true,
@@ -365,7 +372,12 @@ function buildMilkyWayBandShell(count: number, shellR: number, galacticNorth: TH
 }
 
 /** 銀河帶內較亮團塊（類星團／雲氣聚區），疊在帶上增加長曝感 */
-function buildMilkyWayKnots(count: number, shellR: number, galacticNorth: THREE.Vector3): THREE.Points {
+function buildMilkyWayKnots(
+  count: number,
+  shellR: number,
+  galacticNorth: THREE.Vector3,
+  pointSprite: THREE.Texture,
+): THREE.Points {
   const positions = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
   const { u, v, n } = galacticBandBasis(galacticNorth);
@@ -412,10 +424,11 @@ function buildMilkyWayKnots(count: number, shellR: number, galacticNorth: THREE.
   geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
   const mat = new THREE.PointsMaterial({
+    map: pointSprite,
     vertexColors: true,
-    size: 0.054,
+    size: 0.062,
     transparent: true,
-    opacity: 0.52,
+    opacity: 0.5,
     depthWrite: false,
     fog: false,
     sizeAttenuation: true,
@@ -511,10 +524,15 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
   /** 軌道球心：預設為太陽系中心，飛行導覽時會移向各天體 */
   const lookAtPoint = new THREE.Vector3().copy(target);
 
+  const starPointSprite = createSoftStarPointSpriteTexture(80);
+
   const milkyWayShell = new THREE.Group();
   const MW_SHELL_R = 118;
   const galacticNorth = new THREE.Vector3(0.22, 0.89, 0.35).normalize();
-  milkyWayShell.add(buildMilkyWayBandShell(3800, MW_SHELL_R, galacticNorth), buildMilkyWayKnots(420, MW_SHELL_R, galacticNorth));
+  milkyWayShell.add(
+    buildMilkyWayBandShell(3800, MW_SHELL_R, galacticNorth, starPointSprite),
+    buildMilkyWayKnots(420, MW_SHELL_R, galacticNorth, starPointSprite),
+  );
   scene.add(milkyWayShell);
 
   const root = new THREE.Group();
@@ -533,12 +551,28 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
   starPos.set(starBase);
   const starGeo = new THREE.BufferGeometry();
   starGeo.setAttribute("position", new THREE.BufferAttribute(starPos, 3));
+  const starColors = new Float32Array(starCount * 3);
+  for (let i = 0; i < starCount; i++) {
+    const ix = i * 3;
+    const h = hash01(i * 31 + starSeed[ix]! * 0.001);
+    const h2 = hash01(i * 17 + starSeed[ix + 1]! * 0.001);
+    const h3 = hash01(i * 23 + starSeed[ix + 2]! * 0.001);
+    const bright = 0.38 + h2 * 0.62;
+    const warm = h3 * 0.22;
+    starColors[ix] = (0.88 + warm * 0.35) * bright;
+    starColors[ix + 1] = (0.9 + warm * 0.18) * bright;
+    starColors[ix + 2] = (1 - h * 0.22) * bright;
+  }
+  starGeo.setAttribute("color", new THREE.BufferAttribute(starColors, 3));
   const starMat = new THREE.PointsMaterial({
-    color: 0xd0e0f4,
-    size: 0.034,
+    map: starPointSprite,
+    vertexColors: true,
+    color: 0xe8f0ff,
+    size: 0.038,
     transparent: true,
-    opacity: 0.56,
+    opacity: 0.58,
     depthWrite: false,
+    fog: false,
     blending: THREE.NormalBlending,
     sizeAttenuation: true,
   });
@@ -583,11 +617,13 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
   const beltInnerGeo = new THREE.BufferGeometry();
   beltInnerGeo.setAttribute("position", new THREE.BufferAttribute(beltInnerPos, 3));
   const beltInnerMat = new THREE.PointsMaterial({
+    map: starPointSprite,
     color: 0x9a8a78,
-    size: 0.016,
+    size: 0.018,
     transparent: true,
     opacity: 0.7,
     depthWrite: false,
+    fog: false,
     sizeAttenuation: true,
   });
   root.add(new THREE.Points(beltInnerGeo, beltInnerMat));
@@ -600,11 +636,13 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
   const beltOuterGeo = new THREE.BufferGeometry();
   beltOuterGeo.setAttribute("position", new THREE.BufferAttribute(beltOuterPos, 3));
   const beltOuterMat = new THREE.PointsMaterial({
+    map: starPointSprite,
     color: 0x8a9098,
-    size: 0.014,
+    size: 0.016,
     transparent: true,
     opacity: 0.58,
     depthWrite: false,
+    fog: false,
     sizeAttenuation: true,
   });
   root.add(new THREE.Points(beltOuterGeo, beltOuterMat));
@@ -796,11 +834,13 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
   const trailGeo = new THREE.BufferGeometry();
   trailGeo.setAttribute("position", new THREE.BufferAttribute(trailPos, 3));
   const trailMat = new THREE.PointsMaterial({
+    map: starPointSprite,
     color: 0xb8dcff,
-    size: 0.026,
+    size: 0.03,
     transparent: true,
     opacity: 0.52,
     depthWrite: false,
+    fog: false,
     blending: THREE.AdditiveBlending,
     sizeAttenuation: true,
   });
@@ -808,7 +848,7 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
   extrasRoot.add(comet, cometTrail);
   const trailHist: THREE.Vector3[] = [];
 
-  const disposables = [...collectDisposables(milkyWayShell), ...collectDisposables(root)];
+  const disposables = [...collectDisposables(milkyWayShell), ...collectDisposables(root), { dispose: () => starPointSprite.dispose() }];
 
   const meshByBody = new Map<BodyId, THREE.Object3D>();
   for (const obj of pickables) {

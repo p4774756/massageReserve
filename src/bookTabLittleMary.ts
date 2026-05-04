@@ -50,6 +50,14 @@ type BetLine = {
   en: string;
 };
 
+type LmMsgTone = "hint" | "info" | "success" | "danger" | "warning";
+
+/** 中獎後比大小：先選大／小／不賭；開點後須按確定關閉彈窗 */
+type GamblePending =
+  | null
+  | { phase: "offer"; stake: number }
+  | { phase: "result"; stake: number; roll: number; isHigh: boolean; hit: boolean };
+
 /** 倍率與外圈格數大致成反比；檸檬 4 格取 12×（介於櫻桃與橘子之間） */
 const BET_LINES: BetLine[] = [
   { id: "cherry", mult: 2, zh: "櫻桃", en: "Cherry" },
@@ -154,7 +162,7 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
   let spinning = false;
   let spinToken = 0;
   /** 中獎後可選「比大小」；`stake` 為本局剛入帳之得分（可加倍或扣回） */
-  let gamblePending: { stake: number } | null = null;
+  let gamblePending: GamblePending = null;
   let hiloResolving = false;
 
   const cabinet = document.createElement("div");
@@ -272,24 +280,34 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
   betStrip.appendChild(betGrid);
   betRow.appendChild(betStrip);
 
-  const hiLoPanel = document.createElement("div");
-  hiLoPanel.className = "lm-hilo-panel lm-hilo-panel--arcade lm-hilo-panel--hidden";
-  hiLoPanel.setAttribute("role", "region");
-  hiLoPanel.setAttribute("aria-label", en ? "Double-or-nothing rules & result" : "比大小說明與開點");
-  const hiloRule = document.createElement("p");
-  hiloRule.className = "lm-hilo__rule";
-  const hiloDice = document.createElement("div");
-  hiloDice.className = "lm-hilo__dice";
-  hiloDice.setAttribute("aria-live", "polite");
-  hiLoPanel.append(hiloRule, hiloDice);
+  const hiLoModal = document.createElement("div");
+  hiLoModal.className = "lm-hilo-modal lm-hilo-modal--hidden";
+  hiLoModal.setAttribute("aria-hidden", "true");
+  const hiLoBackdrop = document.createElement("div");
+  hiLoBackdrop.className = "lm-hilo-modal__backdrop";
+  hiLoBackdrop.setAttribute("aria-hidden", "true");
+  const hiLoDialog = document.createElement("div");
+  hiLoDialog.className = "lm-hilo-modal__dialog";
+  hiLoDialog.setAttribute("role", "dialog");
+  hiLoDialog.setAttribute("aria-modal", "true");
+  hiLoDialog.setAttribute("aria-labelledby", "lm-hilo-modal-title");
+  const hiloModalTitle = document.createElement("h2");
+  hiloModalTitle.id = "lm-hilo-modal-title";
+  hiloModalTitle.className = "lm-hilo-modal__title";
+  const hiloModalBody = document.createElement("p");
+  hiloModalBody.className = "lm-hilo__rule lm-hilo-modal__body";
+  hiloModalBody.id = "lm-hilo-modal-body";
+  const hiloModalDice = document.createElement("div");
+  hiloModalDice.className = "lm-hilo__dice lm-hilo-modal__dice";
+  hiloModalDice.setAttribute("aria-live", "polite");
 
-  const hiLoBar = document.createElement("div");
-  hiLoBar.className = "lm-hilo-bar lm-hilo-bar--arcade";
-  hiLoBar.setAttribute("role", "group");
-  hiLoBar.setAttribute("aria-label", en ? "Double-or-nothing: pick HIGH, LOW, or Skip" : "比大小：選大、小或不賭");
-  const hiLoBarTitle = document.createElement("div");
-  hiLoBarTitle.className = "lm-hilo-bar__title";
-  hiLoBarTitle.textContent = en ? "Double-or-nothing" : "比大小";
+  const hiloChoiceActions = document.createElement("div");
+  hiloChoiceActions.className = "lm-hilo-modal__actions";
+  hiloChoiceActions.setAttribute("role", "group");
+  hiloChoiceActions.setAttribute(
+    "aria-label",
+    en ? "Double-or-nothing: pick HIGH, LOW, or Skip" : "比大小：選大、小或不賭",
+  );
   const btnHiloBig = document.createElement("button");
   btnHiloBig.type = "button";
   btnHiloBig.className = "lm-hilo__pick lm-hilo__pick--big";
@@ -310,7 +328,20 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
   btnHiloSkip.type = "button";
   btnHiloSkip.className = "lm-hilo__skip";
   btnHiloSkip.textContent = en ? "Skip" : "不賭";
-  hiLoBar.append(hiLoBarTitle, btnHiloBig, btnHiloSmall, btnHiloSkip);
+  hiloChoiceActions.append(btnHiloBig, btnHiloSmall, btnHiloSkip);
+
+  const hiloResultActions = document.createElement("div");
+  hiloResultActions.className = "lm-hilo-modal__actions lm-hilo-modal__actions--result";
+  hiloResultActions.hidden = true;
+  const btnHiloOk = document.createElement("button");
+  btnHiloOk.type = "button";
+  btnHiloOk.className = "lm-hilo__pick lm-hilo__pick--ok";
+  btnHiloOk.textContent = en ? "OK" : "確定";
+  btnHiloOk.setAttribute("aria-label", en ? "Close result" : "關閉結果");
+  hiloResultActions.append(btnHiloOk);
+
+  hiLoDialog.append(hiloModalTitle, hiloModalBody, hiloModalDice, hiloChoiceActions, hiloResultActions);
+  hiLoModal.append(hiLoBackdrop, hiLoDialog);
 
   const controls = document.createElement("div");
   controls.className = "lm-controls lm-controls--bar lm-controls--arcade";
@@ -341,12 +372,16 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
   controls.append(btnClear, btnBetAll, btnCollect, btnStart);
 
   const msg = document.createElement("p");
-  msg.className = "lm-msg";
   msg.setAttribute("aria-live", "polite");
-  msg.textContent = en ? "Tap a symbol, then Start." : "點圖示押注，再按開始。";
+  function setLmMsg(text: string, tone: LmMsgTone) {
+    msg.textContent = text;
+    msg.className = `lm-msg lm-msg--${tone}`;
+  }
+  setLmMsg(en ? "Tap a symbol, then Start." : "點圖示押注，再按開始。", "hint");
 
-  root.append(board, betRow, hiLoPanel, hiLoBar, controls, msg);
+  root.append(board, betRow, controls, msg);
   cabinet.appendChild(root);
+  cabinet.appendChild(hiLoModal);
   host.appendChild(cabinet);
 
   const elWin = root.querySelector('[data-lm="win"]') as HTMLElement;
@@ -376,39 +411,63 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
     btnClear.disabled = spinning || g || totalBet() === 0;
     btnBetAll.disabled = spinning || g || credit <= 0;
     btnCollect.disabled = winPile <= 0;
-    const hiloBtnsOff = !g || hiloResolving;
-    btnHiloBig.disabled = hiloBtnsOff;
-    btnHiloSmall.disabled = hiloBtnsOff;
-    btnHiloSkip.disabled = hiloBtnsOff;
+    const offer = gamblePending?.phase === "offer";
+    const result = gamblePending?.phase === "result";
+    btnHiloBig.disabled = spinning || !offer || hiloResolving;
+    btnHiloSmall.disabled = spinning || !offer || hiloResolving;
+    btnHiloSkip.disabled = spinning || !offer || hiloResolving;
+    btnHiloOk.disabled = spinning || !result || hiloResolving;
   }
 
-  function dismissHiLoPanel() {
+  function closeHiLoModalUi() {
+    hiLoModal.classList.add("lm-hilo-modal--hidden");
+    hiLoModal.setAttribute("aria-hidden", "true");
+    hiloModalTitle.textContent = "";
+    hiloModalBody.textContent = "";
+    hiloModalDice.textContent = "";
+    hiloChoiceActions.hidden = false;
+    hiloResultActions.hidden = true;
+  }
+
+  function abandonHiLoIfOpen() {
+    if (!gamblePending) return;
     gamblePending = null;
-    hiLoPanel.classList.add("lm-hilo-panel--hidden");
-    hiloRule.textContent = "";
-    hiloDice.textContent = "";
+    hiloResolving = false;
+    closeHiLoModalUi();
   }
 
   function offerHiLo(stake: number) {
-    gamblePending = { stake };
-    hiLoPanel.classList.remove("lm-hilo-panel--hidden");
-    hiloRule.textContent = en
-      ? `Double-or-nothing on this win (+${stake}): roll 1–12. HIGH = 7–12, LOW = 1–6 (fair split). Win → +${stake} bonus; lose → −${stake} from bonus. Skip keeps bonus.`
-      : `本局獎 +${stake} 可選比大小：再開 1～12 點，大＝7～12、小＝1～6（各半機率）。猜中再 +${stake} 得分；猜錯從得分扣 ${stake}。「不賭」保留現狀。`;
-    hiloDice.textContent = "";
+    gamblePending = { phase: "offer", stake };
+    hiloModalTitle.textContent = en ? "Double-or-nothing?" : "要比大小嗎？";
+    hiloModalBody.textContent = en
+      ? `You won +${stake} on this spin. Roll 1–12: HIGH = 7–12, LOW = 1–6 (50/50). Win → +${stake} more on your bonus; lose → −${stake} from bonus. Skip keeps your bonus as-is.`
+      : `本局已入帳 +${stake} 得分。可再押一次：再開 1～12 點，大＝7～12、小＝1～6（各半）。猜中再 +${stake} 得分；猜錯從得分扣 ${stake}。按「不賭」則維持現狀。`;
+    hiloModalDice.textContent = en ? `Bonus: +${stake}` : `本局入帳：+${stake} 得分`;
+    hiloChoiceActions.hidden = false;
+    hiloResultActions.hidden = true;
+    hiLoModal.classList.remove("lm-hilo-modal--hidden");
+    hiLoModal.setAttribute("aria-hidden", "false");
     updateInteractiveLock();
     btnHiloSkip.focus();
   }
 
   function skipHiLo() {
-    if (!gamblePending || hiloResolving) return;
-    dismissHiLoPanel();
+    if (!gamblePending || gamblePending.phase !== "offer" || hiloResolving) return;
+    gamblePending = null;
+    closeHiLoModalUi();
     updateInteractiveLock();
-    msg.textContent = en ? "Skipped double-or-nothing." : "已略過比大小，得分不變。";
+    setLmMsg(en ? "Skipped double-or-nothing." : "已略過比大小，得分不變。", "info");
+  }
+
+  function finishHiLoResultOk() {
+    if (!gamblePending || gamblePending.phase !== "result") return;
+    gamblePending = null;
+    closeHiLoModalUi();
+    updateInteractiveLock();
   }
 
   function resolveHiLo(guessHigh: boolean) {
-    if (!gamblePending || hiloResolving) return;
+    if (!gamblePending || gamblePending.phase !== "offer" || hiloResolving) return;
     const { stake } = gamblePending;
     hiloResolving = true;
     updateInteractiveLock();
@@ -418,25 +477,30 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
     if (hit) {
       winPile = Math.min(9999, winPile + stake);
       sfx.playWin(stake);
-      hiloDice.textContent = en
-        ? `Rolled ${roll} (${isHigh ? "HIGH" : "LOW"}). Hit! +${stake} bonus.`
-        : `開出 ${roll} 點（${isHigh ? "大" : "小"}）。中！再 +${stake} 得分。`;
-      msg.textContent = en ? `Hi-lo hit! Bonus +${stake}.` : `比大小猜中！再 +${stake} 得分。`;
+      hiloModalTitle.textContent = en ? "You hit!" : "猜中了！";
+      hiloModalBody.textContent = en
+        ? `Rolled ${roll} (${isHigh ? "HIGH" : "LOW"}). +${stake} added to your bonus.`
+        : `開出 ${roll} 點（${isHigh ? "大" : "小"}）。再 +${stake} 得分已入帳。`;
+      setLmMsg(en ? `Hi-lo hit! Bonus +${stake}.` : `比大小猜中！再 +${stake} 得分。`, "success");
     } else {
       winPile = Math.max(0, winPile - stake);
       sfx.playMiss();
-      hiloDice.textContent = en
-        ? `Rolled ${roll} (${isHigh ? "HIGH" : "LOW"}). Missed −${stake} from this win.`
-        : `開出 ${roll} 點（${isHigh ? "大" : "小"}）。未中，本局 ${stake} 得分自得分欄扣回。`;
-      msg.textContent = en ? `Hi-lo miss. −${stake} from bonus.` : `比大小未中，自得分扣 ${stake}。`;
+      hiloModalTitle.textContent = en ? "Missed" : "未猜中";
+      hiloModalBody.textContent = en
+        ? `Rolled ${roll} (${isHigh ? "HIGH" : "LOW"}). −${stake} taken from this win’s bonus.`
+        : `開出 ${roll} 點（${isHigh ? "大" : "小"}）。自得分欄扣回 ${stake}。`;
+      setLmMsg(en ? `Hi-lo miss. −${stake} from bonus.` : `比大小未中，自得分扣 ${stake}。`, "danger");
     }
-    gamblePending = null;
-    hiLoPanel.classList.add("lm-hilo-panel--hidden");
-    hiloRule.textContent = "";
-    hiloDice.textContent = "";
+    hiloModalDice.textContent = en
+      ? `Roll: ${roll} · ${isHigh ? "HIGH" : "LOW"}`
+      : `開點：${roll}（${isHigh ? "大" : "小"}）`;
+    gamblePending = { phase: "result", stake, roll, isHigh, hit };
+    hiloChoiceActions.hidden = true;
+    hiloResultActions.hidden = false;
     hiloResolving = false;
     syncDisplays();
     updateInteractiveLock();
+    btnHiloOk.focus();
   }
 
   function setLight(i: number) {
@@ -454,12 +518,17 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
     if (spinning) return;
     if (gamblePending) {
       sfx.playError();
-      msg.textContent = en ? "Finish or skip double-or-nothing first." : "請先完成比大小，或按「不賭」。";
+      setLmMsg(
+        en
+          ? "Finish the double-or-nothing pop-up first (Skip, pick High/Low, or OK on the result)."
+          : "請先處理比大小彈窗：略過、選大／小，或看完開點後按「確定」。",
+        "warning",
+      );
       return;
     }
     if (credit <= 0) {
       sfx.playNoCredit();
-      msg.textContent = en ? "No credit." : "分數不足。";
+      setLmMsg(en ? "No credit." : "分數不足。", "warning");
       return;
     }
     credit -= 1;
@@ -467,7 +536,7 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
     sfx.playBet();
     syncDisplays();
     updateInteractiveLock();
-    msg.textContent = en ? "Bet placed." : "已押注。";
+    setLmMsg(en ? "Bet placed." : "已押注。", "info");
   }
 
   function clearBets() {
@@ -480,19 +549,24 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
     sfx.playClear();
     syncDisplays();
     updateInteractiveLock();
-    msg.textContent = en ? "Bets cleared." : "已退回押注。";
+    setLmMsg(en ? "Bets cleared." : "已退回押注。", "info");
   }
 
   function betAll() {
     if (spinning) return;
     if (gamblePending) {
       sfx.playError();
-      msg.textContent = en ? "Finish or skip double-or-nothing first." : "請先完成比大小，或按「不賭」。";
+      setLmMsg(
+        en
+          ? "Finish the double-or-nothing pop-up first (Skip, pick High/Low, or OK on the result)."
+          : "請先處理比大小彈窗：略過、選大／小，或看完開點後按「確定」。",
+        "warning",
+      );
       return;
     }
     if (credit <= 0) {
       sfx.playNoCredit();
-      msg.textContent = en ? "No credit." : "分數不足。";
+      setLmMsg(en ? "No credit." : "分數不足。", "warning");
       return;
     }
     const order = [...BET_TILE_ORDER];
@@ -508,16 +582,19 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
     sfx.playBet();
     syncDisplays();
     updateInteractiveLock();
-    msg.textContent = en
-      ? `All-in: ${placed} credit(s) placed round-robin on all lines.`
-      : `已全押：共 ${placed} 分，依八條線輪流各 +1 直到分數用盡。`;
+    setLmMsg(
+      en
+        ? `All-in: ${placed} credit(s) placed round-robin on all lines.`
+        : `已全押：共 ${placed} 分，依八條線輪流各 +1 直到分數用盡。`,
+      "info",
+    );
   }
 
   function collectWin() {
     if (spinning) return;
     if (winPile <= 0) return;
     if (gamblePending) {
-      dismissHiLoPanel();
+      abandonHiLoIfOpen();
       updateInteractiveLock();
     }
     credit += winPile;
@@ -525,7 +602,7 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
     sfx.playCollect();
     syncDisplays();
     updateInteractiveLock();
-    msg.textContent = en ? "Credited." : "已轉入分數。";
+    setLmMsg(en ? "Credited." : "已轉入分數。", "success");
   }
 
   function resolveStop(stopIdx: number) {
@@ -538,10 +615,10 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
       hitGain = b * mult;
       winPile += hitGain;
       sfx.playWin(hitGain);
-      msg.textContent = en ? `Hit ${BET_LINES[line]!.en}! +${hitGain}` : `開出 ${BET_LINES[line]!.zh}！+${hitGain} 得分`;
+      setLmMsg(en ? `Hit ${BET_LINES[line]!.en}! +${hitGain}` : `開出 ${BET_LINES[line]!.zh}！+${hitGain} 得分`, "success");
     } else {
       sfx.playMiss();
-      msg.textContent = en ? `Stopped on ${symbolLabel(sym, true)}.` : `停在「${symbolLabel(sym, false)}」。`;
+      setLmMsg(en ? `Stopped on ${symbolLabel(sym, true)}.` : `停在「${symbolLabel(sym, false)}」。`, "info");
     }
     bets.fill(0);
     syncDisplays();
@@ -556,12 +633,17 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
     if (spinning) return;
     if (gamblePending) {
       sfx.playError();
-      msg.textContent = en ? "Finish or skip double-or-nothing first." : "請先完成比大小，或按「不賭」。";
+      setLmMsg(
+        en
+          ? "Finish the double-or-nothing pop-up first (Skip, pick High/Low, or OK on the result)."
+          : "請先處理比大小彈窗：略過、選大／小，或看完開點後按「確定」。",
+        "warning",
+      );
       return;
     }
     if (totalBet() === 0) {
       sfx.playError();
-      msg.textContent = en ? "Place a bet first." : "請先押注。";
+      setLmMsg(en ? "Place a bet first." : "請先押注。", "warning");
       return;
     }
     sfx.playSpinStart();
@@ -603,6 +685,7 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
   btnHiloBig.addEventListener("click", () => resolveHiLo(true));
   btnHiloSmall.addEventListener("click", () => resolveHiLo(false));
   btnHiloSkip.addEventListener("click", () => skipHiLo());
+  btnHiloOk.addEventListener("click", () => finishHiLoResultOk());
 
   let panelVisible = false;
   const io = new IntersectionObserver(
@@ -618,6 +701,12 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
     if (!panelVisible) return;
     const t = ev.target as HTMLElement | null;
     if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT")) return;
+    if (ev.code === "Escape" && gamblePending) {
+      ev.preventDefault();
+      if (gamblePending.phase === "offer") skipHiLo();
+      else if (gamblePending.phase === "result") finishHiLoResultOk();
+      return;
+    }
     if (ev.code === "Space") {
       if (gamblePending) return;
       ev.preventDefault();

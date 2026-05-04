@@ -2,6 +2,37 @@ import * as THREE from "three";
 
 /** 預約分頁太陽系與輪盤前奏共用的幾何／材質工具（單一維護點） */
 
+/**
+ * 程序化柔邊圓斑貼圖，供 `PointsMaterial.map` 使用，讓星點呈圓形漸層而非預設方塊。
+ * 材質釋放後須呼叫 `texture.dispose()`（本專案於場景 teardown 時手動加入 disposable）。
+ */
+export function createSoftStarPointSpriteTexture(sizePx = 72): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = sizePx;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("createSoftStarPointSpriteTexture: 2d context unavailable");
+  }
+  const cx = sizePx * 0.5;
+  const r = sizePx * 0.48;
+  const grd = ctx.createRadialGradient(cx, cx, 0, cx, cx, r);
+  grd.addColorStop(0, "rgba(255,255,255,1)");
+  grd.addColorStop(0.12, "rgba(255,255,255,0.96)");
+  grd.addColorStop(0.38, "rgba(255,255,255,0.45)");
+  grd.addColorStop(0.68, "rgba(255,255,255,0.1)");
+  grd.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, 0, sizePx, sizePx);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.NoColorSpace;
+  tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  return tex;
+}
+
 export function fillStarField(base: Float32Array, seeds: Float32Array, count: number, rMin: number, rMax: number) {
   for (let i = 0; i < count; i++) {
     const ix = i * 3;

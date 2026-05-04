@@ -8,11 +8,17 @@ import {
   SHARED_SOLAR_PLANET_DEFS,
   bodyMat,
   collectDisposables,
+  createSoftStarPointSpriteTexture,
   fillAsteroidBelt,
   fillStarField,
 } from "./solarSpectacleShared";
 
 const DPR_CAP = 2;
+
+function hash01(n: number): number {
+  const x = Math.sin(n * 127.1 + 311.7) * 43758.5453123;
+  return x - Math.floor(x);
+}
 
 type OrbitBody = { pivot: THREE.Group; speed: number; phase: number; mesh: THREE.Mesh; spin: number };
 
@@ -62,6 +68,8 @@ export function mountWheelSpectacleSolarIntro(host: HTMLElement): WheelSpectacle
 
   scene.add(new THREE.AmbientLight(0x223344, 0.22));
 
+  const starPointSprite = createSoftStarPointSpriteTexture(80);
+
   const starCount = 720;
   const starBase = new Float32Array(starCount * 3);
   const starPos = new Float32Array(starCount * 3);
@@ -70,12 +78,28 @@ export function mountWheelSpectacleSolarIntro(host: HTMLElement): WheelSpectacle
   starPos.set(starBase);
   const starGeo = new THREE.BufferGeometry();
   starGeo.setAttribute("position", new THREE.BufferAttribute(starPos, 3));
+  const starColors = new Float32Array(starCount * 3);
+  for (let i = 0; i < starCount; i++) {
+    const ix = i * 3;
+    const h = hash01(i * 31 + starSeed[ix]! * 0.001);
+    const h2 = hash01(i * 17 + starSeed[ix + 1]! * 0.001);
+    const h3 = hash01(i * 23 + starSeed[ix + 2]! * 0.001);
+    const bright = 0.38 + h2 * 0.62;
+    const warm = h3 * 0.22;
+    starColors[ix] = (0.88 + warm * 0.35) * bright;
+    starColors[ix + 1] = (0.9 + warm * 0.18) * bright;
+    starColors[ix + 2] = (1 - h * 0.22) * bright;
+  }
+  starGeo.setAttribute("color", new THREE.BufferAttribute(starColors, 3));
   const starMat = new THREE.PointsMaterial({
-    color: 0xd0e0f4,
-    size: 0.034,
+    map: starPointSprite,
+    vertexColors: true,
+    color: 0xe8f0ff,
+    size: 0.038,
     transparent: true,
-    opacity: 0.56,
+    opacity: 0.58,
     depthWrite: false,
+    fog: false,
     blending: THREE.NormalBlending,
     sizeAttenuation: true,
   });
@@ -118,11 +142,13 @@ export function mountWheelSpectacleSolarIntro(host: HTMLElement): WheelSpectacle
   const beltInnerGeo = new THREE.BufferGeometry();
   beltInnerGeo.setAttribute("position", new THREE.BufferAttribute(beltInnerPos, 3));
   const beltInnerMat = new THREE.PointsMaterial({
+    map: starPointSprite,
     color: 0x9a8a78,
-    size: 0.016,
+    size: 0.018,
     transparent: true,
     opacity: 0.7,
     depthWrite: false,
+    fog: false,
     sizeAttenuation: true,
   });
   root.add(new THREE.Points(beltInnerGeo, beltInnerMat));
@@ -135,11 +161,13 @@ export function mountWheelSpectacleSolarIntro(host: HTMLElement): WheelSpectacle
   const beltOuterGeo = new THREE.BufferGeometry();
   beltOuterGeo.setAttribute("position", new THREE.BufferAttribute(beltOuterPos, 3));
   const beltOuterMat = new THREE.PointsMaterial({
+    map: starPointSprite,
     color: 0x8a9098,
-    size: 0.014,
+    size: 0.016,
     transparent: true,
     opacity: 0.58,
     depthWrite: false,
+    fog: false,
     sizeAttenuation: true,
   });
   root.add(new THREE.Points(beltOuterGeo, beltOuterMat));
@@ -241,7 +269,7 @@ export function mountWheelSpectacleSolarIntro(host: HTMLElement): WheelSpectacle
   root.add(dwarfPivot);
   orbitals.push({ pivot: dwarfPivot, speed: 3.25, phase: 2.8, mesh: dwarf, spin: 2.2 });
 
-  const disposableResources = collectDisposables(root);
+  const disposableResources = [...collectDisposables(root), { dispose: () => starPointSprite.dispose() }];
 
   const toCam = new THREE.Vector3().subVectors(new THREE.Vector3(0.85, 1.05, 6.2), target);
   const camRadiusStart = Math.max(2.8, Math.min(22, toCam.length()));
