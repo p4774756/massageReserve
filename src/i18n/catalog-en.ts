@@ -455,6 +455,12 @@ export const EN: Record<string, string> = {
   "admin.pager.hiddenPage": "Page {{cur}} / {{total}} · {{count}} items ({{size}} per page)",
   "admin.pager.memberPage": "Page {{cur}} / {{total}} · {{count}} users ({{size}} per page)",
 
+  "admin.memberList.searchLabel": "Quick filter",
+  "admin.memberList.searchPlaceholder": "Email, UID, or display name…",
+  "admin.memberList.searchAria": "Filter member list",
+  "admin.memberList.searchHint":
+    "Filters the loaded list by email, UID, or display name (case-insensitive). Clear the field to show everyone.",
+  "admin.memberList.searchEmpty": "No members match. Change the keyword or clear the filter.",
   "admin.memberList.title": "Member list",
   "admin.memberList.introA": "All Firebase Authentication users merged with Firestore ",
   "admin.memberList.introB": " wallet balance and display name. Large directories may load slowly.",

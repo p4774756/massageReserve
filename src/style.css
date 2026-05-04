@@ -935,6 +935,39 @@ main.panel[hidden] {
   padding: 14px 14px 16px;
 }
 
+.lm-exchange {
+  width: 100%;
+  max-width: 36rem;
+  margin: 0 auto 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgb(200 152 184 / 0.35);
+  background: rgb(255 255 255 / 0.05);
+  box-sizing: border-box;
+}
+
+/* 須高於後段全域 `.status-line.ok`（var(--ink) 深色），否則貼在小瑪莉深色底會看不到 */
+.lm-exchange .lm-exchange__status {
+  margin: 0 0 6px;
+  color: rgb(220 210 230);
+}
+
+.lm-exchange .lm-exchange__status.ok {
+  color: rgb(140 255 185);
+  font-weight: 600;
+}
+
+.lm-exchange .lm-exchange__status.error {
+  color: rgb(255 195 188);
+  font-weight: 600;
+}
+
+.lm-exchange__row {
+  margin: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .book-tab-lm-static {
   width: 100%;
   min-height: 120px;
@@ -2280,6 +2313,7 @@ button.ghost:disabled {
   display: grid;
   gap: 14px;
   margin-top: 0;
+  margin-bottom: 10px;
 }
 
 .wheel-rules-hint {
@@ -2724,6 +2758,18 @@ tbody tr:hover td {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-muted);
+}
+
+.admin-member-list-search {
+  display: block;
+  max-width: 28rem;
+  margin: 0 0 12px;
+}
+
+.admin-member-list-search .admin-member-list-search-input {
+  width: 100%;
+  max-width: 28rem;
+  box-sizing: border-box;
 }
 
 .admin-member-list-table {

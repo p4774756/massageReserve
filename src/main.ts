@@ -33,8 +33,6 @@ import {
   getMyWalletCall,
   isFirebaseConfigured,
   redeemWheelPointsCall,
-  exchangeSessionForArcadePointsCall,
-  redeemArcadePointsForSessionCall,
   searchMemberUsersCall,
   listMembersAdminCall,
   migrateLegacyWalletsAdminCall,
@@ -729,8 +727,6 @@ function render() {
         el("span", { class: "hint" }, [t("field.noteHint", "可填寫需求，例如：頭痛、背部痠痛、腿部需要按壓等")]),
       ]),
     ]),
-    /** 會員餘額／驗證提示放在備註之後；點數兌換次數在「抽輪盤」分頁 */
-    memberExtrasWrap,
     el("div", { class: "row-actions" }, [submitBtn]),
     bookStatus,
   ]);
@@ -775,69 +771,6 @@ function render() {
       syncRedeemPointsUi();
     }
   });
-  const arcadeMemberStatus = el("div", { class: "status-line", hidden: true });
-  const exchangeArcadeBtn = el("button", { type: "button", class: "ghost" }, [
-    t("member.arcadeExchangeBtn", "1 次按摩 → {{n}} 遊戲點", { n: arcadePointsPerMassageSetting }),
-  ]);
-  const redeemArcadeBtn = el("button", { type: "button", class: "ghost" }, [
-    t("member.arcadeRedeemBtn", "{{n}} 遊戲點 → 1 次按摩", { n: arcadePointsPerMassageSetting }),
-  ]);
-  const arcadeMemberRow = el("div", { class: "row-actions book-arcade-row", hidden: true }, [
-    exchangeArcadeBtn,
-    redeemArcadeBtn,
-  ]);
-  exchangeArcadeBtn.addEventListener("click", async () => {
-    arcadeMemberStatus.textContent = "";
-    arcadeMemberStatus.className = "status-line";
-    arcadeMemberStatus.hidden = false;
-    exchangeArcadeBtn.setAttribute("disabled", "true");
-    try {
-      const fn = exchangeSessionForArcadePointsCall();
-      await fn({ ...localeApiParam() });
-      arcadeMemberStatus.textContent = t("member.arcadeExchangeOk", "已兌換遊戲點。");
-      arcadeMemberStatus.classList.add("ok");
-      await refreshWalletStatus();
-    } catch (e) {
-      arcadeMemberStatus.textContent = errorMessage(e);
-      arcadeMemberStatus.classList.add("error");
-    } finally {
-      syncArcadeMemberUi();
-    }
-  });
-  redeemArcadeBtn.addEventListener("click", async () => {
-    arcadeMemberStatus.textContent = "";
-    arcadeMemberStatus.className = "status-line";
-    arcadeMemberStatus.hidden = false;
-    redeemArcadeBtn.setAttribute("disabled", "true");
-    try {
-      const fn = redeemArcadePointsForSessionCall();
-      await fn({ ...localeApiParam() });
-      arcadeMemberStatus.textContent = t("member.arcadeRedeemOk", "已兌換按摩次數。");
-      arcadeMemberStatus.classList.add("ok");
-      await refreshWalletStatus();
-    } catch (e) {
-      arcadeMemberStatus.textContent = errorMessage(e);
-      arcadeMemberStatus.classList.add("error");
-    } finally {
-      syncArcadeMemberUi();
-    }
-  });
-  function syncArcadeMemberUi() {
-    exchangeArcadeBtn.textContent = t("member.arcadeExchangeBtn", "1 次按摩 → {{n}} 遊戲點", { n: arcadePointsPerMassageSetting });
-    redeemArcadeBtn.textContent = t("member.arcadeRedeemBtn", "{{n}} 遊戲點 → 1 次按摩", { n: arcadePointsPerMassageSetting });
-    const u = auth.currentUser;
-    const vis = Boolean(u && !u.isAnonymous && u.emailVerified);
-    arcadeMemberRow.hidden = !vis;
-    if (!vis) {
-      arcadeMemberStatus.hidden = true;
-      return;
-    }
-    arcadeMemberStatus.hidden = (arcadeMemberStatus.textContent ?? "").length === 0;
-    if (sessionCreditsCount >= 1) exchangeArcadeBtn.removeAttribute("disabled");
-    else exchangeArcadeBtn.setAttribute("disabled", "true");
-    if (arcadePointsCount >= arcadePointsPerMassageSetting) redeemArcadeBtn.removeAttribute("disabled");
-    else redeemArcadeBtn.setAttribute("disabled", "true");
-  }
 
   function syncRedeemPointsUi() {
     redeemPointsBtn.textContent = t("member.redeemPointsBtn", "用 {{per}} 點換 1 次按摩", { per: pointsPerMassageSetting });
@@ -846,13 +779,11 @@ function render() {
     redeemRow.hidden = !vis;
     if (!vis) {
       redeemPointsStatus.hidden = true;
-      syncArcadeMemberUi();
       return;
     }
     redeemPointsStatus.hidden = (redeemPointsStatus.textContent ?? "").length === 0;
     if (wheelPointsCount >= pointsPerMassageSetting) redeemPointsBtn.removeAttribute("disabled");
     else redeemPointsBtn.setAttribute("disabled", "true");
-    syncArcadeMemberUi();
   }
 
   let myBookingsUnsub: (() => void) | null = null;
@@ -1695,7 +1626,6 @@ function render() {
         if (drawChances > 0) spinBtn.removeAttribute("disabled");
         else spinBtn.setAttribute("disabled", "true");
         syncRedeemPointsUi();
-        syncArcadeMemberUi();
         setWheelStatsPanel({ kind: "ok", legacyLine });
         syncPageHeadSession(profileNick);
       } catch (e) {
@@ -1711,7 +1641,6 @@ function render() {
         wheelStatus.textContent = t("member.wheelStateFail", "無法讀取抽獎狀態。");
         wheelStatus.className = "status-line error";
         syncRedeemPointsUi();
-        syncArcadeMemberUi();
         setWheelStatsPanel({ kind: "error", detail: errorMessage(e) });
         syncPageHeadSession();
       }
@@ -2149,7 +2078,7 @@ function render() {
     ),
   ]);
   const wheelRow = el("div", { class: "book-wheel-row" }, [spinBtn, wheelTestBtn, wheelStatus, wheelResult]);
-  memberExtrasWrap.append(emailVerifyBanner, walletStatus, arcadeMemberStatus, arcadeMemberRow);
+  memberExtrasWrap.append(emailVerifyBanner, walletStatus);
   const bookSupportChatMount = el("div", { class: "book-support-chat" });
   mountMemberSupportChat(db, auth, bookSupportChatMount);
 
@@ -2310,6 +2239,8 @@ function render() {
         el("span", { class: "hint" }, [t("field.dateHint", "最遠僅開放至本週曆之下週日（台北）；更後的日期無法選取。")]),
       ]),
     ]),
+    /** 與選時段／付款區分離：登入後即可看餘額與信箱驗證（小瑪莉遊戲點兌換在「小瑪莉」分頁；輪盤點兌換在「抽輪盤」分頁） */
+    memberExtrasWrap,
     bookProgressHint,
     slotStepSection,
     finalizeSection,
@@ -3701,6 +3632,20 @@ function render() {
     let memberListPageIndex = 0;
     let memberListSortKey: MemberListSortKey = "emailVerified";
     let memberListSortAsc = true;
+    let memberListSearchQuery = "";
+    const memberListSearchInput = el("input", {
+      type: "search",
+      class: "admin-member-list-search-input",
+      maxLength: 200,
+      autocomplete: "off",
+      placeholder: t("admin.memberList.searchPlaceholder", "Email、UID 或稱呼…"),
+      "aria-label": t("admin.memberList.searchAria", "篩選會員清單"),
+    });
+    memberListSearchInput.addEventListener("input", () => {
+      memberListSearchQuery = memberListSearchInput.value;
+      memberListPageIndex = 0;
+      paintMemberListTable();
+    });
 
     const memberListPager = el("div", { class: "admin-hidden-pager admin-member-list-pager" });
     const memberListPagePrev = el("button", { type: "button", class: "ghost" }, [t("admin.pager.prev", "上一頁")]);
@@ -3797,8 +3742,20 @@ function render() {
       ]);
     }
 
+    function memberListRowMatchesQuery(m: AdminMemberListRow, qRaw: string): boolean {
+      const q = qRaw.trim().toLowerCase();
+      if (!q) return true;
+      const blob = `${m.email ?? ""} ${m.uid} ${m.nickname}`.toLowerCase();
+      return blob.includes(q);
+    }
+
+    function getMemberListFiltered(): AdminMemberListRow[] {
+      return memberListCache.filter((m) => memberListRowMatchesQuery(m, memberListSearchQuery));
+    }
+
     function paintMemberListTable() {
-      const sorted = [...memberListCache].sort((a, b) => {
+      const filtered = getMemberListFiltered();
+      const sorted = [...filtered].sort((a, b) => {
         const c = compareAdminMemberRows(a, b, memberListSortKey, memberListSortAsc);
         if (c !== 0) return c;
         return a.uid.localeCompare(b.uid);
@@ -3813,10 +3770,12 @@ function render() {
       memberListTable.append(buildMemberListHeaderRow());
 
       if (total === 0) {
+        const emptyMsg =
+          memberListCache.length > 0
+            ? t("admin.memberList.searchEmpty", "沒有符合關鍵字的會員。請改關鍵字或清空篩選欄。")
+            : t("admin.memberList.empty", "目前沒有使用者資料。請按「重新載入會員清單」。");
         memberListTable.append(
-          el("tr", {}, [
-            el("td", { class: "hint", colSpan: 10 }, [t("admin.memberList.empty", "目前沒有使用者資料。請按「重新載入會員清單」。")]),
-          ]),
+          el("tr", {}, [el("td", { class: "hint", colSpan: 10 }, [emptyMsg])]),
         );
         memberListPagePrev.disabled = true;
         memberListPageNext.disabled = true;
@@ -3911,7 +3870,7 @@ function render() {
       paintMemberListTable();
     });
     memberListPageNext.addEventListener("click", () => {
-      const total = memberListCache.length;
+      const total = getMemberListFiltered().length;
       if (total === 0) return;
       const totalPages = Math.ceil(total / MEMBER_LIST_PAGE_SIZE);
       if (memberListPageIndex >= totalPages - 1) return;
@@ -3943,6 +3902,8 @@ function render() {
         memberListPageIndex = 0;
         memberListSortKey = "emailVerified";
         memberListSortAsc = true;
+        memberListSearchQuery = "";
+        memberListSearchInput.value = "";
         paintMemberListTable();
         memberListStatus.textContent = t("admin.memberList.loaded", "已載入 {{n}} 位使用者。", {
           n: memberListCache.length,
@@ -4533,6 +4494,13 @@ function render() {
       ]),
       el("p", { class: "hint" }, [
         t("admin.memberList.introSort", "表頭欄位可點擊排序；預設已驗證信箱在前。清單每頁顯示 10 位。"),
+      ]),
+      el("label", { class: "field admin-member-list-search" }, [
+        t("admin.memberList.searchLabel", "快速篩選"),
+        memberListSearchInput,
+        el("span", { class: "hint" }, [
+          t("admin.memberList.searchHint", "依已載入清單篩選 Email、UID、稱呼（不分大小寫）；清空欄位顯示全部。"),
+        ]),
       ]),
       el("p", { class: "hint" }, [
         t(

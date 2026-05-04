@@ -1,7 +1,8 @@
 import { onAuthStateChanged } from "firebase/auth";
-import { getLocale } from "./i18n";
+import { getLocale, localeApiParam, t } from "./i18n";
 import { createLittleMarySfx } from "./bookTabLittleMaryAudio";
 import {
+  exchangeSessionForArcadePointsCall,
   getFirebaseAuth,
   getMyWalletCall,
   isFirebaseConfigured,
@@ -9,6 +10,7 @@ import {
   littleMaryHiLoRollCall,
   littleMarySpinAccountCall,
   littleMarySpinCall,
+  redeemArcadePointsForSessionCall,
 } from "./firebase";
 
 export type MountBookTabLittleMaryOptions = {
@@ -138,6 +140,14 @@ function symbolLabel(sym: LittleMarySymbol, en: boolean): string {
   return sym;
 }
 
+function lmErrMsg(e: unknown): string {
+  if (e && typeof e === "object" && "message" in e) {
+    const m = (e as { message?: unknown }).message;
+    if (typeof m === "string" && m.length > 0) return m;
+  }
+  return t("errors.generic", "發生錯誤");
+}
+
 /**
  * 預約主面板分頁：復古「小瑪莉」跑燈。
  * 訪客／未驗證信箱：試玩分數於瀏覽器；已驗證會員且已設定 Firebase：遊戲點與開獎由 Cloud Functions 結算。
@@ -168,6 +178,10 @@ export function mountBookTabLittleMary(host: HTMLElement, options?: MountBookTab
   let lastServerArcade = 0;
   /** 本局伺服器結算之中獎分（供 resolveStop 與試玩邏輯對齊）；-1 表示用本地計算 */
   let pendingSpinHitGain = -1;
+  /** 伺服器回傳：可預約次數（兌換遊戲點用） */
+  let lmSessionCredits = 0;
+  /** 伺服器定價：幾遊戲點 ↔ 1 次按摩 */
+  let lmArcadePerMassage = 100;
 
   const sfx = createLittleMarySfx();
   host.addEventListener(
@@ -188,6 +202,8 @@ export function mountBookTabLittleMary(host: HTMLElement, options?: MountBookTab
     winPile = 0;
     lastServerArcade = 0;
     pendingSpinHitGain = -1;
+    lmSessionCredits = 0;
+    lmArcadePerMassage = 100;
     bets.fill(0);
   }
 
@@ -416,7 +432,24 @@ export function mountBookTabLittleMary(host: HTMLElement, options?: MountBookTab
   root.append(board, msg, betRow, controls);
   cabinet.appendChild(root);
   cabinet.appendChild(hiLoModal);
-  host.appendChild(cabinet);
+
+  const exchangeWrap = document.createElement("div");
+  exchangeWrap.className = "lm-exchange";
+  exchangeWrap.hidden = true;
+  const exchangeStatus = document.createElement("div");
+  exchangeStatus.className = "status-line lm-exchange__status";
+  exchangeStatus.hidden = true;
+  const exchangeRow = document.createElement("div");
+  exchangeRow.className = "row-actions lm-exchange__row";
+  const btnLmExSessions = document.createElement("button");
+  btnLmExSessions.type = "button";
+  btnLmExSessions.className = "ghost";
+  const btnLmRedeemArcade = document.createElement("button");
+  btnLmRedeemArcade.type = "button";
+  btnLmRedeemArcade.className = "ghost";
+  exchangeRow.append(btnLmExSessions, btnLmRedeemArcade);
+  exchangeWrap.append(exchangeStatus, exchangeRow);
+  host.append(exchangeWrap, cabinet);
 
   const elWin = root.querySelector('[data-lm="win"]') as HTMLElement;
   const elCredit = root.querySelector('[data-lm="credit"]') as HTMLElement;
@@ -451,6 +484,25 @@ export function mountBookTabLittleMary(host: HTMLElement, options?: MountBookTab
     btnHiloSmall.disabled = spinning || !offer || hiloResolving;
     btnHiloSkip.disabled = spinning || !offer || hiloResolving;
     btnHiloOk.disabled = spinning || !result || hiloResolving;
+    syncLmExchangeUi();
+  }
+
+  function syncLmExchangeUi() {
+    const u = getFirebaseAuth().currentUser;
+    const show = isFirebaseConfigured() && Boolean(u && !u.isAnonymous && u.emailVerified && accountPlay);
+    exchangeWrap.hidden = !show;
+    if (!show) {
+      exchangeStatus.hidden = true;
+      return;
+    }
+    btnLmExSessions.textContent = t("member.arcadeExchangeBtn", "1 次按摩 → {{n}} 遊戲點", { n: lmArcadePerMassage });
+    btnLmRedeemArcade.textContent = t("member.arcadeRedeemBtn", "{{n}} 遊戲點 → 1 次按摩", { n: lmArcadePerMassage });
+    const busy = spinning || gamblePending !== null;
+    if (lmSessionCredits >= 1 && !busy) btnLmExSessions.removeAttribute("disabled");
+    else btnLmExSessions.setAttribute("disabled", "true");
+    if (lastServerArcade >= lmArcadePerMassage && !busy) btnLmRedeemArcade.removeAttribute("disabled");
+    else btnLmRedeemArcade.setAttribute("disabled", "true");
+    exchangeStatus.hidden = (exchangeStatus.textContent ?? "").trim().length === 0;
   }
 
   async function refreshAccountArcadeFromWallet(): Promise<void> {
@@ -469,8 +521,18 @@ export function mountBookTabLittleMary(host: HTMLElement, options?: MountBookTab
     }
     try {
       const res = await getMyWalletCall()({ locale: en ? "en" : "zh-Hant" });
-      const data = res.data as { arcadePoints?: unknown };
+      const data = res.data as {
+        arcadePoints?: unknown;
+        sessionCredits?: unknown;
+        arcadePointsPerMassage?: unknown;
+      };
       const ap = typeof data.arcadePoints === "number" && Number.isFinite(data.arcadePoints) ? Math.floor(data.arcadePoints) : 0;
+      const sc = typeof data.sessionCredits === "number" && Number.isFinite(data.sessionCredits) ? Math.floor(data.sessionCredits) : 0;
+      const perRaw = data.arcadePointsPerMassage;
+      if (typeof perRaw === "number" && Number.isFinite(perRaw)) {
+        lmArcadePerMassage = Math.max(1, Math.round(perRaw));
+      }
+      lmSessionCredits = sc;
       accountPlay = true;
       lastServerArcade = Math.min(999_999, Math.max(0, ap));
       credit = Math.max(0, lastServerArcade - winPile);
@@ -485,6 +547,49 @@ export function mountBookTabLittleMary(host: HTMLElement, options?: MountBookTab
     void refreshAccountArcadeFromWallet();
   });
   void refreshAccountArcadeFromWallet();
+
+  btnLmExSessions.addEventListener("click", () => {
+    void (async () => {
+      exchangeStatus.textContent = "";
+      exchangeStatus.className = "status-line lm-exchange__status";
+      exchangeStatus.hidden = false;
+      btnLmExSessions.setAttribute("disabled", "true");
+      try {
+        const fn = exchangeSessionForArcadePointsCall();
+        await fn({ ...localeApiParam() });
+        exchangeStatus.textContent = t("member.arcadeExchangeOk", "已兌換遊戲點。");
+        exchangeStatus.classList.add("ok");
+        await refreshAccountArcadeFromWallet();
+        await onArcadeBalanceMutated?.();
+      } catch (e) {
+        exchangeStatus.textContent = lmErrMsg(e);
+        exchangeStatus.classList.add("error");
+      } finally {
+        syncLmExchangeUi();
+      }
+    })();
+  });
+  btnLmRedeemArcade.addEventListener("click", () => {
+    void (async () => {
+      exchangeStatus.textContent = "";
+      exchangeStatus.className = "status-line lm-exchange__status";
+      exchangeStatus.hidden = false;
+      btnLmRedeemArcade.setAttribute("disabled", "true");
+      try {
+        const fn = redeemArcadePointsForSessionCall();
+        await fn({ ...localeApiParam() });
+        exchangeStatus.textContent = t("member.arcadeRedeemOk", "已兌換按摩次數。");
+        exchangeStatus.classList.add("ok");
+        await refreshAccountArcadeFromWallet();
+        await onArcadeBalanceMutated?.();
+      } catch (e) {
+        exchangeStatus.textContent = lmErrMsg(e);
+        exchangeStatus.classList.add("error");
+      } finally {
+        syncLmExchangeUi();
+      }
+    })();
+  });
 
   function closeHiLoModalUi() {
     hiLoModal.classList.add("lm-hilo-modal--hidden");
@@ -913,6 +1018,7 @@ export function mountBookTabLittleMary(host: HTMLElement, options?: MountBookTab
     io.disconnect();
     window.removeEventListener("keydown", onKey);
     sfx.dispose();
+    exchangeWrap.remove();
     cabinet.remove();
     host.classList.remove("book-tab-lm-mount--interactive");
   };
