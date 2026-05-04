@@ -379,7 +379,8 @@ export function mountBookTabLittleMary(host: HTMLElement): () => void {
   }
   setLmMsg(en ? "Tap a symbol, then Start." : "點圖示押注，再按開始。", "hint");
 
-  root.append(board, betRow, controls, msg);
+  /** 訊息列置於跑燈盤＋押注 LED 列之後、押注白鍵格之前，靠近操作區（避免貼在機台最底） */
+  root.append(board, msg, betRow, controls);
   cabinet.appendChild(root);
   cabinet.appendChild(hiLoModal);
   host.appendChild(cabinet);

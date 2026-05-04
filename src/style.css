@@ -1933,6 +1933,11 @@ main.panel[hidden] {
   grid-template-columns: 1fr;
 }
 
+/* 與 .grid[hidden] 相同：.lm-hilo-modal__actions 的 display:grid 會蓋過部分瀏覽器對 [hidden] 的預設，導致比大小「結果列／選項列」在 hidden 時仍露出 */
+.lm-hilo-modal__actions[hidden] {
+  display: none !important;
+}
+
 .lm-hilo-modal__actions .lm-hilo__pick,
 .lm-hilo-modal__actions .lm-hilo__skip {
   min-height: 2.75rem;
