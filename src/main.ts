@@ -2163,7 +2163,7 @@ function render() {
     "aria-label",
     t(
       "book.tabsAria",
-      "預約按摩、畫廊、我的預約、抽輪盤、星空、小瑪莉試玩；「我的預約／抽輪盤」於登入會員後顯示。",
+      "預約按摩、我的預約、抽輪盤、畫廊、星空、小瑪莉試玩；「我的預約／抽輪盤」於登入會員後顯示。",
     ),
   );
   const tabBook = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-book" }, [
@@ -2204,7 +2204,7 @@ function render() {
   tabLittleMary.tabIndex = -1;
   tabMyBookings.hidden = memberExtrasWrap.hidden;
   tabWheel.hidden = memberExtrasWrap.hidden;
-  bookTabList.append(tabBook, tabGallery, tabMyBookings, tabWheel, tabThree, tabLittleMary);
+  bookTabList.append(tabBook, tabMyBookings, tabWheel, tabGallery, tabThree, tabLittleMary);
 
   const bookPanelBook = el("div", {
     class: "book-tab-panel",
