@@ -22,7 +22,7 @@ export const EN: Record<string, string> = {
   "booking.mode.member_beverage": "Member · drink credit",
 
   "book.tabsAria":
-    "Massage booking, my bookings and wheel when signed in, then a portrait gallery tab, plus a Starry sky WebGL tab and a Little Mary–style demo for everyone",
+    "Massage booking, my bookings and wheel when signed in, then a portrait gallery tab and a Starry sky WebGL tab; the Little Mary tab is visible only to admins while in development",
   "book.tab.booking": "Book massage",
   "book.tab.gallery": "Gallery",
   "book.tab.wheel": "Wheel",

@@ -2247,7 +2247,7 @@ function render() {
     "aria-label",
     t(
       "book.tabsAria",
-      "預約按摩、我的預約、抽輪盤、畫廊、星空、小瑪莉試玩；「我的預約／抽輪盤」於登入會員後顯示。",
+      "預約按摩、我的預約、抽輪盤、畫廊、星空；「我的預約／抽輪盤」於登入會員後顯示。小瑪莉分頁僅管理員可見（開發中）。",
     ),
   );
   const tabBook = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-book" }, [
@@ -2286,6 +2286,7 @@ function render() {
   tabMyBookings.tabIndex = -1;
   tabThree.tabIndex = -1;
   tabLittleMary.tabIndex = -1;
+  tabLittleMary.hidden = true;
   tabMyBookings.hidden = memberExtrasWrap.hidden;
   tabWheel.hidden = memberExtrasWrap.hidden;
   bookTabList.append(tabBook, tabMyBookings, tabWheel, tabGallery, tabThree, tabLittleMary);
@@ -5095,6 +5096,15 @@ function render() {
     }
   }
 
+  /** 小瑪莉尚在開發：僅後台管理員可看見預約頁分頁，避免一般用戶誤玩 */
+  async function syncBookLittleMaryTabVisibility() {
+    const allow = await canCurrentUserAccessAdmin();
+    tabLittleMary.hidden = !allow;
+    if (!allow && bookSubTab === "littleMary") {
+      setBookSubTab("book");
+    }
+  }
+
   async function syncAdminView() {
     if (tab !== "admin") return;
     const user = auth.currentUser;
@@ -5114,6 +5124,7 @@ function render() {
     void (async () => {
       await refreshBookingPricing();
       await refreshWalletStatus();
+      await syncBookLittleMaryTabVisibility();
     })();
     if (tab !== "admin") return;
     void syncAdminView();
