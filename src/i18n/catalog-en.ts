@@ -22,11 +22,11 @@ export const EN: Record<string, string> = {
   "booking.mode.member_beverage": "Member · drink credit",
 
   "book.tabsAria":
-    "Massage booking, my bookings and wheel when signed in, plus a Solar system WebGL tab and a Little Mary–style demo for everyone",
+    "Massage booking, my bookings and wheel when signed in, plus a Starry sky WebGL tab and a Little Mary–style demo for everyone",
   "book.tab.booking": "Book massage",
   "book.tab.wheel": "Wheel",
   "book.tab.myBookings": "My bookings",
-  "book.tab.threeSpectacle": "Solar system",
+  "book.tab.threeSpectacle": "Starry sky",
   "book.tab.littleMary": "Little Mary",
   "book.threeSpectacle.hint":
     "Live WebGL (Three.js): solar system with an Earth-night-sky style Milky Way band: a large star shell recenters on the camera (very little parallax), with a brighter plane, multiple dust rifts, mottling, a brighter “galactic core” direction, and a few bright knots—illustrative, not a full astronomical model. Use the bar atop the canvas for Overview or to fly near each body; drag to orbit, wheel or pinch-zoom, tap a body for a fact; includes procedural ships and a comet. Display only, no backend.",
@@ -408,8 +408,8 @@ export const EN: Record<string, string> = {
 
   "admin.table.when": "When",
   "admin.table.name": "Name",
-  "admin.table.guest": "Guest",
-  "admin.table.guestTitle": "Guest booking?",
+  "admin.table.member": "Member",
+  "admin.table.memberTitle": "Member booking?",
   "admin.table.note": "Notes",
   "admin.table.status": "Status",
   "admin.table.actions": "Actions",
@@ -532,11 +532,12 @@ export const EN: Record<string, string> = {
   "admin.hidden.cancelSummaryNone": "(none)",
   "admin.booking.cancel": "Cancel",
   "admin.booking.hide": "Archive",
+  "admin.booking.hideNeedTerminal": "Cancel the booking or mark it completed before archiving",
   "admin.booking.hideTitleDone": "Completed bookings cannot be cancelled",
   "admin.booking.hideTitleCancelled": "Already cancelled",
   "admin.booking.hideConfirmTitle": "Archive this booking?",
   "admin.booking.hideConfirmBody":
-    "Archive this booking off the main admin list?\n\n(Status is unchanged; members still see the real status. Caps behave the same as the main list. You can unarchive from Bookings & archive → “Archived bookings”.)\n\nName: {{name}}\nDate: {{date}}\nStart: {{start}}",
+    "Archive this booking off the main admin list?\n\n(Only cancelled or completed bookings. Status is unchanged; members still see the real status. Caps behave the same as the main list. You can unarchive from Bookings & archive → “Archived bookings”.)\n\nName: {{name}}\nDate: {{date}}\nStart: {{start}}",
   "admin.booking.hideBtn": "Archive",
   "admin.status.updating": "Updating…",
   "admin.status.updated": "Updated",

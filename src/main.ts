@@ -72,7 +72,7 @@ type Booking = {
   cancelReason?: string;
   /** 與後端一致：該預約曆日所屬週的週一 dateKey */
   weekStart?: string;
-  /** 後台「封存」：自主列表移出（invisible）；不改 status，會員端仍看真實狀態 */
+  /** 後台「封存」：自主列表移出（invisible）；僅「已取消／已完成」可封存；不改 status，會員端仍看真實狀態 */
   invisible?: boolean;
   /** 後台標為完成時寫入（與 status done 一併出現） */
   completedAt?: { seconds: number };
@@ -300,12 +300,12 @@ function bookingIsCancelledForAdmin(status: unknown): boolean {
   return bookingStatusNorm(status) === "cancelled";
 }
 
-/** 後台預約表：是否為訪客預約（是／否） */
-function bookingGuestYesNo(b: Pick<Booking, "bookingMode" | "customerId">): string {
+/** 後台預約表：是否為會員預約（是／否） */
+function bookingMemberYesNo(b: Pick<Booking, "bookingMode" | "customerId">): string {
   const mode = b.bookingMode;
-  if (mode === "guest_cash" || mode === "guest_beverage") return t("guest.yes", "是");
-  if (typeof mode === "string" && mode.startsWith("member_")) return t("guest.no", "否");
-  if (typeof b.customerId === "string" && b.customerId.length > 0) return t("guest.no", "否");
+  if (mode === "guest_cash" || mode === "guest_beverage") return t("guest.no", "否");
+  if (typeof mode === "string" && mode.startsWith("member_")) return t("guest.yes", "是");
+  if (typeof b.customerId === "string" && b.customerId.length > 0) return t("guest.yes", "是");
   return t("guest.dash", "—");
 }
 
@@ -1433,7 +1433,7 @@ function render() {
           );
   }
 
-  /** 與下方 `setBookSubTab` 一併指派：會員區隱藏時關閉「我的預約／抽輪盤」並切回預約表單（「太陽系／小瑪莉」分頁不受影響） */
+  /** 與下方 `setBookSubTab` 一併指派：會員區隱藏時關閉「我的預約／抽輪盤」並切回預約表單（「星空／小瑪莉」分頁不受影響） */
   let syncBookMyBookingsTabVisibility: () => void = () => {};
 
   function resetWheelStatsSummary() {
@@ -2164,7 +2164,7 @@ function render() {
     "aria-label",
     t(
       "book.tabsAria",
-      "預約按摩、我的預約、抽輪盤、太陽系、小瑪莉試玩；「我的預約／抽輪盤」於登入會員後顯示。",
+      "預約按摩、我的預約、抽輪盤、星空、小瑪莉試玩；「我的預約／抽輪盤」於登入會員後顯示。",
     ),
   );
   const tabBook = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-book" }, [
@@ -2177,7 +2177,7 @@ function render() {
     t("book.tab.myBookings", "我的預約"),
   ]);
   const tabThree = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-three" }, [
-    t("book.tab.threeSpectacle", "太陽系"),
+    t("book.tab.threeSpectacle", "星空"),
   ]);
   const tabLittleMary = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-little-mary" }, [
     t("book.tab.littleMary", "小瑪莉"),
@@ -3332,11 +3332,11 @@ function render() {
     const tableHolder = el("div", { class: "table-wrap admin-bookings-table" });
     const table = el("table", {}, []);
     function adminBookingsHeaderRow(): HTMLTableRowElement {
-      const guestThTitle = t("admin.table.guestTitle", "是否為訪客預約");
+      const memberThTitle = t("admin.table.memberTitle", "是否為會員預約");
       return el("tr", {}, [
         el("th", {}, [t("admin.table.when", "預約時間")]),
         el("th", {}, [t("admin.table.name", "姓名")]),
-        el("th", { title: guestThTitle }, [t("admin.table.guest", "訪客")]),
+        el("th", { title: memberThTitle }, [t("admin.table.member", "會員")]),
         el("th", {}, [t("admin.table.note", "備註")]),
         el("th", {}, [t("admin.table.status", "狀態")]),
         el("th", {}, [t("admin.table.actions", "操作")]),
@@ -4612,7 +4612,7 @@ function render() {
         el("tr", {}, [
           el("td", { class: "mono" }, [formatWhen(b)]),
           el("td", {}, [b.displayName ?? ""]),
-          el("td", {}, [bookingGuestYesNo(b)]),
+          el("td", {}, [bookingMemberYesNo(b)]),
           el("td", {}, [b.note ?? ""]),
           el("td", {}, [
             el("span", { class: "admin-booking-status-readonly" }, [
@@ -4730,7 +4730,7 @@ function render() {
         el("tr", {}, [
           el("td", { class: "mono" }, [formatWhen(b)]),
           el("td", {}, [b.displayName ?? ""]),
-          el("td", {}, [bookingGuestYesNo(b)]),
+          el("td", {}, [bookingMemberYesNo(b)]),
           el("td", {}, [b.note ?? ""]),
           el("td", {}, [statusCell]),
           el("td", {}, [actionCell]),
@@ -4890,13 +4890,19 @@ function render() {
               cancelBtn.removeAttribute("disabled");
             }
           });
+          const canArchive = bookingIsDoneForAdmin(b) || bookingIsCancelledForAdmin(b.status);
           const archiveBtn = el("button", { class: "ghost", type: "button" }, [t("admin.booking.hide", "封存")]);
+          archiveBtn.disabled = !canArchive;
+          archiveBtn.title = canArchive
+            ? ""
+            : t("admin.booking.hideNeedTerminal", "須先取消預約或標記為完成後才能封存");
           archiveBtn.addEventListener("click", async () => {
+            if (!canArchive) return;
             const confirmed = await showConfirmModal(
               t("admin.booking.hideConfirmTitle", "確認封存此筆預約"),
               t(
                 "admin.booking.hideConfirmBody",
-                "確定將此筆預約從後台主列表封存嗎？\n\n（不改變預約狀態；會員端仍顯示原狀態。額度與可預約時段仍依預約狀態計算，與主列表邏輯相同。封存後可至「預約與封存」內「封存的預約」子分頁取消封存。）\n\n姓名：{{name}}\n日期：{{date}}\n開始時間：{{start}}",
+                "確定將此筆預約從後台主列表封存嗎？\n\n（僅限已取消或已完成之預約。不改變預約狀態；會員端仍顯示原狀態。額度與可預約時段仍依預約狀態計算，與主列表邏輯相同。封存後可至「預約與封存」內「封存的預約」子分頁取消封存。）\n\n姓名：{{name}}\n日期：{{date}}\n開始時間：{{start}}",
                 { name: b.displayName ?? "", date: b.dateKey ?? "", start: b.startSlot ?? "" },
               ),
               t("admin.booking.hideBtn", "封存"),
@@ -4924,7 +4930,7 @@ function render() {
             el("tr", {}, [
               el("td", { class: "mono" }, [formatWhen(b)]),
               el("td", {}, [b.displayName ?? ""]),
-              el("td", {}, [bookingGuestYesNo(b)]),
+              el("td", {}, [bookingMemberYesNo(b)]),
               el("td", {}, [b.note ?? ""]),
               el("td", {}, [statusCell]),
               el("td", {}, [actionCell]),

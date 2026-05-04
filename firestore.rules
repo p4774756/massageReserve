@@ -12,6 +12,13 @@ service cloud.firestore {
         && resource.data.customerId == request.auth.uid;
     }
 
+    /** 後台封存（invisible=true）：須為已取消、已完成，或有 completedAt（與前台「已完成」判斷一致） */
+    function bookingTerminalForArchive() {
+      let st = request.resource.data.get('status', '');
+      return (st is string && (st.lower() == 'done' || st.lower() == 'cancelled'))
+        || request.resource.data.get('completedAt', null) != null;
+    }
+
     match /admins/{uid} {
       allow read, write: if false;
     }
@@ -23,7 +30,10 @@ service cloud.firestore {
 
       allow update: if isAdmin()
         && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['status', 'updatedAt', 'deletedAt', 'deletedBy', 'memberLastStatus', 'invisible']);
+          .hasOnly(['status', 'updatedAt', 'deletedAt', 'deletedBy', 'memberLastStatus', 'invisible'])
+        && (request.resource.data.get('invisible', false) != true
+          || resource.data.get('invisible', false) == true
+          || bookingTerminalForArchive());
     }
 
     match /siteSettings/{id} {
