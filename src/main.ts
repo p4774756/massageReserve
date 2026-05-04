@@ -2999,7 +2999,14 @@ function render() {
     const saveBookingBlocksBtn = el("button", { type: "button", class: "ghost" }, [t("admin.blocks.save", "儲存不開放時段")]);
     const bookingBlocksStatus = el("div", { class: "status-line" });
 
-    type BookingBlockRowModel = { weekday: number; start: string; end: string; reason: string };
+    type BookingBlockRowModel = {
+      weekday: number;
+      start: string;
+      end: string;
+      reason: string;
+      /** 空字串 = 每週該星期重複；有值 = 僅該曆日 */
+      dateKey: string;
+    };
 
     function normalizeTimeForBookingBlock(v: string): string | null {
       const m = /^(\d{1,2}):(\d{2})$/.exec(v.trim());
@@ -3022,14 +3029,25 @@ function render() {
         const start = typeof o.start === "string" ? o.start.trim() : "";
         const end = typeof o.end === "string" ? o.end.trim() : "";
         const reason = typeof o.reason === "string" ? o.reason.trim() : "";
-        if (!Number.isInteger(wd) || wd < 1 || wd > 5) continue;
         const ns = normalizeTimeForBookingBlock(start);
         const ne = normalizeTimeForBookingBlock(end);
         if (!ns || !ne) continue;
         const m0 = Number(ns.slice(0, 2)) * 60 + Number(ns.slice(3, 5));
         const m1 = Number(ne.slice(0, 2)) * 60 + Number(ne.slice(3, 5));
         if (m0 >= m1) continue;
-        out.push({ weekday: wd, start: ns, end: ne, reason: reason.slice(0, 200) });
+        const dkRaw = o.dateKey;
+        if (typeof dkRaw === "string" && dkRaw.trim() !== "") {
+          const dk = dkRaw.trim();
+          if (/^\d{4}-\d{2}-\d{2}$/.test(dk)) {
+            const wn = taipeiWeekdayNumMon1Sun7(dk);
+            if (Number.isFinite(wn) && wn >= 1 && wn <= 5) {
+              out.push({ weekday: wn, start: ns, end: ne, reason: reason.slice(0, 200), dateKey: dk });
+              continue;
+            }
+          }
+        }
+        if (!Number.isInteger(wd) || wd < 1 || wd > 5) continue;
+        out.push({ weekday: wd, start: ns, end: ne, reason: reason.slice(0, 200), dateKey: "" });
       }
       return out;
     }
@@ -3042,6 +3060,30 @@ function render() {
         weekdaySel.append(el("option", { value: String(d) }, [dayLabels[d - 1] ?? String(d)]));
       }
       weekdaySel.value = String(model.weekday);
+      const dateIn = el("input", {
+        type: "date",
+        class: "bb-date",
+        ariaLabel: t("admin.blocks.specificDate", "特定日期（選填）"),
+      });
+      dateIn.value = model.dateKey;
+      const syncWeekdayFromDate = () => {
+        const dk = dateIn.value.trim();
+        if (!dk) return;
+        const wn = taipeiWeekdayNumMon1Sun7(dk);
+        if (Number.isFinite(wn) && wn >= 1 && wn <= 5) {
+          weekdaySel.value = String(wn);
+        }
+      };
+      dateIn.addEventListener("change", syncWeekdayFromDate);
+      weekdaySel.addEventListener("change", () => {
+        const dk = dateIn.value.trim();
+        if (!dk) return;
+        const wn = taipeiWeekdayNumMon1Sun7(dk);
+        const wd = Number(weekdaySel.value);
+        if (!Number.isFinite(wn) || wn !== wd) {
+          dateIn.value = "";
+        }
+      });
       const startIn = el("input", {
         type: "time",
         class: "bb-start",
@@ -3070,6 +3112,7 @@ function render() {
       });
       row.append(
         el("label", { class: "field bb-field-wd" }, [t("admin.blocks.weekday", "星期"), weekdaySel]),
+        el("label", { class: "field bb-field-date" }, [t("admin.blocks.specificDate", "特定日期（選填）"), dateIn]),
         el("label", { class: "field bb-field-t" }, [t("admin.blocks.start", "起（含）"), startIn]),
         el("label", { class: "field bb-field-t" }, [t("admin.blocks.end", "迄（不含）"), endIn]),
         el("label", { class: "field bb-field-reason" }, [t("admin.blocks.reason", "前台顯示原因"), reasonIn]),
@@ -3087,7 +3130,7 @@ function render() {
 
     addBookingBlockRowBtn.addEventListener("click", () => {
       bookingBlocksRows.append(
-        renderBookingBlockRow({ weekday: 1, start: "15:30", end: "16:30", reason: "" }),
+        renderBookingBlockRow({ weekday: 1, start: "15:30", end: "16:30", reason: "", dateKey: "" }),
       );
     });
 
@@ -3107,7 +3150,7 @@ function render() {
       bookingBlocksStatus.textContent = "";
       bookingBlocksStatus.className = "status-line";
       const rowEls = bookingBlocksRows.querySelectorAll(".admin-booking-block-row");
-      const windows: { weekday: number; start: string; end: string; reason: string }[] = [];
+      const windows: { weekday: number; start: string; end: string; reason: string; dateKey?: string }[] = [];
       if (rowEls.length > 40) {
         bookingBlocksStatus.textContent = t("admin.blocks.tooMany", "最多 40 筆規則，請刪減後再儲存。");
         bookingBlocksStatus.classList.add("error");
@@ -3118,6 +3161,7 @@ function render() {
         const st = (row.querySelector(".bb-start") as HTMLInputElement)?.value ?? "";
         const en = (row.querySelector(".bb-end") as HTMLInputElement)?.value ?? "";
         const re = (row.querySelector(".bb-reason") as HTMLInputElement)?.value ?? "";
+        const dateRaw = ((row.querySelector(".bb-date") as HTMLInputElement)?.value ?? "").trim();
         if (!Number.isInteger(wd) || wd < 1 || wd > 5) {
           bookingBlocksStatus.textContent = t("admin.blocks.invalidWeekday", "每一列的星期需為週一到週五。");
           bookingBlocksStatus.classList.add("error");
@@ -3140,7 +3184,29 @@ function render() {
           bookingBlocksStatus.classList.add("error");
           return;
         }
-        windows.push({ weekday: wd, start: ns, end: ne, reason: re.trim().slice(0, 200) });
+        const reasonTrim = re.trim().slice(0, 200);
+        if (dateRaw !== "") {
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(dateRaw)) {
+            bookingBlocksStatus.textContent = t(
+              "admin.blocks.invalidSpecificDate",
+              "「特定日期」須為 YYYY-MM-DD 之週一至週五，且與「星期」欄一致。",
+            );
+            bookingBlocksStatus.classList.add("error");
+            return;
+          }
+          const wn = taipeiWeekdayNumMon1Sun7(dateRaw);
+          if (!Number.isFinite(wn) || wn < 1 || wn > 5 || wn !== wd) {
+            bookingBlocksStatus.textContent = t(
+              "admin.blocks.invalidSpecificDate",
+              "「特定日期」須為 YYYY-MM-DD 之週一至週五，且與「星期」欄一致。",
+            );
+            bookingBlocksStatus.classList.add("error");
+            return;
+          }
+          windows.push({ weekday: wd, start: ns, end: ne, reason: reasonTrim, dateKey: dateRaw });
+        } else {
+          windows.push({ weekday: wd, start: ns, end: ne, reason: reasonTrim });
+        }
       }
       saveBookingBlocksBtn.setAttribute("disabled", "true");
       bookingBlocksStatus.textContent = t("admin.status.processing", "處理中…");
@@ -3292,7 +3358,7 @@ function render() {
       el("p", { class: "hint" }, [
         t(
           "admin.blocks.hintA",
-          "依星期與當日時段關閉預約：若一次服務（約 30 分鐘）與關閉區間重疊，該開始時間無法選取。例：週一、週四 14:30–15:30 關閉，則 14:30、14:45、15:00 皆不可開始。Firestore：",
+          "依星期與當日時段關閉預約；「特定日期」有填時僅該日生效（例如明天下午外出），未填則每週該星期皆套用。若一次服務（約 30 分鐘）與關閉區間重疊，該開始時間無法選取。例：週一、週四 14:30–15:30 關閉，則 14:30、14:45、15:00 皆不可開始。Firestore：",
         ),
         el("code", {}, ["siteSettings/bookingBlocks"]),
         t("admin.blocks.hintB", " 的 "),

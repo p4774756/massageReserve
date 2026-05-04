@@ -339,12 +339,13 @@ export const EN: Record<string, string> = {
   "admin.blocks.rowRemove": "Remove this row",
   "admin.blocks.heading": "Closed booking windows",
   "admin.blocks.weekday": "Weekday",
+  "admin.blocks.specificDate": "Specific date (optional)",
   "admin.blocks.start": "Start (inclusive)",
   "admin.blocks.end": "End (exclusive)",
   "admin.blocks.reason": "Reason shown on the booking page",
   "admin.blocks.reasonPh": "e.g. therapist training, away",
   "admin.blocks.hintA":
-    "Disable booking by weekday/time window. If a service slot (~30 min) overlaps a blocked window, that start time is unavailable. Example: Mon/Thu 14:30-15:30 blocks starts at 14:30, 14:45, 15:00. Firestore: ",
+    "Disable booking by weekday and time. If “Specific date” is set, that row applies only on that calendar day (e.g. one afternoon away); if empty, it repeats every week on that weekday. If a service slot (~30 min) overlaps a blocked window, that start time is unavailable. Example: Mon/Thu 14:30-15:30 blocks starts at 14:30, 14:45, 15:00. Firestore: ",
   "admin.blocks.hintB": " field ",
   "admin.blocks.hintC": ". Interval is [start, end).",
   "admin.blocks.tooMany": "Maximum 40 rows. Remove some rows and save again.",
@@ -352,6 +353,8 @@ export const EN: Record<string, string> = {
   "admin.blocks.invalidTime": "Please check each row time format.",
   "admin.blocks.invalidRange":
     "Each row end time must be later than start time. Intervals are [start, end).",
+  "admin.blocks.invalidSpecificDate":
+    "Specific date must be Mon–Fri as YYYY-MM-DD (Taipei) and match the weekday column.",
   "admin.dayLabels": "Mon,Tue,Wed,Thu,Fri",
 
   "admin.announce.heading": "Front page & booking rules",

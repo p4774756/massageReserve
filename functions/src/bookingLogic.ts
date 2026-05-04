@@ -124,6 +124,8 @@ export type BookingBlockWindow = {
   start: string;
   end: string;
   reason: string;
+  /** 若為 YYYY-MM-DD，僅該曆日套用；未設則依 weekday 每週重複 */
+  dateKey?: string;
 };
 
 function minutesFromHHmm(hhmm: string): number | null {
@@ -162,12 +164,27 @@ export function parseBookingBlockWindows(raw: unknown): BookingBlockWindow[] {
     const b0 = minutesFromHHmm(start);
     const b1 = minutesFromHHmm(end);
     if (b0 === null || b1 === null || b0 >= b1) continue;
-    out.push({
+    let onlyDate: string | undefined;
+    const dkRaw = o.dateKey;
+    if (typeof dkRaw === "string" && dkRaw.trim() !== "") {
+      let dayForBlock: DateTime;
+      try {
+        dayForBlock = parseDateKey(dkRaw.trim());
+      } catch {
+        continue;
+      }
+      if (!isWeekday(dayForBlock)) continue;
+      if (dayForBlock.weekday !== weekday) continue;
+      onlyDate = dayForBlock.toISODate()!;
+    }
+    const row: BookingBlockWindow = {
       weekday,
       start: normalizeHHmm(start),
       end: normalizeHHmm(end),
       reason: reason.slice(0, 200),
-    });
+    };
+    if (onlyDate) row.dateKey = onlyDate;
+    out.push(row);
   }
   return out;
 }
@@ -195,7 +212,11 @@ export function blockedReasonForSlot(
   const srv1 = srv0 + BOOKING_DURATION_MINUTES;
 
   for (const w of windows) {
-    if (w.weekday !== wd) continue;
+    if (w.dateKey) {
+      if (w.dateKey !== dateKey) continue;
+    } else if (w.weekday !== wd) {
+      continue;
+    }
     const b0 = minutesFromHHmm(w.start);
     const b1 = minutesFromHHmm(w.end);
     if (b0 === null || b1 === null || b0 >= b1) continue;

@@ -1232,8 +1232,8 @@ main.panel[hidden] {
   line-height: 1.1;
   color: #f0b028;
   background: linear-gradient(180deg, #fffce0 0%, #f8c850 38%, #c86038 100%);
-  background-clip: text;
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
   filter: drop-shadow(0 2px 0 rgb(60 20 40 / 0.85)) drop-shadow(0 0 12px rgb(255 180 120 / 0.35));
 }
@@ -1694,7 +1694,6 @@ main.panel[hidden] {
   align-items: center;
   justify-content: center;
   text-align: center;
-  text-wrap: balance;
   padding: 4px 3px;
   font-size: clamp(0.52rem, 2.5vw, 0.66rem);
   line-height: 1.12;
@@ -1892,6 +1891,7 @@ main.panel[hidden] {
   inset: 0;
   border-radius: inherit;
   background: rgb(0 0 0 / 0.58);
+  -webkit-backdrop-filter: blur(3px);
   backdrop-filter: blur(3px);
 }
 
@@ -3126,6 +3126,10 @@ tbody tr:hover td {
 
 .admin-booking-block-row .bb-field-wd {
   min-width: 108px;
+}
+
+.admin-booking-block-row .bb-field-date {
+  min-width: 158px;
 }
 
 .admin-booking-block-row .bb-field-t {
