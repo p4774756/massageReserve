@@ -150,7 +150,7 @@ function visitRadiusFor(id: BodyId): number {
     case "earth":
       return 0.24;
     case "moon":
-      return 0.072;
+      return 0.082;
     case "mars":
       return 0.22;
     case "jupiter":
@@ -642,7 +642,8 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
   const fog = new THREE.FogExp2(0x050810, 0.038);
   scene.fog = fog;
 
-  const camera = new THREE.PerspectiveCamera(46, 1, 0.06, 90);
+  /** near 過大時，飛近小天體（月球）相機距離可能 ≤ near+半徑，前向表面會被裁切成「中央穿洞」 */
+  const camera = new THREE.PerspectiveCamera(46, 1, 0.015, 90);
   const target = new THREE.Vector3(0.08, -0.06, 0);
   /** 軌道球心：預設為太陽系中心，飛行導覽時會移向各天體 */
   const lookAtPoint = new THREE.Vector3().copy(target);

@@ -57,7 +57,7 @@ export function mountWheelSpectacleSolarIntro(host: HTMLElement): WheelSpectacle
   const scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(0x050810, 0.038);
 
-  const camera = new THREE.PerspectiveCamera(46, 1, 0.06, 90);
+  const camera = new THREE.PerspectiveCamera(46, 1, 0.015, 90);
   const target = new THREE.Vector3(0.08, -0.06, 0);
 
   const root = new THREE.Group();

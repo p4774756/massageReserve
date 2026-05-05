@@ -143,7 +143,7 @@ export const EN: Record<string, string> = {
   "wheel.statsLoading": "Loading points and draw chances…",
   "wheel.statsLoadFail": "Could not load points or draw chances: {{detail}}",
   "wheel.statsOk":
-    "Wheel points: {{points}} (redeem 1 prepaid session at {{per}} points); draw chances: {{chances}}; prepaid sessions left: {{sessions}}. {{legacy}}",
+    "Wheel: {{points}} pts / {{per}} pts → 1 session · spins: {{chances}} · sessions: {{sessions}}. {{legacy}}",
   "wheel.spinNeedLogin": "Please sign in as a member.",
   "wheel.spinNeedVerify": "Please verify your email first.",
   "wheel.spinNoChances": "No spins available.",
@@ -157,13 +157,6 @@ export const EN: Record<string, string> = {
   "wheel.previewPrizeExtra": "One extra spin",
   "wheel.previewPrizeThanks": "Thanks for participating",
   "wheel.previewPrizeFun": "Fun penalty text",
-
-  "support.fab.chat": "Chat",
-  "support.fab.collapse": "Close",
-  "support.fab.open": "Open contact",
-  "support.fab.close": "Close contact",
-  "support.fab.hint":
-    "Tap: open or close. Press and move slightly (~10px) to drag; release snaps to the bottom-left or bottom-right corner.",
 
   "booking.fillName": "Please enter your name.",
   "booking.pickDateSlot": "Please choose a date and start time.",
@@ -205,8 +198,11 @@ export const EN: Record<string, string> = {
     "Signed in, but email is not verified. Open the link in your email, then tap “I've verified — refresh status”.",
   "member.walletLoading": "Loading member balance…",
   "member.walletLine": "Signed in: wallet balance {{balance}} (NTD), spin chances {{chances}}.",
-  "member.walletLine2":
-    "Signed in: sessions {{sessions}}, points {{points}} / {{per}} pts for 1 session, spin chances {{chances}}. {{legacy}}",
+  "member.walletSummaryTitle": "Member",
+  "member.walletItemSessions": "Sessions: {{n}}",
+  "member.walletItemWheel": "Wheel points: {{pts}} / {{per}} pts → 1 session",
+  "member.walletItemArcade": "Little Mary: {{pts}} pts ({{perA}} pts → 1 session)",
+  "member.walletItemDraw": "Wheel spins: {{n}}",
   "member.walletLegacyLine": "Remaining cash not yet folded into sessions: {{n}} (NTD).",
   "member.redeemPointsBtn": "Redeem {{per}} points → 1 session",
   "member.redeemOk": "Redeemed successfully.",
@@ -330,10 +326,9 @@ export const EN: Record<string, string> = {
   "admin.grantDraw.processing": "Processing…",
   "admin.grantDraw.ok": "Granted {{added}} chance(s); member can spin {{total}} time(s) now.",
 
-  "admin.marquee.saveLed": "Save LED marquee",
-  "admin.marquee.placeholderLed": "Top LED strip: can be longer, e.g. promo tagline",
+  "admin.marquee.save": "Save marquee",
+  "admin.marquee.placeholder": "Top marquee text — can be longer, e.g. promo tagline",
 
-  "admin.wheelSpectacle.save": "Save wheel preview toggle",
   "admin.caps.save": "Save booking caps",
   "admin.blocks.addRow": "Add row",
   "admin.blocks.save": "Save closed booking windows",
@@ -360,29 +355,21 @@ export const EN: Record<string, string> = {
 
   "admin.announce.heading": "Front page & booking rules",
   "admin.announce.introShort":
-    "Top LED marquee, wheel preview toggle, booking caps, and closed windows are grouped below. Expand “Firestore paths” for technical detail.",
+    "Top marquee, booking caps, and closed windows are grouped below. Expand “Firestore paths” for technical detail. The wheel preview button on the booking page is visible only to admins.",
   "admin.announce.detailsSummary": "Firestore paths / full marquee note",
-  "admin.announce.blockMarquee": "Top LED marquee",
+  "admin.announce.blockMarquee": "Top marquee",
   "admin.announce.blockMarqueeLead": "Shown at the top of the booking page; set scroll speed and on/off.",
 
-  "admin.announce.blockPlay": "Wheel",
-  "admin.announce.blockPlayLead": "Preview wheel toggle (not related to marquee).",
   "admin.announce.blockRules": "Booking caps & closed windows",
   "admin.announce.blockRulesLead": "Limits and blocked time ranges affect what slots can be booked.",
   "admin.announce.intro":
-    "The booking page shows one LED marquee at the top, configured in Firestore siteSettings/marqueeLed (text, enabled, scroll speed in px/s).",
-  "admin.announce.ledHeading": "Top · LED marquee",
+    "The booking page shows one marquee at the top, configured in Firestore siteSettings/marqueeLed (text, enabled, scroll speed in px/s).",
+  "admin.announce.marqueeHeading": "Top · Marquee",
   "admin.announce.ledLabel": "Content",
   "admin.announce.enable": "Enable",
   "admin.announce.speedLabel": "Scroll speed",
   "admin.announce.speedHint":
     "About {{min}}–{{max}} (larger number = faster, unit: pixels/second).",
-  "admin.announce.wheelHeading": "Booking page · wheel preview",
-  "admin.announce.wheelToggle": "Show “Preview wheel effect” on the booking page",
-  "admin.announce.wheelHintA":
-    "After enabling and saving, the booking page member area shows a “Preview wheel effect” button. It only plays animation, does not call spin API, and does not consume chances. Recommended off in production. Firestore: ",
-  "admin.announce.wheelHintB": ".",
-
   "admin.caps.heading": "Booking caps",
   "admin.caps.perDay": "Max bookings same day",
   "admin.caps.perWeek": "Max bookings same work week",
@@ -441,8 +428,6 @@ export const EN: Record<string, string> = {
   "admin.tab.hidden": "Archived bookings",
   "admin.tab.members": "Members & top-up",
   "admin.tab.announce": "Front page & rules",
-  "admin.tab.support": "Support",
-
   "admin.memberTab.wallet": "Top up",
   "admin.memberTab.list": "Member list",
 
@@ -587,63 +572,4 @@ export const EN: Record<string, string> = {
   "locale.option.en": "English",
 
   "adminSession.fallbackName": "Admin",
-
-  "supportUi.contactTitle": "Contact",
-  "supportUi.guestHint":
-    "No account needed — tap below to use an anonymous identity (support chat only). For wallet or bookings, use Member sign-in (top right).",
-  "supportUi.guestBtn": "Start as guest",
-  "supportUi.inputPh": "Type a message…",
-  "supportUi.send": "Send",
-  "supportUi.reopen": "Resume chat (reopen thread)",
-  "supportUi.hintNone":
-    "Signed-in members can contact the shop here; if not signed in, start as guest below. The shop replies from the admin console.",
-  "supportUi.hintGuest":
-    "You are messaging as a guest; the thread is tied to this browser. Clearing site data or switching devices may lose the thread. Member sign-in enables wallet and bookings (guest chat is not merged automatically).",
-  "supportUi.hintMember": "Signed in as a member; the shop will see and reply from the admin console.",
-  "supportUi.emptyContent": "Please enter a message.",
-  "supportUi.whoShop": "Shop",
-  "supportUi.whoMe": "Me",
-  "supportUi.whoMember": "Member",
-  "supportUi.starAria": "Star rating 1 to 5",
-  "supportUi.starsN": "{{n}} stars",
-  "supportUi.failSend": "Send failed",
-  "supportUi.failReopen": "Could not reopen",
-  "supportUi.anonDisabled":
-    "Anonymous sign-in is not enabled: Firebase Console → Authentication → Sign-in method → enable Anonymous.",
-  "supportUi.failStartGuest": "Could not start guest chat",
-  "supportUi.failThread": "Could not load thread status",
-  "supportUi.failMsgs": "Could not load messages",
-  "supportUi.previewNone": "(no preview)",
-  "supportUi.statusOpen": "Open",
-  "supportUi.statusClosed": "Closed",
-  "supportUi.failList": "Could not load thread list",
-  "supportUi.adminTitle": "Support chat",
-  "supportUi.adminPanelHead": "One-to-one support (private)",
-  "supportUi.adminFirestorePathCode": "supportThreads/{customerUid}",
-  "supportUi.threadForRole": " ({{role}})",
-  "supportUi.adminScopeNote":
-    "Private one-to-one chat — visible only in admin and to that member or guest.",
-  "supportUi.adminIntroA":
-    "Left: member threads with tabs for Open vs Closed, each sorted by recent update. Select one to reply on the right. Firestore: ",
-  "supportUi.threadListTabsAria": "Thread status tabs",
-  "supportUi.threadTabOpen": "Open ({{n}})",
-  "supportUi.threadTabClosed": "Closed ({{n}})",
-  "supportUi.threadSectionEmptyOpen": "(No open threads)",
-  "supportUi.threadSectionEmptyClosed": "(No closed threads)",
-  "supportUi.adminIntroB": " and subcollection ",
-  "supportUi.adminIntroC": ".",
-  "supportUi.threadList": "Threads",
-  "supportUi.pickThread": "Pick a thread on the left.",
-  "supportUi.markClosed": "Mark closed",
-  "supportUi.reopenAdmin": "Reopen",
-  "supportUi.replyPh": "Reply to member…",
-  "supportUi.replyBtn": "Reply",
-  "supportUi.replyEmpty": "Please enter a reply.",
-  "supportUi.updateFail": "Update failed",
-  "supportUi.failMsgsAdmin": "Could not load messages.",
-  "supportUi.guestLabel": "Guest",
-  "supportUi.memberLabel": "Member",
-  "supportUi.resolving": "Identifying…",
-  "supportUi.threadFor": "With {{name}}{{role}}",
-  "supportUi.roleMember": "Member",
 };

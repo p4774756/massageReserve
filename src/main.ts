@@ -45,8 +45,6 @@ import {
   adjustSessionCreditsAdminCall,
   grantDrawChancesAdminCall,
 } from "./firebase";
-import { mountAdminSupportChat, mountMemberSupportChat, type SupportChatUnmount } from "./supportChat";
-import { attachSupportChatFloatDrag } from "./supportChatFloatDock";
 import { createVisitorStatsLine } from "./visitorStats";
 import { allStartSlots } from "./slots";
 import { runWheelSpectacle } from "./wheelSpectacle";
@@ -132,6 +130,47 @@ function errorMessage(e: unknown): string {
     if (typeof m === "string" && m.length > 0) return m;
   }
   return t("errors.generic", "發生錯誤");
+}
+
+/** 會員餘額列：條列呈現，避免長句難掃讀 */
+function paintMemberWalletSummary(
+  host: HTMLElement,
+  opts: {
+    sessions: number;
+    points: number;
+    per: number;
+    arcade: number;
+    perA: number;
+    chances: number;
+    legacy: string;
+  },
+) {
+  host.replaceChildren();
+  host.className = "status-line ok member-wallet-summary";
+  const head = el("div", { class: "member-wallet-summary__head" }, [
+    t("member.walletSummaryTitle", "會員"),
+  ]);
+  const list = el("ul", { class: "member-wallet-summary__list" });
+  list.append(
+    el("li", {}, [t("member.walletItemSessions", "預約次數：{{n}} 次", { n: opts.sessions })]),
+    el("li", {}, [
+      t("member.walletItemWheel", "輪盤點：{{pts}}／滿 {{per}} 點可換 1 次預約", {
+        pts: opts.points,
+        per: opts.per,
+      }),
+    ]),
+    el("li", {}, [
+      t("member.walletItemArcade", "小瑪莉：{{pts}} 點（{{perA}} 點可換 1 次預約）", {
+        pts: opts.arcade,
+        perA: opts.perA,
+      }),
+    ]),
+    el("li", {}, [t("member.walletItemDraw", "可抽輪盤：{{n}} 次", { n: opts.chances })]),
+  );
+  host.append(head, list);
+  if (opts.legacy.trim()) {
+    host.append(el("p", { class: "member-wallet-summary__legacy hint" }, [opts.legacy]));
+  }
 }
 
 /** 密碼輸入框右側「顯示／隱藏」切換（不改變 input 的 value） */
@@ -578,8 +617,8 @@ function render() {
   shellStage.append(shell);
   root.append(shellStage);
 
-  const announcementBox = el("div", { class: "marquee marquee-led", hidden: true });
-  const ledHost = el("div", { class: "marquee-led-host" });
+  const announcementBox = el("div", { class: "marquee marquee-text", hidden: true });
+  const ledHost = el("div", { class: "marquee-text-host" });
   announcementBox.append(ledHost);
   shell.prepend(announcementBox);
   let ledMarquee: LedMarqueeHandle | null = null;
@@ -630,7 +669,7 @@ function render() {
       } else {
         ledMarquee.setSpeed(speed);
       }
-      ledMarquee.setText(`${text}     ·     ${text}`);
+      ledMarquee.setText(text);
       syncMarqueeVisibilityForTab();
     },
     () => {
@@ -1481,7 +1520,7 @@ function render() {
     wheelStatsSummary.className = "wheel-stats-summary wheel-stats-summary--ok";
     wheelStatsSummary.textContent = t(
       "wheel.statsOk",
-      "目前輪盤點數 {{points}} 點（滿 {{per}} 點可手動換 1 次預約次數）；可抽獎 {{chances}} 次；預約次數餘額 {{sessions}} 次。{{legacy}}",
+      "輪盤：點數 {{points}}／滿 {{per}} 點可換 1 次預約 · 可抽 {{chances}} 次 · 預約次數 {{sessions}} 次。{{legacy}}",
       {
         points: wheelPointsCount,
         per: pointsPerMassageSetting,
@@ -1606,20 +1645,15 @@ function render() {
           walletBalance > 0
             ? t("member.walletLegacyLine", "尚有 {{n}} 元未折成次數。", { n: walletBalance })
             : "";
-        walletStatus.textContent = t(
-          "member.walletLine2",
-          "會員：預約次數 {{sessions}}、輪盤點 {{points}}／滿 {{per}} 點可換 1 次；小瑪莉遊戲點 {{arcade}}（{{perA}} 點↔1 次按摩）；可抽獎 {{chances}} 次。{{legacy}}",
-          {
-            sessions: sessionCreditsCount,
-            points: wheelPointsCount,
-            per: pointsPerMassageSetting,
-            arcade: arcadePointsCount,
-            perA: arcadePointsPerMassageSetting,
-            chances: drawChances,
-            legacy: legacyLine,
-          },
-        );
-        walletStatus.className = "status-line ok";
+        paintMemberWalletSummary(walletStatus, {
+          sessions: sessionCreditsCount,
+          points: wheelPointsCount,
+          per: pointsPerMassageSetting,
+          arcade: arcadePointsCount,
+          perA: arcadePointsPerMassageSetting,
+          chances: drawChances,
+          legacy: legacyLine,
+        });
         wheelStatus.textContent =
           drawChances > 0 ? t("member.wheelLuck", "可抽輪盤，祝你好運！") : t("member.wheelNone", "目前無可抽次數。");
         wheelStatus.className = "status-line";
@@ -2098,61 +2132,6 @@ function render() {
   ]);
   const wheelRow = el("div", { class: "book-wheel-row" }, [spinBtn, wheelTestBtn, wheelStatus, wheelResult]);
   memberExtrasWrap.append(emailVerifyBanner, walletStatus);
-  const bookSupportChatMount = el("div", { class: "book-support-chat" });
-  mountMemberSupportChat(db, auth, bookSupportChatMount);
-
-  const supportChatFloatPanel = el("div", {
-    class: "support-chat-float__panel",
-    id: "support-chat-float-panel",
-    hidden: true,
-  });
-  supportChatFloatPanel.append(bookSupportChatMount);
-  const supportChatFab = el("button", { type: "button", class: "support-chat-float__fab" }, []);
-  const supportFabGlyph = el("span", { class: "support-chat-float__fab-glyph", ariaHidden: "true" }, ["💬"]);
-  const supportFabText = el("span", { class: "support-chat-float__fab-text", ariaHidden: "true" }, [
-    t("support.fab.chat", "聊"),
-  ]);
-  supportChatFab.append(supportFabGlyph, supportFabText);
-  supportChatFab.setAttribute("aria-controls", "support-chat-float-panel");
-  supportChatFab.setAttribute("aria-expanded", "false");
-  supportChatFab.setAttribute("aria-label", t("support.fab.open", "開啟聯絡店家"));
-  supportChatFab.title = t(
-    "support.fab.hint",
-    "短按：開啟或收合。按住後略為移動即可拖曳；放開貼左或右下緣。",
-  );
-  const supportChatFloat = el("div", { class: "support-chat-float" }, [supportChatFloatPanel, supportChatFab]);
-  let supportChatOpen = false;
-  function setSupportChatOpen(open: boolean) {
-    supportChatOpen = open;
-    supportChatFloat.classList.toggle("support-chat-float--open", open);
-    supportChatFloatPanel.hidden = !open;
-    supportChatFab.setAttribute("aria-expanded", String(open));
-    supportFabGlyph.textContent = open ? "✕" : "💬";
-    supportFabText.textContent = open ? t("support.fab.collapse", "收") : t("support.fab.chat", "聊");
-    supportChatFab.setAttribute(
-      "aria-label",
-      open ? t("support.fab.close", "收合聯絡店家") : t("support.fab.open", "開啟聯絡店家"),
-    );
-  }
-  supportChatFab.addEventListener("click", () => setSupportChatOpen(!supportChatOpen));
-  function onSupportChatEscape(ev: KeyboardEvent) {
-    if (ev.key !== "Escape") return;
-    if (!supportChatOpen || supportChatFloat.hidden) return;
-    setSupportChatOpen(false);
-  }
-  document.addEventListener("keydown", onSupportChatEscape);
-
-  const wheelSpectacleSettingsRef = doc(db, "siteSettings", "wheelSpectacle");
-  onSnapshot(
-    wheelSpectacleSettingsRef,
-    (snap) => {
-      const data = snap.data() as { showTestButton?: unknown } | undefined;
-      wheelTestBtn.hidden = data?.showTestButton !== true;
-    },
-    () => {
-      wheelTestBtn.hidden = true;
-    },
-  );
 
   wheelTestBtn.addEventListener("click", async () => {
     wheelTestBtn.setAttribute("disabled", "true");
@@ -2398,21 +2377,15 @@ function render() {
     bookPanelLittleMary,
   );
 
-  root.append(supportChatFloat);
-  const supportChatFloatDock = attachSupportChatFloatDrag(supportChatFloat, supportChatFab);
-
   /** --- 管理後台 --- */
   const adminWrap = el("div", {}, []);
   panelAdmin.append(adminWrap);
 
   let adminUnsub: (() => void) | null = null;
   let adminMarqueeLedUnsub: (() => void) | null = null;
-  let adminWheelSpectacleUnsub: (() => void) | null = null;
   let adminPricingUnsub: (() => void) | null = null;
   let adminBookingCapsUnsub: (() => void) | null = null;
   let adminBookingBlocksUnsub: (() => void) | null = null;
-  let adminSupportChatUnmount: SupportChatUnmount | null = null;
-
   function stopAdminListener() {
     if (adminUnsub) {
       adminUnsub();
@@ -2421,10 +2394,6 @@ function render() {
     if (adminMarqueeLedUnsub) {
       adminMarqueeLedUnsub();
       adminMarqueeLedUnsub = null;
-    }
-    if (adminWheelSpectacleUnsub) {
-      adminWheelSpectacleUnsub();
-      adminWheelSpectacleUnsub = null;
     }
     if (adminPricingUnsub) {
       adminPricingUnsub();
@@ -2437,10 +2406,6 @@ function render() {
     if (adminBookingBlocksUnsub) {
       adminBookingBlocksUnsub();
       adminBookingBlocksUnsub = null;
-    }
-    if (adminSupportChatUnmount) {
-      adminSupportChatUnmount();
-      adminSupportChatUnmount = null;
     }
   }
 
@@ -2820,7 +2785,7 @@ function render() {
     const marqueeLedBody = el("input", {
       type: "text",
       maxLength: 500,
-      placeholder: t("admin.marquee.placeholderLed", "頂部 LED：可較長，例如活動標語"),
+      placeholder: t("admin.marquee.placeholder", "頂部跑馬燈內容，可較長，例如活動標語"),
       autocomplete: "off",
     });
     const marqueeLedSpeed = el("input", {
@@ -2829,53 +2794,15 @@ function render() {
       max: String(LED_SPEED_MAX),
       step: "1",
     });
-    const marqueeLedSpeedValue = el("span", { class: "led-speed-readout" }, [
+    const marqueeLedSpeedValue = el("span", { class: "marquee-speed-readout" }, [
       String(clampLedSpeed(undefined)),
     ]);
     marqueeLedSpeed.addEventListener("input", () => {
       marqueeLedSpeedValue.textContent = marqueeLedSpeed.value;
     });
-    const saveMarqueeLedBtn = el("button", { class: "ghost", type: "button" }, [t("admin.marquee.saveLed", "儲存 LED 跑馬燈")]);
+    const saveMarqueeLedBtn = el("button", { class: "ghost", type: "button" }, [t("admin.marquee.save", "儲存跑馬燈")]);
     const marqueeLedStatus = el("div", { class: "status-line" });
     const marqueeLedDocRef = doc(db, "siteSettings", "marqueeLed");
-    const wheelSpectacleDocRef = doc(db, "siteSettings", "wheelSpectacle");
-    const wheelSpectacleShowTest = el("input", { type: "checkbox" });
-    const saveWheelSpectacleBtn = el("button", { class: "ghost", type: "button" }, [t("admin.wheelSpectacle.save", "儲存輪盤預覽開關")]);
-    const wheelSpectacleStatus = el("div", { class: "status-line" });
-    adminWheelSpectacleUnsub = onSnapshot(
-      wheelSpectacleDocRef,
-      (snap) => {
-        const data = snap.data() as { showTestButton?: unknown } | undefined;
-        wheelSpectacleShowTest.checked = data?.showTestButton === true;
-      },
-      () => {
-        wheelSpectacleStatus.textContent = t("admin.snapshot.loadFail", "無法讀取輪盤預覽設定。");
-        wheelSpectacleStatus.className = "status-line error";
-      },
-    );
-
-    saveWheelSpectacleBtn.addEventListener("click", async () => {
-      wheelSpectacleStatus.textContent = "";
-      wheelSpectacleStatus.className = "status-line";
-      saveWheelSpectacleBtn.setAttribute("disabled", "true");
-      try {
-        await setDoc(
-          wheelSpectacleDocRef,
-          {
-            showTestButton: wheelSpectacleShowTest.checked,
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true },
-        );
-        wheelSpectacleStatus.textContent = t("admin.status.updated", "已更新");
-        wheelSpectacleStatus.classList.add("ok");
-      } catch (e) {
-        wheelSpectacleStatus.textContent = e instanceof Error ? e.message : t("admin.memberList.saveFail", "儲存失敗");
-        wheelSpectacleStatus.classList.add("error");
-      } finally {
-        saveWheelSpectacleBtn.removeAttribute("disabled");
-      }
-    });
 
     const bookingCapsDocRef = doc(db, "siteSettings", "bookingCaps");
     const capMaxPerDayInput = el("input", {
@@ -3187,7 +3114,7 @@ function render() {
         marqueeLedSpeedValue.textContent = String(s);
       },
       () => {
-        marqueeLedStatus.textContent = t("admin.snapshot.loadFail", "無法讀取 LED 跑馬燈設定。");
+        marqueeLedStatus.textContent = t("admin.snapshot.loadFail", "無法讀取跑馬燈設定。");
         marqueeLedStatus.className = "status-line error";
       },
     );
@@ -3224,17 +3151,17 @@ function render() {
       el("div", { class: "admin-announce__details-body hint" }, [
         t(
           "admin.announce.intro",
-          "前台僅保留頂部 LED 跑馬燈，設定於 Firestore `siteSettings/marqueeLed`（內容、啟用、捲動速度／像素每秒）。",
+          "預約頁頂部跑馬燈設定於 Firestore `siteSettings/marqueeLed`（內容、啟用、捲動速度／像素每秒）。",
         ),
       ]),
     ]);
 
     const marqueeLedSub = el("div", { class: "admin-announce__sub admin-announce__sub--top" }, [
-      el("h4", { class: "admin-announce__sub-title" }, [t("admin.announce.ledHeading", "頂部 · LED 跑馬燈")]),
+      el("h4", { class: "admin-announce__sub-title" }, [t("admin.announce.marqueeHeading", "頂部 · 跑馬燈")]),
       el("label", { class: "field" }, [t("admin.announce.ledLabel", "內容"), marqueeLedBody]),
-      el("label", { class: "field led-speed-field" }, [
+      el("label", { class: "field marquee-speed-field" }, [
         t("admin.announce.speedLabel", "捲動速度"),
-        el("div", { class: "led-speed-row" }, [marqueeLedSpeed, marqueeLedSpeedValue]),
+        el("div", { class: "marquee-speed-row" }, [marqueeLedSpeed, marqueeLedSpeedValue]),
         el("span", { class: "hint" }, [
           t("admin.announce.speedHint", "約 {{min}}～{{max}}（數字愈大移動愈快，單位：像素／秒）。", {
             min: LED_SPEED_MIN,
@@ -3248,33 +3175,11 @@ function render() {
     ]);
 
     const blockMarquee = el("section", { class: "admin-announce__block admin-announce__block--marquee" }, [
-      el("h4", { class: "admin-announce__block-title" }, [t("admin.announce.blockMarquee", "頂部 LED 跑馬燈")]),
+      el("h4", { class: "admin-announce__block-title" }, [t("admin.announce.blockMarquee", "頂部跑馬燈")]),
       el("p", { class: "hint admin-announce__block-lead" }, [
         t("admin.announce.blockMarqueeLead", "顯示於預約頁最上方；可調捲動速度與是否啟用。"),
       ]),
       marqueeLedSub,
-    ]);
-
-    const blockPlay = el("section", { class: "admin-announce__block admin-announce__block--play" }, [
-      el("h4", { class: "admin-announce__block-title" }, [t("admin.announce.blockPlay", "輪盤")]),
-      el("p", { class: "hint admin-announce__block-lead" }, [
-        t("admin.announce.blockPlayLead", "前台輪盤預覽開關（與跑馬燈無關）。"),
-      ]),
-      el("h4", { class: "admin-subhead" }, [t("admin.announce.wheelHeading", "前台 · 輪盤特效預覽")]),
-      el("p", { class: "hint" }, [
-        t(
-          "admin.announce.wheelHintA",
-          "勾選並儲存後，預約頁「會員區」會出現「預覽輪盤特效」按鈕；僅播放動畫，不呼叫抽獎 API、不扣次數。正式上線建議關閉。Firestore：",
-        ),
-        el("code", {}, ["siteSettings/wheelSpectacle"]),
-        t("admin.announce.wheelHintB", "。"),
-      ]),
-      el("label", { class: "field checkbox-field" }, [
-        wheelSpectacleShowTest,
-        el("span", {}, [t("admin.announce.wheelToggle", "顯示前台「預覽輪盤特效」按鈕")]),
-      ]),
-      el("div", { class: "row-actions" }, [saveWheelSpectacleBtn]),
-      wheelSpectacleStatus,
     ]);
 
     const blockRules = el("section", { class: "admin-announce__block admin-announce__block--rules" }, [
@@ -3325,12 +3230,11 @@ function render() {
       el("p", { class: "hint admin-announce__page-lead" }, [
         t(
           "admin.announce.introShort",
-          "此分頁集中調整頂部 LED 跑馬燈、輪盤預覽，以及預約名額／不開放時段；區塊已分組，技術路徑可展開查看。",
+          "此分頁集中調整頂部跑馬燈，以及預約名額／不開放時段；區塊已分組，技術路徑可展開查看。（輪盤特效預覽按鈕僅管理員在預約頁可見，無須設定。）",
         ),
       ]),
       announceIntroDetails,
       blockMarquee,
-      blockPlay,
       blockRules,
     );
     const walletSegmentPricing = el(
@@ -3598,7 +3502,7 @@ function render() {
       t("admin.pager.none", "—"),
     ]);
     const hiddenPageNext = el("button", { type: "button", class: "ghost" }, [t("admin.pager.next", "下一頁")]);
-    hiddenPager.append(hiddenPagePrev, hiddenPageInfo, hiddenPageNext);
+    hiddenPager.append(hiddenPagePrev, hiddenPageNext, hiddenPageInfo);
 
     const memberListSection = el("div", { class: "admin-member-list" }, []);
     const memberListRefreshBtn = el("button", { class: "ghost", type: "button" }, [
@@ -3672,7 +3576,7 @@ function render() {
       t("admin.pager.none", "—"),
     ]);
     const memberListPageNext = el("button", { type: "button", class: "ghost" }, [t("admin.pager.next", "下一頁")]);
-    memberListPager.append(memberListPagePrev, memberListPageInfo, memberListPageNext);
+    memberListPager.append(memberListPagePrev, memberListPageNext, memberListPageInfo);
 
     function compareAdminMemberRows(
       a: AdminMemberListRow,
@@ -4618,13 +4522,9 @@ function render() {
       t("admin.tab.announce", "前台與預約規則"),
     ]);
     tabAnnounce.id = "admin-tab-trigger-announce";
-    const tabSupport = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
-      t("admin.tab.support", "客服"),
-    ]);
-    tabSupport.id = "admin-tab-trigger-support";
 
     const adminTablist = el("div", { class: "admin-tabs", role: "tablist" });
-    adminTablist.append(tabBookingsHub, tabMembers, tabAnnounce, tabSupport);
+    adminTablist.append(tabBookingsHub, tabMembers, tabAnnounce);
 
     const subBookingsActive = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
       t("admin.tab.bookings", "預約管理"),
@@ -4722,33 +4622,21 @@ function render() {
     });
     panelAnnounceEl.setAttribute("aria-labelledby", "admin-tab-trigger-announce");
 
-    const panelSupportEl = el("div", {
-      class: "admin-tab-panel",
-      role: "tabpanel",
-      id: "admin-tab-panel-support",
-      hidden: true,
-    });
-    panelSupportEl.setAttribute("aria-labelledby", "admin-tab-trigger-support");
-    const adminSupportChatHost = el("div", { class: "admin-support-chat-host" });
-    panelSupportEl.append(adminSupportChatHost);
-    adminSupportChatUnmount = mountAdminSupportChat(db, auth, adminSupportChatHost);
-
     tabBookingsHub.setAttribute("aria-controls", "admin-tab-panel-bookings-hub");
     tabMembers.setAttribute("aria-controls", "admin-tab-panel-members");
     tabAnnounce.setAttribute("aria-controls", "admin-tab-panel-announce");
-    tabSupport.setAttribute("aria-controls", "admin-tab-panel-support");
 
     panelBookingsActiveSub.append(adminCapacitySection, adminStatus, tableHolder);
     panelMembersEl.append(membersSubTablist, membersSubPanelsWrap);
     panelAnnounceEl.append(announcementSection);
 
     const adminPanelsWrap = el("div", { class: "admin-tab-panels" });
-    adminPanelsWrap.append(panelBookingsHubEl, panelMembersEl, panelAnnounceEl, panelSupportEl);
+    adminPanelsWrap.append(panelBookingsHubEl, panelMembersEl, panelAnnounceEl);
 
-    const adminTabButtons = [tabBookingsHub, tabMembers, tabAnnounce, tabSupport] as const;
-    const adminTabPanels = [panelBookingsHubEl, panelMembersEl, panelAnnounceEl, panelSupportEl] as const;
+    const adminTabButtons = [tabBookingsHub, tabMembers, tabAnnounce] as const;
+    const adminTabPanels = [panelBookingsHubEl, panelMembersEl, panelAnnounceEl] as const;
 
-    function selectAdminTab(index: 0 | 1 | 2 | 3) {
+    function selectAdminTab(index: 0 | 1 | 2) {
       adminTabButtons.forEach((btn, i) => {
         const on = i === index;
         btn.setAttribute("aria-selected", String(on));
@@ -4764,7 +4652,6 @@ function render() {
     tabBookingsHub.addEventListener("click", () => selectAdminTab(0));
     tabMembers.addEventListener("click", () => selectAdminTab(1));
     tabAnnounce.addEventListener("click", () => selectAdminTab(2));
-    tabSupport.addEventListener("click", () => selectAdminTab(3));
 
     adminTablist.addEventListener("keydown", (ev) => {
       if (ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;
@@ -4774,7 +4661,7 @@ function render() {
       const delta = ev.key === "ArrowRight" ? 1 : -1;
       const n = adminTabButtons.length;
       const next = ((cur + delta) % n + n) % n;
-      selectAdminTab(next as 0 | 1 | 2 | 3);
+      selectAdminTab(next as 0 | 1 | 2);
       adminTabButtons[next].focus();
     });
 
@@ -5149,6 +5036,11 @@ function render() {
     }
   }
 
+  /** 輪盤特效預覽僅管理員可看見（與 Firestore 開關無關） */
+  async function syncWheelPreviewBtnVisibility() {
+    wheelTestBtn.hidden = !(await canCurrentUserAccessAdmin());
+  }
+
   /** 小瑪莉尚在開發：僅後台管理員可看見預約頁分頁，避免一般用戶誤玩 */
   async function syncBookLittleMaryTabVisibility() {
     const allow = await canCurrentUserAccessAdmin();
@@ -5177,6 +5069,7 @@ function render() {
     void (async () => {
       await refreshBookingPricing();
       await refreshWalletStatus();
+      await syncWheelPreviewBtnVisibility();
       await syncBookLittleMaryTabVisibility();
     })();
     if (tab !== "admin") return;
@@ -5198,19 +5091,12 @@ function render() {
         )
       : t(
           "admin.backSubtitle",
-          "以分頁切換：預約與封存（內含預約管理／封存的預約）、會員與儲值、前台與預約規則、客服。",
+          "以分頁切換：預約與封存（內含預約管理／封存的預約）、會員與儲值、前台與預約規則。",
         );
     document.title = isBook ? t("meta.docTitle", "辦公室按摩預約") : t("admin.backTitle", "管理後台");
     panelBook.hidden = !isBook;
     panelAdmin.hidden = isBook;
     hostPortrait.hidden = !isBook;
-    supportChatFloat.hidden = !isBook;
-    if (isBook) {
-      supportChatFloatDock.relayout();
-    }
-    if (!isBook) {
-      setSupportChatOpen(false);
-    }
     syncMarqueeVisibilityForTab();
     if (isBook) {
       stopAdminListener();
