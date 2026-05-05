@@ -1737,6 +1737,25 @@ function render() {
       const blockReason = blockedReasonBySlot.get(s);
       const blockedHere = blockReason !== undefined;
 
+      /** 連續「已過」且未被佔用的格子合併成一列，避免下拉清單過長（與不開放區間合併同理） */
+      const mergeablePast = pastHere && !takenHere;
+      if (mergeablePast) {
+        let j = i;
+        while (j + 1 < slots.length) {
+          const s2 = slots[j + 1]!;
+          if (taken.has(s2)) break;
+          if (!isStartSlotInPastForTaipeiToday(selectedDateKey, s2)) break;
+          j++;
+        }
+        if (j > i) {
+          const rangeTimes = t("slot.pastRangeTimes", "{{from}}–{{to}}", { from: s, to: slots[j]! });
+          const pastNote = t("slot.past", "（已過）");
+          slotSelect.append(el("option", { value: "", disabled: true }, [`${rangeTimes}${pastNote}`]));
+          i = j + 1;
+          continue;
+        }
+      }
+
       const mergeableBlocked = blockedHere && !takenHere && !pastHere;
       if (mergeableBlocked) {
         const reason0 = blockReason as string;

@@ -122,6 +122,7 @@ export const EN: Record<string, string> = {
   "slot.blocked": " (closed)",
   "slot.blockedWith": " (closed: {{reason}})",
   "slot.blockedRangeTimes": "{{from}}–{{to}}",
+  "slot.pastRangeTimes": "{{from}}–{{to}}",
 
   "field.name": "Name",
   "field.nameHint":
