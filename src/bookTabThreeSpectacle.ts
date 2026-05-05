@@ -35,8 +35,16 @@ const BODY_LABELS: Record<
   }
 > = {
   sun: {
-    zh: { title: "太陽", blurb: "太陽系中心恆星，提供光與熱；畫面為示意比例。" },
-    en: { title: "Sun", blurb: "The star at the center of the Solar System—sizes here are illustrative." },
+    zh: {
+      title: "太陽",
+      blurb:
+        "太陽系中心恆星，提供光與熱；光球層為程式化米粒組織示意，外層為多層 additive 光暈（比例皆為示意）。",
+    },
+    en: {
+      title: "Sun",
+      blurb:
+        "The star at the center of the Solar System. The photosphere uses a procedural granulation-style map with layered additive glow—all illustrative scale.",
+    },
   },
   mercury: {
     zh: { title: "水星", blurb: "距太陽最近、無大氣的小型岩質行星。飛近為示意地表貼圖。" },
@@ -53,10 +61,15 @@ const BODY_LABELS: Record<
     },
   },
   earth: {
-    zh: { title: "地球", blurb: "已知唯一有穩定液態水與生命的行星。飛近時載入晝面貼圖，可見大陸與海洋示意（非測繪精度）。" },
+    zh: {
+      title: "地球",
+      blurb:
+        "已知唯一有穩定液態水與生命的行星。飛近時載入晝面貼圖；外圍藍色大氣光暈帶簡化漂移流動示意（非天氣模型）。",
+    },
     en: {
       title: "Earth",
-      blurb: "The only world we know with stable liquid water and life. Fly close to see an illustrative day map of continents and oceans (not survey-grade).",
+      blurb:
+        "The only world we know with stable liquid water and life. Fly close for the day map—blue atmospheric rim with a simple drifting flow pattern (illustrative, not a weather model).",
     },
   },
   moon: {
@@ -206,6 +219,116 @@ function loadSolarPlanetSurface(
       /* 貼圖載入失敗時保留白底材質 */
     },
   );
+}
+
+/** 程式化太陽光球貼圖（米粒／簡化黑子），無外部檔案依賴 */
+function createSunPhotosphereTexture(renderer: THREE.WebGLRenderer): THREE.CanvasTexture {
+  const size = 512;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    const fallback = new THREE.CanvasTexture(canvas);
+    fallback.colorSpace = THREE.SRGBColorSpace;
+    return fallback;
+  }
+
+  const cx = size * 0.5;
+  const cy = size * 0.5;
+  const grd = ctx.createRadialGradient(cx + size * 0.06, cy + size * 0.05, size * 0.04, cx, cy, size * 0.48);
+  grd.addColorStop(0, "#fffcee");
+  grd.addColorStop(0.28, "#ffeec8");
+  grd.addColorStop(0.55, "#ffcc66");
+  grd.addColorStop(1, "#e07028");
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, 0, size, size);
+
+  const img = ctx.getImageData(0, 0, size, size);
+  const d = img.data;
+  const rng = (x: number, y: number, seed: number) => {
+    const n = Math.sin(x * 12.9898 + y * 78.233 + seed * 43.758) * 43758.5453123;
+    return n - Math.floor(n);
+  };
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4;
+      const gran = (rng(x, y, 1) - 0.5) * 44;
+      const granFine = (rng(x * 4, y * 4, 2) - 0.5) * 18;
+      const sp = rng(x * 0.08, y * 0.08, 3);
+      const sunspot = sp > 0.992 ? -62 : 0;
+
+      d[i] = Math.min(255, Math.max(0, d[i]! + gran * 0.95 + granFine + sunspot));
+      d[i + 1] = Math.min(255, Math.max(0, d[i + 1]! + gran * 0.72 + granFine * 0.85 + sunspot * 0.88));
+      d[i + 2] = Math.min(255, Math.max(0, d[i + 2]! + gran * 0.38 + sunspot * 1.05));
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  return tex;
+}
+
+/**
+ * 地球薄大氣：view-space Fresnel 邊緣光 + 以模型空間經緯度與 uTime 驅動的漂移紋理（示意環流，非真實散射／預報）。
+ */
+function createEarthAtmosphereMaterial(): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      glowColor: { value: new THREE.Color(0x62a8ff) },
+      intensity: { value: 0.58 },
+      rimPower: { value: 2.35 },
+      uTime: { value: 0 },
+    },
+    vertexShader: `
+      varying vec3 vNormView;
+      varying vec3 vPosView;
+      varying vec3 vLocalDir;
+      void main() {
+        vLocalDir = normalize(position);
+        vNormView = normalize(normalMatrix * normal);
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vPosView = mv.xyz;
+        gl_Position = projectionMatrix * mv;
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 glowColor;
+      uniform float intensity;
+      uniform float rimPower;
+      uniform float uTime;
+      varying vec3 vNormView;
+      varying vec3 vPosView;
+      varying vec3 vLocalDir;
+
+      void main() {
+        vec3 toEye = normalize(-vPosView);
+        float ndotv = clamp(dot(vNormView, toEye), 0.0, 1.0);
+        float rim = pow(1.0 - ndotv, rimPower);
+
+        float lon = atan(vLocalDir.z, vLocalDir.x);
+        float lat = asin(clamp(vLocalDir.y, -1.0, 1.0));
+
+        float driftEW = lon * 5.5 - uTime * 0.72;
+        float bandNS = sin(lat * 10.0 - uTime * 0.38) * 0.5 + 0.5;
+        float cells = sin(driftEW + lat * 6.0) * cos(lat * 4.0 - driftEW * 0.65 + uTime * 0.5);
+        cells += sin(driftEW * 1.7 + lat * 11.0 + uTime * 0.28) * 0.35;
+        float flow = 0.58 + 0.42 * smoothstep(-0.25, 0.55, cells * 0.45 + bandNS * 0.35);
+
+        vec3 rgb = glowColor * rim * intensity * flow;
+        float a = rim * intensity * (0.78 + 0.22 * flow);
+        gl_FragColor = vec4(rgb, a);
+      }
+    `,
+    blending: THREE.AdditiveBlending,
+    transparent: true,
+    depthWrite: false,
+    side: THREE.FrontSide,
+    fog: false,
+  });
 }
 
 function buildShip(hull: number, accent: number, scale: number): THREE.Group {
@@ -505,7 +628,7 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
   renderer.setClearColor(0x020511, 1);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.95;
+  renderer.toneMappingExposure = 0.72;
   const canvas = renderer.domElement;
   canvas.style.display = "block";
   canvas.style.width = "100%";
@@ -579,33 +702,44 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
   const stars = new THREE.Points(starGeo, starMat);
   root.add(stars);
 
-  const sunLight = new THREE.PointLight(0xfff2dd, 14, 0, 2);
+  const sunLight = new THREE.PointLight(0xfff2dd, 7.5, 0, 2);
   sunLight.position.set(0, 0, 0);
   root.add(sunLight);
 
-  const sunCore = new THREE.Mesh(
-    new THREE.SphereGeometry(0.22, 28, 28),
-    new THREE.MeshStandardMaterial({
-      color: 0xfff8e8,
-      emissive: 0xffeecc,
-      emissiveIntensity: 1.28,
-      roughness: 0.55,
-      metalness: 0,
-    }),
-  );
+  const sunTex = createSunPhotosphereTexture(renderer);
+  const sunMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    map: sunTex,
+    emissiveMap: sunTex,
+    emissive: 0xffeed0,
+    emissiveIntensity: 0.62,
+    roughness: 0.62,
+    metalness: 0,
+  });
+  const sunCore = new THREE.Mesh(new THREE.SphereGeometry(0.22, 36, 36), sunMat);
   tagPickable(sunCore, "sun");
-  const corona = new THREE.Mesh(
-    new THREE.SphereGeometry(0.48, 20, 20),
-    new THREE.MeshBasicMaterial({
-      color: 0xffaa66,
-      transparent: true,
-      opacity: 0.11,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    }),
-  );
-  tagPickable(corona, "sun");
-  root.add(corona, sunCore);
+
+  const sunCoronaLayers: THREE.Mesh[] = [];
+  function addSunCorona(radius: number, segments: number, color: number, opacity: number) {
+    const m = new THREE.Mesh(
+      new THREE.SphereGeometry(radius, segments, segments),
+      new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      }),
+    );
+    tagPickable(m, "sun");
+    sunCoronaLayers.push(m);
+  }
+  addSunCorona(0.92, 18, 0xff5522, 0.016);
+  addSunCorona(0.74, 20, 0xff7733, 0.024);
+  addSunCorona(0.58, 22, 0xff9944, 0.034);
+  addSunCorona(0.48, 24, 0xffaa66, 0.048);
+
+  root.add(...sunCoronaLayers, sunCore);
 
   const beltInnerCount = 380;
   const beltOuterCount = 480;
@@ -699,7 +833,9 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
     root.add(orbitLine);
   }
 
-  const pickables: THREE.Object3D[] = [sunCore, corona];
+  const pickables: THREE.Object3D[] = [...sunCoronaLayers, sunCore];
+
+  let earthAtmosphereTimeUniform: { value: number } | null = null;
 
   for (let i = 0; i < planetDefs.length; i++) {
     const def = planetDefs[i]!;
@@ -756,6 +892,13 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
       } else {
         arm.add(body);
         if (def.id === "earth") {
+          const atmRadius = def.size * 1.052;
+          const atmMat = createEarthAtmosphereMaterial();
+          earthAtmosphereTimeUniform = atmMat.uniforms.uTime as { value: number };
+          const atmosphere = new THREE.Mesh(new THREE.SphereGeometry(atmRadius, segs, segs), atmMat);
+          atmosphere.renderOrder = 1;
+          body.add(atmosphere);
+
           const moonPivot = new THREE.Group();
           const moonR = def.size * 0.272;
           const moonMat = new THREE.MeshStandardMaterial({
@@ -848,7 +991,12 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
   extrasRoot.add(comet, cometTrail);
   const trailHist: THREE.Vector3[] = [];
 
-  const disposables = [...collectDisposables(milkyWayShell), ...collectDisposables(root), { dispose: () => starPointSprite.dispose() }];
+  const disposables = [
+    ...collectDisposables(milkyWayShell),
+    ...collectDisposables(root),
+    { dispose: () => starPointSprite.dispose() },
+    { dispose: () => sunTex.dispose() },
+  ];
 
   const meshByBody = new Map<BodyId, THREE.Object3D>();
   for (const obj of pickables) {
@@ -1143,6 +1291,10 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
     const dt = Math.min(0.05, clock.getDelta());
     const t = clock.getElapsedTime() * SPECTACLE_TIME_SCALE;
 
+    if (earthAtmosphereTimeUniform) {
+      earthAtmosphereTimeUniform.value = t;
+    }
+
     for (const o of orbitals) {
       o.pivot.rotation.y = t * o.speed + o.phase;
       o.mesh.rotation.y = t * o.spin;
@@ -1219,8 +1371,13 @@ export function mountBookTabThreeSpectacle(host: HTMLElement): () => void {
     }
     (trailGeo.getAttribute("position") as THREE.BufferAttribute).needsUpdate = true;
 
-    sunCore.scale.setScalar(1 + Math.sin(t * 0.85) * 0.035);
-    corona.scale.setScalar(1 + Math.sin(t * 0.48) * 0.06);
+    sunCore.rotation.y = t * 0.095;
+    const corePulse = 1 + Math.sin(t * 0.85) * 0.035;
+    sunCore.scale.setScalar(corePulse);
+    const coronaPulse = 1 + Math.sin(t * 0.48) * 0.055;
+    sunCoronaLayers.forEach((mesh, j) => {
+      mesh.scale.setScalar(coronaPulse * (1 + j * 0.009));
+    });
 
     twinkle(starBase, starPos, starSeed, starCount, t, 0.032);
     (starGeo.getAttribute("position") as THREE.BufferAttribute).needsUpdate = true;
