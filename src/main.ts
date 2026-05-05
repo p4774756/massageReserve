@@ -35,7 +35,6 @@ import {
   redeemWheelPointsCall,
   searchMemberUsersCall,
   listMembersAdminCall,
-  migrateLegacyWalletsAdminCall,
   sendMembersBroadcastAdminCall,
   sendMemberDirectEmailAdminCall,
   updateMemberNicknameAdminCall,
@@ -3378,7 +3377,7 @@ function render() {
         el("div", { class: "row-actions" }, [topupBtn]),
         topupStatus,
       ],
-      true,
+      false,
     );
     const accordionAdjust = walletAccordion(
       "adjust",
@@ -3565,9 +3564,6 @@ function render() {
     const memberListRefreshBtn = el("button", { class: "ghost", type: "button" }, [
       t("admin.memberList.reload", "重新載入會員清單"),
     ]);
-    const memberListMigrateWalletBtn = el("button", { class: "ghost", type: "button" }, [
-      t("admin.memberList.migrateWalletBtn", "折換未折抵金額→次數"),
-    ]);
     const memberListEmailBtn = el(
       "button",
       {
@@ -3590,7 +3586,6 @@ function render() {
       email: string | null;
       emailVerified: boolean;
       nickname: string;
-      walletBalance: number;
       sessionCredits: number;
       wheelPoints: number;
       arcadePoints: number;
@@ -3601,7 +3596,6 @@ function render() {
       | "emailVerified"
       | "uid"
       | "nickname"
-      | "walletBalance"
       | "sessionCredits"
       | "wheelPoints"
       | "arcadePoints"
@@ -3665,10 +3659,6 @@ function render() {
           cmp = a.nickname.localeCompare(b.nickname, getLocale() === "en" ? "en" : "zh-Hant", { numeric: true });
           break;
         }
-        case "walletBalance": {
-          cmp = a.walletBalance === b.walletBalance ? 0 : a.walletBalance < b.walletBalance ? -1 : 1;
-          break;
-        }
         case "sessionCredits": {
           cmp = a.sessionCredits === b.sessionCredits ? 0 : a.sessionCredits < b.sessionCredits ? -1 : 1;
           break;
@@ -3716,7 +3706,6 @@ function render() {
         mk(t("admin.memberList.th.sessions", "可預約次數"), "sessionCredits"),
         mk(t("admin.memberList.th.points", "輪盤點數"), "wheelPoints"),
         mk(t("admin.memberList.th.arcadePoints", "小瑪莉遊戲點"), "arcadePoints"),
-        mk(t("admin.memberList.th.wallet", "未折抵金額"), "walletBalance"),
         mk(t("admin.memberList.th.draws", "可抽次數"), "drawChances"),
         el("th", { class: "admin-member-th-actions" }, [t("admin.memberList.th.actions", "操作")]),
       ]);
@@ -3769,7 +3758,7 @@ function render() {
           emptyMsg = t("admin.memberList.searchEmpty", "沒有符合關鍵字的會員。請改關鍵字或清空篩選欄。");
         }
         memberListTable.append(
-          el("tr", {}, [el("td", { class: "hint", colSpan: 10 }, [emptyMsg])]),
+          el("tr", {}, [el("td", { class: "hint", colSpan: 9 }, [emptyMsg])]),
         );
         memberListPagePrev.disabled = true;
         memberListPageNext.disabled = true;
@@ -3822,7 +3811,6 @@ function render() {
             el("td", { class: "mono" }, [String(m.sessionCredits)]),
             el("td", { class: "mono" }, [String(m.wheelPoints)]),
             el("td", { class: "mono" }, [String(m.arcadePoints)]),
-            el("td", { class: "mono" }, [String(m.walletBalance)]),
             el("td", { class: "mono" }, [String(m.drawChances)]),
             el("td", { class: "admin-member-td-actions" }, [saveBtn]),
           ]),
@@ -3887,7 +3875,6 @@ function render() {
           email: m.email ?? null,
           emailVerified: m.emailVerified === true,
           nickname: typeof m.nickname === "string" ? m.nickname : "",
-          walletBalance: typeof m.walletBalance === "number" ? m.walletBalance : 0,
           sessionCredits: typeof m.sessionCredits === "number" ? m.sessionCredits : 0,
           wheelPoints: typeof m.wheelPoints === "number" ? m.wheelPoints : 0,
           arcadePoints: typeof m.arcadePoints === "number" ? m.arcadePoints : 0,
@@ -3917,40 +3904,6 @@ function render() {
 
     memberListRefreshBtn.addEventListener("click", () => {
       void loadMemberList();
-    });
-
-    memberListMigrateWalletBtn.addEventListener("click", async () => {
-      memberListStatus.textContent = "";
-      memberListStatus.className = "status-line";
-      memberListMigrateWalletBtn.setAttribute("disabled", "true");
-      memberListRefreshBtn.setAttribute("disabled", "true");
-      memberListEmailBtn.setAttribute("disabled", "true");
-      memberListStatus.textContent = t("admin.memberList.migrateRunning", "折換中…");
-      try {
-        const fn = migrateLegacyWalletsAdminCall();
-        const res = await fn({ ...localeApiParam() });
-        const data = res.data as { scanned?: number; updated?: number; sessionPriceNtd?: number };
-        memberListStatus.textContent = t(
-          "admin.memberList.migrateDone",
-          "完成：掃描 {{scanned}} 筆 customers，已更新 {{updated}} 筆（單價參考 {{price}} 元）。請按「重新載入會員清單」刷新表格。",
-          {
-            scanned: typeof data.scanned === "number" ? data.scanned : 0,
-            updated: typeof data.updated === "number" ? data.updated : 0,
-            price: typeof data.sessionPriceNtd === "number" ? data.sessionPriceNtd : 0,
-          },
-        );
-        memberListStatus.classList.add("ok");
-        if (memberListCache.length > 0) {
-          await loadMemberList();
-        }
-      } catch (e) {
-        memberListStatus.textContent = errorMessage(e);
-        memberListStatus.classList.add("error");
-      } finally {
-        memberListMigrateWalletBtn.removeAttribute("disabled");
-        memberListRefreshBtn.removeAttribute("disabled");
-        memberListEmailBtn.removeAttribute("disabled");
-      }
     });
 
     function openMemberEmailModal(initialMode: "broadcast" | "direct") {
@@ -4504,17 +4457,7 @@ function render() {
           ),
         ]),
       ]),
-      el("p", { class: "hint" }, [
-        t(
-          "admin.memberList.migrateHint",
-          "「折換未折抵金額→次數」會掃描 Firestore 全部 customers 文件，依後台定價將 walletBalance 可折整數次併入 sessionCredits；不滿一次的金額仍留在未折抵欄。",
-        ),
-      ]),
-      el("div", { class: "row-actions" }, [
-        memberListRefreshBtn,
-        memberListMigrateWalletBtn,
-        memberListEmailBtn,
-      ]),
+      el("div", { class: "row-actions" }, [memberListRefreshBtn, memberListEmailBtn]),
       memberListStatus,
       memberListTableWrap,
       memberListPager,
@@ -4750,7 +4693,7 @@ function render() {
 
     void loadMemberList();
 
-    const HIDDEN_ADMIN_PAGE_SIZE = 10;
+    const HIDDEN_ADMIN_PAGE_SIZE = 5;
     let hiddenAdminPageIndex = 0;
     type AdminHiddenQueueItem = { kind: "deleted" | "invisible"; b: Booking };
     const hiddenAdminQueue: AdminHiddenQueueItem[] = [];

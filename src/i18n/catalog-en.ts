@@ -504,12 +504,6 @@ export const EN: Record<string, string> = {
   "admin.memberList.broadcastFailedHead": "{{n}} failed (excerpt):",
   "admin.memberList.broadcastSubjectLabel": "Subject",
   "admin.memberList.broadcastBodyLabel": "Body (plain text)",
-  "admin.memberList.migrateWalletBtn": "Fold legacy cash → sessions",
-  "admin.memberList.migrateHint":
-    "“Fold legacy cash → sessions” scans every Firestore customers document, uses admin pricing to move whole-session amounts from walletBalance into sessionCredits; any remainder under one session stays in the legacy cash column.",
-  "admin.memberList.migrateRunning": "Folding balances…",
-  "admin.memberList.migrateDone":
-    "Done: scanned {{scanned}} customers documents, updated {{updated}} (price reference NT$ {{price}}). Tap “Reload member list” to refresh the table.",
   "admin.memberList.loading": "Loading member list…",
   "admin.memberList.loaded": "Loaded {{n}} users.",
   "admin.memberList.loadedWithEmailFilter":
@@ -528,7 +522,6 @@ export const EN: Record<string, string> = {
   "admin.memberList.th.sessions": "Bookable sessions",
   "admin.memberList.th.points": "Wheel points",
   "admin.memberList.th.arcadePoints": "Little Mary arcade pts",
-  "admin.memberList.th.wallet": "Legacy cash (NTD)",
   "admin.memberList.th.draws": "Spin chances",
   "admin.memberList.th.actions": "Actions",
   "admin.memberList.sortTitle": "Sort by “{{label}}”; click again to reverse",

@@ -52,7 +52,6 @@ export const getAdminStatusCall = () => httpsCallable(getFns(), "getAdminStatus"
 export const createMemberAccountCall = () => httpsCallable(getFns(), "createMemberAccount");
 export const searchMemberUsersCall = () => httpsCallable(getFns(), "searchMemberUsers");
 export const listMembersAdminCall = () => httpsCallable(getFns(), "listMembersAdmin");
-export const migrateLegacyWalletsAdminCall = () => httpsCallable(getFns(), "migrateLegacyWalletsAdmin");
 export const sendMembersBroadcastAdminCall = () => httpsCallable(getFns(), "sendMembersBroadcastAdmin");
 export const sendMemberDirectEmailAdminCall = () => httpsCallable(getFns(), "sendMemberDirectEmailAdmin");
 export const updateMemberNicknameAdminCall = () => httpsCallable(getFns(), "updateMemberNicknameAdmin");
