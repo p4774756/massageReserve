@@ -57,10 +57,13 @@ test("會員預約 -> 後台完成 -> 前台抽輪盤", async ({ page }) => {
   await row.getByRole("combobox").selectOption("done");
   await expect(page.getByText("已更新")).toBeVisible();
 
-  // 回前台抽輪盤，驗證可抽與結果顯示
+  // 回前台：會員中心內抽輪盤，驗證可抽與結果顯示
   await page.goto("/");
-  await expect(page.getByRole("button", { name: "抽輪盤" })).toBeEnabled();
-  await page.getByRole("button", { name: "抽輪盤" }).click();
+  await page.getByRole("button", { name: "會員中心" }).click();
+  const memberDialog = page.getByRole("dialog");
+  await expect(memberDialog).toBeVisible();
+  await expect(memberDialog.getByRole("button", { name: "抽輪盤" })).toBeEnabled();
+  await memberDialog.getByRole("button", { name: "抽輪盤" }).click();
   await expect(page.getByRole("heading", { name: "幸運輪盤" })).toBeVisible();
   await expect(page.getByRole("button", { name: "收下" })).toBeVisible({ timeout: 20_000 });
   await page.getByRole("button", { name: "收下" }).click();

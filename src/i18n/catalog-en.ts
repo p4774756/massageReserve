@@ -22,15 +22,11 @@ export const EN: Record<string, string> = {
   "booking.mode.member_beverage": "Member · drink credit",
 
   "book.tabsAria":
-    "Massage booking, my bookings and wheel when signed in, then a portrait gallery tab and a Starry sky WebGL tab; the Little Mary tab is visible only to admins while in development",
+    "Massage booking and my bookings when signed in; Little Mary tab is admins only; wheel and session↔arcade exchange are under Member hub",
   "book.tab.booking": "Book massage",
-  "book.tab.gallery": "Gallery",
   "book.tab.wheel": "Wheel",
   "book.tab.myBookings": "My bookings",
-  "book.tab.threeSpectacle": "Starry sky",
   "book.tab.littleMary": "Little Mary",
-  "book.threeSpectacle.hint":
-    "Live WebGL (Three.js): solar system with an Earth-night-sky style Milky Way band: a large star shell recenters on the camera (very little parallax), with a brighter plane, multiple dust rifts, mottling, a brighter “galactic core” direction, and a few bright knots—illustrative, not a full astronomical model. Use the bar atop the canvas for Overview or to fly near each body; drag to orbit, wheel or pinch-zoom, tap a body for a fact; includes procedural ships and a comet. Display only, no backend.",
   "book.littleMary.hint":
     "Demo: bet on symbols, then Start (Space). Full rules below. With Firebase + deployed Functions, outcomes come from the server; otherwise local demo RNG. No real money.",
   "book.littleMary.rulesTitle": "Rules",
@@ -73,9 +69,6 @@ export const EN: Record<string, string> = {
     "Mon–Fri · 15-minute start slots · session about 15–50 min depending on needs · lunch break 11:45–13:15 closed · latest start 16:30, ends before 17:00",
   "home.guestHint":
     "No sign-up required: choose a guest payment option. Members can top up and join the wheel draw.",
-  "home.hostCaption": "A moment of shadow and light is also blank space left for the body.",
-  "home.hostAlt":
-    "Host portrait: a vertical image composed of gazing, writing at a desk, and contemplation by the window.",
 
   "visitor.loading": "Loading visit stats…",
   "visitor.badFormat": "Visit stats response was invalid.",
@@ -139,11 +132,6 @@ export const EN: Record<string, string> = {
   "wheel.previewTitle": "Preview only — no real spin or deduction",
   "wheel.rules":
     "Wheel rules: after a member booking is marked completed in admin, you earn 1 spin (once per booking). Each spin uses 1 chance. Prizes are random by admin weights (points, extra spins, thanks, fun text, etc.). Points can be redeemed for sessions when you reach the threshold. Email verification is required.",
-  "wheel.statsNeedVerify": "Verify your email to see your points and draw chances here.",
-  "wheel.statsLoading": "Loading points and draw chances…",
-  "wheel.statsLoadFail": "Could not load points or draw chances: {{detail}}",
-  "wheel.statsOk":
-    "Wheel: {{points}} pts / {{per}} pts → 1 session · spins: {{chances}} · sessions: {{sessions}}. {{legacy}}",
   "wheel.spinNeedLogin": "Please sign in as a member.",
   "wheel.spinNeedVerify": "Please verify your email first.",
   "wheel.spinNoChances": "No spins available.",
@@ -206,8 +194,13 @@ export const EN: Record<string, string> = {
   "member.walletLegacyLine": "Remaining cash not yet folded into sessions: {{n}} (NTD).",
   "member.redeemPointsBtn": "Redeem {{per}} points → 1 session",
   "member.redeemOk": "Redeemed successfully.",
-  "member.modalRedeemHint":
-    "The “redeem points” button is below the signed-in status on the booking tab; close this dialog to use it.",
+  "member.wheelSectionTitle": "Wheel",
+  "member.wheelSectionLead": "Redeem wheel points and spin; email verification required.",
+  "member.wheel.rulesSummary": "How the wheel works",
+  "member.arcadeExchangeTitle": "Sessions ↔ Little Mary points",
+  "member.arcadeExchangeLead":
+    "Synced with the wallet summary above. Play Little Mary on the booking page tab (admins only).",
+  "member.hubGamesTabsAria": "Member hub games",
   "member.wheelLuck": "You can spin — good luck!",
   "member.wheelNone": "No spins right now.",
   "member.wheelStateFail": "Could not read spin state.",
@@ -355,13 +348,21 @@ export const EN: Record<string, string> = {
 
   "admin.announce.heading": "Front page & booking rules",
   "admin.announce.introShort":
-    "Top marquee, booking caps, and closed windows are grouped below. Expand “Firestore paths” for technical detail. The wheel preview button on the booking page is visible only to admins.",
+    "Use the sub-tabs below for the top marquee, booking caps, closed time windows, and pricing / point redemption. Expand “Firestore paths” under Marquee for technical detail. The wheel preview button on the booking page is visible only to admins.",
+  "admin.announce.subtabsAria": "Other settings — sub-sections",
+  "admin.announce.subtabMarquee": "Top marquee",
+  "admin.announce.subtabCaps": "Booking caps",
+  "admin.announce.subtabBlocks": "Closed windows",
+  "admin.announce.subtabPricing": "Pricing & points",
   "admin.announce.detailsSummary": "Firestore paths / full marquee note",
   "admin.announce.blockMarquee": "Top marquee",
   "admin.announce.blockMarqueeLead": "Shown at the top of the booking page; set scroll speed and on/off.",
 
-  "admin.announce.blockRules": "Booking caps & closed windows",
-  "admin.announce.blockRulesLead": "Limits and blocked time ranges affect what slots can be booked.",
+  "admin.announce.blockCapsTitle": "Booking caps",
+  "admin.announce.blockCapsLead":
+    "Max active bookings per calendar day and per Mon–Fri work week; separate from closed windows below.",
+  "admin.announce.blockBlocksTitle": "Closed booking windows",
+  "admin.announce.blockBlocksLead": "Block slots by weekday and time (and optional specific dates); separate from caps.",
   "admin.announce.intro":
     "The booking page shows one marquee at the top, configured in Firestore siteSettings/marqueeLed (text, enabled, scroll speed in px/s).",
   "admin.announce.marqueeHeading": "Top · Marquee",
@@ -381,6 +382,8 @@ export const EN: Record<string, string> = {
     ", integer 1-50; if doc is missing backend defaults to 2 and 4).",
 
   "admin.pricing.heading": "Pricing & point redemption",
+  "admin.pricing.pageLead":
+    "Site-wide pricing and point redemption; member top-ups and session adjustments are under Members & top-up.",
   "admin.pricing.hint":
     "Controls the cash amount shown for guests/members, the rate to fold legacy wallet cash into sessions, how many wheel points redeem for 1 session, and how many Little Mary arcade points swap with 1 session. Firestore:",
   "admin.pricing.hintEnd": "",
@@ -427,7 +430,7 @@ export const EN: Record<string, string> = {
   "admin.tab.bookings": "Bookings",
   "admin.tab.hidden": "Archived bookings",
   "admin.tab.members": "Members & top-up",
-  "admin.tab.announce": "Front page & rules",
+  "admin.tab.announce": "Other settings",
   "admin.memberTab.wallet": "Top up",
   "admin.memberTab.list": "Member list",
 
@@ -445,11 +448,11 @@ export const EN: Record<string, string> = {
   "admin.memberList.searchPlaceholder": "Email, UID, or display name…",
   "admin.memberList.searchAria": "Filter member list",
   "admin.memberList.searchHint":
-    "Filters the loaded list by email, UID, or display name (case-insensitive). Clear the field to show everyone.",
+    "Filters the loaded list by email, UID, or display name (case-insensitive). Clear the field to show all members who have an email.",
   "admin.memberList.searchEmpty": "No members match. Change the keyword or clear the filter.",
   "admin.memberList.title": "Member list",
   "admin.memberList.introA": "All Firebase Authentication users merged with Firestore ",
-  "admin.memberList.introB": " wallet balance and display name. Large directories may load slowly.",
+  "admin.memberList.introB": " wallet balance and display name. Large directories may load slowly. The table lists only users with an email address.",
   "admin.memberList.introSort":
     "Click column headers to sort. Verified email is listed first by default; 10 rows per page.",
   "admin.memberList.reload": "Reload member list",
@@ -467,7 +470,10 @@ export const EN: Record<string, string> = {
     "Only members with a verified email in Firebase Auth. Enter email or UID; body is plain text and becomes HTML like broadcast. Needs RESEND_API_KEY and RESEND_FROM.",
   "admin.memberList.directEmailTargetLabel": "Recipient member",
   "admin.memberList.directEmailTargetPh": "Member email or UID",
-  "admin.memberList.directEmailConfirmLabel": "I confirm recipient, subject, and body — send for real",
+  "admin.memberList.emailSendConfirmBroadcast":
+    "I confirm the subject and body are correct, and the recipient scope matches “Preview recipient count” — send for real",
+  "admin.memberList.emailSendConfirmDirect":
+    "I confirm the subject and body are correct, and the recipient matches “Verify recipient” — send for real",
   "admin.memberList.directEmailVerify": "Verify recipient (do not send)",
   "admin.memberList.directEmailSend": "Send one email",
   "admin.memberList.directEmailVerifyOk":
@@ -485,7 +491,6 @@ export const EN: Record<string, string> = {
   "admin.memberList.broadcastSubjectPh": "Subject, e.g. Thank you for your support",
   "admin.memberList.broadcastBodyPh": "Message body (plain text)…",
   "admin.memberList.broadcastOnlyVerified": "Send only to members with verified email (recommended)",
-  "admin.memberList.broadcastConfirmLabel": "I confirm the subject and body are correct and I want to send",
   "admin.memberList.broadcastPreview": "Preview recipient count",
   "admin.memberList.broadcastSend": "Send broadcast",
   "admin.memberList.broadcastPreviewOk":
@@ -507,8 +512,12 @@ export const EN: Record<string, string> = {
     "Done: scanned {{scanned}} customers documents, updated {{updated}} (price reference NT$ {{price}}). Tap “Reload member list” to refresh the table.",
   "admin.memberList.loading": "Loading member list…",
   "admin.memberList.loaded": "Loaded {{n}} users.",
+  "admin.memberList.loadedWithEmailFilter":
+    "Loaded {{total}} users; the table shows {{listed}} with an email address.",
   "admin.memberList.loadFail": "Load failed",
   "admin.memberList.empty": "No users yet. Tap “Reload member list”.",
+  "admin.memberList.emptyNoEmail":
+    "Users exist on the server, but none have an email to show (the table only lists accounts with an email).",
   "admin.memberList.saveNick": "Save display name",
   "admin.memberList.nickUpdated": "Updated display name for {{email}}.",
   "admin.memberList.saveFail": "Save failed",
@@ -560,7 +569,7 @@ export const EN: Record<string, string> = {
 
   "admin.backTitle": "Admin",
   "admin.backSubtitle":
-    "Use tabs: bookings & archive (sub-tabs: main list / archived), members & top-up, front page & booking rules, support.",
+    "Use tabs: bookings & archive (sub-tabs: main list / archived), members & top-up, other settings (marquee, caps, closed windows, pricing), support.",
 
   "booking.rulesFooter":
     "Rules: max {{dayCap}} same day, max {{weekCap}} same work week; cancelled do not count toward caps.",

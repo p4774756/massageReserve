@@ -103,7 +103,7 @@ export function collectDisposables(root: THREE.Object3D): { dispose(): void }[] 
   return out;
 }
 
-/** 與預約分頁 `bookTabThreeSpectacle` 相同軌道參數，前奏場景視覺一致 */
+/** 輪盤前奏等太陽系場景共用之軌道參數 */
 export type SharedSolarPlanetDef = {
   r: number;
   speed: number;
