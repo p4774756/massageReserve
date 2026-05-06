@@ -557,6 +557,8 @@ function render() {
   /** 會員中心 modal 內「按摩次數 ↔ 遊戲點」掛載：關閉 overlay 時 dispose，refreshWalletStatus 時 sync */
   let activeMemberArcadeExchangeDispose: (() => void) | null = null;
   let activeMemberArcadeExchangeSync: (() => Promise<void>) | null = null;
+  /** 會員中心 modal 內錢包摘要節點（勿用 cloneNode，須與 `walletStatus` 同步更新） */
+  let memberModalWalletMirror: HTMLElement | null = null;
 
   function tabFromPath(): "book" | "admin" {
     const path = (window.location.pathname.replace(/\/+$/, "") || "/").toLowerCase();
@@ -807,7 +809,7 @@ function render() {
       await fn({ ...localeApiParam() });
       redeemPointsStatus.textContent = t("member.redeemOk", "兌換成功。");
       redeemPointsStatus.classList.add("ok");
-      await refreshWalletStatus();
+      await refreshWalletStatus({ keepWalletSummaryDuringFetch: true });
     } catch (e) {
       redeemPointsStatus.textContent = errorMessage(e);
       redeemPointsStatus.classList.add("error");
@@ -915,7 +917,7 @@ function render() {
         try {
           const fn = cancelBookingCall();
           await fn({ bookingId: b.id, ...localeApiParam() });
-          await refreshWalletStatus();
+          await refreshWalletStatus({ keepWalletSummaryDuringFetch: true });
         } catch (e) {
           myBookingsHint.textContent = e instanceof Error ? e.message : t("myBookings.cancelFail", "取消失敗");
           myBookingsHint.classList.add("error");
@@ -1110,6 +1112,7 @@ function render() {
   });
 
   function openMemberAuthModal() {
+    memberModalWalletMirror = null;
     const overlay = el("div", { class: "modal-overlay" });
     const dialog = el("div", { class: "modal-card member-modal" });
     dialog.setAttribute("role", "dialog");
@@ -1337,6 +1340,7 @@ function render() {
         activeMemberArcadeExchangeDispose?.();
         activeMemberArcadeExchangeDispose = null;
         activeMemberArcadeExchangeSync = null;
+        memberModalWalletMirror = null;
         overlay.remove();
       };
       closeBtn.addEventListener("click", dismissOverlay);
@@ -1423,11 +1427,13 @@ function render() {
           el("div", { class: "modal-actions" }, [modalResendBtn, modalReloadBtn]),
         );
       }
-      modalBody.push(walletStatus.cloneNode(true) as HTMLElement);
+      const modalWalletHost = el("div", { class: "status-line" });
+      memberModalWalletMirror = modalWalletHost;
+      modalBody.push(modalWalletHost);
       if (user.emailVerified) {
         const arcadeExHost = el("div", { class: "member-modal__arcade-exchange" });
         const { dispose, sync } = mountArcadeSessionExchange(arcadeExHost, {
-          onMutated: () => refreshWalletStatus(),
+          onMutated: () => refreshWalletStatus({ keepWalletSummaryDuringFetch: true }),
         });
         activeMemberArcadeExchangeDispose = dispose;
         activeMemberArcadeExchangeSync = sync;
@@ -1442,6 +1448,7 @@ function render() {
       }
       modalBody.push(el("div", { class: "modal-actions" }, [closeBtn, logoutBtn]));
       dialog.append(...modalBody);
+      void refreshWalletStatus();
     }
 
     overlay.addEventListener("click", (ev) => {
@@ -1450,6 +1457,7 @@ function render() {
         activeMemberArcadeExchangeDispose?.();
         activeMemberArcadeExchangeDispose = null;
         activeMemberArcadeExchangeSync = null;
+        memberModalWalletMirror = null;
         overlay.remove();
       }
     });
@@ -1502,7 +1510,28 @@ function render() {
   /** 與下方 `setBookSubTab` 一併指派：非會員登入時關閉「我的預約」並切回預約表單 */
   let syncBookMyBookingsTabVisibility: () => void = () => {};
 
-  async function refreshWalletStatus() {
+  type MemberWalletSummaryOpts = Parameters<typeof paintMemberWalletSummary>[1];
+
+  function setMemberWalletLinePlain(text: string, className: string) {
+    walletStatus.textContent = text;
+    walletStatus.className = className;
+    if (memberModalWalletMirror) {
+      memberModalWalletMirror.textContent = text;
+      memberModalWalletMirror.className = className;
+    }
+  }
+
+  function paintMemberWalletSummaryBoth(opts: MemberWalletSummaryOpts) {
+    paintMemberWalletSummary(walletStatus, opts);
+    if (memberModalWalletMirror) paintMemberWalletSummary(memberModalWalletMirror, opts);
+  }
+
+  type RefreshWalletStatusOpts = {
+    /** 為 true 時不先把摘要換成「讀取中」，避免剛操作完（兌換／抽獎等）畫面閃一下 */
+    keepWalletSummaryDuringFetch?: boolean;
+  };
+
+  async function refreshWalletStatus(opts?: RefreshWalletStatusOpts) {
     try {
       const user = auth.currentUser;
       refillBookingModes(isVerifiedMember());
@@ -1515,8 +1544,7 @@ function render() {
         drawChances = 0;
         memberExtrasWrap.hidden = true;
         emailVerifyBanner.hidden = true;
-        walletStatus.textContent = "";
-        walletStatus.className = "status-line";
+        setMemberWalletLinePlain("", "status-line");
         spinBtn.setAttribute("disabled", "true");
         wheelStatus.textContent = "";
         wheelStatus.className = "status-line";
@@ -1533,8 +1561,7 @@ function render() {
         drawChances = 0;
         memberExtrasWrap.hidden = true;
         emailVerifyBanner.hidden = true;
-        walletStatus.textContent = "";
-        walletStatus.className = "status-line";
+        setMemberWalletLinePlain("", "status-line");
         spinBtn.setAttribute("disabled", "true");
         wheelStatus.textContent = "";
         wheelStatus.className = "status-line";
@@ -1555,8 +1582,7 @@ function render() {
           "member.verifyBanner",
           "已登入，但尚未完成 Email 驗證。請至信箱點擊驗證連結；完成後請按「我已驗證，重新整理狀態」。",
         );
-        walletStatus.textContent = "";
-        walletStatus.className = "status-line";
+        setMemberWalletLinePlain("", "status-line");
         spinBtn.setAttribute("disabled", "true");
         wheelStatus.textContent = t("member.wheelNeedVerifyFirst", "完成信箱驗證後才可抽輪盤。");
         wheelStatus.className = "status-line";
@@ -1568,8 +1594,9 @@ function render() {
       emailVerifyBanner.hidden = true;
       memberExtrasWrap.hidden = true;
       ensureMyBookingsListener(user.uid);
-      walletStatus.textContent = t("member.walletLoading", "讀取會員餘額中…");
-      walletStatus.className = "status-line";
+      if (!opts?.keepWalletSummaryDuringFetch) {
+        setMemberWalletLinePlain(t("member.walletLoading", "讀取會員餘額中…"), "status-line");
+      }
       redeemPointsStatus.textContent = "";
       redeemPointsStatus.className = "status-line";
       syncPageHeadSession(user.displayName?.trim() || user.email?.trim());
@@ -1613,7 +1640,7 @@ function render() {
           walletBalance > 0
             ? t("member.walletLegacyLine", "尚有 {{n}} 元未折成次數。", { n: walletBalance })
             : "";
-        paintMemberWalletSummary(walletStatus, {
+        paintMemberWalletSummaryBoth({
           sessions: sessionCreditsCount,
           points: wheelPointsCount,
           per: pointsPerMassageSetting,
@@ -1636,8 +1663,7 @@ function render() {
         arcadePointsCount = 0;
         drawChances = 0;
         memberExtrasWrap.hidden = true;
-        walletStatus.textContent = errorMessage(e);
-        walletStatus.className = "status-line error";
+        setMemberWalletLinePlain(errorMessage(e), "status-line error");
         spinBtn.setAttribute("disabled", "true");
         wheelStatus.textContent = t("member.wheelStateFail", "無法讀取抽獎狀態。");
         wheelStatus.className = "status-line error";
@@ -1704,7 +1730,7 @@ function render() {
       wheelResult.hidden = false;
       wheelStatus.textContent = t("wheel.spinDone", "抽獎完成！");
       wheelStatus.classList.add("ok");
-      await refreshWalletStatus();
+      await refreshWalletStatus({ keepWalletSummaryDuringFetch: true });
     } catch (e) {
       wheelStatus.textContent = errorMessage(e);
       wheelStatus.classList.add("error");
@@ -2089,7 +2115,7 @@ function render() {
       nameInput.value = "";
       noteInput.value = "";
       await refreshAvailability();
-      await refreshWalletStatus();
+      await refreshWalletStatus({ keepWalletSummaryDuringFetch: true });
     } catch (e) {
       bookStatus.textContent = errorMessage(e);
       bookStatus.classList.add("error");
@@ -2287,7 +2313,7 @@ function render() {
     littleMaryMount,
   );
   mountBookTabLittleMary(littleMaryMount, {
-    onArcadeBalanceMutated: () => refreshWalletStatus(),
+    onArcadeBalanceMutated: () => refreshWalletStatus({ keepWalletSummaryDuringFetch: true }),
   });
 
   memberHubGamesRoot = el("div", { class: "member-hub-games member-hub-games--wheel-only" });
@@ -4784,7 +4810,7 @@ function render() {
             hiddenBookingsStatus.textContent = t("admin.status.updated", "已更新");
             hiddenBookingsStatus.classList.add("ok");
             if (nextStatus === "done") {
-              await refreshWalletStatus();
+              await refreshWalletStatus({ keepWalletSummaryDuringFetch: true });
             }
           } catch (e) {
             sel.value = prevStatus;
@@ -4826,7 +4852,7 @@ function render() {
           await fn({ ...payload, ...localeApiParam() });
           hiddenBookingsStatus.textContent = t("admin.status.cancelled", "已取消");
           hiddenBookingsStatus.classList.add("ok");
-          await refreshWalletStatus();
+          await refreshWalletStatus({ keepWalletSummaryDuringFetch: true });
         } catch (e) {
           hiddenBookingsStatus.textContent = e instanceof Error ? e.message : t("admin.status.cancelFail", "取消失敗");
           hiddenBookingsStatus.classList.add("error");
@@ -4968,7 +4994,7 @@ function render() {
                 adminStatus.textContent = t("admin.status.updated", "已更新");
                 adminStatus.classList.add("ok");
                 if (nextStatus === "done") {
-                  await refreshWalletStatus();
+                  await refreshWalletStatus({ keepWalletSummaryDuringFetch: true });
                 }
               } catch (e) {
                 sel.value = prevStatus;
@@ -5010,7 +5036,7 @@ function render() {
               await fn({ ...payload, ...localeApiParam() });
               adminStatus.textContent = t("admin.status.cancelled", "已取消");
               adminStatus.classList.add("ok");
-              await refreshWalletStatus();
+              await refreshWalletStatus({ keepWalletSummaryDuringFetch: true });
             } catch (e) {
               adminStatus.textContent = e instanceof Error ? e.message : t("admin.status.cancelFail", "取消失敗");
               adminStatus.classList.add("error");
