@@ -19,8 +19,7 @@ const CURTAIN_MOVE_MS = 1900;
 const CURTAIN_OPEN_WAIT_MS = CURTAIN_MOVE_MS + 180;
 const CURTAIN_CLOSE_WAIT_MS = CURTAIN_MOVE_MS + 320;
 
-const CELL_PX = 52;
-const VISIBLE_ROWS = 3;
+const CELL_PX = 82;
 const CENTER_ROW = 1;
 
 /** 街機捲軸符色：金、紅、綠 BAR、藍、焰橘等（呼應經典老虎機） */
@@ -56,6 +55,21 @@ function shufflePeriod(prizes: WheelPrizeLabel[], seed: number): WheelPrizeLabel
     [out[i], out[j]] = [out[j]!, out[i]!];
   }
   return out;
+}
+
+function buildIdlePeriod(prizes: WheelPrizeLabel[]): WheelPrizeLabel[] {
+  const used = new Set<string>();
+  const take = (match: (p: WheelPrizeLabel) => boolean): WheelPrizeLabel | null => {
+    const p = prizes.find((candidate) => !used.has(candidate.id) && match(candidate));
+    if (!p) return null;
+    used.add(p.id);
+    return p;
+  };
+  const chance = take((p) => /再抽|extra|spin|again/i.test(p.name) || p.id.toLowerCase().includes("chance"));
+  const plusFive = take((p) => /\+?\s*5\s*(點|pts|point)?/i.test(p.name));
+  const plusThree = take((p) => /\+?\s*3\s*(點|pts|point)?/i.test(p.name));
+  const head = [chance, plusFive, plusThree].filter((p): p is WheelPrizeLabel => p != null);
+  return [...head, ...prizes.filter((p) => !used.has(p.id))];
 }
 
 function buildReelStrip(
@@ -132,7 +146,7 @@ function fillStripEl(stripEl: HTMLElement, strip: WheelPrizeLabel[], prizes: Whe
     const ix = accentIndexForId(prizes, p.id) % ACCENT_COLORS.length;
     cell.style.setProperty("--slot-accent", ACCENT_COLORS[ix]!);
     const raw = p.name.trim();
-    const shown = raw.length > 10 ? `${raw.slice(0, 9)}…` : raw;
+    const shown = raw.length > 16 ? `${raw.slice(0, 15)}…` : raw;
     cell.title = p.name;
     const ico = document.createElement("span");
     ico.className = "slot-spectacle-cell-ico";
@@ -178,7 +192,7 @@ const SLOT_CROWN_SVG = `<svg class="slot-spectacle-crown-svg" xmlns="http://www.
 </svg>`;
 
 function buildIdleStrip(prizes: WheelPrizeLabel[]): { strip: WheelPrizeLabel[]; offsetY: number } {
-  const period = shufflePeriod(prizes, 7721);
+  const period = buildIdlePeriod(prizes);
   const strip: WheelPrizeLabel[] = [];
   for (let r = 0; r < 5; r++) strip.push(...period);
   const plen = period.length;
@@ -313,6 +327,7 @@ export function runSlotSpectacle(
 
     const actions = document.createElement("div");
     actions.className = "wheel-spectacle-actions";
+    actions.hidden = true;
     const primaryBtn = document.createElement("button");
     primaryBtn.type = "button";
     primaryBtn.className = "primary wheel-spectacle-primary";
@@ -517,6 +532,7 @@ export function runSlotSpectacle(
               : t("slot.spinFailGeneric", "開獎失敗，請稍後再試。");
           primaryBtn.textContent = t("slot.close", "關閉");
           primaryBtn.disabled = false;
+          actions.hidden = false;
           dismiss = () => {
             closeCurtainsThen(() => reject(e));
           };
@@ -614,6 +630,7 @@ export function runSlotSpectacle(
 
         phase = "done";
         primaryBtn.disabled = false;
+        actions.hidden = false;
         dismiss = () => {
           closeCurtainsThen(() => resolve(data));
         };

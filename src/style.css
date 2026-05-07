@@ -4618,6 +4618,651 @@ body.wheel-spectacle-lock {
   filter: saturate(0.8);
 }
 
+/* 拉霸：對齊參考稿的寬版精品機台 */
+/* 避免拉桿／箭頭提示／裝飾偽元素超出視窗；過高時可於舞台掛點捲動 */
+.slot-spectacle-overlay.wheel-spectacle-overlay {
+  overflow-x: hidden;
+  overflow-y: hidden;
+  overscroll-behavior: contain;
+}
+
+.slot-spectacle-overlay .wheel-spectacle-stage-mount {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding-top: max(8px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  pointer-events: auto;
+}
+
+.slot-spectacle-overlay .wheel-spectacle-deep {
+  background:
+    radial-gradient(ellipse 76% 64% at 50% 24%, rgb(99 28 73 / 0.42) 0%, transparent 58%),
+    radial-gradient(ellipse 74% 62% at 50% 78%, rgb(8 50 99 / 0.5) 0%, transparent 62%),
+    linear-gradient(135deg, #080b22 0%, #1b082d 42%, #03214f 100%);
+}
+
+.slot-spectacle-confetti {
+  opacity: 0.78;
+  background-image:
+    radial-gradient(10px 5px at 9% 18%, rgb(255 211 111 / 0.72), transparent 62%),
+    radial-gradient(7px 12px at 16% 29%, rgb(255 175 67 / 0.78), transparent 64%),
+    radial-gradient(8px 5px at 80% 23%, rgb(255 201 88 / 0.78), transparent 64%),
+    radial-gradient(6px 7px at 86% 77%, rgb(255 224 137 / 0.68), transparent 64%),
+    radial-gradient(5px 5px at 30% 34%, rgb(255 210 105 / 0.68), transparent 62%),
+    radial-gradient(10px 5px at 62% 84%, rgb(255 188 81 / 0.62), transparent 64%),
+    radial-gradient(3px 3px at 70% 36%, rgb(255 246 198 / 0.62), transparent 68%),
+    radial-gradient(4px 4px at 22% 78%, rgb(255 230 154 / 0.6), transparent 68%),
+    radial-gradient(5px 5px at 94% 15%, rgb(255 198 91 / 0.56), transparent 68%);
+  background-size: auto;
+}
+
+.slot-spectacle-stage.wheel-spectacle-stage {
+  box-sizing: border-box;
+  width: min(980px, calc(100vw - 32px));
+  max-width: calc(100vw - 16px);
+  padding: 28px 42px 26px;
+  border-radius: 26px;
+  border: 3px solid rgb(206 130 31 / 0.74);
+  background:
+    radial-gradient(ellipse 72% 54% at 50% 42%, rgb(9 45 92 / 0.55) 0%, transparent 67%),
+    linear-gradient(145deg, rgb(13 16 49 / 0.92) 0%, rgb(11 18 50 / 0.94) 48%, rgb(7 23 58 / 0.92) 100%);
+  box-shadow:
+    0 0 0 1px rgb(255 205 95 / 0.26),
+    0 28px 90px rgb(0 0 0 / 0.42),
+    0 0 70px rgb(255 147 31 / 0.19),
+    inset 0 1px 0 rgb(255 255 255 / 0.1),
+    inset 0 -34px 80px rgb(0 0 0 / 0.24);
+}
+
+.slot-spectacle-stage-head {
+  margin-bottom: 18px;
+}
+
+.slot-spectacle-close-round {
+  top: 0;
+  right: 4px;
+  width: 58px;
+  height: 58px;
+  border: 3px solid rgb(146 155 190 / 0.46);
+  background: rgb(16 21 54 / 0.48);
+  color: rgb(230 235 255 / 0.78);
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.08),
+    inset 0 0 22px rgb(255 255 255 / 0.06);
+}
+
+.slot-spectacle-close-x {
+  font-size: 2.2rem;
+  font-weight: 300;
+}
+
+.slot-spectacle-marquee {
+  position: relative;
+  width: min(560px, 72%);
+  min-height: 116px;
+  margin: -4px auto 0;
+  padding: 30px 42px 22px;
+  border: 5px solid #ffc747;
+  border-radius: 34px 34px 24px 24px / 52px 52px 24px 24px;
+  background:
+    radial-gradient(ellipse 82% 68% at 50% 28%, rgb(143 62 21 / 0.92), transparent 64%),
+    linear-gradient(180deg, #73330b 0%, #5d2309 42%, #351004 100%);
+  box-shadow:
+    0 0 0 2px #b97010,
+    0 0 28px rgb(255 164 26 / 0.82),
+    0 8px 20px rgb(93 35 5 / 0.64),
+    inset 0 0 22px rgb(0 0 0 / 0.52),
+    inset 0 8px 0 rgb(255 255 255 / 0.1);
+}
+
+.slot-spectacle-marquee::before {
+  content: "";
+  position: absolute;
+  inset: 8px 10px;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(circle, #fff7b8 0 3px, #ffbd31 4px, transparent 6px) top / 42px 12px repeat-x,
+    radial-gradient(circle, #fff7b8 0 3px, #ffbd31 4px, transparent 6px) bottom / 42px 12px repeat-x,
+    radial-gradient(circle, #fff7b8 0 3px, #ffbd31 4px, transparent 6px) left / 12px 38px repeat-y,
+    radial-gradient(circle, #fff7b8 0 3px, #ffbd31 4px, transparent 6px) right / 12px 38px repeat-y;
+  filter: drop-shadow(0 0 5px rgb(255 177 33 / 0.95));
+}
+
+.slot-spectacle-crown-wrap {
+  position: absolute;
+  left: 50%;
+  top: -56px;
+  transform: translateX(-50%);
+  width: 178px;
+  margin: 0;
+}
+
+.slot-spectacle-crown-svg {
+  width: 100%;
+  filter:
+    drop-shadow(0 0 8px rgb(255 181 34 / 0.95))
+    drop-shadow(0 5px 7px rgb(0 0 0 / 0.45));
+}
+
+.slot-spectacle-stage-head .wheel-spectacle-title {
+  font-size: 4.35rem;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: #fff4ce;
+  -webkit-text-stroke: 3px rgb(128 61 9 / 0.92);
+  text-shadow:
+    0 5px 0 #8a3a08,
+    0 9px 8px rgb(0 0 0 / 0.42),
+    0 0 18px rgb(255 206 80 / 0.74);
+}
+
+@supports (-webkit-background-clip: text) or (background-clip: text) {
+  .slot-spectacle-stage-head .wheel-spectacle-title {
+    background: none;
+    -webkit-background-clip: initial;
+    background-clip: initial;
+    color: #fff4ce;
+    -webkit-text-fill-color: #fff4ce;
+  }
+}
+
+.slot-spectacle-tagline {
+  margin-top: 28px;
+  font-size: 1.28rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: #ffc952;
+  text-shadow:
+    0 2px 0 rgb(79 34 6 / 0.72),
+    0 0 12px rgb(255 187 61 / 0.44);
+}
+
+.slot-spectacle-hub.wheel-spectacle-hub {
+  width: min(760px, 100%);
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0 auto 20px;
+  padding: 18px 26px;
+  min-height: 64px;
+  border: 2px solid rgb(69 70 129 / 0.8);
+  border-radius: 0;
+  background:
+    linear-gradient(90deg, transparent 0 10px, rgb(17 43 91 / 0.86) 10px calc(100% - 10px), transparent calc(100% - 10px)),
+    linear-gradient(180deg, rgb(18 35 80 / 0.92), rgb(6 21 53 / 0.92));
+  box-shadow:
+    0 0 0 1px rgb(125 108 188 / 0.24),
+    inset 0 0 18px rgb(45 96 185 / 0.28);
+  font-size: 1.55rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+}
+
+.slot-spectacle-hub.wheel-spectacle-hub::before,
+.slot-spectacle-hub.wheel-spectacle-hub::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  width: 22px;
+  border: 2px solid rgb(82 79 139 / 0.58);
+}
+
+.slot-spectacle-hub.wheel-spectacle-hub::before {
+  left: 8px;
+  border-right: 0;
+}
+
+.slot-spectacle-hub.wheel-spectacle-hub::after {
+  right: 8px;
+  border-left: 0;
+}
+
+.slot-spectacle-hub-star {
+  font-size: 1.22em;
+  color: #ffcf52;
+}
+
+.slot-spectacle-machine {
+  width: min(810px, 100%);
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.slot-spectacle-machine.is-win {
+  box-shadow: none;
+}
+
+.slot-spectacle-machine-row {
+  position: relative;
+  align-items: center;
+  gap: 0;
+  /* 左右總留白與原先單側 124px 相當，讓主機台區塊略往右移，與右側拉桿視覺平衡 */
+  padding: 0 92px 0 32px;
+}
+
+.slot-spectacle-machine-main {
+  z-index: 2;
+  border-radius: 35px;
+  padding: 24px 22px;
+  background:
+    linear-gradient(180deg, #ffc346 0%, #d99016 36%, #8e510d 100%);
+  box-shadow:
+    0 10px 0 #5d3108,
+    0 16px 24px rgb(0 0 0 / 0.38),
+    0 0 0 5px rgb(96 45 8 / 0.9),
+    inset 0 0 0 5px rgb(255 223 101 / 0.96),
+    inset 0 -18px 24px rgb(94 43 7 / 0.34);
+}
+
+.slot-spectacle-machine-main::before,
+.slot-spectacle-machine-main::after {
+  content: "";
+  position: absolute;
+  top: 54px;
+  bottom: 54px;
+  width: 54px;
+  z-index: -1;
+  background: linear-gradient(90deg, #8a4b0a, #ffd45a 50%, #98530b);
+  box-shadow: inset 0 0 13px rgb(0 0 0 / 0.35);
+}
+
+.slot-spectacle-machine-main::before {
+  left: -36px;
+  border-radius: 18px 0 0 18px;
+}
+
+.slot-spectacle-machine-main::after {
+  right: -36px;
+  border-radius: 0 18px 18px 0;
+}
+
+.slot-spectacle-machine-main-inner {
+  gap: 0;
+}
+
+.slot-spectacle-side-decor {
+  position: absolute;
+  left: -16px;
+  top: 50%;
+  z-index: 4;
+  width: 66px;
+  height: 82px;
+  transform: translateY(-50%);
+}
+
+.slot-spectacle-hinge {
+  display: none;
+}
+
+.slot-spectacle-play-tri {
+  width: 58px;
+  height: 66px;
+  display: grid;
+  place-items: center;
+  color: transparent;
+  font-size: 0;
+  background: linear-gradient(145deg, #ffe981 0%, #ffb11c 58%, #d27309 100%);
+  clip-path: polygon(7% 5%, 92% 50%, 7% 95%);
+  filter:
+    drop-shadow(0 0 7px rgb(255 195 45 / 0.92))
+    drop-shadow(0 4px 4px rgb(86 37 5 / 0.6));
+}
+
+.slot-spectacle-reel-frame {
+  padding: 10px;
+  border-radius: 22px;
+  background: #090805;
+  box-shadow:
+    inset 0 0 0 3px rgb(0 0 0 / 0.9),
+    0 0 0 1px rgb(255 238 170 / 0.35);
+}
+
+.slot-spectacle-payline {
+  display: none;
+}
+
+.slot-spectacle-reel-window {
+  height: calc(82px * 3);
+  border-radius: 18px;
+  background: #061628;
+  box-shadow:
+    inset 0 8px 22px rgb(0 0 0 / 0.62),
+    inset 0 -8px 18px rgb(0 0 0 / 0.48);
+}
+
+.slot-spectacle-reel-window::before {
+  background:
+    linear-gradient(180deg, rgb(36 118 55 / 0.5) 0%, rgb(28 93 47 / 0.48) 33.33%, transparent 33.33% 66.66%, rgb(82 20 117 / 0.62) 66.66% 100%),
+    linear-gradient(180deg, transparent 0 33.33%, rgb(255 228 119 / 0.9) 33.33% 66.66%, transparent 66.66% 100%),
+    radial-gradient(ellipse 72% 55% at 50% 50%, rgb(255 243 178 / 0.32), transparent 70%);
+}
+
+.slot-spectacle-cell {
+  height: 82px;
+  justify-content: center;
+  gap: 22px;
+  padding: 12px 34px;
+  border-bottom: 1px solid rgb(0 0 0 / 0.34);
+  font-size: 1.52rem;
+  letter-spacing: 0.03em;
+  color: #fffdf4;
+  background: transparent;
+  text-align: center;
+  text-shadow:
+    0 3px 0 rgb(63 35 5 / 0.42),
+    0 3px 5px rgb(0 0 0 / 0.58);
+}
+
+.slot-spectacle-cell-ico {
+  font-size: 2.05rem;
+  filter:
+    drop-shadow(0 3px 2px rgb(0 0 0 / 0.46))
+    drop-shadow(0 0 5px rgb(255 216 92 / 0.42));
+}
+
+.slot-spectacle-cell-txt {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.slot-spectacle-lever {
+  position: absolute;
+  right: 4px;
+  top: 10px;
+  bottom: 2px;
+  width: 126px;
+  z-index: 1;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+}
+
+.slot-spectacle-lever::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 118px;
+  width: 52px;
+  height: 100px;
+  border-radius: 18px;
+  background: linear-gradient(90deg, #7c3f08, #f7b934 45%, #804108);
+  box-shadow:
+    inset 0 0 14px rgb(0 0 0 / 0.46),
+    0 4px 12px rgb(0 0 0 / 0.34);
+}
+
+.slot-spectacle-lever-swing {
+  transform-origin: 30px 172px;
+  transform: rotate(17deg) translate3d(8px, 4px, 0);
+}
+
+.slot-spectacle-lever.is-pulled .slot-spectacle-lever-swing {
+  transform: rotate(48deg) translate3d(-9px, 20px, 0);
+}
+
+.slot-spectacle-lever-knob {
+  width: 96px;
+  height: 96px;
+  background:
+    radial-gradient(circle at 31% 25%, #ffd0c9 0 8px, transparent 9px),
+    radial-gradient(circle at 42% 36%, #ff7772 0%, #f3322d 46%, #ba1010 72%, #6f0807 100%);
+  box-shadow:
+    inset -10px -12px 18px rgb(95 0 0 / 0.36),
+    inset 10px 10px 18px rgb(255 255 255 / 0.38),
+    0 8px 16px rgb(0 0 0 / 0.42),
+    0 0 16px rgb(255 63 42 / 0.58);
+}
+
+.slot-spectacle-lever-arm {
+  width: 26px;
+  height: 166px;
+  margin-top: -9px;
+  border-radius: 16px;
+  background: linear-gradient(90deg, #7b3e06 0%, #ffdf6b 32%, #c98510 65%, #6b3506 100%);
+  box-shadow:
+    inset 2px 0 0 rgb(255 255 255 / 0.36),
+    inset -4px 0 8px rgb(0 0 0 / 0.32),
+    0 5px 10px rgb(0 0 0 / 0.4);
+}
+
+.slot-spectacle-pull-hint {
+  right: -24px;
+  top: 122px;
+  transform: scale(2.1) rotate(-7deg);
+  transform-origin: 0 50%;
+  opacity: 0.9;
+  filter: drop-shadow(0 0 4px rgb(255 199 80 / 0.62));
+}
+
+.slot-spectacle-pull-hint-svg path:first-child {
+  stroke: #ffc65b;
+}
+
+.slot-spectacle-pull-hint-svg path:last-child {
+  fill: #ffc65b;
+}
+
+.slot-spectacle-idle-cta {
+  margin-top: 42px;
+  gap: 18px;
+}
+
+.slot-spectacle-pull-btn {
+  min-width: 320px;
+  max-width: 370px;
+  padding: 20px 38px;
+  border-radius: 18px;
+  border: 3px solid #ffd266;
+  font-size: 1.86rem;
+  letter-spacing: 0.08em;
+  background: linear-gradient(180deg, #ff9b19 0%, #f27515 48%, #df4a0a 100%);
+  box-shadow:
+    inset 0 3px 0 rgb(255 255 255 / 0.32),
+    0 7px 0 #9b3504,
+    0 0 26px rgb(255 154 24 / 0.62);
+}
+
+.slot-spectacle-foot-encourage {
+  font-size: 1.14rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: #ffd16b;
+}
+
+.slot-spectacle-stage.is-slot-idle .wheel-spectacle-actions {
+  display: none;
+}
+
+.slot-spectacle-stage .wheel-spectacle-result:not(.is-error) {
+  width: min(520px, 80%);
+  margin: 24px auto 0;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #153b79 0%, #0b2456 100%);
+  font-size: 1.5rem;
+}
+
+.slot-spectacle-stage .wheel-spectacle-sub {
+  font-size: 1rem;
+}
+
+.slot-spectacle-stage .wheel-spectacle-primary {
+  min-width: 260px;
+  padding: 16px 34px;
+  font-size: 1.35rem;
+  border-radius: 16px;
+}
+
+@media (max-width: 720px) {
+  .slot-spectacle-stage.wheel-spectacle-stage {
+    width: min(420px, calc(100vw - 20px));
+    padding: 20px 18px 22px;
+    border-radius: 22px;
+  }
+
+  .slot-spectacle-close-round {
+    right: -4px;
+    width: 42px;
+    height: 42px;
+  }
+
+  .slot-spectacle-close-x {
+    font-size: 1.55rem;
+  }
+
+  .slot-spectacle-marquee {
+    width: 72%;
+    min-height: 74px;
+    padding: 22px 18px 12px;
+    border-width: 4px;
+  }
+
+  .slot-spectacle-crown-wrap {
+    top: -34px;
+    width: 112px;
+  }
+
+  .slot-spectacle-stage-head .wheel-spectacle-title {
+    font-size: 2.05rem;
+    -webkit-text-stroke-width: 2px;
+  }
+
+  .slot-spectacle-tagline {
+    margin-top: 16px;
+    font-size: 0.94rem;
+  }
+
+  .slot-spectacle-hub.wheel-spectacle-hub {
+    width: 92%;
+    min-height: 52px;
+    padding: 12px 18px;
+    font-size: 1rem;
+    letter-spacing: 0.08em;
+  }
+
+  .slot-spectacle-machine {
+    width: 94%;
+  }
+
+  .slot-spectacle-machine-row {
+    padding: 0 44px 0 14px;
+  }
+
+  .slot-spectacle-machine-main {
+    border-radius: 24px;
+    padding: 14px 12px;
+    box-shadow:
+      0 7px 0 #5d3108,
+      0 10px 16px rgb(0 0 0 / 0.38),
+      0 0 0 4px rgb(96 45 8 / 0.9),
+      inset 0 0 0 4px rgb(255 223 101 / 0.96);
+  }
+
+  .slot-spectacle-machine-main::before,
+  .slot-spectacle-machine-main::after {
+    top: 38px;
+    bottom: 38px;
+    width: 30px;
+  }
+
+  .slot-spectacle-machine-main::before {
+    left: -20px;
+  }
+
+  .slot-spectacle-machine-main::after {
+    right: -20px;
+  }
+
+  .slot-spectacle-side-decor {
+    left: -12px;
+    width: 40px;
+    height: 52px;
+  }
+
+  .slot-spectacle-play-tri {
+    width: 36px;
+    height: 42px;
+  }
+
+  .slot-spectacle-reel-frame {
+    padding: 7px;
+    border-radius: 18px;
+  }
+
+  .slot-spectacle-reel-window {
+    height: calc(82px * 3);
+    border-radius: 14px;
+  }
+
+  .slot-spectacle-cell {
+    gap: 10px;
+    padding: 10px 18px;
+    font-size: 1rem;
+  }
+
+  .slot-spectacle-cell-ico {
+    font-size: 1.45rem;
+  }
+
+  .slot-spectacle-lever {
+    width: 70px;
+    top: 6px;
+  }
+
+  .slot-spectacle-lever::before {
+    left: 8px;
+    top: 90px;
+    width: 28px;
+    height: 64px;
+  }
+
+  .slot-spectacle-lever-swing {
+    transform-origin: 20px 118px;
+    transform: rotate(17deg) translate3d(6px, 4px, 0);
+  }
+
+  .slot-spectacle-lever-knob {
+    width: 52px;
+    height: 52px;
+  }
+
+  .slot-spectacle-lever-arm {
+    width: 14px;
+    height: 104px;
+  }
+
+  .slot-spectacle-pull-hint {
+    right: -30px;
+    top: 92px;
+    transform: scale(1.55) rotate(-7deg);
+  }
+
+  .slot-spectacle-idle-cta {
+    margin-top: 26px;
+  }
+
+  .slot-spectacle-pull-btn {
+    max-width: 270px;
+    padding: 15px 24px;
+    font-size: 1.25rem;
+  }
+
+  .slot-spectacle-foot-encourage {
+    font-size: 0.88rem;
+  }
+}
+
 .wheel-spectacle-pointer {
   width: 36px;
   height: 30px;
@@ -4831,6 +5476,22 @@ body.wheel-spectacle-lock {
   font-weight: 900;
   letter-spacing: 0.06em;
   box-shadow: 0 4px 0 rgb(120 30 70 / 0.45), 0 8px 20px rgb(200 40 100 / 0.25);
+}
+
+.slot-spectacle-stage .wheel-spectacle-primary {
+  min-width: 260px;
+  padding: 16px 34px;
+  border-radius: 16px;
+  border: 2px solid rgb(255 220 140 / 0.65);
+  font-size: 1.35rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  color: #fffaf0;
+  background: linear-gradient(180deg, #ff9b19 0%, #f27515 48%, #df4a0a 100%);
+  box-shadow:
+    inset 0 3px 0 rgb(255 255 255 / 0.32),
+    0 6px 0 #9b3504,
+    0 0 22px rgb(255 154 24 / 0.5);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -5378,4 +6039,3 @@ html.kuso-retro:has(.shell.admin-mode) .modal-card h3 {
   background: none;
   animation: none;
 }
-
