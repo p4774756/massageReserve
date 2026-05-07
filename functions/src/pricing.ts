@@ -4,7 +4,7 @@ import type { DocumentData } from "firebase-admin/firestore";
 
 export const DEFAULT_SESSION_PRICE_NTD = 50;
 export const DEFAULT_POINTS_PER_MASSAGE = 10;
-/** 小瑪莉「遊戲點」：每 1 次按摩次數可兌換／兌回之點數（與輪盤 wheelPoints 門檻分開） */
+/** 老虎機「遊戲點」：每 1 次按摩次數可兌換／兌回之點數（與輪盤 wheelPoints 門檻分開） */
 export const DEFAULT_ARCADE_POINTS_PER_MASSAGE = 100;
 
 export function resolveSessionPriceNtd(raw: DocumentData | undefined): number {

@@ -55,6 +55,23 @@ const SYM_MULT: Record<string, number> = {
   bar: 50,
 };
 
+/** 與前端 `src/littleMaryWeightedStop.ts` 同式：權重 ∝ 1/倍率，非 1/24 均等；高倍格較罕見。 */
+const LM_STOP_CELL_WEIGHTS = LOOP_24.map((sym) => {
+  const m = SYM_MULT[sym] ?? 1;
+  return Math.max(1, Math.round(1000 / m));
+});
+const LM_STOP_WEIGHT_SUM = LM_STOP_CELL_WEIGHTS.reduce((a, b) => a + b, 0);
+
+function randomLmStopIndexWeighted(): number {
+  const r = randomInt(0, LM_STOP_WEIGHT_SUM);
+  let x = r;
+  for (let i = 0; i < LM_STOP_CELL_WEIGHTS.length; i++) {
+    x -= LM_STOP_CELL_WEIGHTS[i]!;
+    if (x < 0) return i;
+  }
+  return LM_STOP_CELL_WEIGHTS.length - 1;
+}
+
 const LINE_ORDER = ["cherry", "lemon", "orange", "watermelon", "bell", "star", "seven", "bar"] as const;
 
 function parseLittleMaryBets(raw: unknown): number[] | null {
@@ -93,6 +110,7 @@ async function assertMemberEmailVerified(uid: string, locale: ServerLocale): Pro
 
 /**
  * 小瑪莉試玩：伺服器以 CSPRNG 決定外圈停格 index（0～23），與前端 LOOP_24 對齊。
+ * 停格為加權隨機（權重與該格倍率成反比），非每格 1/24。
  * 不驗證客戶端分數（試玩經濟仍在瀏覽器）；僅驗證押注陣列格式以防濫用 payload。
  */
 export const littleMarySpin = onCall(publicCall, async (request) => {
@@ -108,7 +126,7 @@ export const littleMarySpin = onCall(publicCall, async (request) => {
       ),
     );
   }
-  const stopIndex = randomInt(0, 24);
+  const stopIndex = randomLmStopIndexWeighted();
   const roundId = randomUUID();
   return { stopIndex, roundId };
 });
@@ -153,7 +171,7 @@ export const littleMarySpinAccount = onCall(publicCall, async (request) => {
   const walletTxRef = db.collection("walletTransactions").doc();
   const wager = bets.reduce((a, b) => a + b, 0);
   const roundId = randomUUID();
-  const stopIndex = randomInt(0, 24);
+  const stopIndex = randomLmStopIndexWeighted();
   const hitGain = hitGainForStop(bets, stopIndex);
 
   const out = await db.runTransaction(async (tx) => {
@@ -442,4 +460,141 @@ export const redeemArcadePointsForSession = onCall(publicCall, async (request) =
   });
 
   return { ok: true as const, ...out };
+});
+
+const LM_ADMIN_SPIN_SAMPLE = 800;
+const LM_ADMIN_HILO_SAMPLE = 500;
+const LM_ADMIN_RECENT_SPINS = 30;
+const LM_ADMIN_RECENT_HILO = 25;
+
+function parseLmSpinNote(note: unknown): { wager: number; stopIndex: number; hitGain: number } | null {
+  if (typeof note !== "string") return null;
+  const m = note.match(/wager=(\d+)\s+stop=(\d+)\s+gain=(\d+)/);
+  if (!m) return null;
+  return { wager: +m[1]!, stopIndex: +m[2]!, hitGain: +m[3]! };
+}
+
+function parseLmHiloNote(note: unknown): { stake: number; roll: number; hit: boolean } | null {
+  if (typeof note !== "string") return null;
+  const m = note.match(/stake=(\d+)\s+roll=(\d+)\s+high=(true|false)\s+hit=(true|false)/);
+  if (!m) return null;
+  return { stake: +m[1]!, roll: +m[2]!, hit: m[4] === "true" };
+}
+
+/**
+ * 管理後台：小瑪莉相關 `walletTransactions` 聚合與最近紀錄（需 admins 權限）。
+ */
+export const getLittleMaryAdminStats = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
+  }
+  const db = getFirestore();
+  const adminSnap = await db.collection("admins").doc(uid).get();
+  if (!adminSnap.exists) {
+    throw new HttpsError("permission-denied", st(locale, "admin.only", "僅限管理員操作"));
+  }
+
+  const col = db.collection("walletTransactions");
+
+  const [cSpin, cHilo, cSess2Pts, cPts2Sess] = await Promise.all([
+    col.where("type", "==", "arcade_lm_spin").count().get(),
+    col.where("type", "==", "arcade_lm_hilo").count().get(),
+    col.where("type", "==", "arcade_session_to_points").count().get(),
+    col.where("type", "==", "arcade_points_to_session").count().get(),
+  ]);
+
+  const countSpin = cSpin.data().count;
+  const countHilo = cHilo.data().count;
+  const countSessionToPoints = cSess2Pts.data().count;
+  const countPointsToSession = cPts2Sess.data().count;
+
+  const spinSampleSnap = await col
+    .where("type", "==", "arcade_lm_spin")
+    .orderBy("createdAt", "desc")
+    .limit(LM_ADMIN_SPIN_SAMPLE)
+    .get();
+
+  let sampleWagerSum = 0;
+  let sampleGainSum = 0;
+  let sampleSpinParsed = 0;
+  for (const doc of spinSampleSnap.docs) {
+    const p = parseLmSpinNote(doc.data().note);
+    if (p) {
+      sampleWagerSum += p.wager;
+      sampleGainSum += p.hitGain;
+      sampleSpinParsed += 1;
+    }
+  }
+
+  const recentSpins = spinSampleSnap.docs.slice(0, LM_ADMIN_RECENT_SPINS).map((doc) => {
+    const d = doc.data();
+    const p = parseLmSpinNote(d.note);
+    const ts = d.createdAt as { toMillis?: () => number } | undefined;
+    const createdAtMs = typeof ts?.toMillis === "function" ? ts.toMillis() : null;
+    return {
+      id: doc.id,
+      customerId: typeof d.customerId === "string" ? d.customerId : "",
+      createdAtMs,
+      wager: p?.wager ?? 0,
+      stopIndex: p?.stopIndex ?? 0,
+      hitGain: p?.hitGain ?? 0,
+    };
+  });
+
+  const hiloSampleSnap = await col
+    .where("type", "==", "arcade_lm_hilo")
+    .orderBy("createdAt", "desc")
+    .limit(LM_ADMIN_HILO_SAMPLE)
+    .get();
+
+  let hiloHitInSample = 0;
+  let hiloParsedInSample = 0;
+  for (const doc of hiloSampleSnap.docs) {
+    const p = parseLmHiloNote(doc.data().note);
+    if (p) {
+      hiloParsedInSample += 1;
+      if (p.hit) hiloHitInSample += 1;
+    }
+  }
+
+  const recentHilo = hiloSampleSnap.docs.slice(0, LM_ADMIN_RECENT_HILO).map((doc) => {
+    const d = doc.data();
+    const p = parseLmHiloNote(d.note);
+    const ts = d.createdAt as { toMillis?: () => number } | undefined;
+    const createdAtMs = typeof ts?.toMillis === "function" ? ts.toMillis() : null;
+    return {
+      id: doc.id,
+      customerId: typeof d.customerId === "string" ? d.customerId : "",
+      createdAtMs,
+      stake: p?.stake ?? 0,
+      roll: p?.roll ?? 0,
+      hit: p?.hit ?? false,
+    };
+  });
+
+  return {
+    counts: {
+      spin: countSpin,
+      hilo: countHilo,
+      sessionToPoints: countSessionToPoints,
+      pointsToSession: countPointsToSession,
+    },
+    spinSample: {
+      limit: LM_ADMIN_SPIN_SAMPLE,
+      rowsFetched: spinSampleSnap.size,
+      parsed: sampleSpinParsed,
+      wagerSum: sampleWagerSum,
+      gainSum: sampleGainSum,
+    },
+    hiloSample: {
+      limit: LM_ADMIN_HILO_SAMPLE,
+      rowsFetched: hiloSampleSnap.size,
+      parsed: hiloParsedInSample,
+      hits: hiloHitInSample,
+    },
+    recentSpins,
+    recentHilo,
+  };
 });

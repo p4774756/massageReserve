@@ -43,10 +43,11 @@ import {
   topupWalletCall,
   adjustSessionCreditsAdminCall,
   grantDrawChancesAdminCall,
+  getLittleMaryAdminStatsCall,
 } from "./firebase";
 import { createVisitorStatsLine } from "./visitorStats";
 import { allStartSlots } from "./slots";
-import { runWheelSpectacle } from "./wheelSpectacle";
+import { runSlotSpectacle } from "./slotSpectacle";
 import {
   clampLedSpeed,
   createLedMarquee,
@@ -163,7 +164,7 @@ function paintMemberWalletSummary(
         perA: opts.perA,
       }),
     ]),
-    el("li", {}, [t("member.walletItemDraw", "可抽輪盤：{{n}} 次", { n: opts.chances })]),
+    el("li", {}, [t("member.walletItemDraw", "可拉霸開獎：{{n}} 次", { n: opts.chances })]),
   );
   host.append(head, list);
   if (opts.legacy.trim()) {
@@ -812,7 +813,7 @@ function render() {
   const walletStatus = el("div", { class: "status-line" });
   const wheelStatus = el("div", { class: "status-line" });
   const wheelResult = el("div", { class: "pill", hidden: true });
-  const spinBtn = el("button", { class: "ghost", type: "button" }, [t("booking.spinWheel", "抽輪盤")]);
+  const spinBtn = el("button", { class: "ghost", type: "button" }, [t("booking.spinWheel", "拉霸開獎")]);
   /** 僅登入後顯示：餘額／抽輪盤（訪客預約不需此區） */
   const memberExtrasWrap = el("div", { class: "book-member-extras", hidden: true });
   const finalizeSection = el("div", { class: "book-step book-step--finalize" }, [
@@ -1699,7 +1700,7 @@ function render() {
         );
         setMemberWalletLinePlain("", "status-line");
         spinBtn.setAttribute("disabled", "true");
-        wheelStatus.textContent = t("member.wheelNeedVerifyFirst", "完成信箱驗證後才可抽輪盤。");
+        wheelStatus.textContent = t("member.wheelNeedVerifyFirst", "完成信箱驗證後才可拉霸開獎。");
         wheelStatus.className = "status-line";
         wheelResult.hidden = true;
         syncRedeemPointsUi();
@@ -1765,7 +1766,7 @@ function render() {
           legacy: legacyLine,
         });
         wheelStatus.textContent =
-          drawChances > 0 ? t("member.wheelLuck", "可抽輪盤，祝你好運！") : t("member.wheelNone", "目前無可抽次數。");
+          drawChances > 0 ? t("member.wheelLuck", "可拉霸開獎，祝你好運！") : t("member.wheelNone", "目前無可抽次數。");
         wheelStatus.className = "status-line";
         if (drawChances > 0) spinBtn.removeAttribute("disabled");
         else spinBtn.setAttribute("disabled", "true");
@@ -1801,11 +1802,10 @@ function render() {
 
   /** 預覽輪盤用：固定示範獎項（不連後端），格內可立即看到文字與比例 */
   const wheelPreviewMockPrizes: { id: string; name: string; weight: number }[] = [
-    { id: "pv-p5", name: t("wheel.previewPrizePts5", "【預覽】+5 點"), weight: 22 },
-    { id: "pv-p3", name: t("wheel.previewPrizePts3", "【預覽】+3 點"), weight: 26 },
-    { id: "pv-ch", name: t("wheel.previewPrizeExtra", "再抽一次"), weight: 16 },
-    { id: "pv-th", name: t("wheel.previewPrizeThanks", "銘謝惠顧"), weight: 24 },
-    { id: "pv-pn", name: t("wheel.previewPrizeFun", "小處罰文案"), weight: 12 },
+    { id: "pv-p5", name: t("wheel.previewPrizePts5", "【預覽】+5 點"), weight: 26 },
+    { id: "pv-p3", name: t("wheel.previewPrizePts3", "【預覽】+3 點"), weight: 30 },
+    { id: "pv-ch", name: t("wheel.previewPrizeExtra", "再抽一次"), weight: 18 },
+    { id: "pv-th", name: t("wheel.previewPrizeThanks", "銘謝惠顧"), weight: 26 },
   ];
 
   spinBtn.addEventListener("click", async () => {
@@ -1828,7 +1828,7 @@ function render() {
     }
     spinBtn.setAttribute("disabled", "true");
     try {
-      const data = await runWheelSpectacle(
+      const data = await runSlotSpectacle(
         async () => {
           const fn = spinWheelCall();
           const res = await fn({ ...localeApiParam() });
@@ -1848,8 +1848,13 @@ function render() {
       wheelStatus.classList.add("ok");
       await refreshWalletStatus({ keepWalletSummaryDuringFetch: true });
     } catch (e) {
-      wheelStatus.textContent = errorMessage(e);
-      wheelStatus.classList.add("error");
+      if (e instanceof DOMException && e.name === "AbortError") {
+        wheelStatus.textContent = "";
+        wheelStatus.className = "status-line";
+      } else {
+        wheelStatus.textContent = errorMessage(e);
+        wheelStatus.classList.add("error");
+      }
       if (drawChances > 0) spinBtn.removeAttribute("disabled");
     }
   });
@@ -2229,20 +2234,20 @@ function render() {
   });
 
   const wheelTestBtn = el("button", { class: "ghost", type: "button" }, [
-    t("wheel.previewBtn", "預覽輪盤特效"),
+    t("wheel.previewBtn", "預覽拉霸特效"),
   ]);
   wheelTestBtn.hidden = true;
   wheelTestBtn.title = t("wheel.previewTitle", "僅畫面預覽，不呼叫抽獎、不扣次數");
   const wheelRulesHint = el("p", { class: "hint wheel-rules-hint" }, [
     t(
       "wheel.rules",
-      "輪盤規則：預約有綁定會員，且後台將該筆標為「已完成」後，可獲得 1 次抽獎機會（同一筆僅發一次）。每次按下「抽輪盤」消耗 1 次；獎項由後台依權重隨機抽出，可能為點數、加抽次數、銘謝惠顧或趣味文案等。點數可累積，滿門檻可手動兌換 1 次預約次數。須完成 Email 驗證才可抽獎。",
+      "拉霸規則：預約有綁定會員，且後台將該筆標為「已完成」後，可獲得 1 次開獎機會（同一筆僅發一次）。進入拉霸畫面後須由右上往左下拉桿才會消耗 1 次並向伺服器開獎；獎項由後台依權重隨機抽出（點數、加抽次數、銘謝惠顧等）。點數可累積，滿門檻可手動兌換 1 次預約次數。須完成 Email 驗證才可開獎。",
     ),
   ]);
   const wheelRulesDetails = el("details", { class: "member-hub-wheel-card__details" });
   wheelRulesDetails.append(
     el("summary", { class: "member-hub-wheel-card__summary" }, [
-      t("member.wheel.rulesSummary", "輪盤規則說明"),
+      t("member.wheel.rulesSummary", "拉霸規則說明"),
     ]),
     wheelRulesHint,
   );
@@ -2257,7 +2262,7 @@ function render() {
   wheelTestBtn.addEventListener("click", async () => {
     wheelTestBtn.setAttribute("disabled", "true");
     try {
-      await runWheelSpectacle(
+      await runSlotSpectacle(
         async () => {
           await new Promise((r) => setTimeout(r, 1200));
           return {
@@ -2283,6 +2288,11 @@ function render() {
         "以上為特效預覽，未實際抽獎、未扣除次數。",
       );
       wheelStatus.className = "status-line";
+    } catch (e) {
+      if (!(e instanceof DOMException && e.name === "AbortError")) {
+        wheelStatus.textContent = errorMessage(e);
+        wheelStatus.className = "status-line error";
+      }
     } finally {
       wheelTestBtn.removeAttribute("disabled");
     }
@@ -2370,9 +2380,9 @@ function render() {
   ]);
   const memberHubWheelCard = el("section", { class: "member-hub-wheel-card" });
   memberHubWheelCard.append(
-    el("h4", { class: "member-hub-wheel-card__title" }, [t("member.wheelSectionTitle", "輪盤")]),
+    el("h4", { class: "member-hub-wheel-card__title" }, [t("member.wheelSectionTitle", "拉霸")]),
     el("p", { class: "hint member-hub-wheel-card__lead" }, [
-      t("member.wheelSectionLead", "兌換輪盤點與抽獎；須完成信箱驗證。"),
+      t("member.wheelSectionLead", "兌換輪盤點與拉霸開獎；須完成信箱驗證。"),
     ]),
     wheelRulesDetails,
     wheelRedeemBlock,
@@ -2406,7 +2416,7 @@ function render() {
       el("p", { class: "book-tab-lm-rules__body", lang: getLocale() === "en" ? "en" : "zh-Hant" }, [
         t(
           "book.littleMary.rules",
-          "試玩分數開局；點圖示押注每次從「分數」扣 1 至該線；「+1」為八條線同時各加 1（一次扣 8 分），不足 8 分時無法使用。八種倍率：櫻桃 2×、檸檬 12×、橘子 10×、西瓜 20×、鈴鐺 20×、星星 30×、７７ 40×、BAR 50×。外圈 24 格依圖示出現次數配置（櫻桃 5、檸檬 4、橘子 4、西瓜 3、鈴鐺 3、星星 2、７７ 2、BAR 1）。須先押注才能按「開始」。若網站已設定 Firebase 並部署 Cloud Functions（littleMarySpin／littleMaryHiLoRoll），停格與比大小開點由伺服器亂數決定；未設定時於瀏覽器試玩亂數。跑燈動畫會停至該格；若停在與你押注相同的圖示，得分 += 該線押注 × 倍率。中獎後會彈出「比大小」視窗：再開 1～12 點，大＝7～12、小＝1～6；猜中再加分、猜錯扣回該筆；「跳過」或 Esc 略過；開點後須按「確定」關閉。按「得分轉分數」亦會關閉視窗並略過比大小。每局結束押注歸零；已押未中不退，「-1」為八條線各退 1（該線有押才退），可重複按以退回押注。「得分轉分數」把得分併回試玩分數。試玩分數與畫面在前端；開獎數值可由伺服器產生（見上）。無真實金流。",
+          "試玩分數開局；點圖示押注每次從「分數」扣 1 至該線；「+1」為八條線同時各加 1（一次扣 8 分），不足 8 分時無法使用。八種倍率：櫻桃 2×、檸檬 12×、橘子 10×、西瓜 20×、鈴鐺 20×、星星 30×、７７ 40×、BAR 50×。外圈 24 格依圖示出現次數配置（櫻桃 5、檸檬 4、橘子 4、西瓜 3、鈴鐺 3、星星 2、７７ 2、BAR 1）。須先押注才能按「開始」。外圈停格非每格均等：倍率愈高者開出機率愈低（與倍率大致成反比加權），八線均押時長期仍偏向莊家。若網站已設定 Firebase 並部署 Cloud Functions（littleMarySpin／littleMaryHiLoRoll），停格與比大小開點由伺服器亂數決定；未設定時於瀏覽器試玩亂數（同加權規則）。跑燈動畫會停至該格；若停在與你押注相同的圖示，得分 += 該線押注 × 倍率。中獎後會彈出「比大小」視窗：再開 1～12 點，大＝7～12、小＝1～6；猜中再加分、猜錯扣回該筆；「跳過」或 Esc 略過；開點後須按「確定」關閉。按「得分轉分數」亦會關閉視窗並略過比大小。每局結束押注歸零；已押未中不退，「-1」為八條線各退 1（該線有押才退），可重複按以退回押注。「得分轉分數」把得分併回試玩分數。試玩分數與畫面在前端；開獎數值可由伺服器產生（見上）。無真實金流。",
         ),
       ]),
     ]),
@@ -4722,9 +4732,13 @@ function render() {
       t("admin.tab.announce", "其他設定"),
     ]);
     tabAnnounce.id = "admin-tab-trigger-announce";
+    const tabLittleMaryStats = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
+      t("admin.tab.littleMary", "小瑪莉數據"),
+    ]);
+    tabLittleMaryStats.id = "admin-tab-trigger-little-mary-admin";
 
     const adminTablist = el("div", { class: "admin-tabs", role: "tablist" });
-    adminTablist.append(tabBookingsHub, tabMembers, tabAnnounce);
+    adminTablist.append(tabBookingsHub, tabMembers, tabAnnounce, tabLittleMaryStats);
 
     const subBookingsActive = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
       t("admin.tab.bookings", "預約管理"),
@@ -4821,22 +4835,239 @@ function render() {
       hidden: true,
     });
     panelAnnounceEl.setAttribute("aria-labelledby", "admin-tab-trigger-announce");
+    const panelLittleMaryStatsEl = el("div", {
+      class: "admin-tab-panel",
+      role: "tabpanel",
+      id: "admin-tab-panel-little-mary-stats",
+      hidden: true,
+    });
+    panelLittleMaryStatsEl.setAttribute("aria-labelledby", "admin-tab-trigger-little-mary-admin");
 
     tabBookingsHub.setAttribute("aria-controls", "admin-tab-panel-bookings-hub");
     tabMembers.setAttribute("aria-controls", "admin-tab-panel-members");
     tabAnnounce.setAttribute("aria-controls", "admin-tab-panel-announce");
+    tabLittleMaryStats.setAttribute("aria-controls", "admin-tab-panel-little-mary-stats");
 
     panelBookingsActiveSub.append(adminCapacitySection, adminStatus, tableHolder);
     panelMembersEl.append(membersSubTablist, membersSubPanelsWrap);
     panelAnnounceEl.append(announcementSection);
 
+    const lmStatsIntro = el("p", { class: "hint admin-lm-intro" }, [
+      t(
+        "admin.littleMary.intro",
+        "以下為 Firestore 稽核流水：主遊戲開獎、比大小、預約次數與遊戲點兌換。主遊戲加總僅針對最近一筆取樣筆數內可解析的紀錄，非全站歷史精算。",
+      ),
+    ]);
+    const lmStatsStatus = el("p", { class: "status-line" });
+    const lmStatsRefresh = el("button", { type: "button", class: "ghost" }, [
+      t("admin.littleMary.refresh", "重新整理"),
+    ]);
+    const lmStatsSummary = el("div", { class: "admin-lm-summary" });
+    const lmSpinTableWrap = el("div", { class: "table-wrap admin-lm-table" });
+    const lmHiloTableWrap = el("div", { class: "table-wrap admin-lm-table" });
+    panelLittleMaryStatsEl.append(
+      lmStatsIntro,
+      lmStatsStatus,
+      lmStatsRefresh,
+      lmStatsSummary,
+      el("h3", { class: "admin-lm-subhl" }, [t("admin.littleMary.spinsTitle", "最近主遊戲（開獎）")]),
+      lmSpinTableWrap,
+      el("h3", { class: "admin-lm-subhl" }, [t("admin.littleMary.hiloTitle", "最近比大小")]),
+      lmHiloTableWrap,
+    );
+
+    function formatLmAdminTs(ms: number | null): string {
+      if (ms == null || !Number.isFinite(ms)) return "—";
+      try {
+        return new Date(ms).toLocaleString(getLocale() === "en" ? "en" : "zh-Hant", {
+          dateStyle: "short",
+          timeStyle: "medium",
+        });
+      } catch {
+        return "—";
+      }
+    }
+
+    function shortUidForAdmin(uid: string): string {
+      if (!uid) return "—";
+      return uid.length <= 12 ? uid : `${uid.slice(0, 8)}…`;
+    }
+
+    async function loadLittleMaryAdminStats() {
+      if (!isFirebaseConfigured()) {
+        lmStatsStatus.textContent = t("admin.littleMary.needFirebase", "需設定 Firebase 並部署 getLittleMaryAdminStats。");
+        lmStatsStatus.className = "status-line error";
+        return;
+      }
+      lmStatsStatus.textContent = t("admin.littleMary.loading", "讀取中…");
+      lmStatsStatus.className = "status-line";
+      lmStatsRefresh.setAttribute("disabled", "true");
+      try {
+        const fn = getLittleMaryAdminStatsCall();
+        const res = await fn({ ...localeApiParam() });
+        const d = res.data as {
+          counts?: {
+            spin?: unknown;
+            hilo?: unknown;
+            sessionToPoints?: unknown;
+            pointsToSession?: unknown;
+          };
+          spinSample?: {
+            limit?: unknown;
+            rowsFetched?: unknown;
+            parsed?: unknown;
+            wagerSum?: unknown;
+            gainSum?: unknown;
+          };
+          hiloSample?: { limit?: unknown; rowsFetched?: unknown; parsed?: unknown; hits?: unknown };
+          recentSpins?: {
+            id?: string;
+            customerId?: string;
+            createdAtMs?: number | null;
+            wager?: number;
+            stopIndex?: number;
+            hitGain?: number;
+          }[];
+          recentHilo?: {
+            id?: string;
+            customerId?: string;
+            createdAtMs?: number | null;
+            stake?: number;
+            roll?: number;
+            hit?: boolean;
+          }[];
+        };
+        const c = d.counts ?? {};
+        const spinCt = typeof c.spin === "number" ? c.spin : 0;
+        const hiloCt = typeof c.hilo === "number" ? c.hilo : 0;
+        const exCt = typeof c.sessionToPoints === "number" ? c.sessionToPoints : 0;
+        const rdCt = typeof c.pointsToSession === "number" ? c.pointsToSession : 0;
+        const ss = d.spinSample ?? {};
+        const wagerSum = typeof ss.wagerSum === "number" ? ss.wagerSum : 0;
+        const gainSum = typeof ss.gainSum === "number" ? ss.gainSum : 0;
+        const spinParsed = typeof ss.parsed === "number" ? ss.parsed : 0;
+        const spinLimit = typeof ss.limit === "number" ? ss.limit : 0;
+        const hs = d.hiloSample ?? {};
+        const hiloHits = typeof hs.hits === "number" ? hs.hits : 0;
+        const hiloParsed = typeof hs.parsed === "number" ? hs.parsed : 0;
+        const hiloLimit = typeof hs.limit === "number" ? hs.limit : 0;
+
+        const rtpSample =
+          wagerSum > 0 ? `${((gainSum / wagerSum) * 100).toFixed(1)}%` : "—";
+        const hiloHitRate = hiloParsed > 0 ? `${((hiloHits / hiloParsed) * 100).toFixed(1)}%` : "—";
+
+        lmStatsSummary.replaceChildren(
+          el("div", { class: "admin-lm-kpi" }, [
+            el("span", { class: "admin-lm-kpi__v" }, [String(spinCt)]),
+            el("span", { class: "admin-lm-kpi__l" }, [t("admin.littleMary.kpi.spins", "主遊戲筆數（累計）")]),
+          ]),
+          el("div", { class: "admin-lm-kpi" }, [
+            el("span", { class: "admin-lm-kpi__v" }, [String(hiloCt)]),
+            el("span", { class: "admin-lm-kpi__l" }, [t("admin.littleMary.kpi.hilo", "比大小筆數（累計）")]),
+          ]),
+          el("div", { class: "admin-lm-kpi" }, [
+            el("span", { class: "admin-lm-kpi__v" }, [String(exCt)]),
+            el("span", { class: "admin-lm-kpi__l" }, [t("admin.littleMary.kpi.sessionToPts", "次數→遊戲點（筆）")]),
+          ]),
+          el("div", { class: "admin-lm-kpi" }, [
+            el("span", { class: "admin-lm-kpi__v" }, [String(rdCt)]),
+            el("span", { class: "admin-lm-kpi__l" }, [t("admin.littleMary.kpi.ptsToSession", "遊戲點→次數（筆）")]),
+          ]),
+          el("div", { class: "admin-lm-kpi admin-lm-kpi--wide" }, [
+            el("span", { class: "admin-lm-kpi__v" }, [rtpSample]),
+            el("span", { class: "admin-lm-kpi__l" }, [
+              t(
+                "admin.littleMary.kpi.rtpSample",
+                "樣本派彩／押注比（最近約 {{n}} 筆主遊戲內可解析者）",
+                { n: spinLimit },
+              ),
+            ]),
+          ]),
+          el("div", { class: "admin-lm-kpi admin-lm-kpi--wide" }, [
+            el("span", { class: "admin-lm-kpi__v" }, [hiloHitRate]),
+            el("span", { class: "admin-lm-kpi__l" }, [
+              t("admin.littleMary.kpi.hiloHitSample", "比大小猜中率（最近 {{n}} 筆樣本）", { n: hiloLimit }),
+            ]),
+          ]),
+        );
+
+        const rs = d.recentSpins ?? [];
+        const spinHead = el("tr", {}, [
+          el("th", {}, [t("admin.littleMary.col.time", "時間")]),
+          el("th", {}, [t("admin.littleMary.col.member", "會員 UID")]),
+          el("th", {}, [t("admin.littleMary.col.wager", "押注")]),
+          el("th", {}, [t("admin.littleMary.col.stop", "停格")]),
+          el("th", {}, [t("admin.littleMary.col.gain", "派彩")]),
+        ]);
+        lmSpinTableWrap.replaceChildren(
+          el("table", {}, [
+            el("thead", {}, [spinHead]),
+            el(
+              "tbody",
+              {},
+              rs.map((row) =>
+                el("tr", {}, [
+                  el("td", { class: "mono" }, [formatLmAdminTs(row.createdAtMs ?? null)]),
+                  el("td", { class: "mono", title: row.customerId ?? "" }, [
+                    shortUidForAdmin(row.customerId ?? ""),
+                  ]),
+                  el("td", { class: "mono" }, [String(row.wager ?? 0)]),
+                  el("td", { class: "mono" }, [String(row.stopIndex ?? 0)]),
+                  el("td", { class: "mono" }, [String(row.hitGain ?? 0)]),
+                ]),
+              ),
+            ),
+          ]),
+        );
+
+        const rh = d.recentHilo ?? [];
+        const hiloHead = el("tr", {}, [
+          el("th", {}, [t("admin.littleMary.col.time", "時間")]),
+          el("th", {}, [t("admin.littleMary.col.member", "會員 UID")]),
+          el("th", {}, [t("admin.littleMary.col.stake", "賭注")]),
+          el("th", {}, [t("admin.littleMary.col.roll", "點數")]),
+          el("th", {}, [t("admin.littleMary.col.hit", "猜中")]),
+        ]);
+        lmHiloTableWrap.replaceChildren(
+          el("table", {}, [
+            el("thead", {}, [hiloHead]),
+            el(
+              "tbody",
+              {},
+              rh.map((row) =>
+                el("tr", {}, [
+                  el("td", { class: "mono" }, [formatLmAdminTs(row.createdAtMs ?? null)]),
+                  el("td", { class: "mono", title: row.customerId ?? "" }, [
+                    shortUidForAdmin(row.customerId ?? ""),
+                  ]),
+                  el("td", { class: "mono" }, [String(row.stake ?? 0)]),
+                  el("td", { class: "mono" }, [String(row.roll ?? 0)]),
+                  el("td", {}, [row.hit ? "✓" : "×"]),
+                ]),
+              ),
+            ),
+          ]),
+        );
+
+        lmStatsStatus.textContent = t("admin.littleMary.loaded", "已更新。");
+        lmStatsStatus.className = "status-line ok";
+      } catch (e) {
+        lmStatsStatus.textContent = errorMessage(e);
+        lmStatsStatus.className = "status-line error";
+      } finally {
+        lmStatsRefresh.removeAttribute("disabled");
+      }
+    }
+
+    lmStatsRefresh.addEventListener("click", () => void loadLittleMaryAdminStats());
+
     const adminPanelsWrap = el("div", { class: "admin-tab-panels" });
-    adminPanelsWrap.append(panelBookingsHubEl, panelMembersEl, panelAnnounceEl);
+    adminPanelsWrap.append(panelBookingsHubEl, panelMembersEl, panelAnnounceEl, panelLittleMaryStatsEl);
 
-    const adminTabButtons = [tabBookingsHub, tabMembers, tabAnnounce] as const;
-    const adminTabPanels = [panelBookingsHubEl, panelMembersEl, panelAnnounceEl] as const;
+    const adminTabButtons = [tabBookingsHub, tabMembers, tabAnnounce, tabLittleMaryStats] as const;
+    const adminTabPanels = [panelBookingsHubEl, panelMembersEl, panelAnnounceEl, panelLittleMaryStatsEl] as const;
 
-    function selectAdminTab(index: 0 | 1 | 2) {
+    function selectAdminTab(index: 0 | 1 | 2 | 3) {
       adminTabButtons.forEach((btn, i) => {
         const on = i === index;
         btn.setAttribute("aria-selected", String(on));
@@ -4847,11 +5078,13 @@ function render() {
         panel.hidden = i !== index;
         panel.classList.toggle("is-active", i === index);
       });
+      if (index === 3) void loadLittleMaryAdminStats();
     }
 
     tabBookingsHub.addEventListener("click", () => selectAdminTab(0));
     tabMembers.addEventListener("click", () => selectAdminTab(1));
     tabAnnounce.addEventListener("click", () => selectAdminTab(2));
+    tabLittleMaryStats.addEventListener("click", () => selectAdminTab(3));
 
     adminTablist.addEventListener("keydown", (ev) => {
       if (ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;
@@ -4861,7 +5094,7 @@ function render() {
       const delta = ev.key === "ArrowRight" ? 1 : -1;
       const n = adminTabButtons.length;
       const next = ((cur + delta) % n + n) % n;
-      selectAdminTab(next as 0 | 1 | 2);
+      selectAdminTab(next as 0 | 1 | 2 | 3);
       adminTabButtons[next].focus();
     });
 
@@ -5293,7 +5526,7 @@ function render() {
         )
       : t(
           "admin.backSubtitle",
-          "以分頁切換：預約與封存（內含預約管理／封存的預約）、會員與儲值、其他設定。",
+          "以分頁切換：預約與封存、會員與儲值、其他設定、小瑪莉數據。",
         );
     document.title = isBook ? t("meta.docTitle", "辦公室按摩預約") : t("admin.backTitle", "管理後台");
     panelBook.hidden = !isBook;

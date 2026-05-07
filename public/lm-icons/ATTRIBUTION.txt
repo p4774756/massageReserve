@@ -1,10 +1,10 @@
-圖示與字型：小瑪莉得分／押注數字使用 DSEG7 七段顯示字型（npm `@fontsource/dseg7`，原始字型 SIL OFL，見該套件內說明）。
+圖示與字型：老虎機得分／押注數字使用 DSEG7 七段顯示字型（npm `@fontsource/dseg7`，原始字型 SIL OFL，見該套件內說明）。
 
 圖示來源（除 seven.svg、lm-mascot.svg 為本專案自製 SVG；bar.png 為使用者提供；lm-center-hero.png 為本專案介面用素材；其餘見下）：
 
 Twemoji（Twitter / X 開源圖示）
 - 下載自：https://github.com/twitter/twemoji
 - 授權：Creative Commons Attribution 4.0 International (CC-BY 4.0)
-- 使用檔案：cherry.svg, lemon.svg, orange.svg, watermelon.svg, star.svg, bell.svg、seven.svg（Twemoji／自製，檔名經重新命名以利程式引用）；bar.png 為使用者提供之圖示。bar.svg、apple.svg、once.svg、mango.svg 仍保留於目錄，小瑪莉盤面已不再引用 bar.svg。
+- 使用檔案：cherry.svg, lemon.svg, orange.svg, watermelon.svg, star.svg, bell.svg、seven.svg（Twemoji／自製，檔名經重新命名以利程式引用）；bar.png 為使用者提供之圖示。bar.svg、apple.svg、once.svg、mango.svg 仍保留於目錄，老虎機盤面已不再引用 bar.svg。
 
 依 CC-BY 4.0 需標示出處；本專案於此目錄保留本說明檔。

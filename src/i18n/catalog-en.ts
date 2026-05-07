@@ -32,7 +32,7 @@ export const EN: Record<string, string> = {
   "book.littleMary.rulesTitle": "Rules",
   "book.littleMary.rulesAria": "Little Mary demo rules",
   "book.littleMary.rules":
-    "You start with demo credits. Each tap on a symbol bets 1 credit on that line (−1 from balance). +1 adds 1 to every line at once for 8 credits; if you have fewer than 8 credits, it does nothing (button stays disabled). Eight multipliers: Cherry 2×, Lemon 12×, Orange 10×, Melon 20×, Bell 20×, Stars 30×, 77 40×, BAR 50×. The outer ring has 24 cells with fixed symbol counts (Cherry 5, Lemon 4, Orange 4, Melon 3, Bell 3, Stars 2, 77 2, BAR 1). Bet at least once before Start. If Firebase is configured and Cloud Functions are deployed (`littleMarySpin` / `littleMaryHiLoRoll`), the stop cell and hi-lo roll are chosen by the server; otherwise the browser uses local demo RNG. The lamp animation always lands on that cell; if it matches a symbol you bet on, WIN += (bet on that line) × multiplier. After a win, a double-or-nothing pop-up appears: roll 1–12, HIGH = 7–12, LOW = 1–6; correct adds that win again to WIN, wrong removes that hit from WIN; Skip (or Esc) leaves WIN unchanged; after you roll, press OK to close. Win → Credit also closes the dialog and skips double-or-nothing. Bets reset each round; losing stakes are not refunded—use −1 to subtract 1 from each line that has a bet (repeat until cleared). Win → Credit merges WIN into your balance. Demo state is mostly client-side; RNG for outcomes may be server-side as above. No real money.",
+    "You start with demo credits. Each tap on a symbol bets 1 credit on that line (−1 from balance). Stops on the outer ring are weighted inversely to that cell’s multiplier (not 1/24 each), so rarer high-mult cells keep the long-term edge in the house’s favor even with equal bets on all lines. +1 adds 1 to every line at once for 8 credits; if you have fewer than 8 credits, it does nothing (button stays disabled). Eight multipliers: Cherry 2×, Lemon 12×, Orange 10×, Melon 20×, Bell 20×, Stars 30×, 77 40×, BAR 50×. The outer ring has 24 cells with fixed symbol counts (Cherry 5, Lemon 4, Orange 4, Melon 3, Bell 3, Stars 2, 77 2, BAR 1). Bet at least once before Start. If Firebase is configured and Cloud Functions are deployed (`littleMarySpin` / `littleMaryHiLoRoll`), the stop cell and hi-lo roll are chosen by the server; otherwise the browser uses local demo RNG. The lamp animation always lands on that cell; if it matches a symbol you bet on, WIN += (bet on that line) × multiplier. After a win, a double-or-nothing pop-up appears: roll 1–12, HIGH = 7–12, LOW = 1–6; correct adds that win again to WIN, wrong removes that hit from WIN; Skip (or Esc) leaves WIN unchanged; after you roll, press OK to close. Win → Credit also closes the dialog and skips double-or-nothing. Bets reset each round; losing stakes are not refunded—use −1 to subtract 1 from each line that has a bet (repeat until cleared). Win → Credit merges WIN into your balance. Demo state is mostly client-side; RNG for outcomes may be server-side as above. No real money.",
 
   "status.pending": "Pending",
   "status.confirmed": "Confirmed",
@@ -88,7 +88,7 @@ export const EN: Record<string, string> = {
   "member.entrySignOut": "Sign out",
 
   "booking.submit": "Submit booking",
-  "booking.spinWheel": "Spin wheel",
+  "booking.spinWheel": "Spin slots",
   "booking.resendVerify": "Resend verification email",
   "booking.reloadVerify": "I've verified — refresh status",
   "booking.modeHintGuest":
@@ -130,10 +130,10 @@ export const EN: Record<string, string> = {
   "field.note": "Notes (optional)",
   "field.noteHint": "Needs such as headache, sore back, more leg pressure, etc.",
 
-  "wheel.previewBtn": "Preview wheel effect",
+  "wheel.previewBtn": "Preview slot effect",
   "wheel.previewTitle": "Preview only — no real spin or deduction",
   "wheel.rules":
-    "Wheel rules: after a member booking is marked completed in admin, you earn 1 spin (once per booking). Each spin uses 1 chance. Prizes are random by admin weights (points, extra spins, thanks, fun text, etc.). Points can be redeemed for sessions when you reach the threshold. Email verification is required.",
+    "Slot rules: after a member booking is marked completed in admin, you earn 1 draw (once per booking). Inside the slot screen, pull the lever down-left from the top-right to use 1 chance and call the server. Prizes are random by admin weights (points, extra spins, thanks, etc.). Points can be redeemed for sessions when you reach the threshold. Email verification is required.",
   "wheel.spinNeedLogin": "Please sign in as a member.",
   "wheel.spinNeedVerify": "Please verify your email first.",
   "wheel.spinNoChances": "No spins available.",
@@ -146,7 +146,21 @@ export const EN: Record<string, string> = {
   "wheel.previewPrizeC10": "+10 wallet credit",
   "wheel.previewPrizeExtra": "One extra spin",
   "wheel.previewPrizeThanks": "Thanks for participating",
-  "wheel.previewPrizeFun": "Fun penalty text",
+  "slot.spectacleTitle": "Lucky slots",
+  "slot.hubPreparing": "Getting ready…",
+  "slot.hubSpinning": "Drawing prize…",
+  "slot.hubOops": "Oops",
+  "slot.spinFailGeneric": "Could not finish the draw. Try again later.",
+  "slot.close": "Close",
+  "slot.take": "Collect",
+  "slot.revealCongrats": "You won",
+  "slot.subPoints": "You got {{pts}} pts (balance {{total}} pts).",
+  "slot.subChance": "Draw chances updated (now {{n}}).",
+  "slot.subOther": "Have a great day!",
+  "slot.hubPull": "Pull the lever down and left from the top-right to draw",
+  "slot.leverAria": "Pull the lever down-left from the top-right to start the draw",
+  "slot.idleClose": "Close",
+  "slot.aborted": "Cancelled",
 
   "booking.fillName": "Please enter your name.",
   "booking.pickDateSlot": "Please choose a date and start time.",
@@ -195,21 +209,21 @@ export const EN: Record<string, string> = {
   "member.walletItemSessions": "Sessions: {{n}}",
   "member.walletItemWheel": "Wheel points: {{pts}} / {{per}} pts → 1 session",
   "member.walletItemArcade": "Little Mary: {{pts}} pts ({{perA}} pts → 1 session)",
-  "member.walletItemDraw": "Wheel spins: {{n}}",
+  "member.walletItemDraw": "Slot draws left: {{n}}",
   "member.walletLegacyLine": "Remaining cash not yet folded into sessions: {{n}} (NTD).",
   "member.redeemPointsBtn": "Redeem {{per}} points → 1 session",
   "member.redeemOk": "Redeemed successfully.",
-  "member.wheelSectionTitle": "Wheel",
-  "member.wheelSectionLead": "Redeem wheel points and spin; email verification required.",
-  "member.wheel.rulesSummary": "How the wheel works",
+  "member.wheelSectionTitle": "Slots",
+  "member.wheelSectionLead": "Redeem wheel points and play the slot machine; email verification required.",
+  "member.wheel.rulesSummary": "How the slot draw works",
   "member.arcadeExchangeTitle": "Sessions ↔ Little Mary points",
   "member.arcadeExchangeLead":
     "Synced with the wallet summary above. Play Little Mary on the booking page tab (admins only).",
   "member.hubGamesTabsAria": "Member hub games",
-  "member.wheelLuck": "You can spin — good luck!",
+  "member.wheelLuck": "You can play — good luck!",
   "member.wheelNone": "No spins right now.",
   "member.wheelStateFail": "Could not read spin state.",
-  "member.wheelNeedVerifyFirst": "Verify your email before spinning the wheel.",
+  "member.wheelNeedVerifyFirst": "Verify your email before playing the slot.",
   "member.arcadeExchangeBtn": "1 session → {{n}} arcade points",
   "member.arcadeRedeemBtn": "{{n}} arcade points → 1 session",
   "member.arcadeExchangeOk": "Converted to arcade points.",
@@ -436,6 +450,7 @@ export const EN: Record<string, string> = {
   "admin.tab.hidden": "Archived bookings",
   "admin.tab.members": "Members & top-up",
   "admin.tab.announce": "Other settings",
+  "admin.tab.littleMary": "Little Mary stats",
   "admin.memberTab.wallet": "Top up",
   "admin.memberTab.list": "Member list",
 
@@ -567,7 +582,32 @@ export const EN: Record<string, string> = {
 
   "admin.backTitle": "Admin",
   "admin.backSubtitle":
-    "Use tabs: bookings & archive (sub-tabs: main list / archived), members & top-up, other settings (marquee, caps, closed windows, pricing), support.",
+    "Use tabs: bookings & archive, members & top-up, other settings (marquee, caps, closed windows, pricing), and Little Mary stats.",
+
+  "admin.littleMary.intro":
+    "Firestore audit trail: main-game rounds, hi-lo, massage-session swaps vs arcade points. Main-game payout totals use only the latest parsed sample, not a full historical reconciliation.",
+  "admin.littleMary.refresh": "Refresh",
+  "admin.littleMary.spinsTitle": "Recent main game (payouts)",
+  "admin.littleMary.hiloTitle": "Recent hi-lo",
+  "admin.littleMary.needFirebase":
+    "Configure Firebase and deploy getLittleMaryAdminStats for this panel.",
+  "admin.littleMary.loading": "Loading…",
+  "admin.littleMary.kpi.spins": "Main game transactions (total)",
+  "admin.littleMary.kpi.hilo": "Hi-lo transactions (total)",
+  "admin.littleMary.kpi.sessionToPts": "Sessions → arcade points (rows)",
+  "admin.littleMary.kpi.ptsToSession": "Arcade points → sessions (rows)",
+  "admin.littleMary.kpi.rtpSample":
+    "Sample payout ÷ wager (last {{n}} main-game rows we could parse)",
+  "admin.littleMary.kpi.hiloHitSample": "Hi-lo hit rate (last {{n}} sample rows)",
+  "admin.littleMary.col.time": "Time",
+  "admin.littleMary.col.member": "Member UID",
+  "admin.littleMary.col.wager": "Wager",
+  "admin.littleMary.col.stop": "Stop cell",
+  "admin.littleMary.col.gain": "Payout",
+  "admin.littleMary.col.stake": "Stake",
+  "admin.littleMary.col.roll": "Roll",
+  "admin.littleMary.col.hit": "Hit",
+  "admin.littleMary.loaded": "Updated.",
 
   "booking.rulesFooter":
     "Rules: max {{dayCap}} same day, max {{weekCap}} same work week; cancelled do not count toward caps.",

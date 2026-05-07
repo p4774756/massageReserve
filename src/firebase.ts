@@ -62,6 +62,7 @@ export const littleMarySpinAccountCall = () => httpsCallable(getFns(), "littleMa
 export const littleMaryHiLoAccountCall = () => httpsCallable(getFns(), "littleMaryHiLoAccount");
 export const exchangeSessionForArcadePointsCall = () => httpsCallable(getFns(), "exchangeSessionForArcadePoints");
 export const redeemArcadePointsForSessionCall = () => httpsCallable(getFns(), "redeemArcadePointsForSession");
+export const getLittleMaryAdminStatsCall = () => httpsCallable(getFns(), "getLittleMaryAdminStats");
 
 export function getDb() {
   return getFirestore(getFirebaseApp());

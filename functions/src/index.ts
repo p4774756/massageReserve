@@ -55,7 +55,7 @@ type CreateBookingInput = {
 };
 
 type BookingStatus = "pending" | "confirmed" | "done" | "cancelled" | "deleted";
-type PrizeType = "points" | "chance" | "thanks" | "penalty_text";
+type PrizeType = "points" | "chance" | "thanks";
 
 async function assertAdminByUid(uid: string, locale: ServerLocale): Promise<void> {
   const adminSnap = await db.collection("admins").doc(uid).get();
@@ -140,7 +140,7 @@ async function loadActiveWheelPrizes(): Promise<WheelPrizeRow[]> {
       const type = data.type as PrizeType | undefined;
       const name = typeof data.name === "string" ? data.name : "";
       const value = asNonNegativeInteger(data.value);
-      if (!name || !type || !["points", "chance", "thanks", "penalty_text"].includes(type) || weight <= 0) {
+      if (!name || !type || !["points", "chance", "thanks"].includes(type) || weight <= 0) {
         return null;
       }
       return {
@@ -1974,8 +1974,7 @@ export const seedWheelPrizes = onCall(publicCall, async (request) => {
     { id: "pts3", name: "+3 點", type: "points", value: 3, weight: 26 },
     { id: "pts1", name: "+1 點", type: "points", value: 1, weight: 22 },
     { id: "chance1", name: "再抽一次", type: "chance", value: 1, weight: 14 },
-    { id: "thanks", name: "銘謝惠顧", type: "thanks", value: 0, weight: 14 },
-    { id: "penalty", name: "小處罰文案", type: "penalty_text", value: 0, weight: 6 },
+    { id: "thanks", name: "銘謝惠顧", type: "thanks", value: 0, weight: 20 },
   ];
   const batch = db.batch();
   for (const item of defaults) {
@@ -2217,6 +2216,7 @@ export const notifyMemberBookingStatusChange = onDocumentUpdated(
 
 export {
   exchangeSessionForArcadePoints,
+  getLittleMaryAdminStats,
   littleMaryHiLoAccount,
   littleMaryHiLoRoll,
   littleMarySpin,

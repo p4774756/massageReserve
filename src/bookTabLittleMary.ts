@@ -12,6 +12,7 @@ import {
   littleMarySpinCall,
   redeemArcadePointsForSessionCall,
 } from "./firebase";
+import { lmCellWeightsFromSymbols, lmPickStopIndexFromWeights } from "./littleMaryWeightedStop";
 
 export type MountBookTabLittleMaryOptions = {
   /** 會員遊戲點於伺服端變動後（開獎／比大小／兌換）通知外層刷新錢包列 */
@@ -101,6 +102,23 @@ const BET_LINES: BetLine[] = [
   { id: "seven", mult: 40, zh: "７７", en: "77" },
   { id: "bar", mult: 50, zh: "BAR", en: "BAR" },
 ];
+
+const LM_MULT_BY_SYM = Object.fromEntries(BET_LINES.map((l) => [l.id, l.mult])) as Record<
+  LittleMarySymbol,
+  number
+>;
+const LM_STOP_WEIGHTS_24 = lmCellWeightsFromSymbols(LOOP_24, LM_MULT_BY_SYM);
+
+function lmCryptoRandomUnder(maxExclusive: number): number {
+  if (maxExclusive <= 1) return 0;
+  const u = new Uint32Array(1);
+  crypto.getRandomValues(u);
+  return u[0]! % maxExclusive;
+}
+
+function lmPickLocalWeightedStopIndex(): number {
+  return lmPickStopIndexFromWeights(LM_STOP_WEIGHTS_24, lmCryptoRandomUnder);
+}
 
 /** `public/lm-icons/`：Twemoji SVG（CC-BY 4.0）＋自製 seven；bar 為使用者提供 PNG */
 function lmIconSrc(file: string): string {
@@ -1219,7 +1237,7 @@ export function mountBookTabLittleMary(
           if (!Number.isFinite(t) || t < 0 || t > 23) throw new Error("bad stopIndex");
           target = t;
         } else {
-          target = Math.floor(Math.random() * 24);
+          target = lmPickLocalWeightedStopIndex();
         }
       } catch {
         if (myToken !== spinToken) return;
