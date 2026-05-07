@@ -2398,13 +2398,17 @@ function render() {
   bookPanelLittleMary.setAttribute("aria-labelledby", "book-tab-little-mary");
   const littleMaryMount = el("div", { class: "book-tab-lm-mount" });
   littleMaryMount.setAttribute("aria-hidden", "true");
-  const littleMaryRules = el("div", { class: "book-tab-lm-rules", role: "region" }, [
-    el("p", { class: "book-tab-lm-rules__hl" }, [t("book.littleMary.rulesTitle", "規則")]),
-    el("p", { class: "book-tab-lm-rules__body", lang: getLocale() === "en" ? "en" : "zh-Hant" }, [
-      t(
-        "book.littleMary.rules",
-        "試玩分數開局；點圖示押注每次從「分數」扣 1 至該線；「+1」為八條線同時各加 1（一次扣 8 分），不足 8 分時無法使用。八種倍率：櫻桃 2×、檸檬 12×、橘子 10×、西瓜 20×、鈴鐺 20×、星星 30×、７７ 40×、BAR 50×。外圈 24 格依圖示出現次數配置（櫻桃 5、檸檬 4、橘子 4、西瓜 3、鈴鐺 3、星星 2、７７ 2、BAR 1）。須先押注才能按「開始」。若網站已設定 Firebase 並部署 Cloud Functions（littleMarySpin／littleMaryHiLoRoll），停格與比大小開點由伺服器亂數決定；未設定時於瀏覽器試玩亂數。跑燈動畫會停至該格；若停在與你押注相同的圖示，得分 += 該線押注 × 倍率。中獎後會彈出「比大小」視窗：再開 1～12 點，大＝7～12、小＝1～6；猜中再加分、猜錯扣回該筆；「跳過」或 Esc 略過；開點後須按「確定」關閉。按「得分轉分數」亦會關閉視窗並略過比大小。每局結束押注歸零；已押未中不退，「-1」為八條線各退 1（該線有押才退），可重複按以退回押注。「得分轉分數」把得分併回試玩分數。試玩分數與畫面在前端；開獎數值可由伺服器產生（見上）。無真實金流。",
-      ),
+  const littleMaryRules = el("details", { class: "book-tab-lm-rules" }, [
+    el("summary", { class: "book-tab-lm-rules__summary" }, [
+      t("book.littleMary.rulesTitle", "規則"),
+    ]),
+    el("div", { class: "book-tab-lm-rules__scroll" }, [
+      el("p", { class: "book-tab-lm-rules__body", lang: getLocale() === "en" ? "en" : "zh-Hant" }, [
+        t(
+          "book.littleMary.rules",
+          "試玩分數開局；點圖示押注每次從「分數」扣 1 至該線；「+1」為八條線同時各加 1（一次扣 8 分），不足 8 分時無法使用。八種倍率：櫻桃 2×、檸檬 12×、橘子 10×、西瓜 20×、鈴鐺 20×、星星 30×、７７ 40×、BAR 50×。外圈 24 格依圖示出現次數配置（櫻桃 5、檸檬 4、橘子 4、西瓜 3、鈴鐺 3、星星 2、７７ 2、BAR 1）。須先押注才能按「開始」。若網站已設定 Firebase 並部署 Cloud Functions（littleMarySpin／littleMaryHiLoRoll），停格與比大小開點由伺服器亂數決定；未設定時於瀏覽器試玩亂數。跑燈動畫會停至該格；若停在與你押注相同的圖示，得分 += 該線押注 × 倍率。中獎後會彈出「比大小」視窗：再開 1～12 點，大＝7～12、小＝1～6；猜中再加分、猜錯扣回該筆；「跳過」或 Esc 略過；開點後須按「確定」關閉。按「得分轉分數」亦會關閉視窗並略過比大小。每局結束押注歸零；已押未中不退，「-1」為八條線各退 1（該線有押才退），可重複按以退回押注。「得分轉分數」把得分併回試玩分數。試玩分數與畫面在前端；開獎數值可由伺服器產生（見上）。無真實金流。",
+        ),
+      ]),
     ]),
   ]);
   littleMaryRules.setAttribute("aria-label", t("book.littleMary.rulesAria", "小瑪莉試玩規則"));
@@ -2414,7 +2418,7 @@ function render() {
       el("p", { class: "hint book-tab-lm-intro" }, [
         t(
           "book.littleMary.hint",
-          "試玩跑燈：點圖示押注後按「開始」（空白鍵同）。完整規則見下。已設定 Firebase 並部署 Functions 時由伺服器開獎；否則本機試玩。無真實金流。",
+          "試玩跑燈：點圖示押注後按「開始」（空白鍵同）。點「規則」可展開／收合全文。已設定 Firebase 並部署 Functions 時由伺服器開獎；否則本機試玩。無真實金流。",
         ),
       ]),
       littleMaryRules,

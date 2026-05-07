@@ -28,7 +28,7 @@ export const EN: Record<string, string> = {
   "book.tab.myBookings": "My bookings",
   "book.tab.littleMary": "Little Mary",
   "book.littleMary.hint":
-    "Demo: bet on symbols, then Start (Space). Full rules below. With Firebase + deployed Functions, outcomes come from the server; otherwise local demo RNG. No real money.",
+    "Demo: bet on symbols, then Start (Space). Tap Rules to expand/collapse the full text. With Firebase + deployed Functions, outcomes come from the server; otherwise local demo RNG. No real money.",
   "book.littleMary.rulesTitle": "Rules",
   "book.littleMary.rulesAria": "Little Mary demo rules",
   "book.littleMary.rules":
