@@ -11,6 +11,17 @@ interface ImportMetaEnv {
   readonly VITE_FIREBASE_STORAGE_BUCKET: string;
   readonly VITE_FIREBASE_MESSAGING_SENDER_ID: string;
   readonly VITE_FIREBASE_APP_ID: string;
+  /** 小瑪莉：可選 HTTP 音效 URL（需 CORS）；見 `bookTabLittleMarySfxUrls.ts` */
+  readonly VITE_LM_SFX_SPIN_TICK_URL?: string;
+  readonly VITE_LM_SFX_SPIN_START_URL?: string;
+  readonly VITE_LM_SFX_BET_URL?: string;
+  readonly VITE_LM_SFX_NO_CREDIT_URL?: string;
+  readonly VITE_LM_SFX_CLEAR_URL?: string;
+  readonly VITE_LM_SFX_COLLECT_URL?: string;
+  readonly VITE_LM_SFX_WIN_URL?: string;
+  readonly VITE_LM_SFX_ONCE_MORE_URL?: string;
+  readonly VITE_LM_SFX_MISS_URL?: string;
+  readonly VITE_LM_SFX_ERROR_URL?: string;
 }
 
 interface ImportMeta {

@@ -4007,31 +4007,69 @@ body.wheel-spectacle-lock {
     0 0 24px rgb(255 180 220 / 0.65);
 }
 
-/* 拉霸演出：淺色系（粉白／香檳／淡紫，整體偏亮） */
-.slot-spectacle-stage.wheel-spectacle-stage {
-  width: min(520px, 96vw);
-  padding: 22px 22px 26px;
+/* 拉霸：精品 casino 稿（深藍紫底、金跑馬燈、紙屑、三階捲軸色帶） */
+.slot-spectacle-overlay .wheel-spectacle-deep {
   background:
-    radial-gradient(ellipse 92% 58% at 50% -12%, rgb(255 230 248 / 0.95) 0%, transparent 56%),
-    linear-gradient(168deg, #fffdfe 0%, #fff8fc 32%, #fff0f7 65%, #ffe8f3 100%);
-  border: 1px solid rgb(255 255 255 / 0.98);
+    radial-gradient(ellipse 90% 70% at 50% 20%, rgb(74 20 140 / 0.35) 0%, transparent 55%),
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgb(211 47 47 / 0.12) 0%, transparent 45%),
+    linear-gradient(165deg, #12101f 0%, #1a1a2e 42%, #0d0f18 100%);
+}
+
+.slot-spectacle-confetti {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0.55;
+  background-image:
+    radial-gradient(3px 5px at 10% 20%, rgb(255 215 0 / 0.9), transparent),
+    radial-gradient(2px 4px at 22% 75%, rgb(255 200 120 / 0.85), transparent),
+    radial-gradient(3px 3px at 78% 18%, rgb(255 230 180 / 0.9), transparent),
+    radial-gradient(2px 5px at 88% 62%, rgb(255 180 60 / 0.8), transparent),
+    radial-gradient(2px 3px at 45% 40%, rgb(200 220 255 / 0.5), transparent),
+    radial-gradient(3px 4px at 55% 88%, rgb(255 215 0 / 0.75), transparent),
+    radial-gradient(2px 3px at 30% 55%, rgb(255 140 80 / 0.65), transparent),
+    radial-gradient(3px 5px at 92% 35%, rgb(255 248 220 / 0.7), transparent);
+  animation: slot-spectacle-confetti-drift 10s linear infinite;
+}
+
+@keyframes slot-spectacle-confetti-drift {
+  from {
+    transform: translateY(0) rotate(0deg);
+  }
+  to {
+    transform: translateY(-24px) rotate(2deg);
+  }
+}
+
+.slot-spectacle-overlay .wheel-spectacle-sparks {
+  opacity: 0.35;
+  background-image:
+    radial-gradient(2px 2px at 18% 22%, rgb(255 236 200 / 0.95), transparent),
+    radial-gradient(1.5px 1.5px at 82% 30%, rgb(255 220 120 / 0.9), transparent),
+    radial-gradient(2px 2px at 50% 12%, rgb(255 255 255 / 0.55), transparent);
+}
+
+.slot-spectacle-stage.wheel-spectacle-stage {
+  width: min(400px, 94vw);
+  padding: 20px 18px 22px;
+  background: linear-gradient(175deg, rgb(26 26 46 / 0.92) 0%, rgb(18 18 38 / 0.94) 100%);
+  border: 2px solid rgb(255 140 0 / 0.65);
+  border-radius: 20px;
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 1),
-    inset 0 -10px 32px rgb(255 150 195 / 0.14),
-    0 0 0 2px rgb(240 185 215 / 0.45),
-    0 14px 36px rgb(90 40 70 / 0.1),
-    0 0 72px rgb(255 190 220 / 0.28);
-  filter: saturate(1.12) brightness(1.02);
+    0 0 0 1px rgb(255 215 0 / 0.35),
+    0 0 32px rgb(255 140 0 / 0.22),
+    0 0 80px rgb(74 20 140 / 0.15),
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    inset 0 -20px 50px rgb(0 0 0 / 0.35);
+  backdrop-filter: blur(8px);
 }
 
 .wheel-spectacle-overlay.is-cracked .slot-spectacle-stage.wheel-spectacle-stage {
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 1),
-    inset 0 -12px 36px rgb(255 130 185 / 0.12),
-    0 0 0 2px rgb(245 195 225 / 0.55),
-    0 18px 44px rgb(90 45 75 / 0.12),
-    0 0 88px rgb(255 200 230 / 0.35);
-  filter: saturate(1.14) brightness(1.03);
+    0 0 0 2px rgb(255 200 80 / 0.5),
+    0 0 40px rgb(255 160 40 / 0.3),
+    inset 0 1px 0 rgb(255 255 255 / 0.1);
 }
 
 .wheel-spectacle-overlay.is-win-burst .slot-spectacle-stage.wheel-spectacle-stage {
@@ -4041,85 +4079,157 @@ body.wheel-spectacle-lock {
 @keyframes slot-spectacle-win-glow {
   0%,
   100% {
-    filter: saturate(1.12) brightness(1.02);
+    filter: saturate(1.05) brightness(1.02);
   }
   45% {
-    filter: saturate(1.28) brightness(1.08);
+    filter: saturate(1.25) brightness(1.1);
+    box-shadow:
+      0 0 0 3px rgb(255 220 100 / 0.6),
+      0 0 56px rgb(255 200 60 / 0.4);
   }
 }
 
 .slot-spectacle-stage-head {
   position: relative;
   width: 100%;
-  margin: 0 0 12px;
+  margin: 0 0 10px;
 }
 
-.slot-spectacle-close-tr {
+.slot-spectacle-close-round {
   position: absolute;
-  top: 0;
-  right: 0;
-  z-index: 2;
-  padding: 6px 12px;
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: #7a5568;
-  border-radius: 10px;
-  border: 1px solid rgb(235 205 225 / 0.95);
-  background: linear-gradient(180deg, #ffffff 0%, #fff7fc 100%);
+  top: -4px;
+  right: -4px;
+  z-index: 4;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid rgb(255 215 0 / 0.85);
+  background: linear-gradient(180deg, #3d3358 0%, #252038 100%);
+  color: #ffe066;
+  cursor: pointer;
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 1),
-    0 1px 4px rgb(90 40 70 / 0.08);
+    0 0 12px rgb(255 180 60 / 0.35),
+    inset 0 1px 0 rgb(255 255 255 / 0.12);
+  -webkit-tap-highlight-color: transparent;
 }
 
-.slot-spectacle-close-tr:hover:not(:disabled) {
-  background: linear-gradient(180deg, #fff5fa 0%, #ffe8f2 100%);
-  border-color: rgb(230 160 200 / 0.75);
-  color: #5c3d52;
+.slot-spectacle-close-round:hover:not(:disabled) {
+  filter: brightness(1.12);
 }
 
-.slot-spectacle-close-tr:disabled {
+.slot-spectacle-close-round:disabled {
   opacity: 0.45;
+}
+
+.slot-spectacle-close-x {
+  font-size: 1.35rem;
+  font-weight: 300;
+  line-height: 1;
+  margin-top: -2px;
+}
+
+.slot-spectacle-marquee {
+  margin: 0 28px 0 0;
+  padding: 10px 14px 12px;
+  border-radius: 8px 8px 16px 16px;
+  background: linear-gradient(180deg, #4a3208 0%, #6b4810 28%, #3d2806 100%);
+  border: 3px solid #ffd700;
+  box-shadow:
+    0 0 0 1px #ff8c00,
+    0 0 24px rgb(255 180 40 / 0.4),
+    inset 0 2px 0 rgb(255 255 200 / 0.2),
+    inset 0 -8px 20px rgb(0 0 0 / 0.35);
+}
+
+.slot-spectacle-crown-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 2px;
+}
+
+.slot-spectacle-crown-svg {
+  width: min(72px, 22vw);
+  height: auto;
+  display: block;
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.5));
 }
 
 .slot-spectacle-stage-head .wheel-spectacle-title {
   margin: 0;
-  padding: 4px 4.75rem 0 4px;
+  padding: 0 4px;
   text-align: center;
-  font-size: clamp(1.2rem, 4.2vmin, 1.55rem);
+  font-size: clamp(1.25rem, 5vmin, 1.75rem);
   font-weight: 900;
-  letter-spacing: 0.14em;
-  color: #ff3a8c;
-  -webkit-text-stroke: 1.2px rgb(255 255 255 / 0.95);
+  letter-spacing: 0.2em;
+  text-transform: none;
+  color: #ffd700;
+  -webkit-text-stroke: 1px rgb(80 50 10 / 0.85);
   paint-order: stroke fill;
   text-shadow:
-    1px 1px 0 rgb(255 255 255 / 0.9),
-    0 2px 18px rgb(255 150 200 / 0.4);
+    0 2px 0 rgb(40 20 5 / 0.85),
+    0 0 20px rgb(255 200 80 / 0.45);
 }
 
-/* 拉霸：說明條（勿用輪盤 hub 圓形） */
+@supports (-webkit-background-clip: text) or (background-clip: text) {
+  .slot-spectacle-stage-head .wheel-spectacle-title {
+    background: linear-gradient(180deg, #fffef8 0%, #ffd700 40%, #e6a000 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}
+
+.slot-spectacle-tagline {
+  margin: 10px 6px 0;
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1.4;
+  color: rgb(255 248 230 / 0.92);
+  text-shadow: 0 1px 4px rgb(0 0 0 / 0.6);
+}
+
 .slot-spectacle-hub.wheel-spectacle-hub {
   position: relative;
   inset: auto;
-  margin: 0 0 14px;
+  margin: 0 0 12px;
   min-height: 0;
   max-width: 100%;
   width: 100%;
-  border-radius: 12px;
-  border: 1px solid rgb(240 205 228 / 0.95);
-  padding: 11px 16px;
+  border-radius: 10px;
+  border: 2px solid rgb(255 215 0 / 0.55);
+  padding: 10px 14px;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
   text-align: center;
   line-height: 1.45;
-  font-size: 0.8rem;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  color: #6b4a60;
-  background: rgb(255 255 255 / 0.78);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #f0f4ff;
+  background: linear-gradient(180deg, #1e3a6e 0%, #152a52 50%, #0f1f3d 100%);
   z-index: 1;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.95);
+  box-shadow:
+    inset 0 2px 0 rgb(255 255 255 / 0.1),
+    inset 0 -2px 10px rgb(0 0 0 / 0.35),
+    0 0 18px rgb(80 140 255 / 0.12);
+}
+
+.slot-spectacle-hub-star {
+  color: #ffd700;
+  font-size: 0.85em;
+  text-shadow: 0 0 8px rgb(255 200 80 / 0.7);
+}
+
+.slot-spectacle-hub-core {
+  color: #fff;
 }
 
 .slot-spectacle-hub.wheel-spectacle-hub.is-pulse {
@@ -4129,46 +4239,40 @@ body.wheel-spectacle-lock {
 @keyframes slot-spectacle-hub-pulse {
   0%,
   100% {
-    border-color: rgb(240 205 228 / 0.95);
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.95);
+    border-color: rgb(255 215 0 / 0.5);
   }
   50% {
-    border-color: rgb(255 185 215 / 0.85);
+    border-color: rgb(255 230 140 / 0.85);
     box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 1),
-      0 0 22px rgb(255 170 210 / 0.35);
+      inset 0 2px 0 rgb(255 255 255 / 0.12),
+      0 0 22px rgb(100 170 255 / 0.25);
   }
 }
 
 .slot-spectacle-machine {
   position: relative;
   width: 100%;
-  padding: 18px 14px 20px;
-  border-radius: 14px;
-  background: linear-gradient(175deg, #fffefb 0%, #fff8fb 45%, #fff2f7 100%);
-  border: 1px solid rgb(235 195 220 / 0.75);
+  padding: 14px 10px 16px;
+  border-radius: 16px;
+  background: linear-gradient(175deg, #2a1810 0%, #1a0e0a 55%, #120808 100%);
+  border: 2px solid rgb(184 134 11 / 0.7);
   box-shadow:
-    inset 0 2px 0 rgb(255 255 255 / 1),
-    inset 0 -6px 20px rgb(255 170 205 / 0.12),
-    0 1px 0 rgb(255 255 255 / 0.8),
-    0 6px 18px rgb(90 40 70 / 0.08);
+    inset 0 2px 0 rgb(255 220 140 / 0.12),
+    inset 0 -16px 32px rgb(0 0 0 / 0.45);
   transition: box-shadow 0.35s ease, border-color 0.35s ease;
 }
 
 .slot-spectacle-machine.is-win {
-  border-color: rgb(255 210 140 / 0.85);
+  border-color: rgb(255 215 0 / 0.85);
   box-shadow:
-    inset 0 2px 0 rgb(255 255 255 / 1),
-    inset 0 -6px 20px rgb(255 200 150 / 0.18),
-    0 0 0 1px rgb(255 220 160 / 0.5),
-    0 0 28px rgb(255 210 130 / 0.35),
-    0 8px 22px rgb(90 50 30 / 0.1);
+    inset 0 2px 0 rgb(255 240 200 / 0.2),
+    0 0 28px rgb(255 200 80 / 0.35);
 }
 
 .slot-spectacle-machine-row {
   display: flex;
   align-items: stretch;
-  gap: 16px;
+  gap: 8px;
 }
 
 .slot-spectacle-machine-main {
@@ -4177,11 +4281,61 @@ body.wheel-spectacle-lock {
   min-width: 0;
 }
 
+.slot-spectacle-machine-main-inner {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+}
+
+.slot-spectacle-side-decor {
+  flex-shrink: 0;
+  width: 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.slot-spectacle-hinge {
+  width: 14px;
+  height: 44px;
+  border-radius: 7px;
+  background: linear-gradient(90deg, #6a5020, #d4af37, #8a7028);
+  box-shadow:
+    inset 0 0 0 1px rgb(0 0 0 / 0.35),
+    inset 2px 0 0 rgb(255 255 255 / 0.2);
+}
+
+.slot-spectacle-play-tri {
+  font-size: 0.55rem;
+  color: #ffd700;
+  text-shadow: 0 0 8px rgb(255 200 80 / 0.8);
+  line-height: 1;
+}
+
+.slot-spectacle-reel-stack {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.slot-spectacle-reel-frame {
+  padding: 6px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #ffd700 0%, #b8860b 40%, #8b6914 100%);
+  box-shadow:
+    0 0 0 2px rgb(40 20 10 / 0.85),
+    0 0 20px rgb(255 180 40 / 0.25),
+    inset 0 0 0 2px rgb(255 250 200 / 0.35);
+}
+
 .slot-spectacle-lever {
   flex-shrink: 0;
-  width: 56px;
+  width: 52px;
   margin: 0;
-  padding: 0 4px 8px 0;
+  padding: 0 2px 6px 0;
   border: none;
   background: transparent;
   cursor: pointer;
@@ -4190,6 +4344,7 @@ body.wheel-spectacle-lock {
   justify-content: flex-end;
   align-items: flex-start;
   align-self: stretch;
+  position: relative;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -4198,13 +4353,11 @@ body.wheel-spectacle-lock {
   opacity: 0.5;
 }
 
-/*
- * 鉸點在靠機台一側（左下）：待命時球在右上方向，拉動時沿弧往左下帶（右上 → 左下）。
- */
 .slot-spectacle-lever-swing {
   display: flex;
   flex-direction: column;
   align-items: center;
+  position: relative;
   transform-origin: 26% 100%;
   transition: transform 0.42s cubic-bezier(0.33, 1.35, 0.52, 1);
   transform: rotate(26deg) translate3d(2px, 0, 0);
@@ -4214,44 +4367,55 @@ body.wheel-spectacle-lock {
   transform: rotate(-10deg) translate3d(-14px, 16px, 0);
 }
 
+.slot-spectacle-pull-hint {
+  position: absolute;
+  right: -6px;
+  top: 8px;
+  pointer-events: none;
+  opacity: 0.95;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.5));
+}
+
+.slot-spectacle-pull-hint-svg {
+  display: block;
+}
+
 .slot-spectacle-lever-knob {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
-  background: radial-gradient(circle at 30% 26%, #ffb0b0, #e83838 48%, #8a2020);
+  background: radial-gradient(circle at 32% 28%, #ff8a8a, #d32f2f 50%, #6a1010);
   box-shadow:
-    inset 0 2px 5px rgb(255 255 255 / 0.45),
-    0 3px 0 rgb(60 12 12 / 0.55),
-    0 6px 14px rgb(80 30 50 / 0.2);
+    inset 0 2px 6px rgb(255 255 255 / 0.4),
+    0 4px 0 rgb(60 10 10 / 0.65),
+    0 6px 14px rgb(0 0 0 / 0.35);
   z-index: 2;
 }
 
 .slot-spectacle-lever-arm {
-  width: 12px;
-  height: 102px;
+  width: 11px;
+  height: 96px;
   margin-top: -4px;
-  border-radius: 0 0 6px 6px;
-  background: linear-gradient(90deg, #7d6554, #a88868, #5c4a3e);
+  border-radius: 0 0 5px 5px;
+  background: linear-gradient(90deg, #8a7020, #ffd700, #b8860b, #6a5010);
   box-shadow:
-    inset 0 0 0 1px rgb(0 0 0 / 0.2),
-    inset 1px 0 0 rgb(255 255 255 / 0.2);
+    inset 0 0 0 1px rgb(0 0 0 / 0.25),
+    inset 1px 0 0 rgb(255 255 255 / 0.35);
 }
 
 .slot-spectacle-payline {
   position: absolute;
-  z-index: 2;
-  left: 12px;
-  right: 12px;
+  z-index: 3;
+  left: 10px;
+  right: 10px;
   top: 50%;
   height: 0;
   margin-top: -1px;
-  border-top: 2px solid rgb(255 190 90 / 0.9);
-  border-radius: 2px;
+  border-top: 2px solid rgb(255 140 0 / 0.95);
   pointer-events: none;
   box-shadow:
-    0 0 14px rgb(255 200 120 / 0.55),
-    0 0 2px rgb(255 255 255 / 0.8);
-  opacity: 0.95;
+    0 0 14px rgb(255 200 80 / 0.75),
+    0 0 2px #fff;
 }
 
 .slot-spectacle-reels {
@@ -4267,15 +4431,31 @@ body.wheel-spectacle-lock {
 }
 
 .slot-spectacle-reel-window {
+  position: relative;
   height: calc(52px * 3);
   overflow: hidden;
   border-radius: 12px;
-  background: linear-gradient(180deg, #f7f3ff 0%, #ebe4f7 42%, #e2daf0 100%);
-  border: 1px solid rgb(200 175 230 / 0.55);
-  box-shadow:
-    inset 0 3px 12px rgb(255 255 255 / 0.95),
-    inset 0 -6px 16px rgb(130 100 170 / 0.1),
-    0 1px 0 rgb(255 255 255 / 0.9);
+  background: #0f1520;
+  border: none;
+  box-shadow: inset 0 4px 20px rgb(0 0 0 / 0.65);
+}
+
+.slot-spectacle-reel-window::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    rgb(46 125 50 / 0.28) 0%,
+    rgb(46 125 50 / 0.28) 33.33%,
+    rgb(255 215 0 / 0.14) 33.33%,
+    rgb(255 215 0 / 0.14) 66.66%,
+    rgb(74 20 140 / 0.26) 66.66%,
+    rgb(74 20 140 / 0.26) 100%
+  );
 }
 
 .slot-spectacle-reel-window--solo {
@@ -4283,6 +4463,8 @@ body.wheel-spectacle-lock {
 }
 
 .slot-spectacle-strip {
+  position: relative;
+  z-index: 2;
   will-change: transform;
 }
 
@@ -4291,83 +4473,149 @@ body.wheel-spectacle-lock {
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 6px 10px;
-  font-size: 0.8rem;
-  font-weight: 700;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 0.76rem;
+  font-weight: 800;
   line-height: 1.15;
-  text-align: center;
+  text-align: left;
   word-break: break-word;
-  color: #3d2d52;
-  border-bottom: 1px solid rgb(255 255 255 / 0.55);
+  color: #fffef8;
+  border-bottom: 1px solid rgb(0 0 0 / 0.4);
   background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--slot-accent, #d4a84b) 18%, #ffffff) 0%,
-    color-mix(in srgb, var(--slot-accent, #c9a227) 12%, #f2ecfc) 100%
+    90deg,
+    color-mix(in srgb, var(--slot-accent, #f0c940) 35%, rgb(15 20 35 / 0.92)) 0%,
+    rgb(15 22 38 / 0.88) 100%
   );
-  text-shadow: 0 1px 0 rgb(255 255 255 / 0.65);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.9);
+}
+
+.slot-spectacle-cell-ico {
+  flex-shrink: 0;
+  font-size: 1.15rem;
+  line-height: 1;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.5));
+}
+
+.slot-spectacle-cell-txt {
+  flex: 1;
+  min-width: 0;
 }
 
 @supports not (background: color-mix(in srgb, red, blue)) {
   .slot-spectacle-cell {
-    background: linear-gradient(180deg, #fdf8ff 0%, #ede6f8 100%);
-    border-left: 3px solid var(--slot-accent, #c9a227);
+    background: linear-gradient(90deg, #2a3548 0%, #1a2235 100%);
+    border-left: 4px solid var(--slot-accent, #f0c940);
   }
 }
 
-/* 拉霸：結果區與主按鈕（淺底上的亮主色） */
+.slot-spectacle-idle-cta {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.slot-spectacle-stage.is-slot-idle .slot-spectacle-idle-cta {
+  display: flex;
+}
+
+.slot-spectacle-pull-btn {
+  width: 100%;
+  max-width: 280px;
+  padding: 14px 24px;
+  border: none;
+  border-radius: 14px;
+  font-size: 1rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  color: #fff;
+  cursor: pointer;
+  background: linear-gradient(180deg, #ff9f1a 0%, #ff8c00 35%, #e65100 100%);
+  box-shadow:
+    inset 0 2px 0 rgb(255 255 255 / 0.35),
+    0 4px 0 rgb(130 50 0 / 0.85),
+    0 12px 28px rgb(255 140 0 / 0.3);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.slot-spectacle-pull-btn:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.slot-spectacle-pull-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.slot-spectacle-foot-encourage {
+  margin: 0;
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: rgb(255 235 200 / 0.88);
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.5);
+}
+
+/* 拉霸：結果與收下 */
 .slot-spectacle-stage .wheel-spectacle-result:not(.is-error) {
-  margin-top: 18px;
-  font-size: clamp(1rem, 3.4vmin, 1.28rem);
-  font-weight: 800;
+  margin-top: 16px;
+  padding: 12px 14px;
+  font-size: clamp(0.95rem, 3.2vmin, 1.22rem);
+  font-weight: 900;
   letter-spacing: 0.06em;
-  color: #e91a72;
-  -webkit-text-stroke: 1px rgb(255 255 255 / 0.85);
-  text-shadow:
-    1px 1px 0 rgb(255 255 255 / 0.8),
-    0 2px 14px rgb(255 150 190 / 0.4);
+  text-align: center;
+  color: #fffef0;
+  background: linear-gradient(180deg, #1a3a6e 0%, #122a52 100%);
+  border: 2px solid rgb(255 215 0 / 0.65);
+  border-radius: 12px;
+  text-shadow: 0 2px 4px rgb(0 0 0 / 0.45);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08);
 }
 
 .slot-spectacle-stage .wheel-spectacle-result.is-error {
-  color: #c92a2a;
+  color: #ffc9c9;
   font-weight: 600;
-  font-size: 0.88rem;
-  -webkit-text-stroke: 0;
+  font-size: 0.86rem;
+  background: rgb(60 18 24 / 0.75);
+  border: 1px solid rgb(200 80 80 / 0.45);
   text-shadow: none;
 }
 
 .slot-spectacle-stage .wheel-spectacle-sub {
   margin-top: 8px;
-  font-size: 0.84rem;
-  color: #75586a;
+  font-size: 0.82rem;
+  color: rgb(255 230 210 / 0.9);
 }
 
 .slot-spectacle-stage .wheel-spectacle-actions {
-  margin-top: 20px;
+  margin-top: 18px;
 }
 
 .slot-spectacle-stage .wheel-spectacle-primary {
-  min-width: 160px;
+  min-width: 168px;
   padding: 12px 28px;
-  border-radius: 12px;
-  border: 1px solid rgb(255 255 255 / 0.55);
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  color: #fff;
-  background: linear-gradient(180deg, #ff73b3 0%, #ff3d8c 38%, #e02070 100%);
+  border-radius: 14px;
+  border: 2px solid rgb(255 220 140 / 0.45);
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  color: #1a0a08;
+  background: linear-gradient(180deg, #ffe066 0%, #ffb300 40%, #e65100 100%);
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.4),
-    0 3px 0 rgb(130 35 85 / 0.55),
-    0 10px 24px rgb(230 70 130 / 0.28);
+    inset 0 2px 0 rgb(255 255 255 / 0.4),
+    0 4px 0 rgb(120 50 0 / 0.8),
+    0 10px 22px rgb(0 0 0 / 0.3);
 }
 
 .slot-spectacle-stage .wheel-spectacle-primary:hover:not(:disabled) {
-  filter: brightness(1.05) saturate(1.05);
+  filter: brightness(1.06);
 }
 
 .slot-spectacle-stage .wheel-spectacle-primary:disabled {
   opacity: 0.45;
-  filter: saturate(0.85);
+  filter: saturate(0.8);
 }
 
 .wheel-spectacle-pointer {
@@ -4608,6 +4856,10 @@ body.wheel-spectacle-lock {
   }
 
   .slot-spectacle-hub.wheel-spectacle-hub.is-pulse {
+    animation: none !important;
+  }
+
+  .slot-spectacle-confetti {
     animation: none !important;
   }
 

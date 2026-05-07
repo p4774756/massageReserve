@@ -1,6 +1,7 @@
 import { onAuthStateChanged } from "firebase/auth";
 import { getLocale, localeApiParam, t } from "./i18n";
 import { createLittleMarySfx } from "./bookTabLittleMaryAudio";
+import { resolveLittleMaryRemoteSfxUrls } from "./bookTabLittleMarySfxUrls";
 import {
   exchangeSessionForArcadePointsCall,
   getFirebaseAuth,
@@ -390,7 +391,7 @@ export function mountBookTabLittleMary(
   /** 伺服器定價：幾遊戲點 ↔ 1 次按摩 */
   let lmArcadePerMassage = 100;
 
-  const sfx = createLittleMarySfx();
+  const sfx = createLittleMarySfx({ remote: resolveLittleMaryRemoteSfxUrls() });
   host.addEventListener(
     "pointerdown",
     () => {
@@ -1276,7 +1277,7 @@ export function mountBookTabLittleMary(
         if (myToken !== spinToken) return;
         setLight(lightIdx + 1);
         step += 1;
-        sfx.playSpinTick(step / Math.max(1, totalSteps));
+        sfx.playSpinTick(step, totalSteps);
         if (step >= totalSteps) {
           spinning = false;
           resolveStop(lightIdx);
