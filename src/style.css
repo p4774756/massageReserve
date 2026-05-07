@@ -1,36 +1,36 @@
 :root {
   color-scheme: light;
-  /* 無名小站系：粉紅主色、米色紙感、脊狀邊框、明體／標楷 */
-  --accent-rgb: 200 52 96;
-  --accent: #c83460;
-  --accent-bright: #e04a72;
-  --accent-deep: #9a2848;
-  --accent-hover: #a02850;
-  --accent-soft: #ffe8f0;
-  --accent-muted-bg: #fff5f8;
+  /* 痞客邦風：橘白色系、現代無襯線、圓角卡片 */
+  --accent-rgb: 252 91 20;
+  --accent: #FC5B14;
+  --accent-bright: #FF7A3D;
+  --accent-deep: #D94A0E;
+  --accent-hover: #E5520F;
+  --accent-soft: #FFF4ED;
+  --accent-muted-bg: #FFFAF7;
 
-  --bg: #f5e6f0;
-  --surface: #fffef8;
+  --bg: #f8f9fa;
+  --surface: #ffffff;
   --surface-elevated: #ffffff;
-  --surface-muted: #fff5f0;
-  --ink: #2a1a22;
-  --muted: #6a5560;
-  --accent-2: #8b4a6a;
-  --border: #ddb8c8;
-  --border-strong: #c898b0;
-  --danger: #b01028;
-  --radius: 3px;
-  --radius-sm: 2px;
-  --radius-lg: 4px;
-  --shadow: 1px 1px 0 rgb(0 0 0 / 0.12);
-  --shadow-sm: 1px 1px 0 rgb(0 0 0 / 0.1);
-  --shadow-lg: 2px 3px 0 rgb(0 0 0 / 0.14);
-  --ease: ease;
-  --font: "PMingLiU", "PingFang TC", "Heiti TC", "Noto Sans TC", "Apple LiGothic Medium", serif;
-  --font-head: "BiauKai", "DFKai-SB", "Kaiti TC", "STKaiti", "KaiTi", "PMingLiU", serif;
-  --link: #0000cc;
-  --link-visited: #551a8b;
-  --section-gap: 22px;
+  --surface-muted: #f3f4f6;
+  --ink: #1a1a1a;
+  --muted: #6b7280;
+  --accent-2: #0ea5e9;
+  --border: #e5e7eb;
+  --border-strong: #d1d5db;
+  --danger: #dc2626;
+  --radius: 8px;
+  --radius-sm: 4px;
+  --radius-lg: 12px;
+  --shadow: 0 1px 3px rgb(0 0 0 / 0.08);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-lg: 0 4px 12px rgb(0 0 0 / 0.1);
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --font: "Noto Sans TC", "PingFang TC", -apple-system, "Segoe UI", sans-serif;
+  --font-head: "Noto Sans TC", "PingFang TC", -apple-system, sans-serif;
+  --link: #FC5B14;
+  --link-visited: #D94A0E;
+  --section-gap: 24px;
   font-family: var(--font);
 }
 
@@ -43,24 +43,15 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background-color: #e4c8e0;
-  background-image:
-    radial-gradient(circle at 12% 18%, rgb(255 255 255 / 0.55) 0, rgb(255 255 255 / 0.55) 1px, transparent 1.5px),
-    radial-gradient(circle at 78% 9%, rgb(255 255 255 / 0.4) 0, rgb(255 255 255 / 0.4) 1px, transparent 1.5px),
-    radial-gradient(circle at 88% 72%, rgb(255 255 255 / 0.35) 0, rgb(255 255 255 / 0.35) 1px, transparent 1.5px),
-    radial-gradient(circle at 22% 86%, rgb(255 255 255 / 0.3) 0, rgb(255 255 255 / 0.3) 1px, transparent 1.5px),
-    radial-gradient(circle at 55% 44%, rgb(255 240 255 / 0.25) 0, rgb(255 240 255 / 0.25) 1px, transparent 1.5px),
-    radial-gradient(ellipse 120% 80% at 50% -20%, rgb(255 240 250 / 0.95), transparent 55%),
-    radial-gradient(ellipse 100% 60% at 100% 100%, rgb(220 236 255 / 0.5), transparent 45%),
-    radial-gradient(ellipse 80% 50% at 0% 80%, rgb(255 228 240 / 0.6), transparent 40%),
-    linear-gradient(180deg, #e8d0ec 0%, #f5e0f0 28%, #fff0f5 58%, #f0e8ff 88%, #dce8f8 100%);
+  background-color: var(--bg);
+  background-image: none;
   color: var(--ink);
   line-height: 1.6;
   -webkit-font-smoothing: auto;
 }
 
 ::selection {
-  background: rgb(255 200 220 / 0.85);
+  background: rgb(var(--accent-rgb) / 0.2);
   color: var(--ink);
 }
 
@@ -74,7 +65,7 @@ a:visited {
   color: var(--link-visited);
 }
 a:hover {
-  color: #cc0000;
+  color: var(--accent-hover);
   text-decoration-color: currentColor;
 }
 
@@ -90,9 +81,9 @@ a:hover {
 }
 
 .banner {
-  background: linear-gradient(180deg, #ffffee 0%, #fffacd 100%);
-  border: 2px ridge #e8c878;
-  color: #4a4030;
+  background: var(--accent-soft);
+  border: 1px solid var(--border);
+  color: var(--ink);
   padding: 12px 14px;
   border-radius: var(--radius);
   margin-bottom: 16px;
@@ -102,9 +93,9 @@ a:hover {
 .shell {
   position: relative;
   background: var(--surface);
-  border: 2px outset #f0d0e0;
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: 3px 3px 0 rgb(0 0 0 / 0.08), inset 0 0 0 1px rgb(255 255 255 / 0.85);
+  box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
 
@@ -116,14 +107,14 @@ a:hover {
   color: var(--muted);
   text-align: center;
   font-variant-numeric: tabular-nums;
-  border-top: 2px groove #e8c0d0;
-  background: linear-gradient(180deg, #ffeef5 0%, #f5e8f0 100%);
+  border-top: 1px solid var(--border);
+  background: var(--surface-muted);
 }
 
 .marquee {
-  border-bottom: 2px solid #c070a0;
-  background: linear-gradient(180deg, #ffd0e8 0%, #ffb8d8 45%, #ffa8d0 100%);
-  color: #4a1030;
+  border-bottom: 1px solid var(--border);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
   overflow: hidden;
   white-space: nowrap;
   padding: 10px 0;
@@ -188,12 +179,12 @@ a:hover {
 
 header.page-head {
   padding: 18px 20px 20px;
-  border-bottom: 2px groove #e8b8d0;
+  border-bottom: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 14px;
-  background: linear-gradient(180deg, #ffffff 0%, #fff8fc 55%, #fff0f8 100%);
+  background: #ffffff;
 }
 
 /* 標題與語系／會員同一列；h1 佔左側可伸縮空間，工具列靠右 */
@@ -335,10 +326,10 @@ header.page-head {
   font-family: var(--font-head);
   font-size: 1.5rem;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.02em;
   line-height: 1.35;
-  color: #a01850;
-  text-shadow: 1px 1px 0 rgb(255 255 255 / 0.8);
+  color: var(--ink);
+  text-shadow: none;
 }
 
 .page-head p {
@@ -360,8 +351,8 @@ header.page-head {
 
 /* 訪次統計：粉彩帶一點懷舊，色調與全站淺色底和諧（避免過飽和） */
 .page-head .visitor-stats.visitor-stats--wretch {
-  --wretch-ink: #4d3b44;
-  --wretch-accent: #7a5c68;
+  --wretch-ink: var(--ink);
+  --wretch-accent: var(--accent);
   display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
@@ -377,15 +368,15 @@ header.page-head {
   line-height: 1.5;
   letter-spacing: 0.02em;
   color: var(--wretch-ink);
-  background: linear-gradient(180deg, #fffef8 0%, #ffe8f0 100%);
-  border: 2px ridge #d8a8b8;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 1px 1px 0 rgb(0 0 0 / 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .page-head .visitor-stats--wretch .visitor-stats__rail {
   flex-shrink: 0;
-  color: #a88896;
+  color: var(--muted);
   font-size: 0.92em;
   line-height: 1;
   opacity: 0.9;
@@ -404,15 +395,15 @@ header.page-head {
   color: var(--wretch-accent);
   padding: 0 4px;
   margin: 0 1px;
-  border-radius: 2px;
-  background: linear-gradient(180deg, #ffffff 0%, #ffe8f0 100%);
-  border: 1px solid #c8a0b0;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  border: 1px solid var(--border);
+  box-shadow: none;
 }
 
 .page-head .visitor-stats--wretch .visitor-stats__em {
   font-weight: 700;
-  color: #5c4550;
+  color: var(--ink);
 }
 
 /* 後台：訪次列仍留在 DOM（切回前台可再顯示），須蓋過 wretch 的 inline-flex／邊框，否則 [hidden] 仍會露粉框 */
@@ -432,8 +423,8 @@ header.page-head {
   gap: 0;
   padding: 0 18px;
   margin-top: 0;
-  border-bottom: 2px solid #c898b8;
-  background: linear-gradient(180deg, #f8e8f0 0%, #f0dce8 100%);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-muted);
 }
 
 .head-toolbar-aside {
@@ -595,9 +586,9 @@ header.page-head {
 }
 
 .tab[aria-selected="true"] {
-  color: #900040;
+  color: var(--accent);
   font-weight: 700;
-  border-bottom-color: #c01860;
+  border-bottom-color: var(--accent);
 }
 
 .tab:focus-visible {
@@ -626,8 +617,8 @@ main.panel[hidden] {
   gap: 0 4px;
   margin: -4px 0 0;
   padding: 0 2px 2px;
-  border-bottom: 2px solid #c898b8;
-  background: linear-gradient(180deg, rgb(255 255 255 / 0.5) 0%, transparent 100%);
+  border-bottom: 1px solid var(--border);
+  background: transparent;
 }
 
 .book-tab {
@@ -2210,58 +2201,57 @@ textarea:focus-visible {
 
 button.primary {
   appearance: none;
-  border: 2px outset #e8a0c0;
-  background: linear-gradient(180deg, #ff9ec8 0%, #ff78b0 35%, #e85090 100%);
-  color: #fffef8;
+  border: none;
+  background: var(--accent);
+  color: #ffffff;
   padding: 10px 16px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   font: inherit;
   font-weight: 700;
   letter-spacing: 0.04em;
   cursor: pointer;
-  box-shadow: 1px 1px 0 rgb(0 0 0 / 0.12);
-  text-shadow: 0 1px 0 rgb(0 0 0 / 0.2);
-  transition: filter 0.1s var(--ease), border-color 0.1s var(--ease);
+  box-shadow: var(--shadow-sm);
+  text-shadow: none;
+  transition: filter 0.1s var(--ease), background 0.1s var(--ease);
 }
 
 button.primary:hover:not(:disabled) {
   filter: brightness(1.06);
-  color: #fffef8;
+  background: var(--accent-hover);
+  color: #ffffff;
 }
 
 button.primary:active:not(:disabled) {
-  border-style: inset;
   filter: brightness(0.95);
 }
 
 button.primary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  border: 2px solid #c8a8b8;
-  border-style: solid;
-  background: linear-gradient(180deg, #e8e0e8 0%, #d8d0d8 100%);
-  color: #888;
+  border: none;
+  background: var(--surface-muted);
+  color: var(--muted);
   text-shadow: none;
   box-shadow: none;
 }
 
 button.ghost {
   appearance: none;
-  border: 2px outset #e0d0d8;
-  background: linear-gradient(180deg, #ffffff 0%, #f0e8f0 45%, #e8e0e8 100%);
+  border: 1px solid var(--border);
+  background: #ffffff;
   color: var(--ink);
   padding: 9px 14px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 1px 1px 0 rgb(0 0 0 / 0.08);
+  box-shadow: none;
   transition: filter 0.1s var(--ease);
 }
 
 button.ghost:hover:not(:disabled) {
-  filter: brightness(1.03);
-  background: linear-gradient(180deg, #ffffff 0%, #f8f0f8 50%, #f0e8f0 100%);
+  background: var(--surface-muted);
+  border-color: var(--border-strong);
 }
 
 button.ghost:focus-visible {
@@ -2270,8 +2260,7 @@ button.ghost:focus-visible {
 }
 
 button.ghost:active:not(:disabled) {
-  border-style: inset;
-  filter: brightness(0.97);
+  background: var(--border);
 }
 
 button.ghost:disabled {
@@ -2377,10 +2366,10 @@ button.ghost:disabled {
 .member-hub-wheel-card {
   margin: 0;
   padding: 14px 16px 16px;
-  border-radius: 12px;
-  border: 1px solid rgb(200 152 184 / 0.5);
-  background: rgb(255 255 255 / 0.88);
-  box-shadow: 0 1px 0 rgb(255 255 255 / 0.9) inset;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -2392,7 +2381,7 @@ button.ghost:disabled {
   font-family: var(--font-head);
   font-size: 0.98rem;
   font-weight: 700;
-  color: #7a1a50;
+  color: var(--ink);
   letter-spacing: 0.02em;
 }
 
@@ -2536,9 +2525,9 @@ button.ghost:disabled {
 
 .my-bookings {
   padding: 14px 16px;
-  border: 2px ridge #e0c0d0;
-  border-radius: var(--radius-sm);
-  background: linear-gradient(180deg, #fffef8 0%, #fff5f8 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
 }
 
 .my-bookings-heading {
@@ -2575,8 +2564,8 @@ button.ghost:disabled {
   gap: 10px 14px;
   padding: 12px 14px;
   border-radius: var(--radius-sm);
-  border: 1px inset #e8c8d8;
-  background: #fffef8;
+  border: 1px solid var(--border);
+  background: var(--surface);
 }
 
 .my-booking-main {
@@ -2632,7 +2621,7 @@ button.ghost:disabled {
   padding: 6px 11px;
   border-radius: var(--radius);
   border: 1px solid var(--border-strong);
-  background: linear-gradient(180deg, #ffffff 0%, #fff0f5 100%);
+  background: var(--surface);
   font-size: 0.84rem;
   color: var(--muted);
 }
@@ -2766,11 +2755,11 @@ td {
 }
 
 th {
-  background: linear-gradient(180deg, #ffeef5 0%, #f5e0ec 100%);
+  background: var(--surface-muted);
   font-size: 0.78rem;
   letter-spacing: 0.02em;
   text-transform: none;
-  color: #5a3048;
+  color: var(--ink);
   font-weight: 700;
 }
 
@@ -3531,10 +3520,10 @@ label.field.checkbox-field {
 
 .modal-card {
   width: min(560px, 100%);
-  background: linear-gradient(180deg, #fffef8 0%, #fff5fa 100%);
-  border: 3px ridge #f8c8e0;
+  background: #ffffff;
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: 4px 4px 0 rgb(0 0 0 / 0.12), inset 0 0 0 1px rgb(255 255 255 / 0.9);
+  box-shadow: var(--shadow-lg);
   padding: 22px;
   display: grid;
   gap: 16px;
@@ -3545,8 +3534,8 @@ label.field.checkbox-field {
   font-family: var(--font-head);
   font-size: 1.15rem;
   font-weight: 700;
-  color: #901850;
-  letter-spacing: 0.04em;
+  color: var(--ink);
+  letter-spacing: 0.02em;
 }
 
 .member-modal {
@@ -5538,12 +5527,8 @@ body.wheel-spectacle-lock {
 /* -------------------------------------------------------------------------- */
 
 html.kuso-retro body {
-  background-color: #e4c8e0;
-  background-image:
-    radial-gradient(circle at 18% 22%, rgb(255 255 255 / 0.5) 0, rgb(255 255 255 / 0.5) 1px, transparent 1.5px),
-    radial-gradient(circle at 82% 12%, rgb(255 255 255 / 0.38) 0, rgb(255 255 255 / 0.38) 1px, transparent 1.5px),
-    radial-gradient(circle at 64% 78%, rgb(255 240 255 / 0.32) 0, rgb(255 240 255 / 0.32) 1px, transparent 1.5px),
-    linear-gradient(165deg, #e8d0ec 0%, #ffe8f4 38%, #fff8f0 72%, #e8ecfc 100%);
+  background-color: var(--bg);
+  background-image: none;
   color: var(--ink);
 }
 
@@ -5576,77 +5561,73 @@ html.kuso-retro #app::after {
 
 html.kuso-retro .shell:not(.admin-mode) {
   font-family: var(--font);
-  border: 3px ridge #ffb8d8;
-  border-radius: 2px;
-  box-shadow:
-    3px 3px 0 rgb(160 80 120 / 0.14),
-    inset 0 0 0 1px rgb(255 255 255 / 0.55);
-  background: linear-gradient(180deg, #fffef8 0%, #fff5fa 55%, #fffbff 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  background: #ffffff;
 }
 
 html.kuso-retro .shell:not(.admin-mode) header.page-head {
-  border-bottom: 2px groove #e8b8d0;
-  background: linear-gradient(180deg, #ffffff 0%, #fff8fc 55%, #fff0f8 100%);
+  border-bottom: 1px solid var(--border);
+  background: #ffffff;
 }
 
 html.kuso-retro .banner {
-  border: 2px ridge #e8c878;
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: linear-gradient(180deg, #ffffee 0%, #fffacd 100%);
-  color: #4a4030;
+  background: var(--accent-soft);
+  color: var(--ink);
   font-weight: 600;
   box-shadow: var(--shadow-sm);
 }
 
 html.kuso-retro .tabs {
-  background: linear-gradient(180deg, #ffd8ec 0%, #f0c8e0 100%);
-  border-bottom: 2px solid #a06080;
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--border);
 }
 
 html.kuso-retro .tab {
   font-weight: 600;
-  text-shadow: 0 1px 0 rgb(255 255 255 / 0.35);
+  text-shadow: none;
 }
 
 html.kuso-retro .tab[aria-selected="true"] {
-  color: #900040;
+  color: var(--accent);
   font-weight: 700;
-  background: linear-gradient(180deg, #fffef8 0%, #fff8f5 100%);
+  background: #ffffff;
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  border: 2px solid #a06080;
+  border: 1px solid var(--border);
   border-bottom: none;
-  margin-bottom: -2px;
+  margin-bottom: -1px;
   padding-inline: 10px;
   padding-bottom: 11px;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9);
+  box-shadow: none;
 }
 
 html.kuso-retro .book-tabs {
-  background: linear-gradient(180deg, rgb(255 255 255 / 0.55) 0%, transparent 100%);
-  border-bottom: 2px solid #c898b8;
+  background: transparent;
+  border-bottom: 1px solid var(--border);
 }
 
 html.kuso-retro .page-head h1 {
   font-family: var(--font-head);
   font-size: 1.52rem;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.02em;
   line-height: 1.35;
-  color: #c01868;
+  color: var(--ink);
   background: none;
   background-image: none;
   -webkit-text-fill-color: unset;
-  text-shadow:
-    1px 1px 0 #fff,
-    2px 2px 0 rgb(255 180 210 / 0.55);
+  text-shadow: none;
   filter: none;
   animation: none;
 }
 
 html.kuso-retro .app-version-footer {
-  background: linear-gradient(180deg, #ffeef5 0%, #f5e8f0 100%);
+  background: var(--surface-muted);
   color: var(--muted);
-  border-top: 2px groove #e8c0d0;
+  border-top: 1px solid var(--border);
   font-family: var(--font);
 }
 
@@ -5656,127 +5637,117 @@ html.kuso-retro .app-version-footer::before {
 }
 
 html.kuso-retro:not(:has(.shell.admin-mode)) a:hover {
-  background: rgb(200 52 96 / 0.1);
-  color: #a01850;
+  background: rgb(var(--accent-rgb) / 0.08);
+  color: var(--accent-deep);
 }
 
 html.kuso-retro:not(:has(.shell.admin-mode)) button.primary {
-  border: 2px outset #e8a0c0;
-  background: linear-gradient(180deg, #ff9ec8 0%, #ff78b0 35%, #e85090 100%);
-  color: #fffef9;
-  text-shadow: 0 1px 0 rgb(0 0 0 / 0.2);
-  box-shadow: 2px 2px 0 rgb(0 0 0 / 0.1);
-  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--accent);
+  color: #ffffff;
+  text-shadow: none;
+  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius);
 }
 
 html.kuso-retro:not(:has(.shell.admin-mode)) button.primary:hover:not(:disabled) {
   filter: brightness(1.05);
-  color: #fffef9;
+  background: var(--accent-hover);
+  color: #ffffff;
 }
 
 html.kuso-retro:not(:has(.shell.admin-mode)) button.primary:active:not(:disabled) {
-  border-style: inset;
-  filter: brightness(0.96);
+  filter: brightness(0.95);
 }
 
 html.kuso-retro:not(:has(.shell.admin-mode)) button.ghost {
-  border: 2px outset #e0d0d8;
-  background: linear-gradient(180deg, #ffffff 0%, #f0e8f0 45%, #e8e0e8 100%);
-  box-shadow: 1px 1px 0 rgb(0 0 0 / 0.08);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: #ffffff;
+  box-shadow: none;
+  border-radius: var(--radius);
 }
 
 html.kuso-retro:not(:has(.shell.admin-mode)) .modal-overlay {
-  background: rgb(60 20 40 / 0.38);
+  background: rgb(0 0 0 / 0.35);
 }
 
 html.kuso-retro:not(:has(.shell.admin-mode)) .modal-card {
-  border: 3px ridge #e8b8d0;
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: 4px 4px 0 rgb(0 0 0 / 0.12);
-  background: linear-gradient(180deg, #fffef8 0%, #fff5fa 100%);
+  box-shadow: var(--shadow-lg);
+  background: #ffffff;
 }
 
 html.kuso-retro:not(:has(.shell.admin-mode)) .modal-card h3 {
   font-family: var(--font-head);
-  color: #a01850;
-  letter-spacing: 0.04em;
+  color: var(--ink);
+  letter-spacing: 0.02em;
 }
 
 html.kuso-retro:not(:has(.shell.admin-mode)) main.panel {
-  background: linear-gradient(180deg, rgb(255 255 255 / 0.45) 0%, transparent 22px), #fffef8;
-  border-top: 1px dashed #e0b0c8;
+  background: #ffffff;
+  border-top: none;
 }
 
 html.kuso-retro:not(:has(.shell.admin-mode)) .book-tab-lm-mount {
-  border: 4px ridge #d4b896;
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow:
-    4px 4px 0 rgb(100 70 40 / 0.15),
-    inset 0 0 0 2px rgb(255 255 255 / 0.15);
+  box-shadow: var(--shadow);
 }
 
 html.kuso-retro:not(:has(.shell.admin-mode)) .book-tab-lm-intro {
-  color: #3a3028;
+  color: var(--ink);
 }
 
 html.kuso-retro:not(:has(.shell.admin-mode)) .book-tab-lm-rules {
-  border-color: rgb(200 160 180 / 0.45);
-  background: rgb(255 254 248 / 0.55);
+  border-color: var(--border);
+  background: var(--surface-muted);
 }
 
 html.kuso-retro:not(:has(.shell.admin-mode)) .book-tab-lm-rules__summary,
 html.kuso-retro:not(:has(.shell.admin-mode)) .book-tab-lm-rules__body {
-  color: #4a3830;
+  color: var(--ink);
 }
 
 html.kuso-retro:not(:has(.shell.admin-mode)) .lm-controls__start {
-  border: 2px outset #a8c8e8;
-  color: #1a2840;
-  background: linear-gradient(180deg, #c8e0ff 0%, #88b0e0 100%);
-  box-shadow:
-    3px 3px 0 rgb(40 56 80 / 0.28),
-    5px 5px 10px rgb(0 0 0 / 0.12);
+  border: none;
+  color: #ffffff;
+  background: var(--accent);
+  box-shadow: var(--shadow-sm);
 }
 
 html.kuso-retro:not(:has(.shell.admin-mode)) .lm-bet-tile--arcade {
-  border: 2px outset #fff8f0;
-  color: #3a2830;
-  background: linear-gradient(180deg, #fffef8 0%, #ffe8f0 100%);
-  box-shadow:
-    3px 3px 0 rgb(80 56 64 / 0.22),
-    5px 5px 10px rgb(0 0 0 / 0.12);
+  border: 1px solid var(--border);
+  color: var(--ink);
+  background: #ffffff;
+  box-shadow: var(--shadow-sm);
 }
 
 html.kuso-retro:not(:has(.shell.admin-mode)) .lm-bets-strip--arcade {
-  border-color: #e8b8c8;
-  background: linear-gradient(180deg, #fff5f8 0%, #ffe8f0 100%);
+  border-color: var(--border);
+  background: var(--surface-muted);
 }
 
 html.kuso-retro:not(:has(.shell.admin-mode)) .lm-cabinet {
-  background: linear-gradient(180deg, #4a3048 0%, #2a1828 100%);
-  box-shadow: inset 0 0 0 2px rgb(255 200 220 / 0.12);
+  background: linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%);
+  box-shadow: var(--shadow-lg);
 }
 
 html.kuso-retro .marquee.marquee-text {
   animation: none !important;
   filter: none !important;
-  color: #4a1030;
-  text-shadow: 0 1px 0 rgb(255 255 255 / 0.5);
+  color: var(--accent);
+  text-shadow: none;
   border-top: none;
 }
 
 /* -------------------------------------------------------------------------- */
-/* 後台：同無名版型（脊狀、明體）但主色改靛／天青，與前台粉紅區隔           */
+/* 後台                                                                      */
 /* -------------------------------------------------------------------------- */
 
 html.kuso-retro:has(.shell.admin-mode) body {
-  background-color: #dce4f4;
-  background-image:
-    radial-gradient(circle at 18% 20%, rgb(255 255 255 / 0.55) 0, rgb(255 255 255 / 0.55) 1px, transparent 1.5px),
-    radial-gradient(circle at 84% 24%, rgb(255 255 255 / 0.4) 0, rgb(255 255 255 / 0.4) 1px, transparent 1.5px),
-    radial-gradient(circle at 52% 88%, rgb(224 242 254 / 0.45) 0, rgb(224 242 254 / 0.45) 1px, transparent 1.5px),
-    linear-gradient(165deg, #e0e8fc 0%, #eef2ff 38%, #f8fafc 72%, #e0f2fe 100%);
+  background-color: #f1f5f9;
+  background-image: none;
 }
 
 html.kuso-retro:has(.shell.admin-mode) body::before {
@@ -5802,10 +5773,10 @@ html.kuso-retro:has(.shell.admin-mode) #app::after {
 html.kuso-retro .shell.admin-mode {
   --ink: #0f172a;
   --muted: #64748b;
-  --border: #e2e8f0;
-  --border-strong: #cbd5e1;
+  --border: #e5e7eb;
+  --border-strong: #d1d5db;
   --surface: #ffffff;
-  --surface-muted: #f1f5f9;
+  --surface-muted: #f8f9fa;
   --surface-elevated: #ffffff;
   --accent-rgb: 99 102 241;
   --accent: #6366f1;
@@ -5818,65 +5789,61 @@ html.kuso-retro .shell.admin-mode {
   --danger: #dc2626;
   font-family: var(--font);
   color: var(--ink);
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 52%, #f1f5ff 100%);
-  border: 3px ridge #a8b8d8;
-  border-radius: 2px;
-  box-shadow:
-    3px 3px 0 rgb(71 85 105 / 0.12),
-    inset 0 0 0 1px rgb(255 255 255 / 0.75);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
 }
 
 html.kuso-retro .shell.admin-mode header.page-head {
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 55%, #f1f5ff 100%);
-  border-bottom: 2px groove #c7d2fe;
+  background: #ffffff;
+  border-bottom: 1px solid var(--border);
 }
 
 html.kuso-retro .shell.admin-mode .page-head h1 {
   font-family: var(--font-head);
   font-size: 1.38rem;
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.02em;
   line-height: 1.35;
-  color: #312e81;
+  color: var(--ink);
   -webkit-text-fill-color: unset;
   background: none;
   background-image: none;
   background-size: auto;
   animation: none;
   filter: none;
-  text-shadow:
-    1px 1px 0 #fff,
-    2px 2px 0 rgb(165 180 252 / 0.45);
+  text-shadow: none;
 }
 
 html.kuso-retro .shell.admin-mode .tabs {
-  background: linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%);
-  border-bottom: 2px solid #64748b;
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--border);
 }
 
 html.kuso-retro .shell.admin-mode .tab {
   font-weight: 600;
-  text-shadow: 0 1px 0 rgb(255 255 255 / 0.5);
+  text-shadow: none;
   color: var(--muted);
 }
 
 html.kuso-retro .shell.admin-mode .tab[aria-selected="true"] {
-  color: #3730a3;
+  color: var(--accent);
   font-weight: 700;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  background: #ffffff;
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  border: 2px solid #64748b;
+  border: 1px solid var(--border);
   border-bottom: none;
-  margin-bottom: -2px;
+  margin-bottom: -1px;
   padding-inline: 10px;
   padding-bottom: 11px;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.95);
+  box-shadow: none;
 }
 
 html.kuso-retro .shell.admin-mode .app-version-footer {
-  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  background: var(--surface-muted);
   color: var(--muted);
-  border-top: 2px groove #cbd5e1;
+  border-top: 1px solid var(--border);
   font-family: var(--font);
 }
 
@@ -5886,17 +5853,17 @@ html.kuso-retro .shell.admin-mode .app-version-footer::before {
 }
 
 html.kuso-retro .shell.admin-mode a:hover {
-  background: rgb(99 102 241 / 0.1);
-  color: #4338ca;
+  background: rgb(var(--accent-rgb) / 0.08);
+  color: var(--accent-hover);
 }
 
 html.kuso-retro .shell.admin-mode button.primary {
-  border: 2px outset #818cf8;
-  background: linear-gradient(180deg, #818cf8 0%, #6366f1 40%, #4f46e5 100%);
+  border: none;
+  background: var(--accent);
   color: #ffffff;
-  text-shadow: 0 1px 0 rgb(0 0 0 / 0.18);
-  box-shadow: 2px 2px 0 rgb(49 46 129 / 0.18);
-  border-radius: var(--radius-sm);
+  text-shadow: none;
+  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius);
 }
 
 html.kuso-retro .shell.admin-mode button.primary:hover:not(:disabled) {
@@ -5905,56 +5872,53 @@ html.kuso-retro .shell.admin-mode button.primary:hover:not(:disabled) {
 }
 
 html.kuso-retro .shell.admin-mode button.primary:active:not(:disabled) {
-  border-style: inset;
   filter: brightness(0.95);
 }
 
 html.kuso-retro .shell.admin-mode button.primary:disabled {
-  border: 2px solid var(--border-strong);
-  border-style: solid;
-  background: linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%);
+  border: none;
+  background: var(--surface-muted);
   color: var(--muted);
   text-shadow: none;
   box-shadow: none;
 }
 
 html.kuso-retro .shell.admin-mode button.ghost {
-  border: 2px outset #e2e8f0;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 45%, #f1f5f9 100%);
-  box-shadow: 1px 1px 0 rgb(15 23 42 / 0.06);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: #ffffff;
+  box-shadow: none;
+  border-radius: var(--radius);
 }
 
 html.kuso-retro .shell.admin-mode button.ghost:hover:not(:disabled) {
-  filter: brightness(1.02);
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 50%, #f1f5f9 100%);
-  border-color: rgb(99 102 241 / 0.45);
+  background: var(--surface-muted);
+  border-color: var(--border-strong);
 }
 
 html.kuso-retro .shell.admin-mode button.ghost:active:not(:disabled) {
-  border-style: inset;
+  background: var(--border);
 }
 
 html.kuso-retro .shell.admin-mode th {
-  background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%);
-  color: #3730a3;
+  background: var(--surface-muted);
+  color: var(--ink);
 }
 
 html.kuso-retro .shell.admin-mode tbody tr:hover td {
-  background: rgb(99 102 241 / 0.07);
+  background: var(--accent-soft);
 }
 
 html.kuso-retro .shell.admin-mode .admin-tabs {
-  border-bottom: 2px solid #94a3b8;
+  border-bottom: 1px solid var(--border);
   gap: 4px;
 }
 
 html.kuso-retro .shell.admin-mode .admin-tab.is-active,
 html.kuso-retro .shell.admin-mode .admin-tab[aria-selected="true"] {
-  color: #3730a3;
+  color: var(--accent);
   font-weight: 700;
-  border-bottom-color: #6366f1;
-  background: linear-gradient(180deg, #ffffff 0%, #eef2ff 100%);
+  border-bottom-color: var(--accent);
+  background: #ffffff;
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
 }
 
@@ -5962,11 +5926,10 @@ html.kuso-retro .shell.admin-mode .admin-tab:focus-visible {
   outline-color: var(--accent);
 }
 
-/* 次層分頁覆寫：避免被上方「主分頁」靛色底線樣式一併套用 */
 html.kuso-retro .shell.admin-mode .admin-member-subtabs {
-  border-bottom: 1px solid #cbd5e1;
-  background: linear-gradient(180deg, #f1f5f9 0%, #e8ecf4 100%);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.7);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-muted);
+  box-shadow: none;
 }
 
 html.kuso-retro .shell.admin-mode .admin-member-subtabs .admin-tab {
@@ -5989,11 +5952,11 @@ html.kuso-retro .shell.admin-mode .admin-member-subtabs .admin-tab:hover {
 
 html.kuso-retro .shell.admin-mode .admin-member-subtabs .admin-tab.is-active,
 html.kuso-retro .shell.admin-mode .admin-member-subtabs .admin-tab[aria-selected="true"] {
-  color: #3730a3;
+  color: var(--accent);
   font-weight: 600;
   background: #fff;
-  border-color: #94a3b8;
-  box-shadow: 1px 1px 0 rgb(0 0 0 / 0.06);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
 }
 
 html.kuso-retro .shell.admin-mode input,
@@ -6015,8 +5978,8 @@ html.kuso-retro .shell.admin-mode .locale-select {
 }
 
 html.kuso-retro .shell.admin-mode main.panel {
-  background: linear-gradient(180deg, rgb(255 255 255 / 0.55) 0%, transparent 20px), #ffffff;
-  border-top: 1px dashed #cbd5e1;
+  background: #ffffff;
+  border-top: none;
 }
 
 /* Modal／浮層掛在 body，用 :has 與後台同套 */
@@ -6025,16 +5988,16 @@ html.kuso-retro:has(.shell.admin-mode) .modal-overlay {
 }
 
 html.kuso-retro:has(.shell.admin-mode) .modal-card {
-  border: 3px ridge #c7d2fe;
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-  box-shadow: 4px 4px 0 rgb(51 65 85 / 0.14);
+  background: #ffffff;
+  box-shadow: var(--shadow-lg);
 }
 
 html.kuso-retro:has(.shell.admin-mode) .modal-card h3 {
   font-family: var(--font-head);
-  color: #312e81;
-  letter-spacing: 0.04em;
+  color: var(--ink);
+  letter-spacing: 0.02em;
   -webkit-text-fill-color: unset;
   background: none;
   animation: none;
