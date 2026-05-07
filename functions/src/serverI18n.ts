@@ -10,7 +10,8 @@ export function parseLocale(data: unknown): ServerLocale {
 
 const EN: Record<string, string> = {
   "admin.only": "Admins only",
-  "member.verifyEmailFirst": "Verify your email in the inbox before using member features.",
+  "member.verifyEmailFirst":
+    "Verify your email (check spam/junk folder too) before using member features.",
   "topup.needId": "Enter member email or UID.",
   "topup.emailNotFound": "No member account found for this email.",
   "avail.badDateKey": "dateKey must be YYYY-MM-DD",
@@ -18,6 +19,9 @@ const EN: Record<string, string> = {
   "avail.beyondWindow": "Availability is only through the Sunday of next calendar week",
   "avail.weekdaysOnly": "Only Monday–Friday can be queried",
   "booking.pickPayment": "Select a payment method",
+  "booking.membersOnly":
+    "Bookings are for registered members only. Guest booking is no longer available — please sign up and sign in.",
+  "booking.needMemberLogin": "You must be signed in as a member to book. Use “Member sign-in” to register or log in.",
   "booking.memberNeedLogin": "Member payment requires sign-in",
   "booking.nameRequired": "Enter your name (max 80 characters)",
   "booking.noteTooLong": "Notes are too long",

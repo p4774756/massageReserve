@@ -32,7 +32,7 @@ export const EN: Record<string, string> = {
   "book.littleMary.rulesTitle": "Rules",
   "book.littleMary.rulesAria": "Little Mary demo rules",
   "book.littleMary.rules":
-    "You start with demo credits. Each tap on a symbol bets 1 credit on that line (−1 from balance). Bet all spends every remaining credit: +1 per line in round-robin order across all eight lines until balance is zero. Eight multipliers: Cherry 2×, Lemon 12×, Orange 10×, Melon 20×, Bell 20×, Stars 30×, 77 40×, BAR 50×. The outer ring has 24 cells with fixed symbol counts (Cherry 5, Lemon 4, Orange 4, Melon 3, Bell 3, Stars 2, 77 2, BAR 1). Bet at least once before Start. If Firebase is configured and Cloud Functions are deployed (`littleMarySpin` / `littleMaryHiLoRoll`), the stop cell and hi-lo roll are chosen by the server; otherwise the browser uses local demo RNG. The lamp animation always lands on that cell; if it matches a symbol you bet on, WIN += (bet on that line) × multiplier. After a win, a double-or-nothing pop-up appears: roll 1–12, HIGH = 7–12, LOW = 1–6; correct adds that win again to WIN, wrong removes that hit from WIN; Skip (or Esc) leaves WIN unchanged; after you roll, press OK to close. Win → Credit also closes the dialog and skips double-or-nothing. Bets reset each round; losing stakes are not refunded—use Clear bets before spinning to recover unspent stakes. Win → Credit merges WIN into your balance. Demo state is mostly client-side; RNG for outcomes may be server-side as above. No real money.",
+    "You start with demo credits. Each tap on a symbol bets 1 credit on that line (−1 from balance). +1 adds 1 to every line at once for 8 credits; if you have fewer than 8 credits, it does nothing (button stays disabled). Eight multipliers: Cherry 2×, Lemon 12×, Orange 10×, Melon 20×, Bell 20×, Stars 30×, 77 40×, BAR 50×. The outer ring has 24 cells with fixed symbol counts (Cherry 5, Lemon 4, Orange 4, Melon 3, Bell 3, Stars 2, 77 2, BAR 1). Bet at least once before Start. If Firebase is configured and Cloud Functions are deployed (`littleMarySpin` / `littleMaryHiLoRoll`), the stop cell and hi-lo roll are chosen by the server; otherwise the browser uses local demo RNG. The lamp animation always lands on that cell; if it matches a symbol you bet on, WIN += (bet on that line) × multiplier. After a win, a double-or-nothing pop-up appears: roll 1–12, HIGH = 7–12, LOW = 1–6; correct adds that win again to WIN, wrong removes that hit from WIN; Skip (or Esc) leaves WIN unchanged; after you roll, press OK to close. Win → Credit also closes the dialog and skips double-or-nothing. Bets reset each round; losing stakes are not refunded—use −1 to subtract 1 from each line that has a bet (repeat until cleared). Win → Credit merges WIN into your balance. Demo state is mostly client-side; RNG for outcomes may be server-side as above. No real money.",
 
   "status.pending": "Pending",
   "status.confirmed": "Confirmed",
@@ -57,6 +57,7 @@ export const EN: Record<string, string> = {
 
   "modal.cancel": "Cancel",
   "modal.close": "Close",
+  "modal.ok": "Got it",
   "modal.confirmDefault": "OK",
 
   "admin.cancelBooking.title": "Cancel booking",
@@ -68,7 +69,7 @@ export const EN: Record<string, string> = {
   "home.subtitle":
     "Mon–Fri · 15-minute start slots · session about 15–50 min depending on needs · lunch break 11:45–13:15 closed · latest start 16:30, ends before 17:00",
   "home.guestHint":
-    "No sign-up required: choose a guest payment option. Members can top up and join the wheel draw.",
+    "Booking requires a registered member account and verified email (check spam/junk); members can top up and join the wheel.",
 
   "visitor.loading": "Loading visit stats…",
   "visitor.badFormat": "Visit stats response was invalid.",
@@ -84,6 +85,7 @@ export const EN: Record<string, string> = {
 
   "member.entryLogin": "Member sign-in",
   "member.entryCenter": "Member hub",
+  "member.entrySignOut": "Sign out",
 
   "booking.submit": "Submit booking",
   "booking.spinWheel": "Spin wheel",
@@ -119,7 +121,7 @@ export const EN: Record<string, string> = {
 
   "field.name": "Name",
   "field.nameHint":
-    "No sign-in needed—use a nickname; if you're signed in with a profile name, it may auto-fill (you can edit).",
+    "Enter the name for your booking; if you're signed in, your profile name may auto-fill (you can edit). Booking requires a verified member account.",
   "field.date": "Date (Mon–Fri)",
   "field.dateHint": "Farthest selectable date is the Sunday of next week (Taipei); later dates are disabled.",
   "field.startSlot": "Start time (15-minute slots)",
@@ -153,7 +155,10 @@ export const EN: Record<string, string> = {
   "booking.slotPast": "That start time has passed — pick a later slot.",
   "booking.memberModeNeedLogin": "Member payment requires sign-in.",
   "booking.memberNeedVerify":
-    "Member payment needs a verified email — check your inbox for the verification link.",
+    "Bookings need a verified email — open the link in your inbox (check spam/promotions); or tap “Resend verification”.",
+  "booking.membersOnlyModalTitle": "Sign in and verify email to book",
+  "booking.mode.membersOnlyPlaceholder":
+    "Register / sign in and verify your email to choose payment (“Member sign-in” top right)",
   "booking.walletShort":
     "Insufficient wallet balance — switch to cash, “buy a drink”, or top up first.",
   "booking.sessionShort":
@@ -171,7 +176,7 @@ export const EN: Record<string, string> = {
   "myBookings.tab.upcoming": "Upcoming",
   "myBookings.tab.ended": "Ended",
   "myBookings.intro":
-    "Bookings tied to your account (member payment methods). Guest bookings do not appear here. “Upcoming” lists pending/confirmed bookings before their start time; everything else is under “Ended”.",
+    "Bookings tied to your account. “Upcoming” lists pending/confirmed bookings before their start time; everything else is under “Ended”.",
   "myBookings.emptyUpcoming":
     "No upcoming bookings. After you submit with member wallet/cash/drink credit, pending or confirmed bookings before their start time appear here.",
   "myBookings.emptyEnded":
@@ -183,7 +188,7 @@ export const EN: Record<string, string> = {
   "myBookings.cancelFail": "Cancel failed",
 
   "member.verifyBanner":
-    "Signed in, but email is not verified. Open the link in your email, then tap “I've verified — refresh status”.",
+    "Signed in, but email is not verified. Open the link in your inbox (including spam/promotions), then tap “I've verified — refresh status”.",
   "member.walletLoading": "Loading member balance…",
   "member.walletLine": "Signed in: wallet balance {{balance}} (NTD), spin chances {{chances}}.",
   "member.walletSummaryTitle": "Member",
@@ -214,7 +219,7 @@ export const EN: Record<string, string> = {
     "Verification email sent again — check inbox (and spam).",
   "member.verifyDone": "Verification complete — member features are available.",
   "member.verifyPendingReload":
-    "Verification not detected yet — open the link in the email and try again.",
+    "Verification not detected yet — open the link in the email (check spam/promotions) and try again.",
 
   "auth.modal.title": "Member sign-in / sign-up",
   "auth.login": "Sign in",
@@ -238,7 +243,7 @@ export const EN: Record<string, string> = {
   "auth.passwordMin": "Password must be at least 6 characters.",
   "auth.passwordMismatch": "The two passwords do not match.",
   "auth.registerSuccess":
-    "Registered — verification sent. Open the link, then use “I've verified — refresh” or sign in again.",
+    "Registered — verification sent. Open the link in your inbox (including spam/promotions), then use “I've verified — refresh” or sign in again.",
   "auth.registerFail": "Registration failed",
   "auth.needEmail": "Enter email.",
   "auth.resetHintSent":
@@ -250,20 +255,20 @@ export const EN: Record<string, string> = {
 
   "member.center": "Member hub",
   "member.anonymousIntro":
-    "You're using guest “contact shop”. For wallet, bookings, or the wheel, sign out and use Member sign-in; guest chat history is not merged automatically.",
+    "You're using guest “contact shop”. For wallet, bookings, or the wheel, tap “Sign out” (top right), then use “Member sign-in” to register or log in; guest chat history is not merged automatically.",
   "member.anonymousUid": "Anonymous UID: ",
   "member.signedInAs": "Signed in: {{email}} (UID: {{uid}})",
   "member.noEmail": "(no email)",
   "member.verifyModalHint":
-    "Verify your email to use sessions, member booking, and the wheel.",
+    "Verify your email (check spam/promotions) to book, use wallet sessions, and spin the wheel.",
   "member.mode.wallet": "Member sessions (deduct 1)",
   "member.mode.cash": "Member cash (NT$ {{price}})",
   "member.modeHint.member":
     "Choose session deduction, member cash (NT$ {{price}}), or “buy a drink” (per on-site agreement).",
-  "member.modeHint.unverified":
-    "Signed in but email not verified — book as guest for now; after verification you can use member payment, wallet, and wheel.",
-  "member.modeHint.guest":
-    "Guests can pay cash NT$ {{price}} or “buy a drink”; session top-up and wheel need sign-in (top right).",
+  "member.modeHint.unverifiedBook":
+    "Open the verification link in your email; if you didn’t receive it, check spam/promotions or tap “Resend verification”.",
+  "member.modeHint.signUpFirst":
+    "Booking is members-only — you can choose payment here; on submit you must be signed in with a verified email (“Member sign-in”, top right).",
 
   "session.guest": "Guest",
   "session.guestChat": "Guest chat mode",

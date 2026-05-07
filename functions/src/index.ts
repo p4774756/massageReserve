@@ -70,7 +70,11 @@ async function assertMemberEmailVerified(uid: string, locale: ServerLocale): Pro
   if (!record.emailVerified) {
     throw new HttpsError(
       "failed-precondition",
-      st(locale, "member.verifyEmailFirst", "請先至信箱完成 Email 驗證後再使用會員功能。"),
+      st(
+        locale,
+        "member.verifyEmailFirst",
+        "請先至信箱完成 Email 驗證後再使用會員功能（若未見來信，請查看垃圾／販促信件匣）。",
+      ),
     );
   }
 }
@@ -272,8 +276,6 @@ export const createBooking = onCall(
   const startSlot = typeof data.startSlot === "string" ? data.startSlot : "";
   const bookingModeRaw = typeof data.bookingMode === "string" ? data.bookingMode.trim() : "";
   const bookingMode =
-    bookingModeRaw === "guest_cash" ||
-    bookingModeRaw === "guest_beverage" ||
     bookingModeRaw === "member_cash" ||
     bookingModeRaw === "member_wallet" ||
     bookingModeRaw === "member_beverage"
@@ -281,15 +283,21 @@ export const createBooking = onCall(
       : "";
   const uid = request.auth?.uid;
   if (!bookingMode) {
+    if (bookingModeRaw === "guest_cash" || bookingModeRaw === "guest_beverage") {
+      throw new HttpsError(
+        "permission-denied",
+        st(locale, "booking.membersOnly", "預約僅限註冊會員，請先註冊並登入；訪客預約已關閉。"),
+      );
+    }
     throw new HttpsError("invalid-argument", st(locale, "booking.pickPayment", "請選擇付款方式"));
   }
-  const isGuestMode = bookingMode === "guest_cash" || bookingMode === "guest_beverage";
-  if (!isGuestMode && !uid) {
-    throw new HttpsError("unauthenticated", st(locale, "booking.memberNeedLogin", "會員付款模式需先登入"));
+  if (!uid) {
+    throw new HttpsError(
+      "unauthenticated",
+      st(locale, "booking.needMemberLogin", "預約須先註冊並登入；請點選「會員登入」完成註冊或登入。"),
+    );
   }
-  if (!isGuestMode && uid) {
-    await assertMemberEmailVerified(uid, locale);
-  }
+  await assertMemberEmailVerified(uid, locale);
 
   if (!displayName || displayName.length > 80) {
     throw new HttpsError("invalid-argument", st(locale, "booking.nameRequired", "請填寫姓名（最多 80 字）"));
@@ -375,11 +383,7 @@ export const createBooking = onCall(
       let walletDeducted = 0;
       let paidCash = 0;
       let sessionCreditsDeducted = 0;
-      if (bookingMode === "guest_cash") {
-        paidCash = sessionPriceNtd;
-      } else if (bookingMode === "guest_beverage") {
-        // 訪客以飲料折抵：不綁 customerId、不扣款
-      } else if (bookingMode === "member_cash") {
+      if (bookingMode === "member_cash") {
         customerId = uid!;
         paidCash = sessionPriceNtd;
       } else if (bookingMode === "member_beverage") {
@@ -464,8 +468,7 @@ export const createBooking = onCall(
   const ownerTo = ownerNotifyEmail.value().trim();
   const from = resendFrom.value().trim() || "Massage預約 <onboarding@resend.dev>";
   if (key && ownerTo) {
-    const memberUid =
-      bookingMode === "guest_cash" || bookingMode === "guest_beverage" ? null : uid ?? null;
+    const memberUid = uid;
     void sendNewBookingEmailToOwner({
       apiKey: key,
       from,

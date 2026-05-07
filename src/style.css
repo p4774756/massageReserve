@@ -247,6 +247,15 @@ header.page-head {
   gap: 12px;
 }
 
+.head-member-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .page-head-top-row .page-head-session {
   flex: 1 1 0;
   min-width: 0;
@@ -865,6 +874,8 @@ main.panel[hidden] {
 
 .lm-root--salon {
   gap: 12px;
+  /** 機台主體隨視窗變寬（勿鎖死 520px），水果／跑燈格才能跟著放大 */
+  max-width: min(100%, min(94vw, 720px));
   /** 與押注白鍵列對齊：高、內距、欄距（比大小／控制列沿用） */
   --lm-arcade-tile-min-h: 4.35rem;
   --lm-arcade-strip-pad: 10px 12px 12px;
@@ -910,9 +921,10 @@ main.panel[hidden] {
 }
 
 .lm-status--arcade .lm-status__label {
-  color: rgb(200 170 195 / 0.88);
-  font-size: clamp(0.52rem, 2.8vw, 0.65rem);
-  letter-spacing: clamp(0.06em, 0.5vw, 0.14em);
+  color: rgb(200 170 195 / 0.92);
+  font-size: clamp(0.72rem, 3.6vw, 0.95rem);
+  font-weight: 800;
+  letter-spacing: clamp(0.08em, 0.55vw, 0.16em);
 }
 
 .lm-status--arcade .lm-status__group {
@@ -937,8 +949,8 @@ main.panel[hidden] {
   }
 
   .lm-status--arcade .lm-status__label {
-    font-size: clamp(0.52rem, 4cqw, 0.65rem);
-    letter-spacing: clamp(0.06em, 0.8cqw, 0.14em);
+    font-size: clamp(0.72rem, 5.2cqw, 0.95rem);
+    letter-spacing: clamp(0.08em, 1cqw, 0.16em);
   }
 
   .lm-status--arcade .lm-led--arcade {
@@ -946,6 +958,14 @@ main.panel[hidden] {
     padding: clamp(2px, 1.1cqw, 5px) clamp(4px, 3.2cqw, 10px);
     letter-spacing: clamp(0.05em, 0.6cqw, 0.12em);
     min-width: clamp(3.2ch, 18cqw, 4.6ch);
+  }
+
+  /** 外圈水果：依機台（board）寬度比例放大，與七段字／格線同步 */
+  .lm-ico--slot {
+    width: clamp(1.2rem, 12cqw, 3rem);
+    height: clamp(1.2rem, 12cqw, 3rem);
+    max-width: min(100%, 90%);
+    max-height: min(100%, 90%);
   }
 }
 
@@ -1023,7 +1043,7 @@ main.panel[hidden] {
   /* 以寬度決定正方形高度；勿用遠小於寬度的 max-height，否則窄螢幕會垂直擠壓裁切底排 */
   aspect-ratio: 1;
   width: 100%;
-  max-width: min(100%, min(92vw, 400px));
+  max-width: 100%;
   height: auto;
   max-height: none;
   margin: 0 auto 10px;
@@ -1214,10 +1234,11 @@ main.panel[hidden] {
 }
 
 .lm-ico--slot {
-  width: clamp(1.1rem, 5.8vw, 1.72rem);
-  height: clamp(1.1rem, 5.8vw, 1.72rem);
-  max-width: min(100%, 2.1rem);
-  max-height: min(100%, 2.1rem);
+  /** 無 CQ 時：vw 隨視窗；上限拉高避免大螢幕仍像米粒 */
+  width: clamp(1.15rem, 9vw, 2.35rem);
+  height: clamp(1.15rem, 9vw, 2.35rem);
+  max-width: min(100%, 88%);
+  max-height: min(100%, 88%);
   margin: 0 auto;
   flex-shrink: 1;
   object-fit: contain;
@@ -1231,16 +1252,16 @@ main.panel[hidden] {
 
 /* 4×2 押注白鍵：圖示大於上方 LED 總覽列，減少留白（靠 container + cqw 隨寬放大） */
 .lm-bets-strip--arcade .lm-ico--bet {
-  width: clamp(1.42rem, 8.2vw, 2.2rem);
-  height: clamp(1.42rem, 8.2vw, 2.2rem);
-  max-width: min(100%, 2.55rem);
-  max-height: min(72%, 2.55rem);
+  width: clamp(1.45rem, 9vw, 2.65rem);
+  height: clamp(1.45rem, 9vw, 2.65rem);
+  max-width: min(100%, 3rem);
+  max-height: min(72%, 3rem);
 }
 
 @container lm-bets-strip (min-width: 0px) {
   .lm-bets-strip--arcade .lm-ico--bet {
-    width: clamp(1.42rem, 19cqw, 2.45rem);
-    height: clamp(1.42rem, 19cqw, 2.45rem);
+    width: clamp(1.45rem, 22cqw, 2.85rem);
+    height: clamp(1.45rem, 22cqw, 2.85rem);
   }
 }
 
@@ -1281,14 +1302,14 @@ main.panel[hidden] {
 
 /* 與列寬連動：無 CQ 時用 vw；有 container 時用 cqw（8 欄時易偏小，下限與 cqw 係數略抬高） */
 .lm-bet-ledcell .lm-ico--bet {
-  width: clamp(0.95rem, 4.8vw, 1.42rem);
-  height: clamp(0.95rem, 4.8vw, 1.42rem);
+  width: clamp(1rem, 6vw, 1.85rem);
+  height: clamp(1rem, 6vw, 1.85rem);
 }
 
 @container lm-bet-led (min-width: 0px) {
   .lm-bet-ledcell .lm-ico--bet {
-    width: clamp(0.95rem, 12cqw, 1.52rem);
-    height: clamp(0.95rem, 12cqw, 1.52rem);
+    width: clamp(1rem, 14cqw, 1.95rem);
+    height: clamp(1rem, 14cqw, 1.95rem);
   }
 }
 
@@ -1342,12 +1363,13 @@ main.panel[hidden] {
     --lm-arcade-grid-gap: 6px;
   }
 
-  .lm-controls--arcade.lm-controls--bar .lm-controls__clear,
+  .lm-controls--arcade.lm-controls--bar .lm-controls__betminus,
   .lm-controls--arcade.lm-controls--bar .lm-controls__betall,
   .lm-controls--arcade.lm-controls--bar .lm-controls__collect,
   .lm-controls--arcade.lm-controls--bar .lm-controls__start {
-    font-size: clamp(0.5rem, 3.2vw, 0.6rem);
-    padding: 3px 2px;
+    font-size: clamp(0.78rem, 4.5vw, 0.95rem);
+    padding: 4px 3px;
+    line-height: 1.18;
   }
 
   .lm-bet-tile--arcade {
@@ -1518,7 +1540,7 @@ main.panel[hidden] {
   padding: 2px 0;
 }
 
-.lm-controls--bar:not(.lm-controls--arcade) .lm-controls__clear,
+.lm-controls--bar:not(.lm-controls--arcade) .lm-controls__betminus,
 .lm-controls--bar:not(.lm-controls--arcade) .lm-controls__betall,
 .lm-controls--bar:not(.lm-controls--arcade) .lm-controls__collect {
   flex: 0 1 auto;
@@ -1564,7 +1586,7 @@ main.panel[hidden] {
     0 3px 8px rgb(0 0 0 / 0.2);
 }
 
-.lm-controls--arcade.lm-controls--bar .lm-controls__clear,
+.lm-controls--arcade.lm-controls--bar .lm-controls__betminus,
 .lm-controls--arcade.lm-controls--bar .lm-controls__betall,
 .lm-controls--arcade.lm-controls--bar .lm-controls__collect,
 .lm-controls--arcade.lm-controls--bar .lm-controls__start {
@@ -1578,13 +1600,13 @@ main.panel[hidden] {
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 4px 3px;
-  font-size: clamp(0.52rem, 2.5vw, 0.66rem);
-  line-height: 1.12;
+  padding: 6px 4px;
+  font-size: clamp(0.82rem, 4.2vw, 1.08rem);
+  line-height: 1.2;
 }
 
 /* 與押注格 lm-bet-tile--arcade 同系：實體機式方角厚鍵帽 */
-.lm-controls--arcade .lm-controls__clear,
+.lm-controls--arcade .lm-controls__betminus,
 .lm-controls--arcade .lm-controls__betall,
 .lm-controls--arcade .lm-controls__collect,
 .lm-controls--arcade .lm-controls__start {
@@ -1611,7 +1633,7 @@ main.panel[hidden] {
   border-color: rgb(255 210 190 / 0.65);
 }
 
-.lm-controls--arcade .lm-controls__clear:hover,
+.lm-controls--arcade .lm-controls__betminus:hover,
 .lm-controls--arcade .lm-controls__betall:hover,
 .lm-controls--arcade .lm-controls__collect:hover,
 .lm-controls--arcade .lm-controls__start:hover {
@@ -1626,7 +1648,7 @@ main.panel[hidden] {
     0 0 18px rgb(255 200 220 / 0.22);
 }
 
-.lm-controls--arcade .lm-controls__clear:active,
+.lm-controls--arcade .lm-controls__betminus:active,
 .lm-controls--arcade .lm-controls__betall:active,
 .lm-controls--arcade .lm-controls__collect:active,
 .lm-controls--arcade .lm-controls__start:active {
@@ -1665,7 +1687,7 @@ main.panel[hidden] {
 .lm-bet-tile:focus-visible,
 .lm-controls__collect:focus-visible,
 .lm-controls__betall:focus-visible,
-.lm-controls__clear:focus-visible {
+.lm-controls__betminus:focus-visible {
   outline: 2px solid rgb(255 200 120 / 0.85);
   outline-offset: 2px;
 }
@@ -1683,7 +1705,7 @@ main.panel[hidden] {
 
 .lm-controls__collect,
 .lm-controls__betall,
-.lm-controls__clear {
+.lm-controls__betminus {
   padding: 9px 14px;
   font-size: 0.8rem;
   font-weight: 600;
@@ -1839,14 +1861,116 @@ main.panel[hidden] {
 }
 
 .lm-hilo__dice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
   min-height: 1.5em;
   margin-bottom: 8px;
-  font-size: 0.78rem;
+}
+
+/* 比大小：七段顯示器風格（字型見 .lm-led / main 載入 DSEG7） */
+.lm-hilo-7seg-panel {
+  width: 100%;
+  max-width: 280px;
+  padding: 12px 18px 14px;
+  border-radius: 12px;
+  box-sizing: border-box;
+  background: linear-gradient(180deg, #120a10 0%, #060304 100%);
+  border: 2px solid rgb(255 120 70 / 0.38);
+  box-shadow:
+    inset 0 2px 14px rgb(0 0 0 / 0.65),
+    0 0 28px rgb(255 60 30 / 0.12);
+}
+
+.lm-hilo-7seg-readout {
+  font-family: "DSEG7", ui-monospace, "Cascadia Code", monospace;
+  font-size: clamp(2.25rem, 14vw, 3.25rem);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.12em;
+  text-align: center;
+  color: #ff4a32;
+  text-shadow:
+    0 0 12px rgb(255 60 40 / 0.55),
+    0 0 28px rgb(255 40 60 / 0.25),
+    0 1px 0 rgb(0 0 0 / 0.9);
+  min-height: 1.1em;
+  font-variant-numeric: tabular-nums;
+}
+
+.lm-hilo-7seg-readout--rolling {
+  color: #ffb28a;
+  animation: lm-hilo-7seg-flicker 0.09s ease-in-out infinite;
+}
+
+@keyframes lm-hilo-7seg-flicker {
+  50% {
+    opacity: 0.88;
+    filter: brightness(1.12);
+  }
+}
+
+.lm-hilo-modal__dialog--rolling .lm-hilo-modal__actions {
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.lm-hilo-display-caption {
+  margin: 0;
+  width: 100%;
+  font-size: 0.72rem;
+  line-height: 1.4;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-align: center;
   color: rgb(255 220 160 / 0.95);
   font-family: ui-monospace, "Cascadia Code", system-ui, sans-serif;
+}
+
+.lm-hilo-meter {
+  width: 100%;
+  max-width: 280px;
+}
+
+.lm-hilo-meter__track {
+  position: relative;
+  height: 10px;
+  margin-bottom: 6px;
+  border-radius: 6px;
+  overflow: visible;
+  background: linear-gradient(
+    90deg,
+    rgb(90 70 130 / 0.55) 0%,
+    rgb(90 70 130 / 0.55) calc(50% - 1px),
+    rgb(140 90 60 / 0.55) calc(50% + 1px),
+    rgb(140 90 60 / 0.55) 100%
+  );
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.45);
+}
+
+.lm-hilo-meter__needle {
+  position: absolute;
+  top: -5px;
+  left: 0;
+  width: 5px;
+  height: 20px;
+  margin-left: -2.5px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #ffecc8 0%, #f0a848 100%);
+  box-shadow:
+    0 0 10px rgb(255 200 100 / 0.85),
+    0 2px 4px rgb(0 0 0 / 0.35);
+  transition: left 0.35s ease-out;
+}
+
+.lm-hilo-meter__labels {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.58rem;
+  letter-spacing: 0.02em;
+  color: rgb(200 185 215 / 0.88);
 }
 
 .lm-hilo__pick,
@@ -2005,8 +2129,19 @@ textarea {
   transition: border-color 0.12s var(--ease), box-shadow 0.12s var(--ease);
 }
 
+.booking-payment-wrap {
+  position: relative;
+  width: 100%;
+}
+
+select:disabled {
+  cursor: not-allowed;
+  opacity: 0.88;
+  pointer-events: none;
+}
+
 input:hover,
-select:hover,
+select:hover:not(:disabled),
 textarea:hover {
   border-color: var(--border-strong);
   background: var(--surface);
@@ -2018,7 +2153,7 @@ textarea {
 }
 
 input:focus-visible,
-select:focus-visible,
+select:focus-visible:not(:disabled),
 textarea:focus-visible {
   outline: none;
   border-color: var(--ink);

@@ -422,6 +422,46 @@ function showConfirmModal(
   });
 }
 
+/** 單鍵提醒（無取消鈕）；Esc／點遮罩／按鈕皆可關閉 */
+function showAlertModal(title: string, message: string, okText = t("modal.ok", "我知道了")): Promise<void> {
+  return new Promise((resolve) => {
+    const overlay = el("div", { class: "modal-overlay" });
+    const dialog = el("div", { class: "modal-card" });
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    dialog.setAttribute("aria-labelledby", "alert-modal-title");
+    const heading = el("h3", { id: "alert-modal-title" }, [title]);
+    const body = el("pre", { class: "modal-message" }, [message]);
+    const okBtn = el("button", { class: "primary", type: "button" }, [okText]);
+    const actions = el("div", { class: "modal-actions" }, [okBtn]);
+    dialog.append(heading, body, actions);
+    overlay.append(dialog);
+
+    const close = () => {
+      document.removeEventListener("keydown", onKeyDown);
+      overlay.remove();
+      resolve();
+    };
+    const onKeyDown = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape") {
+        ev.preventDefault();
+        close();
+      }
+    };
+
+    okBtn.addEventListener("click", () => close());
+    overlay.addEventListener("click", (ev) => {
+      if (ev.target === overlay) {
+        close();
+      }
+    });
+    document.addEventListener("keydown", onKeyDown);
+
+    document.body.append(overlay);
+    okBtn.focus();
+  });
+}
+
 function shortUidForDisplay(uid: string, headChars = 8): string {
   if (!uid) return "";
   if (uid.length <= headChars) return uid;
@@ -577,15 +617,26 @@ function render() {
   const titleGuestHint = el("p", { class: "page-head-guest-hint" }, [
     t(
       "home.guestHint",
-      "免事先註冊也可預約，選「訪客」付款方式即可；註冊會員則可儲值與抽獎。",
+      "預約須先註冊並登入會員，並完成信箱驗證（若未見驗證信，請查看垃圾／販促信件匣）；會員可儲值與參加抽獎。",
     ),
   ]);
   const visitorStats = createVisitorStatsLine(tabFromPath() !== "admin");
   const visitorStatsLine = visitorStats.element;
   const titleTextCol = el("div", { class: "page-head-text" }, [titleDesc, titleGuestHint, visitorStatsLine]);
 
-  const memberEntryBtn = el("button", { class: "ghost member-entry", type: "button" }, [
+  const memberLoginBtn = el("button", { class: "ghost member-entry member-login", type: "button" }, [
     t("member.entryLogin", "會員登入"),
+  ]);
+  const memberCenterBtn = el("button", { class: "ghost member-entry member-center", type: "button" }, [
+    t("member.entryCenter", "會員中心"),
+  ]);
+  const headerSignOutBtn = el("button", { class: "ghost member-entry member-sign-out", type: "button" }, [
+    t("member.entrySignOut", "登出"),
+  ]);
+  const headMemberActions = el("div", { class: "head-member-actions" }, [
+    memberLoginBtn,
+    memberCenterBtn,
+    headerSignOutBtn,
   ]);
   const headSessionLine1 = el("span", { class: "page-head-session__line" });
   const headSessionLine2 = el("span", { class: "page-head-session__line" });
@@ -612,7 +663,7 @@ function render() {
     setLocale(v);
   });
   const headLocale = el("div", { class: "head-locale" }, [localeField, localeSelect]);
-  const headSession = el("div", { class: "head-session" }, [headSessionStatus, memberEntryBtn]);
+  const headSession = el("div", { class: "head-session" }, [headSessionStatus, headMemberActions]);
   const headToolbarAside = el("div", { class: "head-toolbar-aside" }, [headLocale, headSession]);
   /** 標題與語系／會員同一列；極窄寬時工具列可換行 */
   const pageHeadTopRow = el("div", { class: "page-head-top-row" }, [titleHeading, headToolbarAside]);
@@ -708,7 +759,9 @@ function render() {
   dateInput.max = taipeiLatestBookableDateKey();
   const slotSelect = el("select", {}, []);
   const noteInput = el("textarea", { maxLength: 500 });
-  const bookingModeSelect = el("select", {}, []);
+  const bookingModeSelect = el("select", { id: "booking-mode-select" }, []);
+  /** 未驗證會員時覆蓋於 select 上，避免部分瀏覽器仍會開啟原生下拉 */
+  const bookingPaymentWrap = el("div", { class: "booking-payment-wrap" }, [bookingModeSelect]);
   const bookingModeHint = el("span", { class: "hint" }, []);
   const submitBtn = el("button", { class: "primary", type: "button" }, [t("booking.submit", "送出預約")]);
   /** 選日期／載入空檔與名額相關提示，緊接在時段選擇下方，避免訊息落在頁面底部 */
@@ -764,7 +817,7 @@ function render() {
   const memberExtrasWrap = el("div", { class: "book-member-extras", hidden: true });
   const finalizeSection = el("div", { class: "book-step book-step--finalize" }, [
     el("div", { class: "grid" }, [
-      el("label", { class: "field" }, [t("field.payment", "付款方式"), bookingModeSelect, bookingModeHint]),
+      el("label", { class: "field" }, [t("field.payment", "付款方式"), bookingPaymentWrap, bookingModeHint]),
     ]),
     el("div", { class: "grid" }, [
       el("label", { class: "field" }, [
@@ -882,11 +935,11 @@ function render() {
   myBookingsTabEnded.addEventListener("click", () => setMyBookingsSubTab("ended"));
   setMyBookingsSubTab("upcoming");
 
-  myBookingsSection.append(
+    myBookingsSection.append(
     el("p", { class: "hint my-bookings-intro" }, [
       t(
         "myBookings.intro",
-        "以下為綁定你帳號的預約（須使用會員付款方式送出）。訪客預約不會出現在此。「尚未開始」僅含待確認／已確認且尚未到開始時間；其餘在「已結束」。",
+        "以下為綁定你帳號的預約。「尚未開始」僅含待確認／已確認且尚未到開始時間；其餘在「已結束」。",
       ),
     ]),
     myBookingsTabList,
@@ -1015,9 +1068,11 @@ function render() {
     );
   }
 
-  function updateMemberEntryLabel() {
+  function syncHeadMemberButtons() {
     const user = auth.currentUser;
-    memberEntryBtn.textContent = user ? t("member.entryCenter", "會員中心") : t("member.entryLogin", "會員登入");
+    memberLoginBtn.hidden = Boolean(user);
+    memberCenterBtn.hidden = !user;
+    headerSignOutBtn.hidden = !user;
   }
 
   /** 預約頁右上角：訪客／登入與驗證狀態／稱呼（單行；過長省略，完整字串放 title） */
@@ -1103,7 +1158,10 @@ function render() {
       await refreshWalletStatus();
       emailVerifyText.textContent = fresh?.emailVerified
         ? t("member.verifyDone", "驗證完成，已可使用會員功能。")
-        : t("member.verifyPendingReload", "尚未偵測到驗證完成，請確認已點擊信內連結後再試。");
+        : t(
+            "member.verifyPendingReload",
+            "尚未偵測到驗證完成，請確認已點擊信內連結（亦可查看垃圾／販促信件匣）後再試。",
+          );
     } catch (e) {
       emailVerifyText.textContent = errorMessage(e);
     } finally {
@@ -1111,17 +1169,15 @@ function render() {
     }
   });
 
-  function openMemberAuthModal() {
+  function openLoginModal() {
     memberModalWalletMirror = null;
+    if (auth.currentUser) return;
     const overlay = el("div", { class: "modal-overlay" });
     const dialog = el("div", { class: "modal-card member-modal" });
     dialog.setAttribute("role", "dialog");
     dialog.setAttribute("aria-modal", "true");
-    const user = auth.currentUser;
-
     const status = el("div", { class: "status-line" });
-    if (!user) {
-      const modalTitle = el("h3", {}, [t("auth.modal.title", "會員登入／註冊")]);
+    const modalTitle = el("h3", {}, [t("auth.modal.title", "會員登入／註冊")]);
       const loginStack = el("div", { class: "member-auth-stack" });
       const registerStack = el("div", { class: "member-auth-stack", hidden: true });
       const resetStack = el("div", { class: "member-auth-stack", hidden: true });
@@ -1262,7 +1318,7 @@ function render() {
           await sendEmailVerification(cred.user);
           status.textContent = t(
             "auth.registerSuccess",
-            "註冊成功，已寄出驗證信。請至信箱點擊連結後，再按主畫面的「我已驗證，重新整理狀態」或重新登入。",
+            "註冊成功，已寄出驗證信。請至信箱（含垃圾／販促信件匣）點擊連結後，再按主畫面的「我已驗證，重新整理狀態」或重新登入。",
           );
           status.classList.add("ok");
           overlay.remove();
@@ -1323,62 +1379,77 @@ function render() {
         el("div", { class: "hint" }, [switchToLoginFromReset]),
       );
 
-      dialog.append(
-        modalTitle,
-        loginStack,
-        registerStack,
-        resetStack,
-        status,
-        el("div", { class: "modal-actions" }, [cancelBtn, loginBtn, registerBtn, resetSendBtn]),
-      );
-      syncAuthModalPrimaryButtons();
-    } else {
-      const closeBtn = el("button", { class: "ghost", type: "button" }, [t("modal.close", "關閉")]);
-      const logoutBtn = el("button", { class: "primary", type: "button" }, [t("admin.signOut", "登出")]);
-      const dismissOverlay = () => {
-        parkMemberHubGames();
-        activeMemberArcadeExchangeDispose?.();
-        activeMemberArcadeExchangeDispose = null;
-        activeMemberArcadeExchangeSync = null;
-        memberModalWalletMirror = null;
+    dialog.append(
+      modalTitle,
+      loginStack,
+      registerStack,
+      resetStack,
+      status,
+      el("div", { class: "modal-actions" }, [cancelBtn, loginBtn, registerBtn, resetSendBtn]),
+    );
+    syncAuthModalPrimaryButtons();
+
+    overlay.addEventListener("click", (ev) => {
+      if (ev.target === overlay) {
         overlay.remove();
-      };
-      closeBtn.addEventListener("click", dismissOverlay);
-      logoutBtn.addEventListener("click", async () => {
-        await signOut(auth);
-        dismissOverlay();
-      });
-      if (user.isAnonymous) {
-        dialog.append(
-          el("h3", {}, [t("member.center", "會員中心")]),
-          el("div", { class: "hint" }, [
-            t(
-              "member.anonymousIntro",
-              "您正以訪客身分使用「聯絡店家」。若要儲值、查看預約或抽獎，請先按「登出」再使用「會員登入／註冊」；登入會員後，此裝置上的訪客留言紀錄不會自動合併。",
-            ),
-          ]),
-          el("div", { class: "hint mono" }, [`${t("member.anonymousUid", "匿名身分 UID：")}${shortUidForDisplay(user.uid)}`]),
-          el("div", { class: "modal-actions" }, [closeBtn, logoutBtn]),
-        );
-        overlay.addEventListener("click", (ev) => {
-          if (ev.target === overlay) dismissOverlay();
-        });
-        overlay.append(dialog);
-        document.body.append(overlay);
-        return;
       }
-      const modalBody: HTMLElement[] = [
+    });
+    overlay.append(dialog);
+    document.body.append(overlay);
+  }
+
+  function openMemberCenterModal() {
+    memberModalWalletMirror = null;
+    const user = auth.currentUser;
+    if (!user) return;
+    const overlay = el("div", { class: "modal-overlay" });
+    const dialog = el("div", { class: "modal-card member-modal" });
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    const closeBtn = el("button", { class: "ghost", type: "button" }, [t("modal.close", "關閉")]);
+    const dismissOverlay = () => {
+      parkMemberHubGames();
+      activeMemberArcadeExchangeDispose?.();
+      activeMemberArcadeExchangeDispose = null;
+      activeMemberArcadeExchangeSync = null;
+      memberModalWalletMirror = null;
+      overlay.remove();
+    };
+    closeBtn.addEventListener("click", dismissOverlay);
+    if (user.isAnonymous) {
+      dialog.append(
         el("h3", {}, [t("member.center", "會員中心")]),
         el("div", { class: "hint" }, [
-          t("member.signedInAs", "目前登入：{{email}}（UID：{{uid}}）", {
-            email: user.email ?? t("member.noEmail", "（無 Email）"),
-            uid: shortUidForDisplay(user.uid),
-          }),
+          t(
+            "member.anonymousIntro",
+            "您正以訪客身分使用「聯絡店家」。若要儲值、查看預約或抽獎，請先點選右上角「登出」再使用「會員登入」註冊或登入；登入會員後，此裝置上的訪客留言紀錄不會自動合併。",
+          ),
         ]),
-      ];
-      if (!user.emailVerified) {
+        el("div", { class: "hint mono" }, [`${t("member.anonymousUid", "匿名身分 UID：")}${shortUidForDisplay(user.uid)}`]),
+        el("div", { class: "modal-actions" }, [closeBtn]),
+      );
+      overlay.addEventListener("click", (ev) => {
+        if (ev.target === overlay) dismissOverlay();
+      });
+      overlay.append(dialog);
+      document.body.append(overlay);
+      return;
+    }
+    const modalBody: HTMLElement[] = [
+      el("h3", {}, [t("member.center", "會員中心")]),
+      el("div", { class: "hint" }, [
+        t("member.signedInAs", "目前登入：{{email}}（UID：{{uid}}）", {
+          email: user.email ?? t("member.noEmail", "（無 Email）"),
+          uid: shortUidForDisplay(user.uid),
+        }),
+      ]),
+    ];
+    if (!user.emailVerified) {
         const verifyHint = el("div", { class: "status-line" }, [
-          t("member.verifyModalHint", "請至信箱點擊驗證連結後，才能使用儲值、會員預約與抽獎。"),
+          t(
+            "member.verifyModalHint",
+            "請至信箱（含垃圾／販促信件匣）點擊驗證連結後，才能使用儲值、預約與抽獎。",
+          ),
         ]);
         const modalVerifyStatus = el("div", { class: "status-line" });
         const modalResendBtn = el("button", { class: "ghost", type: "button" }, [t("booking.resendVerify", "重新寄送驗證信")]);
@@ -1426,30 +1497,29 @@ function render() {
           modalVerifyStatus,
           el("div", { class: "modal-actions" }, [modalResendBtn, modalReloadBtn]),
         );
-      }
-      const modalWalletHost = el("div", { class: "status-line" });
-      memberModalWalletMirror = modalWalletHost;
-      modalBody.push(modalWalletHost);
-      if (user.emailVerified) {
-        const arcadeExHost = el("div", { class: "member-modal__arcade-exchange" });
-        const { dispose, sync } = mountArcadeSessionExchange(arcadeExHost, {
-          onMutated: () => refreshWalletStatus({ keepWalletSummaryDuringFetch: true }),
-        });
-        activeMemberArcadeExchangeDispose = dispose;
-        activeMemberArcadeExchangeSync = sync;
-        void sync();
-        modalBody.push(arcadeExHost);
-      }
-      if (user.emailVerified && memberHubGamesRoot) {
-        dialog.classList.add("member-modal--hub");
-        const gamesShell = el("div", { class: "member-modal__games" });
-        gamesShell.append(memberHubGamesRoot);
-        modalBody.push(gamesShell);
-      }
-      modalBody.push(el("div", { class: "modal-actions" }, [closeBtn, logoutBtn]));
-      dialog.append(...modalBody);
-      void refreshWalletStatus();
     }
+    const modalWalletHost = el("div", { class: "status-line" });
+    memberModalWalletMirror = modalWalletHost;
+    modalBody.push(modalWalletHost);
+    if (user.emailVerified) {
+      const arcadeExHost = el("div", { class: "member-modal__arcade-exchange" });
+      const { dispose, sync } = mountArcadeSessionExchange(arcadeExHost, {
+        onMutated: () => refreshWalletStatus({ keepWalletSummaryDuringFetch: true }),
+      });
+      activeMemberArcadeExchangeDispose = dispose;
+      activeMemberArcadeExchangeSync = sync;
+      void sync();
+      modalBody.push(arcadeExHost);
+    }
+    if (user.emailVerified && memberHubGamesRoot) {
+      dialog.classList.add("member-modal--hub");
+      const gamesShell = el("div", { class: "member-modal__games" });
+      gamesShell.append(memberHubGamesRoot);
+      modalBody.push(gamesShell);
+    }
+    modalBody.push(el("div", { class: "modal-actions" }, [closeBtn]));
+    dialog.append(...modalBody);
+    void refreshWalletStatus();
 
     overlay.addEventListener("click", (ev) => {
       if (ev.target === overlay) {
@@ -1465,46 +1535,88 @@ function render() {
     document.body.append(overlay);
   }
 
-  memberEntryBtn.addEventListener("click", openMemberAuthModal);
+  function cleanupMemberModalResources() {
+    parkMemberHubGames();
+    activeMemberArcadeExchangeDispose?.();
+    activeMemberArcadeExchangeDispose = null;
+    activeMemberArcadeExchangeSync = null;
+    memberModalWalletMirror = null;
+  }
+
+  memberLoginBtn.addEventListener("click", openLoginModal);
+  memberCenterBtn.addEventListener("click", openMemberCenterModal);
+  headerSignOutBtn.addEventListener("click", async () => {
+    headerSignOutBtn.setAttribute("disabled", "true");
+    try {
+      cleanupMemberModalResources();
+      document.querySelectorAll(".modal-overlay").forEach((n) => n.remove());
+      await signOut(auth);
+    } finally {
+      headerSignOutBtn.removeAttribute("disabled");
+    }
+  });
+
   function refillBookingModes(isMember: boolean) {
     const current = bookingModeSelect.value as BookingMode;
     bookingModeSelect.innerHTML = "";
     const price = sessionPriceNtdSetting;
-    const modes: { value: BookingMode; label: string; disabled?: boolean }[] = isMember
-      ? [
-          { value: "member_wallet", label: t("member.mode.wallet", "會員次數（扣 1 次）") },
-          { value: "member_cash", label: t("member.mode.cash", "會員現金（{{price}} 元）", { price }) },
-          { value: "member_beverage", label: beverageOptionLabel() },
-        ]
-      : [
-          { value: "guest_cash", label: t("booking.mode.guest_cash", "訪客現金（{{price}} 元）", { price }) },
-          { value: "guest_beverage", label: beverageOptionLabel() },
-        ];
+    bookingModeSelect.disabled = false;
+    bookingModeSelect.removeAttribute("disabled");
+    bookingModeSelect.removeAttribute("aria-disabled");
+    bookingPaymentWrap.querySelector(".booking-payment-lock-shield")?.remove();
+
+    const modes: { value: BookingMode; label: string; disabled?: boolean }[] = [
+      { value: "member_wallet", label: t("member.mode.wallet", "會員次數（扣 1 次）") },
+      { value: "member_cash", label: t("member.mode.cash", "會員現金（{{price}} 元）", { price }) },
+      { value: "member_beverage", label: beverageOptionLabel() },
+    ];
     for (const mode of modes) {
       const opt = el("option", { value: mode.value, disabled: mode.disabled }, [mode.label]);
       bookingModeSelect.append(opt);
     }
     const values = modes.map((m) => m.value);
     bookingModeSelect.value = values.includes(current) ? current : modes[0].value;
+
+    if (isMember) {
+      bookingModeHint.textContent = t(
+        "member.modeHint.member",
+        "可選次數扣 1 次、會員現金（{{price}} 元），或「請師傅一杯飲料」（依現場約定）。",
+        { price },
+      );
+    } else {
+      const loggedInUnverified = Boolean(
+        auth.currentUser && !auth.currentUser.isAnonymous && !auth.currentUser.emailVerified,
+      );
+      bookingModeHint.textContent = loggedInUnverified
+        ? t(
+            "member.modeHint.unverifiedBook",
+            "請至信箱點擊驗證連結；若未收到信，請查看垃圾／販促信件匣，或使用上方「重新寄送驗證信」。",
+          )
+        : t(
+            "member.modeHint.signUpFirst",
+            "預約僅開放給會員；可先選好付款方式，送出時須已登入並完成信箱驗證（右上角「會員登入」）。",
+          );
+    }
+  }
+
+  function buildMembersOnlyReminderBody(): string {
     const loggedInUnverified = Boolean(
       auth.currentUser && !auth.currentUser.isAnonymous && !auth.currentUser.emailVerified,
     );
-    bookingModeHint.textContent = isMember
+    const head = t(
+      "booking.mode.membersOnlyPlaceholder",
+      "請先註冊／登入並完成信箱驗證後才可選擇付款方式（右上角「會員登入」）",
+    );
+    const detail = loggedInUnverified
       ? t(
-          "member.modeHint.member",
-          "可選次數扣 1 次、會員現金（{{price}} 元），或「請師傅一杯飲料」（依現場約定）。",
-          { price },
+          "member.modeHint.unverifiedBook",
+          "請至信箱點擊驗證連結；若未收到信，請查看垃圾／販促信件匣，或使用上方「重新寄送驗證信」。",
         )
-      : loggedInUnverified
-        ? t(
-            "member.modeHint.unverified",
-            "已登入但尚未驗證信箱，暫以訪客方式預約；完成驗證後可選會員付款、儲值與抽獎。",
-          )
-        : t(
-            "member.modeHint.guest",
-            "訪客可選現金 {{price}} 元或「請師傅一杯飲料」；次數儲值與抽獎請使用右上角登入。",
-            { price },
-          );
+      : t(
+          "member.modeHint.signUpFirst",
+          "預約僅開放給會員。請點右上角「會員登入」註冊或登入；註冊後請至信箱完成驗證（若未見來信，請查看垃圾／販促信件匣）。",
+        );
+    return `${head}\n\n${detail}`;
   }
 
   /** 與下方 `setBookSubTab` 一併指派：非會員登入時關閉「我的預約」並切回預約表單 */
@@ -1531,11 +1643,14 @@ function render() {
     keepWalletSummaryDuringFetch?: boolean;
   };
 
+  /** 由 mountBookTabLittleMary 註冊：錢包刷新後同步小瑪莉機台「總分」與伺服器遊戲點（含會員中心兌換） */
+  let syncLittleMaryArcadeFromWallet: (() => Promise<void>) | null = null;
+
   async function refreshWalletStatus(opts?: RefreshWalletStatusOpts) {
     try {
       const user = auth.currentUser;
       refillBookingModes(isVerifiedMember());
-      updateMemberEntryLabel();
+      syncHeadMemberButtons();
       if (!user) {
         stopMyBookingsListener();
         walletBalance = 0;
@@ -1580,7 +1695,7 @@ function render() {
         emailVerifyBanner.hidden = false;
         emailVerifyText.textContent = t(
           "member.verifyBanner",
-          "已登入，但尚未完成 Email 驗證。請至信箱點擊驗證連結；完成後請按「我已驗證，重新整理狀態」。",
+          "已登入，但尚未完成 Email 驗證。請至信箱（含垃圾／販促信件匣）點擊驗證連結；完成後請按「我已驗證，重新整理狀態」。",
         );
         setMemberWalletLinePlain("", "status-line");
         spinBtn.setAttribute("disabled", "true");
@@ -1671,6 +1786,7 @@ function render() {
         syncPageHeadSession();
       }
     } finally {
+      await syncLittleMaryArcadeFromWallet?.();
       syncBookMyBookingsTabVisibility();
       void activeMemberArcadeExchangeSync?.();
     }
@@ -2060,22 +2176,16 @@ function render() {
       bookStatus.classList.add("error");
       return;
     }
-    if (bookingMode !== "guest_cash" && bookingMode !== "guest_beverage" && !auth.currentUser) {
-      bookStatus.textContent = t("booking.memberModeNeedLogin", "會員付款模式需先登入。");
-      bookStatus.classList.add("error");
-      return;
-    }
-    if (
-      bookingMode !== "guest_cash" &&
-      bookingMode !== "guest_beverage" &&
-      auth.currentUser &&
-      !auth.currentUser.emailVerified
-    ) {
-      bookStatus.textContent = t(
-        "booking.memberNeedVerify",
-        "會員付款需先完成 Email 驗證，請至信箱點擊驗證連結。",
+    const allowedModes: BookingMode[] = ["member_cash", "member_wallet", "member_beverage"];
+    const canBookAsMember =
+      allowedModes.includes(bookingMode) &&
+      Boolean(auth.currentUser?.emailVerified);
+    if (!canBookAsMember) {
+      await showAlertModal(
+        t("booking.membersOnlyModalTitle", "預約須先完成會員登入與信箱驗證"),
+        buildMembersOnlyReminderBody(),
+        t("modal.ok", "我知道了"),
       );
-      bookStatus.classList.add("error");
       return;
     }
     if (bookingMode === "member_wallet" && sessionCreditsCount < 1) {
@@ -2099,18 +2209,12 @@ function render() {
     try {
       const fn = createBookingCall();
       await fn({ displayName, note, dateKey, startSlot, bookingMode, ...localeApiParam() });
-      const memberBooking =
-        bookingMode === "member_wallet" ||
-        bookingMode === "member_cash" ||
-        bookingMode === "member_beverage";
       const submittedLine = t(
         "booking.submitted",
         "已送出！狀態為「待確認」，實際時間會依現場情況微調。",
       );
-      const myBookingsHint = memberBooking
-        ? t("booking.submittedMyBookingsHint", "可到上方「我的預約」分頁查看預約狀態。")
-        : "";
-      bookStatus.textContent = myBookingsHint ? `${submittedLine} ${myBookingsHint}` : submittedLine;
+      const myBookingsHint = t("booking.submittedMyBookingsHint", "可到上方「我的預約」分頁查看預約狀態。");
+      bookStatus.textContent = `${submittedLine} ${myBookingsHint}`;
       bookStatus.classList.add("ok");
       nameInput.value = "";
       noteInput.value = "";
@@ -2227,7 +2331,12 @@ function render() {
       el("label", { class: "field" }, [
         t("field.name", "姓名"),
         nameInput,
-        el("span", { class: "hint" }, [t("field.nameHint", "可不登入，打個暱稱即可；若已登入且帳號有設定稱呼，會自動帶入（仍可改）。")]),
+        el("span", { class: "hint" }, [
+          t(
+            "field.nameHint",
+            "請填預約姓名；若已登入且帳號有設定稱呼，會自動帶入（仍可改）。預約須為已驗證會員。",
+          ),
+        ]),
       ]),
       el("label", { class: "field" }, [
         t("field.date", "日期（週一至週五）"),
@@ -2294,7 +2403,7 @@ function render() {
     el("p", { class: "book-tab-lm-rules__body", lang: getLocale() === "en" ? "en" : "zh-Hant" }, [
       t(
         "book.littleMary.rules",
-        "試玩分數開局；點圖示押注每次從「分數」扣 1 至該線；「全押」則將剩餘分數依八條線輪流每次 +1，直到分數用盡。八種倍率：櫻桃 2×、檸檬 12×、橘子 10×、西瓜 20×、鈴鐺 20×、星星 30×、７７ 40×、BAR 50×。外圈 24 格依圖示出現次數配置（櫻桃 5、檸檬 4、橘子 4、西瓜 3、鈴鐺 3、星星 2、７７ 2、BAR 1）。須先押注才能按「開始」。若網站已設定 Firebase 並部署 Cloud Functions（littleMarySpin／littleMaryHiLoRoll），停格與比大小開點由伺服器亂數決定；未設定時於瀏覽器試玩亂數。跑燈動畫會停至該格；若停在與你押注相同的圖示，得分 += 該線押注 × 倍率。中獎後會彈出「比大小」視窗：再開 1～12 點，大＝7～12、小＝1～6；猜中再加分、猜錯扣回該筆；「不賭」或 Esc 略過；開點後須按「確定」關閉。按「得分轉分數」亦會關閉視窗並略過比大小。每局結束押注歸零；已押未中不退，開局前可用「清空押注」退回。「得分轉分數」把得分併回試玩分數。試玩分數與畫面在前端；開獎數值可由伺服器產生（見上）。無真實金流。",
+        "試玩分數開局；點圖示押注每次從「分數」扣 1 至該線；「+1」為八條線同時各加 1（一次扣 8 分），不足 8 分時無法使用。八種倍率：櫻桃 2×、檸檬 12×、橘子 10×、西瓜 20×、鈴鐺 20×、星星 30×、７７ 40×、BAR 50×。外圈 24 格依圖示出現次數配置（櫻桃 5、檸檬 4、橘子 4、西瓜 3、鈴鐺 3、星星 2、７７ 2、BAR 1）。須先押注才能按「開始」。若網站已設定 Firebase 並部署 Cloud Functions（littleMarySpin／littleMaryHiLoRoll），停格與比大小開點由伺服器亂數決定；未設定時於瀏覽器試玩亂數。跑燈動畫會停至該格；若停在與你押注相同的圖示，得分 += 該線押注 × 倍率。中獎後會彈出「比大小」視窗：再開 1～12 點，大＝7～12、小＝1～6；猜中再加分、猜錯扣回該筆；「跳過」或 Esc 略過；開點後須按「確定」關閉。按「得分轉分數」亦會關閉視窗並略過比大小。每局結束押注歸零；已押未中不退，「-1」為八條線各退 1（該線有押才退），可重複按以退回押注。「得分轉分數」把得分併回試玩分數。試玩分數與畫面在前端；開獎數值可由伺服器產生（見上）。無真實金流。",
       ),
     ]),
   ]);
@@ -2312,9 +2421,12 @@ function render() {
     ]),
     littleMaryMount,
   );
-  mountBookTabLittleMary(littleMaryMount, {
-    onArcadeBalanceMutated: () => refreshWalletStatus({ keepWalletSummaryDuringFetch: true }),
-  });
+  {
+    const lmTab = mountBookTabLittleMary(littleMaryMount, {
+      onArcadeBalanceMutated: () => refreshWalletStatus({ keepWalletSummaryDuringFetch: true }),
+    });
+    syncLittleMaryArcadeFromWallet = lmTab.syncArcadeFromServer;
+  }
 
   memberHubGamesRoot = el("div", { class: "member-hub-games member-hub-games--wheel-only" });
   memberHubGamesRoot.append(memberHubPanelWheel);
@@ -5166,7 +5278,7 @@ function render() {
     tab = next;
     const isBook = next === "book";
     shell.classList.toggle("admin-mode", !isBook);
-    memberEntryBtn.hidden = !isBook;
+    headMemberActions.hidden = !isBook;
     titleGuestHint.hidden = !isBook;
     visitorStats.setVisible(isBook);
     titleHeading.textContent = isBook ? t("home.title", "辦公室按摩預約") : t("admin.backTitle", "管理後台");

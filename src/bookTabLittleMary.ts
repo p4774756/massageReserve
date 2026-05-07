@@ -23,6 +23,12 @@ export type MountBookTabLittleMaryOptions = {
   showSessionArcadeExchange?: boolean;
 };
 
+/** 供外層在「會員中心兌換」等錢包刷新後同步機台「總分」與伺服器遊戲點 */
+export type BookTabLittleMaryHandle = {
+  dispose: () => void;
+  syncArcadeFromServer: () => Promise<void>;
+};
+
 export type MountArcadeSessionExchangeOptions = {
   onMutated?: () => void | Promise<void>;
 };
@@ -78,7 +84,7 @@ type BetLine = {
 
 type LmMsgTone = "hint" | "info" | "success" | "danger" | "warning";
 
-/** 中獎後比大小：先選大／小／不賭；開點後須按確定關閉彈窗 */
+/** 中獎後比大小：先選大／小／跳過；開點後須按確定關閉彈窗 */
 type GamblePending =
   | null
   | { phase: "offer"; stake: number }
@@ -325,9 +331,15 @@ export function mountArcadeSessionExchange(
  * 預約主面板分頁：復古「小瑪莉」跑燈。
  * 訪客／未驗證信箱：試玩分數於瀏覽器；已驗證會員且已設定 Firebase：遊戲點與開獎由 Cloud Functions 結算。
  */
-export function mountBookTabLittleMary(host: HTMLElement, options?: MountBookTabLittleMaryOptions): () => void {
+export function mountBookTabLittleMary(
+  host: HTMLElement,
+  options?: MountBookTabLittleMaryOptions,
+): BookTabLittleMaryHandle {
   if (typeof window === "undefined") {
-    return () => {};
+    return {
+      dispose: () => {},
+      syncArcadeFromServer: async () => {},
+    };
   }
 
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
@@ -339,7 +351,10 @@ export function mountBookTabLittleMary(host: HTMLElement, options?: MountBookTab
       getLocale() === "en" ? "Little Mary mini-game disabled when reduced motion is on." : "已開啟減少動態效果，小瑪莉未載入。",
     );
     host.append(div);
-    return () => div.remove();
+    return {
+      dispose: () => div.remove(),
+      syncArcadeFromServer: async () => {},
+    };
   }
 
   const en = getLocale() === "en";
@@ -522,14 +537,59 @@ export function mountBookTabLittleMary(host: HTMLElement, options?: MountBookTab
   hiloModalBody.id = "lm-hilo-modal-body";
   const hiloModalDice = document.createElement("div");
   hiloModalDice.className = "lm-hilo__dice lm-hilo-modal__dice";
-  hiloModalDice.setAttribute("aria-live", "polite");
+  const hiloSegPanel = document.createElement("div");
+  hiloSegPanel.className = "lm-hilo-7seg-panel";
+  const hiloSegReadout = document.createElement("div");
+  hiloSegReadout.className = "lm-hilo-7seg-readout";
+  hiloSegReadout.id = "lm-hilo-seg-readout";
+  hiloSegReadout.textContent = "--";
+  const hiloMeter = document.createElement("div");
+  hiloMeter.className = "lm-hilo-meter";
+  hiloMeter.hidden = true;
+  hiloMeter.setAttribute("aria-hidden", "true");
+  const hiloMeterTrack = document.createElement("div");
+  hiloMeterTrack.className = "lm-hilo-meter__track";
+  const hiloMeterNeedle = document.createElement("div");
+  hiloMeterNeedle.className = "lm-hilo-meter__needle";
+  const hiloMeterLabels = document.createElement("div");
+  hiloMeterLabels.className = "lm-hilo-meter__labels";
+  hiloMeterTrack.appendChild(hiloMeterNeedle);
+  hiloMeter.append(hiloMeterTrack, hiloMeterLabels);
+  hiloSegPanel.appendChild(hiloSegReadout);
+  const hiloDiceCaption = document.createElement("p");
+  hiloDiceCaption.className = "lm-hilo-display-caption";
+  hiloDiceCaption.setAttribute("aria-live", "polite");
+  hiloModalDice.append(hiloSegPanel, hiloMeter, hiloDiceCaption);
+
+  function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /** 七段風格亂數跳動後定格於伺服器給定的點數（1–12） */
+  async function animateHiLoRoll(finalRoll: number): Promise<void> {
+    hiloSegReadout.classList.add("lm-hilo-7seg-readout--rolling");
+    hiLoDialog.classList.add("lm-hilo-modal__dialog--rolling");
+    const gaps = [38, 40, 42, 46, 52, 60, 72, 88, 108, 135, 168];
+    for (const gap of gaps) {
+      hiloSegReadout.textContent = String(Math.floor(Math.random() * 12) + 1);
+      await sleep(gap);
+    }
+    for (let i = 0; i < 3; i++) {
+      hiloSegReadout.textContent = String(Math.floor(Math.random() * 12) + 1);
+      await sleep(160 + i * 55);
+    }
+    hiloSegReadout.textContent = String(finalRoll);
+    hiloSegReadout.classList.remove("lm-hilo-7seg-readout--rolling");
+    hiLoDialog.classList.remove("lm-hilo-modal__dialog--rolling");
+    await sleep(220);
+  }
 
   const hiloChoiceActions = document.createElement("div");
   hiloChoiceActions.className = "lm-hilo-modal__actions";
   hiloChoiceActions.setAttribute("role", "group");
   hiloChoiceActions.setAttribute(
     "aria-label",
-    en ? "Double-or-nothing: pick HIGH, LOW, or Skip" : "比大小：選大、小或不賭",
+    en ? "Double-or-nothing: pick HIGH, LOW, or Skip" : "比大小：選大、小或跳過",
   );
   const btnHiloBig = document.createElement("button");
   btnHiloBig.type = "button";
@@ -550,7 +610,7 @@ export function mountBookTabLittleMary(host: HTMLElement, options?: MountBookTab
   const btnHiloSkip = document.createElement("button");
   btnHiloSkip.type = "button";
   btnHiloSkip.className = "lm-hilo__skip";
-  btnHiloSkip.textContent = en ? "Skip" : "不賭";
+  btnHiloSkip.textContent = en ? "Skip" : "跳過";
   hiloChoiceActions.append(btnHiloBig, btnHiloSmall, btnHiloSkip);
 
   const hiloResultActions = document.createElement("div");
@@ -576,23 +636,30 @@ export function mountBookTabLittleMary(host: HTMLElement, options?: MountBookTab
   btnCollect.type = "button";
   btnCollect.className = "lm-controls__collect";
   btnCollect.textContent = en ? "Win → Credit" : "得分轉分數";
-  const btnClear = document.createElement("button");
-  btnClear.type = "button";
-  btnClear.className = "lm-controls__clear";
-  btnClear.textContent = en ? "Clear bets" : "清空押注";
+  const btnBetMinus = document.createElement("button");
+  btnBetMinus.type = "button";
+  btnBetMinus.className = "lm-controls__betminus";
+  btnBetMinus.textContent = en ? "−1" : "-1";
+  btnBetMinus.title = en
+    ? "−1 on each betting line at once (only lines with a bet return 1 credit each)."
+    : "八條線各 −1：有押的線各退 1 分（可重複按直到押注歸零）。";
+  btnBetMinus.setAttribute(
+    "aria-label",
+    en ? "Subtract 1 from each line that has a bet" : "-1：八條線各退 1（有押才退）",
+  );
   const btnBetAll = document.createElement("button");
   btnBetAll.type = "button";
   btnBetAll.className = "lm-controls__betall";
-  btnBetAll.textContent = en ? "Bet all" : "全押";
+  btnBetAll.textContent = "+1";
   btnBetAll.title = en
-    ? "Spend all credits on bets, +1 per line round-robin until balance is 0."
-    : "將剩餘分數全數押入：依八條線輪流每次 +1，直到分數用盡。";
+    ? "+1 on every line at once (costs 8 credits). Need 8+ credits or nothing happens."
+    : "八條線各 +1，一次扣 8 分；不足 8 分無法使用。";
   btnBetAll.setAttribute(
     "aria-label",
-    en ? "Bet all credits in round-robin across eight lines" : "全押：剩餘分數輪流押滿八條線",
+    en ? "+1 on all eight lines at once for 8 credits" : "+1：八條線同時各加 1（需 8 分）",
   );
 
-  controls.append(btnClear, btnBetAll, btnCollect, btnStart);
+  controls.append(btnBetMinus, btnBetAll, btnCollect, btnStart);
 
   const msg = document.createElement("p");
   msg.setAttribute("aria-live", "polite");
@@ -661,8 +728,8 @@ export function mountBookTabLittleMary(host: HTMLElement, options?: MountBookTab
       b.disabled = tilesOff;
     }
     btnStart.disabled = spinning || g || totalBet() === 0;
-    btnClear.disabled = spinning || g || totalBet() === 0;
-    btnBetAll.disabled = spinning || g || credit <= 0;
+    btnBetMinus.disabled = spinning || g || totalBet() === 0;
+    btnBetAll.disabled = spinning || g || credit < BET_LINES.length;
     btnCollect.disabled = winPile <= 0;
     const offer = gamblePending?.phase === "offer";
     const result = gamblePending?.phase === "result";
@@ -787,7 +854,11 @@ export function mountBookTabLittleMary(host: HTMLElement, options?: MountBookTab
     hiLoModal.setAttribute("aria-hidden", "true");
     hiloModalTitle.textContent = "";
     hiloModalBody.textContent = "";
-    hiloModalDice.textContent = "";
+    hiloSegReadout.textContent = "--";
+    hiloSegReadout.classList.remove("lm-hilo-7seg-readout--rolling");
+    hiloDiceCaption.textContent = "";
+    hiloMeter.hidden = true;
+    hiLoDialog.classList.remove("lm-hilo-modal__dialog--rolling");
     hiloChoiceActions.hidden = false;
     hiloResultActions.hidden = true;
   }
@@ -804,8 +875,10 @@ export function mountBookTabLittleMary(host: HTMLElement, options?: MountBookTab
     hiloModalTitle.textContent = en ? "Double-or-nothing?" : "要比大小嗎？";
     hiloModalBody.textContent = en
       ? `You won +${stake} on this spin. Roll 1–12: HIGH = 7–12, LOW = 1–6 (50/50). Win → +${stake} more on your bonus; lose → −${stake} from bonus. Skip keeps your bonus as-is.`
-      : `本局已入帳 +${stake} 得分。可再押一次：再開 1～12 點，大＝7～12、小＝1～6（各半）。猜中再 +${stake} 得分；猜錯從得分扣 ${stake}。按「不賭」則維持現狀。`;
-    hiloModalDice.textContent = en ? `Bonus: +${stake}` : `本局入帳：+${stake} 得分`;
+      : `本局已入帳 +${stake} 得分。可再押一次：再開 1～12 點，大＝7～12、小＝1～6（各半）。猜中再 +${stake} 得分；猜錯從得分扣 ${stake}。按「跳過」則維持現狀。`;
+    hiloSegReadout.textContent = "--";
+    hiloMeter.hidden = true;
+    hiloDiceCaption.textContent = en ? `Bonus: +${stake}` : `本局入帳：+${stake} 得分`;
     hiloChoiceActions.hidden = false;
     hiloResultActions.hidden = true;
     hiLoModal.classList.remove("lm-hilo-modal--hidden");
@@ -875,8 +948,19 @@ export function mountBookTabLittleMary(host: HTMLElement, options?: MountBookTab
       );
       return;
     }
+    hiloDiceCaption.textContent = en ? "Rolling…" : "開點中…";
+    await animateHiLoRoll(roll);
     const isHigh = roll >= 7;
     const hit = guessHigh ? isHigh : !isHigh;
+    const needlePct = ((roll - 0.5) / 12) * 100;
+    hiloMeterNeedle.style.left = `${needlePct}%`;
+    hiloMeterLabels.replaceChildren();
+    const lbLow = document.createElement("span");
+    lbLow.textContent = en ? "LOW 1–6" : "小 1–6";
+    const lbHigh = document.createElement("span");
+    lbHigh.textContent = en ? "HIGH 7–12" : "大 7–12";
+    hiloMeterLabels.append(lbLow, lbHigh);
+    hiloMeter.hidden = false;
     if (hit) {
       winPile = Math.min(9999, winPile + stake);
       sfx.playWin(stake);
@@ -894,9 +978,9 @@ export function mountBookTabLittleMary(host: HTMLElement, options?: MountBookTab
         : `開出 ${roll} 點（${isHigh ? "大" : "小"}）。自得分欄扣回 ${stake}。`;
       setLmMsg(en ? `Hi-lo miss. −${stake} from bonus.` : `比大小未中，自得分扣 ${stake}。`, "danger");
     }
-    hiloModalDice.textContent = en
-      ? `Roll: ${roll} · ${isHigh ? "HIGH" : "LOW"}`
-      : `開點：${roll}（${isHigh ? "大" : "小"}）`;
+    hiloDiceCaption.textContent = en
+      ? `Roll ${roll} · ${isHigh ? "HIGH" : "LOW"} · threshold between 6 & 7`
+      : `開點 ${roll}（${isHigh ? "大" : "小"}）· 門檻在 6／7 之間`;
     gamblePending = { phase: "result", stake, roll, isHigh, hit };
     hiloChoiceActions.hidden = true;
     hiloResultActions.hidden = false;
@@ -927,7 +1011,7 @@ export function mountBookTabLittleMary(host: HTMLElement, options?: MountBookTab
       setLmMsg(
         en
           ? "Finish the double-or-nothing pop-up first (Skip, pick High/Low, or OK on the result)."
-          : "請先處理比大小彈窗：略過、選大／小，或看完開點後按「確定」。",
+          : "請先處理比大小彈窗：跳過、選大／小，或看完開點後按「確定」。",
         "warning",
       );
       return;
@@ -945,17 +1029,42 @@ export function mountBookTabLittleMary(host: HTMLElement, options?: MountBookTab
     setLmMsg(en ? "Bet placed." : "已押注。", "info");
   }
 
-  function clearBets() {
+  /** 與「+1」對稱：一次對八線各 −1（該線有押才退 1 分）；可重複按直到押注歸零 */
+  function betMinusAll() {
     if (spinning) return;
-    if (gamblePending) return;
-    const sum = totalBet();
-    if (sum === 0) return;
-    credit += sum;
-    bets.fill(0);
+    if (gamblePending) {
+      sfx.playError();
+      setLmMsg(
+        en
+          ? "Finish the double-or-nothing pop-up first (Skip, pick High/Low, or OK on the result)."
+          : "請先處理比大小彈窗：跳過、選大／小，或看完開點後按「確定」。",
+        "warning",
+      );
+      return;
+    }
+    if (totalBet() === 0) {
+      sfx.playError();
+      setLmMsg(en ? "No bets to take back." : "尚未押注。", "warning");
+      return;
+    }
+    let removed = 0;
+    for (let i = 0; i < BET_LINES.length; i++) {
+      const v = bets[i] ?? 0;
+      if (v > 0) {
+        bets[i] = v - 1;
+        credit += 1;
+        removed += 1;
+      }
+    }
     sfx.playClear();
     syncDisplays();
     updateInteractiveLock();
-    setLmMsg(en ? "Bets cleared." : "已退回押注。", "info");
+    setLmMsg(
+      en
+        ? `−1 each line: ${removed} credit(s) returned (lines with a bet).`
+        : `八條線各 −1：退回 ${removed} 分（有押的線才退）。`,
+      "info",
+    );
   }
 
   function betAll() {
@@ -965,33 +1074,33 @@ export function mountBookTabLittleMary(host: HTMLElement, options?: MountBookTab
       setLmMsg(
         en
           ? "Finish the double-or-nothing pop-up first (Skip, pick High/Low, or OK on the result)."
-          : "請先處理比大小彈窗：略過、選大／小，或看完開點後按「確定」。",
+          : "請先處理比大小彈窗：跳過、選大／小，或看完開點後按「確定」。",
         "warning",
       );
       return;
     }
-    if (credit <= 0) {
+    const need = BET_LINES.length;
+    if (credit < need) {
       sfx.playNoCredit();
-      setLmMsg(en ? "No credit." : "分數不足。", "warning");
+      setLmMsg(
+        en
+          ? `Need ${need} credits to +1 every line at once (you have ${credit}).`
+          : `八條線各 +1 需一次扣 ${need} 分，目前只有 ${credit} 分。`,
+        "warning",
+      );
       return;
     }
-    const order = [...BET_TILE_ORDER];
-    let placed = 0;
-    while (credit > 0) {
-      for (const lineIndex of order) {
-        if (credit <= 0) break;
-        credit -= 1;
-        bets[lineIndex] = (bets[lineIndex] ?? 0) + 1;
-        placed += 1;
-      }
+    credit -= need;
+    for (let i = 0; i < BET_LINES.length; i++) {
+      bets[i] = (bets[i] ?? 0) + 1;
     }
     sfx.playBet();
     syncDisplays();
     updateInteractiveLock();
     setLmMsg(
       en
-        ? `All-in: ${placed} credit(s) placed round-robin on all lines.`
-        : `已全押：共 ${placed} 分，依八條線輪流各 +1 直到分數用盡。`,
+        ? `+1 all lines (−${need} credits).`
+        : `八條線各 +1，已扣 ${need} 分。`,
       "info",
     );
   }
@@ -1067,7 +1176,7 @@ export function mountBookTabLittleMary(host: HTMLElement, options?: MountBookTab
       setLmMsg(
         en
           ? "Finish the double-or-nothing pop-up first (Skip, pick High/Low, or OK on the result)."
-          : "請先處理比大小彈窗：略過、選大／小，或看完開點後按「確定」。",
+          : "請先處理比大小彈窗：跳過、選大／小，或看完開點後按「確定」。",
         "warning",
       );
       return;
@@ -1165,7 +1274,7 @@ export function mountBookTabLittleMary(host: HTMLElement, options?: MountBookTab
 
   btnStart.addEventListener("click", runSpin);
   btnCollect.addEventListener("click", collectWin);
-  btnClear.addEventListener("click", clearBets);
+  btnBetMinus.addEventListener("click", betMinusAll);
   btnBetAll.addEventListener("click", betAll);
   btnHiloBig.addEventListener("click", () => void resolveHiLo(true));
   btnHiloSmall.addEventListener("click", () => void resolveHiLo(false));
@@ -1203,7 +1312,7 @@ export function mountBookTabLittleMary(host: HTMLElement, options?: MountBookTab
   syncDisplays();
   updateInteractiveLock();
 
-  return () => {
+  function dispose() {
     spinToken += 1;
     unsubAuth();
     io.disconnect();
@@ -1212,5 +1321,7 @@ export function mountBookTabLittleMary(host: HTMLElement, options?: MountBookTab
     lmInlineExchange?.exchangeWrap.remove();
     cabinet.remove();
     host.classList.remove("book-tab-lm-mount--interactive");
-  };
+  }
+
+  return { dispose, syncArcadeFromServer: refreshAccountArcadeFromWallet };
 }
