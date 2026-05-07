@@ -4945,7 +4945,6 @@ function render() {
         const ss = d.spinSample ?? {};
         const wagerSum = typeof ss.wagerSum === "number" ? ss.wagerSum : 0;
         const gainSum = typeof ss.gainSum === "number" ? ss.gainSum : 0;
-        const spinParsed = typeof ss.parsed === "number" ? ss.parsed : 0;
         const spinLimit = typeof ss.limit === "number" ? ss.limit : 0;
         const hs = d.hiloSample ?? {};
         const hiloHits = typeof hs.hits === "number" ? hs.hits : 0;

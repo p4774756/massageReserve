@@ -5,6 +5,22 @@
  * 庫內沒有單一命名為「jackpot」的檔案；最接近「中大獎」的是觀眾歡呼（crowds）＋鑔片／遊戲秀鼓點（cartoon）疊加。
  */
 
+/** 拉霸金幣雨（與 WHEEL_SFX 相同來源：HTTPS + CORS） */
+export const SLOT_COIN_SFX_URLS = {
+  /** 短金屬碰撞，模擬單枚硬幣落地 */
+  coinMetalThunk: "https://actions.google.com/sounds/v1/cartoon/cartoon_metal_thunk.ogg",
+  /** 較亮的叮響，穿插層次 */
+  coinRingHit: "https://actions.google.com/sounds/v1/cartoon/cartoon_ringing_hit.ogg",
+  /** 硬幣摩擦／散落底噪（截短播放） */
+  coinsShuffleBed: "https://actions.google.com/sounds/v1/household/metal_shuffling.ogg",
+} as const;
+
+export type PrefetchedSlotCoinSfx = {
+  coinMetalThunk: AudioBuffer | null;
+  coinRingHit: AudioBuffer | null;
+  coinsShuffleBed: AudioBuffer | null;
+};
+
 export const WHEEL_SFX_URLS = {
   /** 旋轉過程滴答 */
   spinTick: "https://actions.google.com/sounds/v1/alarms/beep_short.ogg",
@@ -53,6 +69,15 @@ export async function fetchAudioBuffer(ctx: AudioContext, url: string): Promise<
   } catch {
     return null;
   }
+}
+
+export async function prefetchSlotCoinSfx(ctx: AudioContext): Promise<PrefetchedSlotCoinSfx> {
+  const [coinMetalThunk, coinRingHit, coinsShuffleBed] = await Promise.all([
+    fetchAudioBuffer(ctx, SLOT_COIN_SFX_URLS.coinMetalThunk),
+    fetchAudioBuffer(ctx, SLOT_COIN_SFX_URLS.coinRingHit),
+    fetchAudioBuffer(ctx, SLOT_COIN_SFX_URLS.coinsShuffleBed),
+  ]);
+  return { coinMetalThunk, coinRingHit, coinsShuffleBed };
 }
 
 export async function prefetchWheelSfx(ctx: AudioContext): Promise<PrefetchedWheelSfx> {
@@ -121,6 +146,79 @@ export function playBufferAt(
     src.start(when, 0, durationSec);
   } else {
     src.start(when);
+  }
+}
+
+/** 取樣載入失敗時的短金屬叮聲（不經壓縮器時也足夠辨識） */
+function scheduleProceduralCoinClink(ctx: AudioContext, destination: AudioNode, when: number, gain: number): void {
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.type = "triangle";
+  const f0 = 380 + ((when * 137.5) % 1) * 420;
+  o.frequency.setValueAtTime(f0, when);
+  o.frequency.exponentialRampToValueAtTime(190, when + 0.058);
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.exponentialRampToValueAtTime(Math.max(0.0002, gain), when + 0.003);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + 0.09);
+  o.connect(g);
+  g.connect(destination);
+  o.start(when);
+  o.stop(when + 0.1);
+}
+
+/**
+ * 中獎金幣雨：底層摩擦聲 + 多發短碰撞（時間錯開）。
+ * 應接到 **destination**（例如直連 AudioContext.destination 的 Gain），勿與中獎號角共用經 DynamicsCompressor 的 bus，
+ * 否則鑔片等大瞬間會把金幣聲壓到幾乎聽不見。
+ */
+export function playSlotCoinRain(
+  ctx: AudioContext,
+  destination: AudioNode,
+  sfx: PrefetchedSlotCoinSfx,
+  opts?: { reduceMotion?: boolean },
+): void {
+  if (opts?.reduceMotion) return;
+  const t0 = ctx.currentTime + 0.06;
+  const { coinMetalThunk, coinRingHit, coinsShuffleBed } = sfx;
+
+  if (coinsShuffleBed) {
+    try {
+      playBufferAt(ctx, coinsShuffleBed, t0, 0.44, destination, 1, 1.45);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  let seed = (performance.now() * 1000) >>> 0;
+  const rng = (): number => {
+    seed = (seed + 0x6d2b79f5) >>> 0;
+    let x = seed;
+    x = Math.imul(x ^ (x >>> 15), x | 1);
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+
+  const n = 18;
+  for (let i = 0; i < n; i++) {
+    const useRing = Boolean(coinRingHit && rng() > 0.66);
+    const buf = useRing ? coinRingHit : coinMetalThunk ?? coinRingHit;
+    const when = t0 + 0.04 + i * 0.058 + rng() * 0.052;
+    const gain = useRing ? 0.12 + rng() * 0.07 : 0.15 + rng() * 0.09;
+    const rate = useRing ? 1.06 + rng() * 0.2 : 0.84 + rng() * 0.3;
+
+    if (buf) {
+      try {
+        playBufferAt(ctx, buf, when, gain, destination, rate, useRing ? 0.22 : 0.19);
+      } catch {
+        scheduleProceduralCoinClink(ctx, destination, when, gain * 0.85);
+      }
+    } else {
+      try {
+        scheduleProceduralCoinClink(ctx, destination, when, gain * 0.95);
+      } catch {
+        /* ignore */
+      }
+    }
   }
 }
 

@@ -10,7 +10,14 @@ import {
   playWinStinger,
   startSpinDrone,
 } from "./spectacleFanfare";
-import { prefetchWheelSfx, playBufferAt, type PrefetchedWheelSfx } from "./wheelSpectacleSfx";
+import {
+  prefetchSlotCoinSfx,
+  prefetchWheelSfx,
+  playBufferAt,
+  playSlotCoinRain,
+  type PrefetchedSlotCoinSfx,
+  type PrefetchedWheelSfx,
+} from "./wheelSpectacleSfx";
 import type { RunWheelSpectacleOptions, SpinWheelSpectacleResult, WheelPrizeLabel } from "./wheelSpectacle";
 
 export type RunSlotSpectacleOptions = RunWheelSpectacleOptions;
@@ -19,7 +26,7 @@ const CURTAIN_MOVE_MS = 1900;
 const CURTAIN_OPEN_WAIT_MS = CURTAIN_MOVE_MS + 180;
 const CURTAIN_CLOSE_WAIT_MS = CURTAIN_MOVE_MS + 320;
 
-const CELL_PX = 82;
+const CELL_PX = 92;
 const CENTER_ROW = 1;
 
 /** 街機捲軸符色：金、紅、綠 BAR、藍、焰橘等（呼應經典老虎機） */
@@ -191,6 +198,26 @@ const SLOT_CROWN_SVG = `<svg class="slot-spectacle-crown-svg" xmlns="http://www.
   <path fill="#ffd700" stroke="#a67c00" stroke-width="0.6" d="M22 14l1.8 4 4-2.2-1 4.5 4.8 0.6-4.8 1.8 1 4.5-4-2.2-4 2.2 1-4.5-4.8-1.8 4.8-0.6-1-4.5z" transform="translate(56,-2) scale(0.85)"/>
 </svg>`;
 
+/** 跑馬燈旁裝飾龍（AI 產製 PNG，見 public/media/slot-dragon-marquee.png） */
+const SLOT_DRAGON_IMG_SRC = `${import.meta.env.BASE_URL}media/slot-dragon-marquee.png`;
+/** 機台外框／捲軸內框華麗金屬裝飾（透明中央，見 public/media） */
+const SLOT_OUTER_GILT_SRC = `${import.meta.env.BASE_URL}media/slot-outer-gilt-frame.png`;
+const SLOT_INNER_GILT_SRC = `${import.meta.env.BASE_URL}media/slot-inner-gilt-frame.png`;
+
+function appendMarqueeDragon(pairEl: HTMLElement, side: "left" | "right"): void {
+  const wrap = document.createElement("span");
+  wrap.className = `slot-spectacle-dragon slot-spectacle-dragon--${side}`;
+  const img = document.createElement("img");
+  img.className = "slot-spectacle-dragon-img";
+  img.src = SLOT_DRAGON_IMG_SRC;
+  img.alt = "";
+  img.decoding = "async";
+  wrap.append(img);
+  pairEl.append(wrap);
+}
+
+const COIN_RAIN_COUNT = 30;
+
 function buildIdleStrip(prizes: WheelPrizeLabel[]): { strip: WheelPrizeLabel[]; offsetY: number } {
   const period = buildIdlePeriod(prizes);
   const strip: WheelPrizeLabel[] = [];
@@ -242,6 +269,11 @@ export function runSlotSpectacle(
 
     const marquee = document.createElement("div");
     marquee.className = "slot-spectacle-marquee";
+    const dragonPair = document.createElement("div");
+    dragonPair.className = "slot-spectacle-dragon-pair";
+    dragonPair.setAttribute("aria-hidden", "true");
+    appendMarqueeDragon(dragonPair, "left");
+    appendMarqueeDragon(dragonPair, "right");
     const crownWrap = document.createElement("div");
     crownWrap.className = "slot-spectacle-crown-wrap";
     crownWrap.innerHTML = SLOT_CROWN_SVG;
@@ -249,7 +281,7 @@ export function runSlotSpectacle(
     title.id = "slot-spectacle-title";
     title.className = "wheel-spectacle-title slot-spectacle-title";
     title.textContent = t("slot.spectacleTitle", "幸運拉霸");
-    marquee.append(crownWrap, title);
+    marquee.append(dragonPair, crownWrap, title);
 
     const tagline = document.createElement("p");
     tagline.className = "slot-spectacle-tagline";
@@ -269,6 +301,11 @@ export function runSlotSpectacle(
 
     const machineMain = document.createElement("div");
     machineMain.className = "slot-spectacle-machine-main";
+
+    const machineGilt = document.createElement("div");
+    machineGilt.className = "slot-spectacle-machine-gilt";
+    machineGilt.setAttribute("aria-hidden", "true");
+    machineGilt.style.backgroundImage = `url("${SLOT_OUTER_GILT_SRC}")`;
 
     const mainInner = document.createElement("div");
     mainInner.className = "slot-spectacle-machine-main-inner";
@@ -295,7 +332,7 @@ export function runSlotSpectacle(
 
     reelStack.append(payline, reelsRow);
     mainInner.append(sideDecor, reelStack);
-    machineMain.append(mainInner);
+    machineMain.append(machineGilt, mainInner);
 
     const lever = document.createElement("button");
     lever.type = "button";
@@ -365,8 +402,26 @@ export function runSlotSpectacle(
     const confetti = document.createElement("div");
     confetti.className = "slot-spectacle-confetti";
     confetti.setAttribute("aria-hidden", "true");
+    const coins = document.createElement("div");
+    coins.className = "slot-spectacle-coins";
+    coins.setAttribute("aria-hidden", "true");
+    for (let i = 0; i < COIN_RAIN_COUNT; i++) {
+      const coin = document.createElement("span");
+      coin.className = "slot-spectacle-coin";
+      const x = 4 + ((i * 29) % 92);
+      const sway = (i % 2 === 0 ? 1 : -1) * (18 + ((i * 7) % 42));
+      const size = 22 + ((i * 11) % 30);
+      const delay = (i % 10) * 0.055 + Math.floor(i / 10) * 0.12;
+      const duration = 1.05 + ((i * 13) % 36) / 100;
+      coin.style.setProperty("--coin-x", `${x}%`);
+      coin.style.setProperty("--coin-sway", `${sway}px`);
+      coin.style.setProperty("--coin-size", `${size}px`);
+      coin.style.setProperty("--coin-delay", `${delay}s`);
+      coin.style.setProperty("--coin-duration", `${duration}s`);
+      coins.append(coin);
+    }
 
-    overlay.append(deepSpace, confetti, sparks, stageMount, shardTop, shardBot, seamFlash);
+    overlay.append(deepSpace, confetti, coins, sparks, stageMount, shardTop, shardBot, seamFlash);
     document.body.append(overlay);
     document.body.classList.add("wheel-spectacle-lock");
 
@@ -454,6 +509,13 @@ export function runSlotSpectacle(
             winMagicChime: null,
             winPunchlineDrum: null,
           });
+      const coinSfxPromise = audioCtx
+        ? prefetchSlotCoinSfx(audioCtx)
+        : Promise.resolve<PrefetchedSlotCoinSfx>({
+            coinMetalThunk: null,
+            coinRingHit: null,
+            coinsShuffleBed: null,
+          });
 
       requestAnimationFrame(() => {
         overlay.classList.add("is-open");
@@ -466,7 +528,12 @@ export function runSlotSpectacle(
         }
       });
 
-      const [, prizeListRaw, sfx] = await Promise.all([sleep(openWaitMs), labelsPromise, sfxPromise]);
+      const [, prizeListRaw, sfx, coinSfx] = await Promise.all([
+        sleep(openWaitMs),
+        labelsPromise,
+        sfxPromise,
+        coinSfxPromise,
+      ]);
 
       overlay.classList.add("is-cracked");
       overlay.classList.add("is-seam-pop");
@@ -478,6 +545,10 @@ export function runSlotSpectacle(
       reelsRow.replaceChildren();
       const reelFrame = document.createElement("div");
       reelFrame.className = "slot-spectacle-reel-frame";
+      const reelGilt = document.createElement("div");
+      reelGilt.className = "slot-spectacle-reel-gilt";
+      reelGilt.setAttribute("aria-hidden", "true");
+      reelGilt.style.backgroundImage = `url("${SLOT_INNER_GILT_SRC}")`;
       const reelWindow = document.createElement("div");
       reelWindow.className = "slot-spectacle-reel-window slot-spectacle-reel-window--solo";
       const stripEl = document.createElement("div");
@@ -486,7 +557,7 @@ export function runSlotSpectacle(
       stripEl.style.transform = `translate3d(0, ${idleOffsetY}px, 0)`;
       stripEl.style.transition = "none";
       reelWindow.append(stripEl);
-      reelFrame.append(reelWindow);
+      reelFrame.append(reelGilt, reelWindow);
       reelsRow.append(reelFrame);
 
       renderHubFlanked(hub, t("slot.hubPull", "由右上往左下拉桿開始開獎"));
@@ -606,6 +677,11 @@ export function runSlotSpectacle(
 
         if (audioCtx && reelBus) {
           try {
+            void audioCtx.resume();
+            const coinDirect = audioCtx.createGain();
+            coinDirect.gain.value = 1.22;
+            coinDirect.connect(audioCtx.destination);
+            playSlotCoinRain(audioCtx, coinDirect, coinSfx, { reduceMotion });
             playWinStinger(audioCtx, sfx, reelBus);
           } catch {
             /* ignore */
