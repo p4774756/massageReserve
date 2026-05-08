@@ -201,7 +201,6 @@ const SLOT_CROWN_SVG = `<svg class="slot-spectacle-crown-svg" xmlns="http://www.
 /** 跑馬燈旁裝飾龍（AI 產製 PNG，見 public/media/slot-dragon-marquee.png） */
 const SLOT_DRAGON_IMG_SRC = `${import.meta.env.BASE_URL}media/slot-dragon-marquee.png`;
 /** 機台外框／捲軸內框華麗金屬裝飾（透明中央，見 public/media） */
-const SLOT_OUTER_GILT_SRC = `${import.meta.env.BASE_URL}media/slot-outer-gilt-frame.png`;
 const SLOT_INNER_GILT_SRC = `${import.meta.env.BASE_URL}media/slot-inner-gilt-frame.png`;
 
 function appendMarqueeDragon(pairEl: HTMLElement, side: "left" | "right"): void {
@@ -302,11 +301,6 @@ export function runSlotSpectacle(
     const machineMain = document.createElement("div");
     machineMain.className = "slot-spectacle-machine-main";
 
-    const machineGilt = document.createElement("div");
-    machineGilt.className = "slot-spectacle-machine-gilt";
-    machineGilt.setAttribute("aria-hidden", "true");
-    machineGilt.style.backgroundImage = `url("${SLOT_OUTER_GILT_SRC}")`;
-
     const mainInner = document.createElement("div");
     mainInner.className = "slot-spectacle-machine-main-inner";
 
@@ -332,7 +326,7 @@ export function runSlotSpectacle(
 
     reelStack.append(payline, reelsRow);
     mainInner.append(sideDecor, reelStack);
-    machineMain.append(machineGilt, mainInner);
+    machineMain.append(mainInner);
 
     const lever = document.createElement("button");
     lever.type = "button";

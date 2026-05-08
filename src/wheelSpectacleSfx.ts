@@ -5,14 +5,15 @@
  * 庫內沒有單一命名為「jackpot」的檔案；最接近「中大獎」的是觀眾歡呼（crowds）＋鑔片／遊戲秀鼓點（cartoon）疊加。
  */
 
-/** 拉霸金幣雨（與 WHEEL_SFX 相同來源：HTTPS + CORS） */
+/** 拉霸金幣雨：bundled WAV（Mixkit，見 public/media/sfx/ATTRIBUTION.txt），同網域 decode、離線可用 */
+const SLOT_COIN_BASE = `${import.meta.env.BASE_URL}media/sfx/`;
 export const SLOT_COIN_SFX_URLS = {
-  /** 短金屬碰撞，模擬單枚硬幣落地 */
-  coinMetalThunk: "https://actions.google.com/sounds/v1/cartoon/cartoon_metal_thunk.ogg",
-  /** 較亮的叮響，穿插層次 */
-  coinRingHit: "https://actions.google.com/sounds/v1/cartoon/cartoon_ringing_hit.ogg",
-  /** 硬幣摩擦／散落底噪（截短播放） */
-  coinsShuffleBed: "https://actions.google.com/sounds/v1/household/metal_shuffling.ogg",
+  /** 短金屬／街機金幣感，模擬單枚落地 */
+  coinMetalThunk: `${SLOT_COIN_BASE}slot-coin-land.wav`,
+  /** 多枚碰撞叮響 */
+  coinRingHit: `${SLOT_COIN_BASE}slot-coin-clink.wav`,
+  /** 硬幣摩擦散落底噪（截短播放） */
+  coinsShuffleBed: `${SLOT_COIN_BASE}slot-coin-shuffle.wav`,
 } as const;
 
 export type PrefetchedSlotCoinSfx = {

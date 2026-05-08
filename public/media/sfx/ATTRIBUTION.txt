@@ -1,0 +1,8 @@
+拉霸金幣雨音效（Mixkit，可免費用於商業專案）
+https://mixkit.co/license/#sfxFree
+
+- slot-coin-land.wav — Mixkit「Arcade game jump coin」(id 216)，單枚落地／短碰
+- slot-coin-clink.wav — Mixkit「Clinking coins」(id 1993)，叮響層次
+- slot-coin-shuffle.wav — Mixkit「Coins handling」(id 1939)，散落底噪（程式會截短播放）
+
+下載來源：assets.mixkit.co（需帶 mixkit.co Referer）
