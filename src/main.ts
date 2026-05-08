@@ -226,7 +226,7 @@ function taipeiLatestBookableDateKey(): string {
   return addDaysTaipeiDateKey(taipeiMondayOfSameWeek(taipeiTodayDateKey()), 13);
 }
 
-/** 後台名額預覽預設日期：從台北今日起往後找第一個仍在可預約視窗內的週一至週五 */
+/** 後台預約月曆預設選取日期：從台北今日起往後找第一個仍在可預約視窗內的週一至週五 */
 function defaultAdminCapacityProbeDateKey(): string {
   const minKey = taipeiTodayDateKey();
   const maxKey = taipeiLatestBookableDateKey();
@@ -716,9 +716,7 @@ function render() {
   let tab: "book" | "admin" = tabFromPath();
 
   const titleHeading = el("h1", {}, [t("home.title", "辦公室按摩預約")]);
-  const titleDesc = el("p", {}, [
-    t("home.subtitle", "約每 20 分鐘一輪 · 加時 50 元／輪（現場收費）"),
-  ]);
+  const titleDesc = el("p");
   const visitorStats = createVisitorStatsLine(tabFromPath() !== "admin");
   const visitorStatsLine = visitorStats.element;
   const titleTextCol = el("div", { class: "page-head-text" }, [titleDesc, visitorStatsLine]);
@@ -952,7 +950,7 @@ function render() {
   myBookingsTabEnded.addEventListener("click", () => setMyBookingsSubTab("ended"));
   setMyBookingsSubTab("upcoming");
 
-  myBookingsSection.append(
+    myBookingsSection.append(
     myBookingsTabList,
     myBookingsHint,
     myBookingsPanelUpcoming,
@@ -1736,6 +1734,7 @@ function render() {
         if (typeof data.pointsPerMassage === "number" && Number.isFinite(data.pointsPerMassage)) {
           pointsPerMassageSetting = Math.max(2, Math.round(data.pointsPerMassage));
         }
+        syncHomePageSubtitle();
         refillBookingModes(isVerifiedMember());
         const nickFromDb =
           typeof data.nickname === "string" && data.nickname.trim() ? data.nickname.trim() : "";
@@ -1970,6 +1969,15 @@ function render() {
   refillSlots(new Set(), true, "", new Map());
   syncBookingStepVisibility();
 
+  function syncHomePageSubtitle() {
+    if (tab !== "book") return;
+    titleDesc.textContent = t(
+      "home.subtitle",
+      "約每 20 分鐘一輪 · 每輪 {{price}} 元；加時亦 {{price}} 元／輪（現場收費）",
+      { price: sessionPriceNtdSetting },
+    );
+  }
+
   async function refreshBookingPricing() {
     try {
       const fn = getBookingPricingCall();
@@ -1984,6 +1992,7 @@ function render() {
     } catch {
       /* 使用預設 */
     }
+    syncHomePageSubtitle();
     refillBookingModes(isVerifiedMember());
   }
 
@@ -3274,91 +3283,14 @@ function render() {
     table.append(adminBookingsHeaderRow());
     tableHolder.append(table);
 
-    const adminCapacityDateInput = el("input", { type: "date" });
-    adminCapacityDateInput.min = taipeiTodayDateKey();
-    adminCapacityDateInput.max = taipeiLatestBookableDateKey();
-    adminCapacityDateInput.value = defaultAdminCapacityProbeDateKey();
-    const adminCapacityMeta = el("div", { class: "meta-pills admin-capacity-preview__pills", hidden: true });
-    const adminCapacityPreviewStatus = el("div", {
-      class: "status-line admin-capacity-preview__status",
-      role: "status",
-      ariaLive: "polite",
-    });
-    const adminCapacityRefreshBtn = el("button", { type: "button", class: "ghost" }, [
-      t("admin.bookings.capacityRefresh", "重新查詢名額"),
-    ]);
-    const adminCapacitySection = el("section", { class: "admin-capacity-preview" }, [
-      el("h4", { class: "admin-subhead" }, [t("admin.bookings.capacityHeading", "當日／本工作週名額")]),
-      el("label", { class: "field" }, [
-        t("admin.bookings.capacityDateLabel", "查詢日期（週一～週五）"),
-        adminCapacityDateInput,
-      ]),
-      el("div", { class: "row-actions" }, [adminCapacityRefreshBtn]),
-      adminCapacityMeta,
-      adminCapacityPreviewStatus,
-    ]);
-
-    async function refreshAdminCapacityPreview(): Promise<void> {
-      const dk = adminCapacityDateInput.value;
-      adminCapacityPreviewStatus.textContent = "";
-      adminCapacityPreviewStatus.className = "status-line admin-capacity-preview__status";
-      adminCapacityMeta.hidden = true;
-      adminCapacityMeta.innerHTML = "";
-      if (!dk || !isDateKeyMonFri(dk)) {
-        adminCapacityPreviewStatus.textContent = t(
-          "admin.bookings.capacityNeedWeekday",
-          "請選擇週一到週五的日期。",
-        );
-        adminCapacityPreviewStatus.classList.add("error");
-        return;
-      }
-      const minK = taipeiTodayDateKey();
-      const maxK = taipeiLatestBookableDateKey();
-      if (dk < minK || dk > maxK) {
-        adminCapacityPreviewStatus.textContent = t(
-          "admin.bookings.capacityDateOutOfRange",
-          "日期須在可預約視窗內。",
-        );
-        adminCapacityPreviewStatus.classList.add("error");
-        return;
-      }
-      adminCapacityPreviewStatus.textContent = t("admin.bookings.capacityLoading", "查詢中…");
-      try {
-        const fn = getAvailabilityCall();
-        const res = await fn({ dateKey: dk, ...localeApiParam() });
-        const data = res.data as {
-          dayCount: number;
-          weekCount: number;
-          dayCap: number;
-          weekCap: number;
-        };
-        adminCapacityMeta.append(
-          el("span", { class: "pill" }, [
-            t("booking.metaDay", "當日已預約 "),
-            el("strong", {}, [String(data.dayCount)]),
-            ` / ${data.dayCap}`,
-          ]),
-          el("span", { class: "pill" }, [
-            t("booking.metaWeek", "本工作週已預約 "),
-            el("strong", {}, [String(data.weekCount)]),
-            ` / ${data.weekCap}`,
-          ]),
-        );
-        adminCapacityMeta.hidden = false;
-        adminCapacityPreviewStatus.textContent = t("admin.bookings.capacityOk", "已更新。");
-        adminCapacityPreviewStatus.classList.add("ok");
-      } catch (e) {
-        adminCapacityPreviewStatus.textContent = errorMessage(e);
-        adminCapacityPreviewStatus.classList.add("error");
-      }
-    }
+    let adminBookingsCalendarSelectedDateKey = defaultAdminCapacityProbeDateKey();
 
     let adminCalendarYear = 0;
     let adminCalendarMonth = 0;
     let adminCalendarLastVisible: Booking[] = [];
 
     function syncAdminCalendarMonthFromDateInput(): void {
-      const dk = adminCapacityDateInput.value;
+      const dk = adminBookingsCalendarSelectedDateKey;
       if (!/^\d{4}-\d{2}-\d{2}$/.test(dk)) return;
       const [y, m] = dk.split("-").map(Number);
       adminCalendarYear = y;
@@ -3402,7 +3334,7 @@ function render() {
       const mo = adminCalendarMonth;
       const minK = taipeiTodayDateKey();
       const maxK = taipeiLatestBookableDateKey();
-      const selected = adminCapacityDateInput.value;
+      const selected = adminBookingsCalendarSelectedDateKey;
       const todayK = taipeiTodayDateKey();
 
       adminCalendarMonthLabel.textContent = new Intl.DateTimeFormat(intlLocaleTag(), {
@@ -3490,9 +3422,8 @@ function render() {
         }
         if (titleAttr) btn.title = titleAttr;
         btn.addEventListener("click", () => {
-          adminCapacityDateInput.value = dk;
+          adminBookingsCalendarSelectedDateKey = dk;
           syncAdminCalendarMonthFromDateInput();
-          void refreshAdminCapacityPreview();
           paintAdminBookingsCalendar();
         });
         wrap.append(btn);
@@ -3539,15 +3470,6 @@ function render() {
       adminCalendarMonth = mInit;
     }
     paintAdminBookingsCalendar();
-
-    adminCapacityDateInput.addEventListener("change", () => {
-      syncAdminCalendarMonthFromDateInput();
-      paintAdminBookingsCalendar();
-      void refreshAdminCapacityPreview();
-    });
-    adminCapacityRefreshBtn.addEventListener("click", () => {
-      void refreshAdminCapacityPreview();
-    });
 
     const hiddenBookingsStatus = el("div", { class: "status-line" });
     const hiddenTableHolder = el("div", { class: "table-wrap admin-bookings-table" });
@@ -3678,9 +3600,9 @@ function render() {
         const th = el("th", {});
         const arrowChar = memberListSortKey === key ? (memberListSortAsc ? "▲" : "▼") : "";
         const btn = el("button", {
-          type: "button",
-          class: "ghost admin-member-sort-btn",
-          title: t("admin.memberList.sortTitle", "依「{{label}}」排序；再按一次反向", { label }),
+            type: "button",
+            class: "ghost admin-member-sort-btn",
+            title: t("admin.memberList.sortTitle", "依「{{label}}」排序；再按一次反向", { label }),
         });
         btn.append(
           el("span", { class: "admin-member-sort-btn__label" }, [label]),
@@ -4062,8 +3984,8 @@ function render() {
 
       function refreshSendConfirmLabel() {
         sendConfirmText.textContent = t(
-          "admin.memberList.emailSendConfirmBroadcast",
-          "我確認主旨、內文正確，且已按「預覽收件人數」確認收件範圍無誤，要實際寄出",
+                "admin.memberList.emailSendConfirmBroadcast",
+                "我確認主旨、內文正確，且已按「預覽收件人數」確認收件範圍無誤，要實際寄出",
         );
       }
 
@@ -4419,7 +4341,7 @@ function render() {
       el("label", { class: "field admin-member-list-search" }, [
         t("admin.memberList.searchLabel", "快速篩選"),
         memberListSearchInput,
-      ]),
+        ]),
       memberListStatus,
       memberListTableWrap,
       memberListPager,
@@ -4555,7 +4477,6 @@ function render() {
         panel.hidden = i !== index;
         panel.classList.toggle("is-active", i === index);
       });
-      if (index === 0) void refreshAdminCapacityPreview();
     }
 
     subBookingsActive.addEventListener("click", () => selectBookingsSubTab(0));
@@ -4600,7 +4521,7 @@ function render() {
     tabMembers.setAttribute("aria-controls", "admin-tab-panel-members");
     tabAnnounce.setAttribute("aria-controls", "admin-tab-panel-announce");
 
-    panelBookingsActiveSub.append(adminCapacitySection, adminBookingsCalendarSection, adminStatus, tableHolder);
+    panelBookingsActiveSub.append(adminBookingsCalendarSection, adminStatus, tableHolder);
     panelMembersEl.append(membersSubTablist, membersSubPanelsWrap);
     panelAnnounceEl.append(announcementSection);
 
@@ -5093,9 +5014,11 @@ function render() {
     visitorStats.setVisible(isBook);
     titleHeading.textContent = isBook ? t("home.title", "辦公室按摩預約") : t("admin.backTitle", "管理後台");
     titleDesc.hidden = !isBook;
-    titleDesc.textContent = isBook
-      ? t("home.subtitle", "約每 20 分鐘一輪 · 加時 50 元／輪（現場收費）")
-      : "";
+    if (isBook) {
+      syncHomePageSubtitle();
+    } else {
+      titleDesc.textContent = "";
+    }
     document.title = isBook ? t("meta.docTitle", "辦公室按摩預約") : t("admin.backTitle", "管理後台");
     panelBook.hidden = !isBook;
     panelAdmin.hidden = isBook;

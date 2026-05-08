@@ -264,10 +264,6 @@ export function runSlotSpectacle(
 
     const stage = document.createElement("div");
     stage.className = "wheel-spectacle-stage slot-spectacle-stage";
-    stage.style.setProperty(
-      "--slot-take-btn-bg",
-      `url("${import.meta.env.BASE_URL}media/slot-take-button.png")`,
-    );
 
     const stageHead = document.createElement("div");
     stageHead.className = "slot-spectacle-stage-head";
@@ -375,8 +371,9 @@ export function runSlotSpectacle(
     actions.hidden = true;
     const primaryBtn = document.createElement("button");
     primaryBtn.type = "button";
-    primaryBtn.className = "primary wheel-spectacle-primary";
-    primaryBtn.textContent = t("slot.take", "收下");
+    primaryBtn.className = "primary wheel-spectacle-primary slot-spectacle-take-btn";
+    primaryBtn.setAttribute("aria-label", t("slot.take", "收下"));
+    primaryBtn.textContent = "";
     primaryBtn.disabled = true;
     actions.append(primaryBtn);
 

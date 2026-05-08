@@ -917,28 +917,6 @@ button.ghost:disabled {
   min-width: 0;
 }
 
-/* 後台「預約管理」：與前台相同邏輯之名額預覽 */
-.admin-capacity-preview {
-  margin: 0 0 18px;
-  padding: 14px 16px 16px;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
-  background: linear-gradient(180deg, var(--surface-muted) 0%, var(--surface) 100%);
-  box-shadow: var(--shadow-sm);
-}
-
-.admin-capacity-preview .admin-subhead {
-  margin-top: 0;
-}
-
-.admin-capacity-preview__pills {
-  margin-top: 10px;
-}
-
-.admin-capacity-preview__status {
-  margin-top: 8px;
-}
-
 /* 後台預約月曆 */
 .admin-bookings-calendar {
   margin: 0 0 18px;
@@ -3142,20 +3120,6 @@ body.wheel-spectacle-lock {
   margin-top: 18px;
 }
 
-.slot-spectacle-stage .wheel-spectacle-primary:hover:not(:disabled) {
-  filter: brightness(1.06);
-}
-
-.slot-spectacle-stage .wheel-spectacle-primary:focus-visible {
-  outline: 3px solid rgb(255 220 140 / 0.95);
-  outline-offset: 4px;
-}
-
-.slot-spectacle-stage .wheel-spectacle-primary:disabled {
-  opacity: 0.45;
-  filter: saturate(0.8);
-}
-
 /* 拉霸：對齊參考稿的寬版精品機台 */
 /* 避免拉桿／箭頭提示／裝飾偽元素超出視窗；過高時可於舞台掛點捲動 */
 .slot-spectacle-overlay.wheel-spectacle-overlay {
@@ -3984,13 +3948,6 @@ body.wheel-spectacle-lock {
   font-size: 1rem;
 }
 
-.slot-spectacle-stage .wheel-spectacle-primary {
-  min-width: 260px;
-  padding: 16px 34px;
-  font-size: 1.35rem;
-  border-radius: 16px;
-}
-
 @media (max-width: 720px) {
   .slot-spectacle-stage.wheel-spectacle-stage {
     width: min(420px, calc(100vw - 20px));
@@ -4388,28 +4345,73 @@ body.wheel-spectacle-lock {
   box-shadow: 0 4px 0 rgb(120 30 70 / 0.45), 0 8px 20px rgb(200 40 100 / 0.25);
 }
 
-.slot-spectacle-stage .wheel-spectacle-primary {
-  min-width: 260px;
-  padding: 16px 34px;
-  border-radius: 16px;
+/* 拉霸「收下」：華麗產圖（public/media/slot-take-button-luxe.png），須透明底；文案在圖內；按鈕本體僅供點擊區與無障礙 aria-label */
+/* 注意：此鈕含 .primary，全域 button.primary:hover 使用 background 簡寫會清空 background-image，故 hover/active/disabled 須重複宣告底圖 */
+.slot-spectacle-stage .wheel-spectacle-primary.slot-spectacle-take-btn {
+  --slot-take-art: url("/media/slot-take-button-luxe.png");
+  appearance: none;
+  -webkit-appearance: none;
+  width: min(560px, 96vw);
+  min-width: min(560px, 96vw);
+  min-height: clamp(96px, 20vmin, 140px);
+  padding: 14px 36px;
   border: none;
-  font-size: 1.35rem;
-  font-weight: 900;
-  letter-spacing: 0.1em;
-  color: #fffaf0;
-  text-shadow:
-    0 1px 0 rgb(80 20 0 / 0.85),
-    0 2px 8px rgb(60 10 0 / 0.65),
-    0 0 18px rgb(255 200 120 / 0.35);
-  background-color: #c73e08;
-  background-image: var(--slot-take-btn-bg, url("/media/slot-take-button.png"));
+  border-radius: 0;
+  font-size: 0;
+  line-height: 0;
+  color: transparent;
+  text-shadow: none;
+  cursor: pointer;
+  background-color: transparent;
+  background-image: var(--slot-take-art);
   background-repeat: no-repeat;
   background-position: center;
-  background-size: 100% 100%;
-  box-shadow:
-    0 6px 0 rgb(100 38 4 / 0.92),
-    0 12px 28px rgb(0 0 0 / 0.38),
-    0 0 24px rgb(255 154 24 / 0.35);
+  background-size: contain;
+  box-shadow: none;
+  filter: drop-shadow(0 6px 14px rgb(0 0 0 / 0.45)) drop-shadow(0 0 18px rgb(255 200 90 / 0.22));
+  transition:
+    filter 0.15s ease,
+    transform 0.12s ease;
+}
+
+.slot-spectacle-stage .wheel-spectacle-primary.slot-spectacle-take-btn:hover:not(:disabled) {
+  background-color: transparent;
+  background-image: var(--slot-take-art);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  color: transparent;
+  filter: drop-shadow(0 8px 18px rgb(0 0 0 / 0.5)) drop-shadow(0 0 22px rgb(255 215 120 / 0.35))
+    brightness(1.06);
+}
+
+.slot-spectacle-stage .wheel-spectacle-primary.slot-spectacle-take-btn:active:not(:disabled) {
+  background-color: transparent;
+  background-image: var(--slot-take-art);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  color: transparent;
+  transform: translateY(2px);
+  filter: drop-shadow(0 4px 10px rgb(0 0 0 / 0.42)) drop-shadow(0 0 14px rgb(255 200 90 / 0.18))
+    brightness(0.98);
+}
+
+.slot-spectacle-stage .wheel-spectacle-primary.slot-spectacle-take-btn:disabled {
+  background-color: transparent;
+  background-image: var(--slot-take-art);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  color: transparent;
+  opacity: 0.42;
+  cursor: not-allowed;
+  filter: drop-shadow(0 4px 10px rgb(0 0 0 / 0.35)) grayscale(0.45) brightness(0.88);
+}
+
+.slot-spectacle-stage .wheel-spectacle-primary.slot-spectacle-take-btn:focus-visible {
+  outline: 3px solid rgb(255 220 140 / 0.95);
+  outline-offset: 6px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -4586,7 +4588,7 @@ html.kuso-retro:not(:has(.shell.admin-mode)) a:hover {
   color: var(--accent-deep);
 }
 
-/* 排除輪盤／拉霸全螢幕主按鈕（.wheel-spectacle-primary），否則會蓋掉產圖 background-image */
+/* 排除輪盤／拉霸全螢幕主按鈕（.wheel-spectacle-primary），保留各自版面樣式 */
 html.kuso-retro:not(:has(.shell.admin-mode)) button.primary:not(.wheel-spectacle-primary) {
   border: none;
   background: var(--accent);
