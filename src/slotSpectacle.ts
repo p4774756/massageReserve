@@ -30,7 +30,7 @@ const CURTAIN_OPEN_WAIT_MS = CURTAIN_MOVE_MS + 180;
 const CURTAIN_CLOSE_WAIT_MS = CURTAIN_MOVE_MS + 320;
 
 /** 須與 CSS `.slot-spectacle-machine-main-inner { --slot-cell-h }` 一致 */
-const CELL_PX = 92;
+const CELL_PX = 84;
 const CENTER_ROW = 1;
 /** 捲軸 `transform` 過渡長度（與排程 tick／ easing 同步） */
 const SLOT_REEL_SPIN_MS = 8400;
@@ -306,6 +306,9 @@ export function runSlotSpectacle(
     const machineRow = document.createElement("div");
     machineRow.className = "slot-spectacle-machine-row";
 
+    const machineCluster = document.createElement("div");
+    machineCluster.className = "slot-spectacle-machine-cluster";
+
     const machineMain = document.createElement("div");
     machineMain.className = "slot-spectacle-machine-main";
 
@@ -355,7 +358,8 @@ export function runSlotSpectacle(
     leverSwing.append(leverGraphic, pullHint);
     lever.append(leverSwing);
 
-    machineRow.append(machineMain, lever);
+    machineCluster.append(machineMain, lever);
+    machineRow.append(machineCluster);
     machine.append(machineRow);
 
     const resultLine = document.createElement("div");
@@ -562,7 +566,7 @@ export function runSlotSpectacle(
       stripEl.style.transform = `translate3d(0, ${idleOffsetY}px, 0)`;
       stripEl.style.transition = "none";
       reelWindow.append(stripEl);
-      /* 金框在上曾要求 PNG 中央透明；AI 產圖常為不透明白底會遮住獎項。改為先畫金框、捲軸視窗叠在上（見 CSS z-index）。 */
+      /* 金框 PNG（RGBA 鏤空）叠於捲軸之上；素材須為透明中央洞，見 public/media/slot-inner-gilt-frame.png */
       reelFrame.append(reelGilt, reelWindow);
       reelsRow.append(reelFrame);
 

@@ -1,0 +1,20 @@
+---
+description: 變更畫面／版面／視覺素材後須以瀏覽器 MCP 實際確認
+alwaysApply: true
+---
+
+# 畫面變更須用瀏覽器確認（massage-reserve）
+
+## 適用時機
+
+凡會影響使用者可見 UI 的修改（包含但不限於：`src/style.css`、版面結構、元件樣式、疊層／z-index、`public/media/` 內與介面相關之圖檔），在完成實作後 **應使用 Cursor 內建瀏覽器 MCP（`cursor-ide-browser`）** 驗證，不要僅憑推測或 build 通過就結案。
+
+## Agent 應做的事
+
+1. 在本機 **`npm run dev`** 可連線時，對相關頁面 **navigate → snapshot**（必要時 **screenshot**）確認版面、色彩、疊層與互動區是否正確。
+2. 若需登入、權限或按鈕為 `disabled` 導致 MCP **無法開啟目標畫面**，須在回覆中**明說限制**，並列出使用者應如何在本機操作同一流程做目視確認（或後續補 **僅開發用預覽入口** 再驗）。
+3. 驗證時遵守 MCP 瀏覽器規範：`browser_snapshot` 後再互動；結構或網址變動後重新 snapshot。
+
+## 與素材規則的關係
+
+PNG／WebP UI 素材仍須遵守 **`image-generation-transparent`**（透明 alpha、禁止假透明）；瀏覽器確認可用來發現白邊、錯位、合成異常等僅靠檔案不易察覺的問題。
