@@ -26,6 +26,7 @@ const CURTAIN_MOVE_MS = 1900;
 const CURTAIN_OPEN_WAIT_MS = CURTAIN_MOVE_MS + 180;
 const CURTAIN_CLOSE_WAIT_MS = CURTAIN_MOVE_MS + 320;
 
+/** 須與 CSS `.slot-spectacle-machine-main-inner { --slot-cell-h }` 一致 */
 const CELL_PX = 92;
 const CENTER_ROW = 1;
 
@@ -551,7 +552,8 @@ export function runSlotSpectacle(
       stripEl.style.transform = `translate3d(0, ${idleOffsetY}px, 0)`;
       stripEl.style.transition = "none";
       reelWindow.append(stripEl);
-      reelFrame.append(reelGilt, reelWindow);
+      /* 金屬燈框後畫，叠在捲軸上，避免獎項視覺穿出洞緣（見 CSS z-index） */
+      reelFrame.append(reelWindow, reelGilt);
       reelsRow.append(reelFrame);
 
       renderHubFlanked(hub, t("slot.hubPull", "由右上往左下拉桿開始開獎"));
