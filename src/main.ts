@@ -3765,7 +3765,7 @@ function render() {
       | "wheelPoints"
       | "drawChances";
 
-    const MEMBER_LIST_PAGE_SIZE = 10;
+    const MEMBER_LIST_PAGE_SIZE = 5;
     let memberListCache: AdminMemberListRow[] = [];
     let memberListPageIndex = 0;
     let memberListSortKey: MemberListSortKey = "emailVerified";

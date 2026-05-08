@@ -1627,10 +1627,11 @@ tbody tr:hover td {
   box-sizing: border-box;
 }
 
+/* 會員清單每頁筆數少，不再限制高度與內部捲動（由頁面整體捲動即可） */
 .admin-member-list-table {
   overflow-x: auto;
-  overflow-y: auto;
-  max-height: min(52vh, 520px);
+  overflow-y: visible;
+  max-height: none;
   margin-top: 12px;
 }
 
