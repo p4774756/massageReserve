@@ -3614,7 +3614,7 @@ body.wheel-spectacle-lock {
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  --slot-cluster-inline-pad: 16px;
+  --slot-cluster-inline-pad: 10px;
   padding: 0 var(--slot-cluster-inline-pad);
 }
 
@@ -3637,7 +3637,7 @@ body.wheel-spectacle-lock {
   width: 100%;
   flex: none;
   border-radius: 38px;
-  padding: 22px 5px;
+  padding: 22px 3px;
   /* 本體底色與體積感；華麗金邊僅保留捲軸區 .slot-spectacle-reel-gilt */
   background:
     linear-gradient(188deg, rgb(255 254 238 / 0.55) 0%, transparent 15%),
@@ -3718,7 +3718,7 @@ body.wheel-spectacle-lock {
   background-position: center;
   background-repeat: no-repeat;
   /* 橫向多拉伸：PNG 透明洞變寬，獎項列較不擠（直向維持約略對齊捲軸） */
-  background-size: 152% 112%;
+  background-size: 168% 112%;
   pointer-events: none;
   /* 須高於捲軸：`slot-inner-gilt-frame.png` 為 RGBA、中央透明洞露出獎項（勿用無 alpha 的 RGB 圖） */
   z-index: 12;
@@ -3733,7 +3733,7 @@ body.wheel-spectacle-lock {
   /* isolate 讓 gilt 與捲軸的 z-index 只在框內比較，避免與外層誤叠 */
   isolation: isolate;
   /* 與 gilt 透明洞對齊：內縮捲軸，獎項不頂到燈珠金屬內緣；上下略收與較矮列高搭配 */
-  padding: 14px 5px 18px 5px;
+  padding: 14px 3px 18px 3px;
   border-radius: 22px;
   /* 勿 overflow:hidden，會裁掉 reel-gilt 負 inset 裝飾 */
   background: linear-gradient(180deg, #1f140a, #060402);
@@ -3774,7 +3774,7 @@ body.wheel-spectacle-lock {
   background:
     linear-gradient(180deg, rgb(28 104 48 / 0.68) 0%, rgb(13 78 43 / 0.64) 33.33%, transparent 33.33% 66.66%, rgb(83 18 116 / 0.76) 66.66% 100%),
     linear-gradient(180deg, transparent 0 33.33%, rgb(255 220 98 / 0.96) 33.33% 66.66%, transparent 66.66% 100%),
-    radial-gradient(ellipse 72% 55% at 50% 50%, rgb(255 243 178 / 0.32), transparent 70%);
+    radial-gradient(ellipse 88% 55% at 50% 50%, rgb(255 243 178 / 0.32), transparent 70%);
 }
 
 .slot-spectacle-cell {
@@ -3782,8 +3782,8 @@ body.wheel-spectacle-lock {
   flex-shrink: 0;
   height: var(--slot-cell-h);
   justify-content: center;
-  gap: 12px;
-  padding: 14px 10px;
+  gap: 10px;
+  padding: 14px 8px;
   border-bottom: 1px solid rgb(0 0 0 / 0.34);
   font-size: 1.58rem;
   letter-spacing: 0.03em;
@@ -4024,7 +4024,7 @@ body.wheel-spectacle-lock {
   }
 
   .slot-spectacle-machine-cluster {
-    --slot-cluster-inline-pad: 8px;
+    --slot-cluster-inline-pad: 4px;
   }
 
   .slot-spectacle-machine-row {
@@ -4033,7 +4033,7 @@ body.wheel-spectacle-lock {
 
   .slot-spectacle-machine-main {
     border-radius: 26px;
-    padding: 14px 3px;
+    padding: 14px 2px;
     box-shadow:
       0 8px 0 rgb(44 22 8 / 0.88),
       0 12px 20px rgb(0 0 0 / 0.36),
@@ -4045,7 +4045,7 @@ body.wheel-spectacle-lock {
   .slot-spectacle-reel-gilt {
     inset: -30px -26px;
     border-radius: 26px;
-    background-size: 150% 108%;
+    background-size: 166% 108%;
     opacity: 1;
   }
 
@@ -4061,7 +4061,7 @@ body.wheel-spectacle-lock {
   }
 
   .slot-spectacle-reel-frame {
-    padding: 11px 4px 13px 4px;
+    padding: 11px 2px 13px 2px;
     border-radius: 18px;
   }
 
@@ -4077,7 +4077,7 @@ body.wheel-spectacle-lock {
 
   .slot-spectacle-cell {
     gap: 10px;
-    padding: 10px 7px;
+    padding: 10px 5px;
     font-size: 1rem;
   }
 
