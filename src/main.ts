@@ -717,20 +717,11 @@ function render() {
 
   const titleHeading = el("h1", {}, [t("home.title", "辦公室按摩預約")]);
   const titleDesc = el("p", {}, [
-    t(
-      "home.subtitle",
-      "週一至週五 · 線上選開始時間（每 15 分鐘一個時段）· 現場約 20 分鐘一輪，若要加時請告知師傅（現場每加一輪依訂價收費）· 每工作週有名額上限（見下方規則）· 現場臨時預約視當日狀況 · 午休 11:45–13:15 不開放 · 最晚 16:45 開始、17:00 前結束",
-    ),
-  ]);
-  const titleGuestHint = el("p", { class: "page-head-guest-hint" }, [
-    t(
-      "home.guestHint",
-      "預約須先註冊並登入會員，並完成信箱驗證（若未見驗證信，請查看垃圾／販促信件匣）；會員可儲值與參加抽獎。",
-    ),
+    t("home.subtitle", "約每 20 分鐘一輪 · 加時 50 元／輪（現場收費）"),
   ]);
   const visitorStats = createVisitorStatsLine(tabFromPath() !== "admin");
   const visitorStatsLine = visitorStats.element;
-  const titleTextCol = el("div", { class: "page-head-text" }, [titleDesc, titleGuestHint, visitorStatsLine]);
+  const titleTextCol = el("div", { class: "page-head-text" }, [titleDesc, visitorStatsLine]);
 
   const memberLoginBtn = el("button", { class: "ghost member-entry member-login", type: "button" }, [
     t("member.entryLogin", "會員登入"),
@@ -741,7 +732,9 @@ function render() {
   const headerSignOutBtn = el("button", { class: "ghost member-entry member-sign-out", type: "button" }, [
     t("member.entrySignOut", "登出"),
   ]);
+  const adminHeadSignedInHint = el("span", { class: "hint admin-head-signed-in", hidden: true });
   const headMemberActions = el("div", { class: "head-member-actions" }, [
+    adminHeadSignedInHint,
     memberLoginBtn,
     memberCenterBtn,
     headerSignOutBtn,
@@ -784,7 +777,14 @@ function render() {
   shell.append(appVersionFooter);
 
   /** --- 預約表單 --- */
-  const nameInput = el("input", { type: "text", autocomplete: "name", maxLength: 80 });
+  const nameInput = el("input", {
+    type: "text",
+    autocomplete: "name",
+    maxLength: 80,
+    required: true,
+    name: "displayName",
+  });
+  nameInput.setAttribute("aria-required", "true");
   const dateInput = el("input", { type: "date" });
   dateInput.min = taipeiTodayDateKey();
   dateInput.max = taipeiLatestBookableDateKey();
@@ -803,10 +803,6 @@ function render() {
   });
   const bookStatus = el("div", { class: "status-line book-submit-status", role: "status", ariaLive: "polite" });
   const meta = el("div", { class: "meta-pills" });
-  /** 未選日期時顯示；選定日期後改為依步驟顯示時段／結帳區 */
-  const bookProgressHint = el("p", { class: "hint book-progress-hint" }, [
-    t("booking.pickSlotFirst", "先選擇日期後，會顯示可選時段與名額。"),
-  ]);
   const slotFieldWrap = el(
     "div",
     { class: "grid" },
@@ -814,23 +810,13 @@ function render() {
       el("label", { class: "field" }, [
         t("field.startSlot", "開始時間（請選預約時段）"),
         slotSelect,
-        el("span", { class: "hint" }, [
-          t(
-            "field.startSlotHint",
-            "下拉選單為每 15 分鐘一個可選開始時間。現場服務以約 20 分鐘為一輪；一輪結束後若要加時，請直接向師傅告知，現場另收費（一般每加一輪為現場單次金額）。",
-          ),
-        ]),
       ]),
     ],
   );
-  const bookThenFinalizeHint = el("p", { class: "hint book-then-finalize-hint", hidden: true }, [
-    t("booking.thenFinalize", "選定開始時間後，將顯示付款方式、備註與送出按鈕。"),
-  ]);
   const slotStepSection = el("div", { class: "book-step book-step--slots" }, [
     slotFieldWrap,
     scheduleStatus,
     meta,
-    bookThenFinalizeHint,
   ]);
   const bookFooterNote = el("div", { class: "footer-note" });
   bookFooterNote.textContent = t(
@@ -966,13 +952,7 @@ function render() {
   myBookingsTabEnded.addEventListener("click", () => setMyBookingsSubTab("ended"));
   setMyBookingsSubTab("upcoming");
 
-    myBookingsSection.append(
-    el("p", { class: "hint my-bookings-intro" }, [
-      t(
-        "myBookings.intro",
-        "以下為綁定你帳號的預約。「尚未開始」僅含待確認／已確認且尚未到開始時間；其餘在「已結束」。",
-      ),
-    ]),
+  myBookingsSection.append(
     myBookingsTabList,
     myBookingsHint,
     myBookingsPanelUpcoming,
@@ -1046,14 +1026,6 @@ function render() {
         myBookingsHint.textContent = "";
         myBookingsHint.className = "status-line";
         if (snap.empty) {
-          myBookingsListUpcoming.append(
-            el("p", { class: "hint my-bookings-empty" }, [
-              t(
-                "myBookings.emptyUpcoming",
-                "尚無進行中的預約。請用會員儲值／現金／飲料折抵送出預約後，待確認或已確認且尚未到開始時間的會顯示於此。",
-              ),
-            ]),
-          );
           myBookingsListEnded.append(
             el("p", { class: "hint my-bookings-empty" }, [
               t("myBookings.emptyEnded", "尚無已結束的紀錄（已完成、已取消、已刪除或已過開始時間）。"),
@@ -1065,16 +1037,7 @@ function render() {
         const upcoming = all.filter(isMyBookingUpcomingTab).sort((a, b) => bookingStartMs(a) - bookingStartMs(b));
         const ended = all.filter((b) => !isMyBookingUpcomingTab(b)).sort((a, b) => bookingStartMs(b) - bookingStartMs(a));
 
-        if (upcoming.length === 0) {
-          myBookingsListUpcoming.append(
-            el("p", { class: "hint my-bookings-empty" }, [
-              t(
-                "myBookings.emptyUpcoming",
-                "尚無進行中的預約。請用會員儲值／現金／飲料折抵送出預約後，待確認或已確認且尚未到開始時間的會顯示於此。",
-              ),
-            ]),
-          );
-        } else {
+        if (upcoming.length > 0) {
           for (const b of upcoming) appendMyBookingRow(myBookingsListUpcoming, b);
         }
 
@@ -1101,9 +1064,36 @@ function render() {
 
   function syncHeadMemberButtons() {
     const user = auth.currentUser;
-    memberLoginBtn.hidden = Boolean(user);
-    memberCenterBtn.hidden = !user;
+    const bookUi = tab === "book";
+    memberLoginBtn.hidden = Boolean(user) || !bookUi;
+    /** 後台不顯示會員中心／會員登入（登出保留於標題列） */
+    memberCenterBtn.hidden = !user || !bookUi;
     headerSignOutBtn.hidden = !user;
+  }
+
+  /** 後台：將「已登入…」放在標題列右上角（登出鈕左側）；預約頁不顯示 */
+  function syncAdminHeadSignedInHint(fallbackUid?: string) {
+    if (tab !== "admin") {
+      adminHeadSignedInHint.hidden = true;
+      adminHeadSignedInHint.textContent = "";
+      return;
+    }
+    const u = auth.currentUser;
+    const uidRaw = u?.uid ?? fallbackUid ?? "";
+    if (!uidRaw) {
+      adminHeadSignedInHint.hidden = true;
+      adminHeadSignedInHint.textContent = "";
+      return;
+    }
+    const whoLabel =
+      u != null
+        ? t("admin.signedInLabel", "已登入：{{name}}（{{uid}}）", {
+            name: adminSessionCallName(u),
+            uid: shortUidForDisplay(u.uid),
+          })
+        : t("admin.signedInUidOnly", "已登入：（{{uid}}）", { uid: shortUidForDisplay(uidRaw) });
+    adminHeadSignedInHint.textContent = whoLabel;
+    adminHeadSignedInHint.hidden = false;
   }
 
   /** 預約頁右上角：訪客／登入與驗證狀態／稱呼（單行；過長省略，完整字串放 title） */
@@ -1969,20 +1959,12 @@ function render() {
       bookingAvailabilityLoading ||
       (showSlotFields && !bookingAvailabilityLoading && !pickable);
 
-    bookProgressHint.hidden = dk !== "";
     slotStepSection.hidden = dk === "";
     slotFieldWrap.hidden = hideStartTimeRow;
 
     const slotPicked = Boolean(slotSelect.value);
     /** 與時段列一致：無可選時段／載入中／額滿時一併隱藏付款與送出 */
     finalizeSection.hidden = !slotPicked || !showSlotFields || hideStartTimeRow;
-    bookThenFinalizeHint.hidden = !(
-      showSlotFields &&
-      pickable &&
-      !slotPicked &&
-      !bookingAvailabilityLoading &&
-      !bookingCapacityBlocksSlots
-    );
   }
 
   refillSlots(new Set(), true, "", new Map());
@@ -2074,8 +2056,6 @@ function render() {
 
         setBookFooterFromCaps(data.dayCap, data.weekCap);
         refillSlots(taken, blocked, dk, blockedMap);
-        const weekMon = taipeiMondayOfSameWeek(dk);
-        const weekFri = addDaysTaipeiDateKey(weekMon, 4);
         meta.append(
           el("span", { class: "pill" }, [
             t("booking.metaDay", "當日已預約 "),
@@ -2086,17 +2066,6 @@ function render() {
             t("booking.metaWeek", "本工作週已預約 "),
             el("strong", {}, [String(data.weekCount)]),
             ` / ${data.weekCap}`,
-          ]),
-          el("div", { class: "meta-pills-note" }, [
-            t("booking.metaNoteLead", "「當日」＝您所選的這一天："),
-            el("strong", {}, [dateKeyLabelTaipei(dk)]),
-            t("booking.metaNoteMid", "。「本工作週」＝該日所屬曆週之週一至週五："),
-            el("strong", {}, [dateKeyLabelTaipei(weekMon)]),
-            "～",
-            el("strong", {}, [dateKeyLabelTaipei(weekFri)]),
-            t("booking.metaNoteTail", "（週一與後端 "),
-            el("code", {}, [t("booking.metaNoteCode", "weekStart")]),
-            t("booking.metaNoteEnd", " 相同，名額為該曆週內有效預約合計）。"),
           ]),
         );
         if (dayFull) {
@@ -2151,8 +2120,9 @@ function render() {
     const note = noteInput.value.trim();
     const bookingMode = bookingModeSelect.value as BookingMode;
     if (!displayName) {
-      bookStatus.textContent = t("booking.fillName", "請填寫姓名。");
+      bookStatus.textContent = t("booking.fillName", "請填寫姓名（必填）。");
       bookStatus.classList.add("error");
+      nameInput.focus();
       return;
     }
     if (!dateKey || !startSlot) {
@@ -2232,32 +2202,6 @@ function render() {
   ]);
   wheelTestBtn.hidden = true;
   wheelTestBtn.title = t("wheel.previewTitle", "僅畫面預覽，不呼叫抽獎、不扣次數");
-  const wheelRulesHint = el("p", { class: "hint wheel-rules-hint" }, [
-    t(
-      "wheel.rules",
-      "拉霸規則：預約有綁定會員，且後台將該筆標為「已完成」後，可獲得 1 次開獎機會（同一筆僅發一次）。進入拉霸畫面後須由右上往左下拉桿才會消耗 1 次並向伺服器開獎；獎項由後台依權重隨機抽出（點數、加抽次數、銘謝惠顧等）。點數可累積，滿門檻可手動兌換 1 次預約次數。須完成 Email 驗證才可開獎。",
-    ),
-  ]);
-  const wheelRulesDetails = el("details", {
-    class: "member-hub-wheel-card__details member-hub-wheel-card__details--hint",
-  });
-  wheelRulesDetails.append(
-    el("summary", { class: "member-hub-wheel-card__summary" }, [
-      el("span", { class: "member-hub-wheel-card__hint-badge", ariaHidden: "true" }, [
-        t("member.wheel.rulesHintBadge", "提示"),
-      ]),
-      el("span", { class: "member-hub-wheel-card__summary-copy" }, [
-        el("span", { class: "member-hub-wheel-card__summary-title" }, [
-          t("member.wheel.rulesSummary", "拉霸規則說明"),
-        ]),
-        el("span", { class: "member-hub-wheel-card__summary-sub" }, [
-          t("member.wheel.rulesTapExpand", "點開可查看完整說明"),
-        ]),
-      ]),
-      el("span", { class: "member-hub-wheel-card__chevron", ariaHidden: "true" }, ["▾"]),
-    ]),
-    wheelRulesHint,
-  );
   const wheelRow = el("div", { class: "book-wheel-row member-hub-wheel-card__spin-row" }, [
     spinBtn,
     wheelTestBtn,
@@ -2338,25 +2282,11 @@ function render() {
   bookPanelBook.setAttribute("aria-labelledby", "book-tab-book");
   bookPanelBook.append(
     el("div", { class: "grid grid-2" }, [
-      el("label", { class: "field" }, [
-        t("field.name", "姓名"),
-        nameInput,
-        el("span", { class: "hint" }, [
-          t(
-            "field.nameHint",
-            "請填預約姓名；若已登入且帳號有設定稱呼，會自動帶入（仍可改）。預約須為已驗證會員。",
-          ),
-        ]),
-      ]),
-      el("label", { class: "field" }, [
-        t("field.date", "日期（週一至週五）"),
-        dateInput,
-        el("span", { class: "hint" }, [t("field.dateHint", "最遠僅開放至本週曆之下週日（台北）；更後的日期無法選取。")]),
-      ]),
+      el("label", { class: "field" }, [t("field.name", "姓名（必填）"), nameInput]),
+      el("label", { class: "field" }, [t("field.date", "日期（週一至週五）"), dateInput]),
     ]),
     /** 與選時段／付款區分離：未完成信箱驗證時顯示提示（餘額／輪盤／兌換在會員中心） */
     memberExtrasWrap,
-    bookProgressHint,
     slotStepSection,
     finalizeSection,
     bookFooterNote,
@@ -2381,10 +2311,6 @@ function render() {
   const memberHubWheelCard = el("section", { class: "member-hub-wheel-card" });
   memberHubWheelCard.append(
     el("h4", { class: "member-hub-wheel-card__title" }, [t("member.wheelSectionTitle", "拉霸")]),
-    el("p", { class: "hint member-hub-wheel-card__lead" }, [
-      t("member.wheelSectionLead", "兌換輪盤點與拉霸開獎；須完成信箱驗證。"),
-    ]),
-    wheelRulesDetails,
     wheelRedeemBlock,
     wheelRow,
   );
@@ -2521,6 +2447,7 @@ function render() {
       adminStatus,
     );
     adminWrap.append(box);
+    syncAdminHeadSignedInHint();
   }
 
   function renderAdminForbidden() {
@@ -2531,26 +2458,13 @@ function render() {
         el("p", { class: "status-line error" }, [t("admin.forbidden", "無權限：此帳號不是管理員。")]),
       ]),
     );
+    syncAdminHeadSignedInHint();
   }
 
   function renderAdminTable(userId: string) {
     stopAdminListener();
     adminWrap.innerHTML = "";
-    const top = el("div", { class: "row-actions" }, []);
-    const u = auth.currentUser;
-    const whoLabel =
-      u != null
-        ? t("admin.signedInLabel", "已登入：{{name}}（{{uid}}）", {
-            name: adminSessionCallName(u),
-            uid: shortUidForDisplay(u.uid),
-          })
-        : t("admin.signedInUidOnly", "已登入：（{{uid}}）", { uid: shortUidForDisplay(userId) });
-    const who = el("span", { class: "hint" }, [whoLabel]);
-    const outBtn = el("button", { class: "ghost", type: "button" }, [t("admin.signOut", "登出")]);
-    outBtn.addEventListener("click", async () => {
-      await signOut(auth);
-    });
-    top.append(who, outBtn);
+    syncAdminHeadSignedInHint(userId);
 
     const adminStatus = el("div", { class: "status-line" });
     const walletTopupSection = el("div", { class: "admin-announce admin-announce--wallet" }, []);
@@ -2707,14 +2621,6 @@ function render() {
       "section",
       { class: "admin-announce__wallet-segment admin-announce__wallet-segment--pricing" },
       [
-        el("p", { class: "hint" }, [
-          t(
-            "admin.pricing.hint",
-            "影響訪客／會員現金預約所示金額、舊儲值金折次數之單價、輪盤點數幾點可換 1 次。Firestore：",
-          ),
-          el("code", {}, ["siteSettings/pricing"]),
-          t("admin.pricing.hintEnd", "。"),
-        ]),
         el("div", { class: "grid grid-2" }, [
           el("label", { class: "field" }, [t("admin.pricing.sessionPrice", "現場單次金額（元）"), pricingSessionPriceInput]),
           el("label", { class: "field" }, [t("admin.pricing.pointsPer", "輪盤：幾點換 1 次按摩"), pricingPointsPerInput]),
@@ -3143,12 +3049,6 @@ function render() {
 
     const blockCaps = el("section", { class: "admin-announce__block admin-announce__block--caps" }, [
       el("h4", { class: "admin-announce__block-title" }, [t("admin.announce.blockCapsTitle", "預約名額")]),
-      el("p", { class: "hint admin-announce__block-lead" }, [
-        t(
-          "admin.announce.blockCapsLead",
-          "控制同一天與同一工作週（週一至週五）各最多幾筆有效預約；與下方「不開放時段」分開設定。",
-        ),
-      ]),
       el("div", { class: "grid grid-2" }, [
         el("label", { class: "field" }, [t("admin.caps.perDay", "同一天最多幾筆"), capMaxPerDayInput]),
         el("label", { class: "field" }, [t("admin.caps.perWeek", "同一工作週最多幾筆"), capMaxPerWorkWeekInput]),
@@ -3164,16 +3064,6 @@ function render() {
           "admin.announce.blockBlocksLead",
           "依星期與當日時段關閉預約；與「預約名額」分開設定。",
         ),
-      ]),
-      el("p", { class: "hint" }, [
-        t(
-          "admin.blocks.hintA",
-          "依星期與當日時段關閉預約；「特定日期」有填時僅該日生效（例如明天下午外出），未填則每週該星期皆套用。若預約所佔時段（系統依開始時間與預設服務長度計算）與關閉區間重疊，該開始時間無法選取。例：週一、週四 14:30–15:30 關閉，則與該區間重疊的開始時間（如 14:15、14:30、14:45）皆不可選。Firestore：",
-        ),
-        el("code", {}, ["siteSettings/bookingBlocks"]),
-        t("admin.blocks.hintB", " 的 "),
-        el("code", {}, ["windows"]),
-        t("admin.blocks.hintC", "。區間為左閉右開（「迄」該分鐘起已不封鎖）。"),
       ]),
       bookingBlocksRows,
       el("div", { class: "row-actions" }, [addBookingBlockRowBtn, saveBookingBlocksBtn]),
@@ -3220,12 +3110,6 @@ function render() {
     panelAnnouncePricingSub.append(
       el("div", { class: "admin-announce admin-announce--pricing" }, [
         el("h4", { class: "admin-announce__block-title" }, [t("admin.pricing.heading", "定價與點數兌換")]),
-        el("p", { class: "hint admin-announce__page-lead" }, [
-          t(
-            "admin.pricing.pageLead",
-            "全站定價與點數兌換比例；會員儲值、次數增減與贈抽請至「會員與儲值」。",
-          ),
-        ]),
         walletSegmentPricing,
       ]),
     );
@@ -3277,12 +3161,6 @@ function render() {
 
     announcementSection.append(
       el("h3", { class: "admin-announce__page-title" }, [t("admin.announce.heading", "前台與預約規則")]),
-      el("p", { class: "hint admin-announce__page-lead" }, [
-        t(
-          "admin.announce.introShort",
-          "此分頁集中調整預約名額、不開放時段與定價／點數兌換；請用下方子分頁切換。（輪盤特效預覽按鈕僅管理員在預約頁可見，無須設定。）",
-        ),
-      ]),
       announceSubTablist,
       announceSubPanelsWrap,
     );
@@ -3354,12 +3232,6 @@ function render() {
       "adjust",
       t("admin.adjustSessions.heading", "調整可預約次數（增／減）"),
       [
-        el("p", { class: "hint" }, [
-          t(
-            "admin.adjustSessions.hint",
-            "使用上方會員欄位。每次可增減 −50～+50（非零整數）；會先依「現場單次金額」把儲值金餘額折成「可預約次數」再套用。寫入 walletTransactions（type：admin_session_adjust）供稽核。",
-          ),
-        ]),
         el("label", { class: "field" }, [t("admin.adjustSessions.deltaLabel", "可預約次數增減（−50～+50，扣點填負數）"), adjustSessionDelta]),
         el("label", { class: "field" }, [t("admin.adjustSessions.noteLabel", "備註（必填，3～500 字）"), adjustSessionNote]),
         el("div", { class: "row-actions" }, [adjustSessionBtn]),
@@ -3371,12 +3243,6 @@ function render() {
       "grant",
       t("admin.grantDraw.heading", "贈送輪盤抽獎次數"),
       [
-        el("p", { class: "hint" }, [
-          t(
-            "admin.grantDraw.hint",
-            "使用上方會員欄位；不影響儲值金額或可預約次數。單次最多 50 次；會寫入 walletTransactions（type：admin_grant_draw）供稽核。",
-          ),
-        ]),
         el("label", { class: "field" }, [t("admin.grantDraw.deltaLabel", "贈送次數（1～50）"), grantDrawDelta]),
         el("label", { class: "field" }, [t("admin.grantDraw.noteLabel", "備註（選填）"), grantDrawNote]),
         el("div", { class: "row-actions" }, [grantDrawBtn]),
@@ -3388,11 +3254,7 @@ function render() {
 
     const walletMemberOpsCard = el("section", { class: "admin-announce__wallet-segment admin-announce__wallet-segment--member-ops" }, [
       el("h3", {}, [t("admin.wallet.opsHeading", "會員儲值與調整")]),
-      el("p", { class: "hint admin-announce__wallet-ops-lead" }, [
-        t("admin.wallet.opsLead", "以下三項共用同一「會員」欄位；請先輸入或選擇會員，再展開其中一項操作（同時僅能展開一項）。"),
-      ]),
       el("label", { class: "field" }, [t("admin.wallet.memberLabel", "會員（Email 或 UID）"), topupTypeaheadWrap]),
-      el("div", { class: "hint" }, [t("admin.wallet.searchHint", "輸入至少 2 個字元會顯示符合的 Email；亦可直接貼上 UID。")]),
       el("div", { class: "admin-wallet-accordion-stack" }, [accordionTopup, accordionAdjust, accordionGrant]),
     ]);
     walletTopupSection.append(walletMemberOpsCard);
@@ -3427,12 +3289,6 @@ function render() {
     ]);
     const adminCapacitySection = el("section", { class: "admin-capacity-preview" }, [
       el("h4", { class: "admin-subhead" }, [t("admin.bookings.capacityHeading", "當日／本工作週名額")]),
-      el("p", { class: "hint" }, [
-        t(
-          "admin.bookings.capacityHint",
-          "與前台預約表單相同資料來源（getAvailability）：僅計入待確認／已確認／已完成；已取消不計。",
-        ),
-      ]),
       el("label", { class: "field" }, [
         t("admin.bookings.capacityDateLabel", "查詢日期（週一～週五）"),
         adminCapacityDateInput,
@@ -3476,8 +3332,6 @@ function render() {
           dayCap: number;
           weekCap: number;
         };
-        const weekMon = taipeiMondayOfSameWeek(dk);
-        const weekFri = addDaysTaipeiDateKey(weekMon, 4);
         adminCapacityMeta.append(
           el("span", { class: "pill" }, [
             t("booking.metaDay", "當日已預約 "),
@@ -3488,17 +3342,6 @@ function render() {
             t("booking.metaWeek", "本工作週已預約 "),
             el("strong", {}, [String(data.weekCount)]),
             ` / ${data.weekCap}`,
-          ]),
-          el("div", { class: "meta-pills-note" }, [
-            t("booking.metaNoteLead", "「當日」＝您所選的這一天："),
-            el("strong", {}, [dateKeyLabelTaipei(dk)]),
-            t("booking.metaNoteMid", "。「本工作週」＝該日所屬曆週之週一至週五："),
-            el("strong", {}, [dateKeyLabelTaipei(weekMon)]),
-            "～",
-            el("strong", {}, [dateKeyLabelTaipei(weekFri)]),
-            t("booking.metaNoteTail", "（週一與後端 "),
-            el("code", {}, [t("booking.metaNoteCode", "weekStart")]),
-            t("booking.metaNoteEnd", " 相同，名額為該曆週內有效預約合計）。"),
           ]),
         );
         adminCapacityMeta.hidden = false;
@@ -3685,12 +3528,6 @@ function render() {
 
     const adminBookingsCalendarSection = el("section", { class: "admin-bookings-calendar" }, [
       el("h4", { class: "admin-subhead" }, [t("admin.calendar.heading", "預約月曆")]),
-      el("p", { class: "hint" }, [
-        t(
-          "admin.calendar.hint",
-          "依下方列表即時統計：數字為計入名額之筆數（待確認／已確認／已完成）。點選平日可同步上方「查詢日期」並更新名額；灰底為週末或不在可預約視窗內。",
-        ),
-      ]),
       adminCalendarToolbar,
       adminCalendarGrid,
     ]);
@@ -3759,7 +3596,6 @@ function render() {
     type MemberListSortKey =
       | "email"
       | "emailVerified"
-      | "uid"
       | "nickname"
       | "sessionCredits"
       | "wheelPoints"
@@ -3768,7 +3604,7 @@ function render() {
     const MEMBER_LIST_PAGE_SIZE = 5;
     let memberListCache: AdminMemberListRow[] = [];
     let memberListPageIndex = 0;
-    let memberListSortKey: MemberListSortKey = "emailVerified";
+    let memberListSortKey: MemberListSortKey = "email";
     let memberListSortAsc = true;
     let memberListSearchQuery = "";
     const memberListSearchInput = el("input", {
@@ -3815,10 +3651,6 @@ function render() {
           cmp = asc ? bv - av : av - bv;
           return cmp;
         }
-        case "uid": {
-          cmp = a.uid.localeCompare(b.uid);
-          break;
-        }
         case "nickname": {
           cmp = a.nickname.localeCompare(b.nickname, "zh-Hant", { numeric: true });
           break;
@@ -3844,15 +3676,15 @@ function render() {
     function buildMemberListHeaderRow(): HTMLTableRowElement {
       const mk = (label: string, key: MemberListSortKey) => {
         const th = el("th", {});
-        const arrow = memberListSortKey === key ? (memberListSortAsc ? " ▲" : " ▼") : "";
-        const btn = el(
-          "button",
-          {
-            type: "button",
-            class: "ghost admin-member-sort-btn",
-            title: t("admin.memberList.sortTitle", "依「{{label}}」排序；再按一次反向", { label }),
-          },
-          [`${label}${arrow}`],
+        const arrowChar = memberListSortKey === key ? (memberListSortAsc ? "▲" : "▼") : "";
+        const btn = el("button", {
+          type: "button",
+          class: "ghost admin-member-sort-btn",
+          title: t("admin.memberList.sortTitle", "依「{{label}}」排序；再按一次反向", { label }),
+        });
+        btn.append(
+          el("span", { class: "admin-member-sort-btn__label" }, [label]),
+          el("span", { class: "admin-member-sort-btn__arrow", ariaHidden: "true" }, [arrowChar]),
         );
         btn.setAttribute("data-member-sort", key);
         th.append(btn);
@@ -3861,12 +3693,10 @@ function render() {
       return el("tr", {}, [
         mk(t("admin.memberList.th.email", "Email"), "email"),
         mk(t("admin.memberList.th.verified", "信箱驗證"), "emailVerified"),
-        mk(t("admin.memberList.th.uid", "UID"), "uid"),
         mk(t("admin.memberList.th.nickname", "稱呼"), "nickname"),
         mk(t("admin.memberList.th.sessions", "可預約次數"), "sessionCredits"),
         mk(t("admin.memberList.th.points", "輪盤點數"), "wheelPoints"),
         mk(t("admin.memberList.th.draws", "可抽次數"), "drawChances"),
-        el("th", { class: "admin-member-th-actions" }, [t("admin.memberList.th.actions", "操作")]),
       ]);
     }
 
@@ -3885,6 +3715,81 @@ function render() {
       return memberListCache.filter(
         (m) => memberListRowHasEmail(m) && memberListRowMatchesQuery(m, memberListSearchQuery),
       );
+    }
+
+    function openAdminNicknameModal(m: AdminMemberListRow) {
+      const overlay = el("div", { class: "modal-overlay" });
+      const dialog = el("div", { class: "modal-card admin-member-nick-modal" });
+      dialog.setAttribute("role", "dialog");
+      dialog.setAttribute("aria-modal", "true");
+      const titleId = "admin-member-nick-modal-title";
+      dialog.setAttribute("aria-labelledby", titleId);
+      const heading = el("h3", { id: titleId }, [t("admin.memberList.editNickTitle", "編輯稱呼")]);
+      const whoLine = el("p", { class: "hint admin-member-nick-modal-who" }, [(m.email ?? m.uid).trim()]);
+      const nickInput = el("input", {
+        type: "text",
+        maxLength: 80,
+        value: m.nickname,
+        class: "admin-member-nick-input",
+        autocomplete: "off",
+      });
+      const nickField = el("label", { class: "field" }, [
+        t("admin.memberList.nickFieldLabel", "稱呼"),
+        nickInput,
+      ]);
+      const cancelBtn = el("button", { class: "ghost", type: "button" }, [t("modal.cancel", "取消")]);
+      const saveBtn = el("button", { class: "primary", type: "button" }, [
+        t("admin.memberList.modalSaveNick", "儲存"),
+      ]);
+      const actions = el("div", { class: "modal-actions" }, [cancelBtn, saveBtn]);
+
+      const dismiss = () => {
+        document.removeEventListener("keydown", onKeyDown);
+        overlay.remove();
+      };
+      const onKeyDown = (ev: KeyboardEvent) => {
+        if (ev.key === "Escape") {
+          ev.preventDefault();
+          dismiss();
+        }
+      };
+
+      cancelBtn.addEventListener("click", () => dismiss());
+      overlay.addEventListener("click", (ev) => {
+        if (ev.target === overlay) dismiss();
+      });
+      document.addEventListener("keydown", onKeyDown);
+
+      saveBtn.addEventListener("click", async () => {
+        memberListStatus.textContent = "";
+        memberListStatus.className = "status-line";
+        saveBtn.setAttribute("disabled", "true");
+        cancelBtn.setAttribute("disabled", "true");
+        try {
+          const updateFn = updateMemberNicknameAdminCall();
+          await updateFn({ customerId: m.uid, nickname: nickInput.value, ...localeApiParam() });
+          const cached = memberListCache.find((r) => r.uid === m.uid);
+          if (cached) cached.nickname = nickInput.value.trim();
+          memberListStatus.textContent = t("admin.memberList.nickUpdated", "已更新 {{email}} 的稱呼。", {
+            email: m.email ?? m.uid,
+          });
+          memberListStatus.classList.add("ok");
+          dismiss();
+          paintMemberListTable();
+        } catch (e) {
+          memberListStatus.textContent = e instanceof Error ? e.message : t("admin.memberList.saveFail", "儲存失敗");
+          memberListStatus.classList.add("error");
+        } finally {
+          saveBtn.removeAttribute("disabled");
+          cancelBtn.removeAttribute("disabled");
+        }
+      });
+
+      dialog.append(heading, whoLine, nickField, actions);
+      overlay.append(dialog);
+      document.body.append(overlay);
+      nickInput.focus();
+      nickInput.select();
     }
 
     function paintMemberListTable() {
@@ -3917,7 +3822,7 @@ function render() {
           emptyMsg = t("admin.memberList.searchEmpty", "沒有符合關鍵字的會員。請改關鍵字或清空篩選欄。");
         }
         memberListTable.append(
-          el("tr", {}, [el("td", { class: "hint", colSpan: 8 }, [emptyMsg])]),
+          el("tr", {}, [el("td", { class: "hint", colSpan: 6 }, [emptyMsg])]),
         );
         memberListPagePrev.disabled = true;
         memberListPageNext.disabled = true;
@@ -3926,51 +3831,34 @@ function render() {
       }
 
       for (const m of pageRows) {
-        const nickInput = el("input", {
-          type: "text",
-          maxLength: 80,
-          value: m.nickname,
-          class: "admin-member-nick-input",
-          autocomplete: "off",
+        const nickOpen = el("button", {
+          type: "button",
+          class: "admin-member-nick-trigger",
+          title: t("admin.memberList.nickClickToEdit", "點擊編輯稱呼"),
         });
-        const saveBtn = el("button", { class: "ghost admin-save-nick-btn", type: "button" }, [
-          t("admin.memberList.saveNick", "儲存稱呼"),
-        ]);
-        saveBtn.addEventListener("click", async () => {
-          memberListStatus.textContent = "";
-          memberListStatus.className = "status-line";
-          saveBtn.setAttribute("disabled", "true");
-          try {
-            const updateFn = updateMemberNicknameAdminCall();
-            await updateFn({ customerId: m.uid, nickname: nickInput.value, ...localeApiParam() });
-            const cached = memberListCache.find((r) => r.uid === m.uid);
-            if (cached) cached.nickname = nickInput.value.trim();
-            memberListStatus.textContent = t("admin.memberList.nickUpdated", "已更新 {{email}} 的稱呼。", {
-              email: m.email ?? m.uid,
-            });
-            memberListStatus.classList.add("ok");
-            paintMemberListTable();
-          } catch (e) {
-            memberListStatus.textContent = e instanceof Error ? e.message : t("admin.memberList.saveFail", "儲存失敗");
-            memberListStatus.classList.add("error");
-          } finally {
-            saveBtn.removeAttribute("disabled");
-          }
+        nickOpen.textContent = m.nickname;
+        nickOpen.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          openAdminNicknameModal(m);
         });
         const verified = m.emailVerified === true;
         const verifyCell = el("td", { class: verified ? "admin-member-verify ok" : "admin-member-verify" }, [
           verified ? t("admin.memberList.verifiedYes", "已驗證") : t("admin.memberList.verifiedNo", "未驗證"),
         ]);
+        const emailStr = (m.email ?? "").trim();
+        const emailTd = el("td", {
+          class: "admin-member-email-cell",
+          title: emailStr,
+        });
+        emailTd.textContent = emailStr;
         memberListTable.append(
           el("tr", {}, [
-            el("td", {}, [(m.email ?? "").trim()]),
+            emailTd,
             verifyCell,
-            el("td", { class: "mono admin-member-uid" }, [m.uid]),
-            el("td", {}, [nickInput]),
+            el("td", { class: "admin-member-nick-cell" }, [nickOpen]),
             el("td", { class: "mono" }, [String(m.sessionCredits)]),
             el("td", { class: "mono" }, [String(m.wheelPoints)]),
             el("td", { class: "mono" }, [String(m.drawChances)]),
-            el("td", { class: "admin-member-td-actions" }, [saveBtn]),
           ]),
         );
       }
@@ -4038,18 +3926,13 @@ function render() {
           drawChances: typeof m.drawChances === "number" ? m.drawChances : 0,
         }));
         memberListPageIndex = 0;
-        memberListSortKey = "emailVerified";
+        memberListSortKey = "email";
         memberListSortAsc = true;
         memberListSearchQuery = "";
         memberListSearchInput.value = "";
         paintMemberListTable();
-        const listed = memberListCache.filter(memberListRowHasEmail).length;
-        memberListStatus.textContent = t(
-          "admin.memberList.loadedWithEmailFilter",
-          "已載入 {{total}} 位使用者；清單顯示 {{listed}} 位有 Email。",
-          { total: memberListCache.length, listed },
-        );
-        memberListStatus.classList.add("ok");
+        memberListStatus.textContent = "";
+        memberListStatus.className = "status-line";
       } catch (e) {
         memberListStatus.textContent = e instanceof Error ? e.message : t("admin.memberList.loadFail", "載入失敗");
         memberListStatus.classList.add("error");
@@ -4099,20 +3982,12 @@ function render() {
           "內文為純文字（可換行），會轉成 HTML 寄出；主旨與內文會經伺服器長度檢查。建議先按「預覽收件人數」確認對象，再勾選確認並寄出。需已設定 RESEND_API_KEY 與適當的 RESEND_FROM。",
         ),
       ]);
-      const onlyVerifiedCb = el("input", { type: "checkbox" }) as HTMLInputElement;
-      onlyVerifiedCb.checked = true;
-      const onlyVerifiedLabel = el("label", { class: "admin-member-broadcast-check" });
-      onlyVerifiedLabel.append(
-        onlyVerifiedCb,
-        document.createTextNode(" "),
-        el("span", {}, [t("admin.memberList.broadcastOnlyVerified", "僅寄給「已驗證」Email 的會員（建議勾選）")]),
-      );
       const paneBroadcast = el("div", {
         class: "admin-member-email-pane",
         id: "admin-member-email-pane-broadcast",
         role: "tabpanel",
       });
-      paneBroadcast.append(hintBroadcast, onlyVerifiedLabel);
+      paneBroadcast.append(hintBroadcast);
 
       const hintDirect = el("p", { class: "hint" }, [
         t(
@@ -4174,39 +4049,36 @@ function render() {
       const previewBtn = el("button", { class: "ghost", type: "button" }, [
         t("admin.memberList.broadcastPreview", "預覽收件人數"),
       ]);
-      const verifyBtn = el("button", { class: "ghost", type: "button" }, [
-        t("admin.memberList.directEmailVerify", "確認對象（不寄出）"),
-      ]);
       const sendBtn = el("button", { class: "primary", type: "button" }, [
         t("admin.memberList.broadcastSend", "寄出群發信"),
       ]);
       sendBtn.setAttribute("disabled", "true");
       const closeBtn = el("button", { class: "ghost", type: "button" }, [t("modal.close", "關閉")]);
-      const actions = el("div", { class: "modal-actions" }, [closeBtn, previewBtn, verifyBtn, sendBtn]);
+      const actions = el("div", { class: "modal-actions" }, [closeBtn, previewBtn, sendBtn]);
       const modalStatus = el("div", { class: "status-line" });
 
       let mode: "broadcast" | "direct" = initialMode;
       let previewOk = false;
-      let verifyOk = false;
 
       function refreshSendConfirmLabel() {
-        sendConfirmText.textContent =
-          mode === "broadcast"
-            ? t(
-                "admin.memberList.emailSendConfirmBroadcast",
-                "我確認主旨、內文正確，且已按「預覽收件人數」確認收件範圍無誤，要實際寄出",
-              )
-            : t(
-                "admin.memberList.emailSendConfirmDirect",
-                "我確認主旨、內文正確，且已按「確認對象」驗證收件會員無誤，要實際寄出",
-              );
+        sendConfirmText.textContent = t(
+          "admin.memberList.emailSendConfirmBroadcast",
+          "我確認主旨、內文正確，且已按「預覽收件人數」確認收件範圍無誤，要實際寄出",
+        );
+      }
+
+      function directFieldsReadyForSend(): boolean {
+        const targetOk = memberTargetInput.value.trim().length > 0;
+        const subOk = subjectInput.value.trim().length > 0;
+        const bodyOk = bodyTa.value.trim().length >= 3;
+        return targetOk && subOk && bodyOk;
       }
 
       function syncSendEnabled() {
         if (mode === "broadcast") {
           if (previewOk && sendConfirmCb.checked) sendBtn.removeAttribute("disabled");
           else sendBtn.setAttribute("disabled", "true");
-        } else if (verifyOk && sendConfirmCb.checked) sendBtn.removeAttribute("disabled");
+        } else if (directFieldsReadyForSend()) sendBtn.removeAttribute("disabled");
         else sendBtn.setAttribute("disabled", "true");
       }
 
@@ -4233,7 +4105,8 @@ function render() {
         paneBroadcast.hidden = next !== "broadcast";
         paneDirect.hidden = next !== "direct";
         previewBtn.hidden = next !== "broadcast";
-        verifyBtn.hidden = next !== "direct";
+        sendConfirmLabel.hidden = next !== "broadcast";
+        previewOk = false;
         sendConfirmCb.checked = false;
         refreshSendConfirmLabel();
         refreshHeading();
@@ -4247,11 +4120,6 @@ function render() {
         previewOk = false;
         syncSendEnabled();
       }
-      function invalidateDirectVerify() {
-        verifyOk = false;
-        syncSendEnabled();
-      }
-
       async function runDirectTargetMemberSearch() {
         const q = memberTargetInput.value.trim();
         if (q.length < 2) {
@@ -4275,7 +4143,7 @@ function render() {
               memberTargetInput.value = u.email;
               directTargetSuggestions.hidden = true;
               directTargetSuggestions.innerHTML = "";
-              invalidateDirectVerify();
+              syncSendEnabled();
             });
             directTargetSuggestions.append(li);
           }
@@ -4291,15 +4159,14 @@ function render() {
       sendConfirmCb.addEventListener("change", syncSendEnabled);
       subjectInput.addEventListener("input", () => {
         invalidateBroadcastPreview();
-        invalidateDirectVerify();
+        syncSendEnabled();
       });
       bodyTa.addEventListener("input", () => {
         invalidateBroadcastPreview();
-        invalidateDirectVerify();
+        syncSendEnabled();
       });
-      onlyVerifiedCb.addEventListener("change", invalidateBroadcastPreview);
       memberTargetInput.addEventListener("input", () => {
-        invalidateDirectVerify();
+        syncSendEnabled();
         const raw = memberTargetInput.value.trim();
         if (raw.length < 2) {
           directTargetSuggestions.hidden = true;
@@ -4345,7 +4212,6 @@ function render() {
           const res = await fn({
             subject: subjectInput.value,
             body: bodyTa.value,
-            onlyEmailVerified: onlyVerifiedCb.checked,
             dryRun: true,
             ...localeApiParam(),
           });
@@ -4380,42 +4246,6 @@ function render() {
         }
       });
 
-      verifyBtn.addEventListener("click", async () => {
-        modalStatus.textContent = "";
-        modalStatus.className = "status-line";
-        verifyBtn.setAttribute("disabled", "true");
-        verifyOk = false;
-        syncSendEnabled();
-        try {
-          const fn = sendMemberDirectEmailAdminCall();
-          const res = await fn({
-            memberTarget: memberTargetInput.value,
-            subject: subjectInput.value,
-            body: bodyTa.value,
-            dryRun: true,
-            ...localeApiParam(),
-          });
-          const d = res.data as { email?: string; uid?: string; displayName?: string };
-          verifyOk = true;
-          syncSendEnabled();
-          modalStatus.className = "status-line ok";
-          modalStatus.textContent = t(
-            "admin.memberList.directEmailVerifyOk",
-            "對象有效：將寄至 {{email}}（UID：{{uid}}，{{name}}）。可勾選確認後按「寄出一封信」。",
-            {
-              email: typeof d.email === "string" ? d.email : "—",
-              uid: typeof d.uid === "string" ? d.uid : "—",
-              name: typeof d.displayName === "string" ? d.displayName : "—",
-            },
-          );
-        } catch (e) {
-          modalStatus.className = "status-line error";
-          modalStatus.textContent = errorMessage(e);
-        } finally {
-          verifyBtn.removeAttribute("disabled");
-        }
-      });
-
       sendBtn.addEventListener("click", async () => {
         if (mode === "broadcast") {
           if (!previewOk || !sendConfirmCb.checked) return;
@@ -4435,11 +4265,9 @@ function render() {
           modalStatus.className = "status-line";
           sendBtn.setAttribute("disabled", "true");
           previewBtn.setAttribute("disabled", "true");
-          verifyBtn.setAttribute("disabled", "true");
           closeBtn.setAttribute("disabled", "true");
           subjectInput.setAttribute("disabled", "true");
           bodyTa.setAttribute("disabled", "true");
-          onlyVerifiedCb.setAttribute("disabled", "true");
           sendConfirmCb.setAttribute("disabled", "true");
           tabBroadcast.setAttribute("disabled", "true");
           tabDirect.setAttribute("disabled", "true");
@@ -4449,7 +4277,6 @@ function render() {
             const res = await fn({
               subject: subjectInput.value,
               body: bodyTa.value,
-              onlyEmailVerified: onlyVerifiedCb.checked,
               confirmSend: true,
               dryRun: false,
               ...localeApiParam(),
@@ -4488,11 +4315,9 @@ function render() {
           } finally {
             sendBtn.removeAttribute("disabled");
             previewBtn.removeAttribute("disabled");
-            verifyBtn.removeAttribute("disabled");
             closeBtn.removeAttribute("disabled");
             subjectInput.removeAttribute("disabled");
             bodyTa.removeAttribute("disabled");
-            onlyVerifiedCb.removeAttribute("disabled");
             sendConfirmCb.removeAttribute("disabled");
             tabBroadcast.removeAttribute("disabled");
             tabDirect.removeAttribute("disabled");
@@ -4502,13 +4327,15 @@ function render() {
           return;
         }
 
-        if (!verifyOk || !sendConfirmCb.checked) return;
+        if (!directFieldsReadyForSend()) return;
+        const targetLine = memberTargetInput.value.trim();
+        const subLine = subjectInput.value.trim();
         const ok = await showConfirmModal(
           t("admin.memberList.directEmailSendConfirmTitle", "確認寄出單筆郵件"),
           t(
             "admin.memberList.directEmailSendConfirmBody",
-            "將寄出一封自訂郵件至已驗證對象（無法撤回）。\n\n{{previewLine}}",
-            { previewLine: modalStatus.textContent || "" },
+            "將寄出一封自訂郵件至已驗證對象（無法撤回）。\n\n收件：{{target}}\n主旨：{{subject}}",
+            { target: targetLine, subject: subLine },
           ),
           t("admin.memberList.broadcastSendConfirmOk", "確定寄出"),
         );
@@ -4517,7 +4344,6 @@ function render() {
         modalStatus.textContent = t("admin.memberList.directEmailSending", "寄送中…");
         modalStatus.className = "status-line";
         sendBtn.setAttribute("disabled", "true");
-        verifyBtn.setAttribute("disabled", "true");
         previewBtn.setAttribute("disabled", "true");
         closeBtn.setAttribute("disabled", "true");
         memberTargetInput.setAttribute("disabled", "true");
@@ -4553,7 +4379,6 @@ function render() {
           modalStatus.textContent = errorMessage(e);
         } finally {
           sendBtn.removeAttribute("disabled");
-          verifyBtn.removeAttribute("disabled");
           previewBtn.removeAttribute("disabled");
           closeBtn.removeAttribute("disabled");
           memberTargetInput.removeAttribute("disabled");
@@ -4590,31 +4415,11 @@ function render() {
 
     memberListSection.append(
       el("h3", {}, [t("admin.memberList.title", "會員清單")]),
-      el("p", { class: "hint" }, [
-        t("admin.memberList.introA", "資料來自 Firebase Authentication 全部使用者，並合併 Firestore "),
-        el("code", {}, ["customers/{uid}"]),
-        t(
-          "admin.memberList.introB",
-          " 的餘額與稱呼。人數極多時載入可能較久。下方表格僅列出有 Email 的帳號。",
-        ),
-      ]),
-      el("p", { class: "hint" }, [
-        t(
-          "admin.memberList.introSort",
-          "表頭欄位可點擊排序；預設已驗證信箱在前。清單每頁顯示 10 位；僅顯示有 Email 的帳號。",
-        ),
-      ]),
+      el("div", { class: "row-actions" }, [memberListRefreshBtn, memberListEmailBtn]),
       el("label", { class: "field admin-member-list-search" }, [
         t("admin.memberList.searchLabel", "快速篩選"),
         memberListSearchInput,
-        el("span", { class: "hint" }, [
-          t(
-            "admin.memberList.searchHint",
-            "依已載入清單篩選 Email、UID、稱呼（不分大小寫）；清空欄位顯示全部有 Email 的會員。",
-          ),
-        ]),
       ]),
-      el("div", { class: "row-actions" }, [memberListRefreshBtn, memberListEmailBtn]),
       memberListStatus,
       memberListTableWrap,
       memberListPager,
@@ -4727,17 +4532,7 @@ function render() {
       hidden: true,
     });
     panelBookingsArchivedSub.setAttribute("aria-labelledby", "admin-bookings-subtab-archived");
-    panelBookingsArchivedSub.append(
-      el("p", { class: "hint" }, [
-        t(
-          "admin.hidden.intro",
-          "以下為自「預約管理」子分頁主列表封存之預約，或舊版於資料庫標記為已刪除之筆。額度與可預約時段與主列表相同，仍依預約狀態計算（僅影響後台列表是否顯示）。筆數多時每頁 10 筆，請用列表下方「上一頁／下一頁」切換。",
-        ),
-      ]),
-      hiddenBookingsStatus,
-      hiddenTableHolder,
-      hiddenPager,
-    );
+    panelBookingsArchivedSub.append(hiddenBookingsStatus, hiddenTableHolder, hiddenPager);
 
     subBookingsActive.setAttribute("aria-controls", "admin-bookings-subpanel-active");
     subBookingsArchived.setAttribute("aria-controls", "admin-bookings-subpanel-archived");
@@ -4846,7 +4641,7 @@ function render() {
 
     selectAdminTab(0);
 
-    adminWrap.append(top, adminTablist, adminPanelsWrap);
+    adminWrap.append(adminTablist, adminPanelsWrap);
 
     void loadMemberList();
 
@@ -5286,6 +5081,7 @@ function render() {
       await refreshWalletStatus();
       await syncWheelPreviewBtnVisibility();
     })();
+    syncAdminHeadSignedInHint();
     if (tab !== "admin") return;
     void syncAdminView();
   });
@@ -5294,19 +5090,12 @@ function render() {
     tab = next;
     const isBook = next === "book";
     shell.classList.toggle("admin-mode", !isBook);
-    headMemberActions.hidden = !isBook;
-    titleGuestHint.hidden = !isBook;
     visitorStats.setVisible(isBook);
     titleHeading.textContent = isBook ? t("home.title", "辦公室按摩預約") : t("admin.backTitle", "管理後台");
+    titleDesc.hidden = !isBook;
     titleDesc.textContent = isBook
-      ? t(
-          "home.subtitle",
-          "週一至週五 · 線上選開始時間（每 15 分鐘一個時段）· 現場約 20 分鐘一輪，若要加時請告知師傅（現場每加一輪依訂價收費）· 每工作週有名額上限（見下方規則）· 現場臨時預約視當日狀況 · 午休 11:45–13:15 不開放 · 最晚 16:45 開始、17:00 前結束",
-        )
-      : t(
-          "admin.backSubtitle",
-          "以分頁切換：預約與封存、會員與儲值、其他設定（名額、不開放時段、定價）。",
-        );
+      ? t("home.subtitle", "約每 20 分鐘一輪 · 加時 50 元／輪（現場收費）")
+      : "";
     document.title = isBook ? t("meta.docTitle", "辦公室按摩預約") : t("admin.backTitle", "管理後台");
     panelBook.hidden = !isBook;
     panelAdmin.hidden = isBook;
@@ -5315,6 +5104,8 @@ function render() {
     } else {
       void syncAdminView();
     }
+    syncHeadMemberButtons();
+    syncAdminHeadSignedInHint();
     syncPageHeadSession();
   }
 

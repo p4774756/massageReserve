@@ -233,6 +233,14 @@ export const WHEEL_SPIN_TRANSITION_EASING: WheelSpinEasing = {
   p2y: 1,
 };
 
+/** 與拉霸捲軸 `slotSpectacle` 的 `transition: transform … cubic-bezier(0.18, 0.82, 0.32, 1)` 一致 */
+export const SLOT_REEL_TRANSITION_EASING: WheelSpinEasing = {
+  p1x: 0.18,
+  p1y: 0.82,
+  p2x: 0.32,
+  p2y: 1,
+};
+
 function cubicBezierAt(
   s: number,
   p1x: number,
@@ -262,8 +270,8 @@ function easedSpinProgressAtTime(u: number, easing: WheelSpinEasing = WHEEL_SPIN
   return cubicBezierAt(s, p1x, p1y, p2x, p2y).y;
 }
 
-/** 旋轉完成度 p∈[0,1] → 正規化時間 u（用於對齊「經過第 k 格邊界」的瞬間） */
-function timeFractionForSpinProgress(p: number, easing: WheelSpinEasing = WHEEL_SPIN_TRANSITION_EASING): number {
+/** 過渡累積進度 p∈[0,1] → 線性時間比例 u∈[0,1]（與 CSS transition-timing-function 同步） */
+export function timeUForTransitionProgress(p: number, easing: WheelSpinEasing): number {
   const clamped = Math.min(1, Math.max(0, p));
   let lo = 0;
   let hi = 1;
@@ -303,12 +311,66 @@ export function scheduleSpinTicksAtSliceCrossings(
   for (const theta of crossingAnglesDeg) {
     if (theta <= 0 || theta > finalDeg + 1e-4) continue;
     const p = Math.min(1, theta / finalDeg);
-    const u = timeFractionForSpinProgress(p, easing);
+    const u = timeUForTransitionProgress(p, easing);
     const when = t0 + u * durS;
     if (buffer) {
       playBufferAt(ctx, buffer, when, tickGain, destination);
     } else {
       scheduleProceduralSpinTickAt(ctx, destination, when, procGain);
+    }
+  }
+
+  return () => {};
+}
+
+/**
+ * 拉霸垂直捲軸：每滑過一格高度排程 tick（與 `transform` 過渡 easing 對齊）。
+ * 使用 `WHEEL_SFX_URLS.spinTick`（Google Actions Sound Library）或程序化喀聲。
+ */
+export function scheduleSlotReelCellTicks(
+  ctx: AudioContext,
+  buffer: AudioBuffer | null,
+  destination: AudioNode,
+  opts: {
+    durationMs: number;
+    totalScrollPx: number;
+    cellPx: number;
+    easing?: WheelSpinEasing;
+    tickGain?: number;
+    proceduralGain?: number;
+    landingGain?: number;
+  },
+): () => void {
+  const { durationMs, totalScrollPx, cellPx } = opts;
+  const easing = opts.easing ?? SLOT_REEL_TRANSITION_EASING;
+  const tickGain = opts.tickGain ?? 0.13;
+  const procGain = opts.proceduralGain ?? 0.085;
+  const landingGain = opts.landingGain ?? 0.17;
+  if (totalScrollPx <= 0 || durationMs <= 0 || cellPx <= 0) return () => {};
+
+  const t0 = ctx.currentTime;
+  const durS = durationMs / 1000;
+  const n = Math.floor(totalScrollPx / cellPx);
+
+  for (let k = 1; k <= n; k++) {
+    const p = Math.min(1, (k * cellPx) / totalScrollPx);
+    const u = timeUForTransitionProgress(p, easing);
+    const when = t0 + u * durS;
+    const rate = 1 + ((k * 7) % 5) * 0.025;
+    if (buffer) {
+      playBufferAt(ctx, buffer, when, tickGain, destination, rate, 0.085);
+    } else {
+      scheduleProceduralSpinTickAt(ctx, destination, when, procGain);
+    }
+  }
+
+  const lastP = n > 0 ? Math.min(1, (n * cellPx) / totalScrollPx) : 0;
+  if (lastP < 0.97) {
+    const whenLand = t0 + Math.max(0, durS - 0.028);
+    if (buffer) {
+      playBufferAt(ctx, buffer, whenLand, landingGain, destination, 0.88, 0.11);
+    } else {
+      scheduleProceduralSpinTickAt(ctx, destination, whenLand, procGain * 1.2);
     }
   }
 

@@ -174,6 +174,17 @@ header.page-head {
   flex-shrink: 0;
 }
 
+/* 後台標題列：已登入提示緊挨登出鈕左側，窄螢幕省略 */
+.shell.admin-mode .head-member-actions .admin-head-signed-in:not([hidden]) {
+  display: inline-block;
+  max-width: min(46vw, 16rem);
+  margin-right: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+
 .page-head-top-row .page-head-session {
   flex: 1 1 0;
   min-width: 0;
@@ -452,6 +463,12 @@ header.page-head {
   align-items: center;
 }
 
+/* 後台標題列不顯示「會員登入／會員中心」（仍可使用右上角登出） */
+.shell.admin-mode .member-entry.member-login,
+.shell.admin-mode .member-entry.member-center {
+  display: none !important;
+}
+
 .shell.admin-mode main.panel {
   background: var(--surface);
 }
@@ -527,10 +544,6 @@ main.panel[hidden] {
   display: none !important;
 }
 
-.book-progress-hint {
-  margin: 0;
-}
-
 .book-step[hidden] {
   display: none !important;
 }
@@ -547,10 +560,6 @@ main.panel[hidden] {
   flex-direction: column;
   gap: var(--section-gap);
   min-width: 0;
-}
-
-.book-then-finalize-hint {
-  margin: 0;
 }
 
 .book-tab-panel--my-bookings .my-bookings {
@@ -788,20 +797,6 @@ button.ghost:disabled {
   align-items: baseline;
 }
 
-.meta-pills-note {
-  flex: 1 0 100%;
-  margin: 2px 0 0;
-  padding: 8px 0 0;
-  border-top: 1px dashed var(--border);
-  font-size: 0.82rem;
-  line-height: 1.55;
-  color: var(--muted);
-}
-
-.meta-pills-note code {
-  font-size: 0.88em;
-}
-
 .book-member-extras[hidden] {
   display: none !important;
 }
@@ -840,11 +835,6 @@ button.ghost:disabled {
   padding-top: 2px;
 }
 
-.wheel-rules-hint {
-  margin: 0 0 8px;
-  max-width: 52rem;
-}
-
 /* 會員中心 · 輪盤區（與遊戲點兌換卡視覺對齊） */
 .member-hub-wheel-card {
   margin: 0;
@@ -866,111 +856,6 @@ button.ghost:disabled {
   font-weight: 700;
   color: var(--ink);
   letter-spacing: 0.02em;
-}
-
-.member-hub-wheel-card__lead {
-  margin: 0;
-  font-size: 0.82rem;
-  line-height: 1.5;
-  color: var(--muted);
-}
-
-.member-hub-wheel-card__details {
-  margin: 0;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: rgb(255 255 255 / 0.55);
-  overflow: hidden;
-}
-
-.member-hub-wheel-card__details--hint {
-  border-style: dashed;
-  border-color: rgb(var(--accent-rgb) / 0.35);
-  background: var(--accent-muted-bg);
-}
-
-.member-hub-wheel-card__summary {
-  margin: 0;
-  padding: 10px 12px;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 0.88rem;
-  color: var(--ink);
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 10px;
-  -webkit-user-select: none;
-  user-select: none;
-}
-
-.member-hub-wheel-card__summary::-webkit-details-marker {
-  display: none;
-}
-
-.member-hub-wheel-card__hint-badge {
-  flex-shrink: 0;
-  font-size: 0.65rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: rgb(var(--accent-rgb) / 0.14);
-  color: var(--accent-deep);
-  line-height: 1.2;
-}
-
-.member-hub-wheel-card__summary-copy {
-  flex: 1 1 12rem;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-}
-
-.member-hub-wheel-card__summary-title {
-  font-weight: 700;
-  font-size: 0.88rem;
-  line-height: 1.25;
-}
-
-.member-hub-wheel-card__summary-sub {
-  font-weight: 500;
-  font-size: 0.74rem;
-  color: var(--muted);
-  line-height: 1.35;
-}
-
-.member-hub-wheel-card__chevron {
-  flex-shrink: 0;
-  margin-left: auto;
-  width: 1.5rem;
-  height: 1.5rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-sm);
-  background: rgb(var(--accent-rgb) / 0.1);
-  color: var(--accent-deep);
-  font-size: 0.65rem;
-  line-height: 1;
-  transition: transform 0.2s ease;
-}
-
-.member-hub-wheel-card__details--hint[open] > .member-hub-wheel-card__summary .member-hub-wheel-card__chevron {
-  transform: rotate(180deg);
-}
-
-.member-hub-wheel-card__details .wheel-rules-hint {
-  margin: 0;
-  padding: 10px 12px 12px;
-  max-width: none;
-  font-size: 0.82rem;
-  line-height: 1.55;
-  color: var(--muted);
-  border-top: 1px solid var(--border);
 }
 
 .member-hub-wheel-card__redeem {
@@ -1236,10 +1121,6 @@ button.ghost:disabled {
   font-size: 0.95rem;
   font-weight: 600;
   color: var(--ink);
-}
-
-.my-bookings-intro {
-  margin: 0 0 10px;
 }
 
 .my-bookings-tabs {
@@ -1615,6 +1496,14 @@ tbody tr:hover td {
   background: var(--surface-muted);
 }
 
+/* 載入完成後不顯示摘要時，避免空白 status-line 仍佔 min-height */
+.admin-member-list > .status-line:empty {
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
 .admin-member-list-search {
   display: block;
   max-width: 28rem;
@@ -1636,15 +1525,107 @@ tbody tr:hover td {
 }
 
 .admin-member-list-table table {
-  width: max-content;
+  width: auto;
   min-width: 100%;
+  table-layout: auto;
+  border-collapse: collapse;
+}
+
+.admin-member-list-table th,
+.admin-member-list-table td {
+  vertical-align: middle;
+}
+
+.admin-member-list-table thead th {
+  white-space: nowrap;
+}
+
+.admin-member-list-table th:nth-child(1) {
+  min-width: 13rem;
+}
+
+.admin-member-list-table td:nth-child(1) {
+  min-width: 13rem;
+  max-width: 22rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-member-email-cell {
+  cursor: help;
+}
+
+.admin-member-list-table th:nth-child(2),
+.admin-member-list-table td:nth-child(2) {
+  min-width: 7.5rem;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.admin-member-list-table th:nth-child(4),
+.admin-member-list-table td:nth-child(4),
+.admin-member-list-table th:nth-child(5),
+.admin-member-list-table td:nth-child(5),
+.admin-member-list-table th:nth-child(6),
+.admin-member-list-table td:nth-child(6) {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.admin-member-list-table th:nth-child(3),
+.admin-member-list-table td:nth-child(3) {
+  min-width: 6.5rem;
+}
+
+.admin-member-list-table th:nth-child(4) .admin-member-sort-btn,
+.admin-member-list-table th:nth-child(5) .admin-member-sort-btn,
+.admin-member-list-table th:nth-child(6) .admin-member-sort-btn {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.admin-member-nick-cell {
+  vertical-align: middle;
+}
+
+.admin-member-nick-trigger {
+  display: inline-block;
+  max-width: 280px;
+  margin: 0;
+  padding: 2px 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.admin-member-nick-trigger:hover {
+  color: var(--accent-deep);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.admin-member-nick-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .admin-member-sort-btn {
   display: inline-flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-start;
-  width: 100%;
+  gap: 0.28em;
+  width: max-content;
   max-width: 100%;
   margin: 0;
   padding: 6px 10px;
@@ -1653,6 +1634,22 @@ tbody tr:hover td {
   font-size: 0.88rem;
   text-align: left;
   box-sizing: border-box;
+}
+
+.admin-member-list-table thead .admin-member-sort-btn {
+  max-width: none;
+}
+
+.admin-member-sort-btn__label {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.admin-member-sort-btn__arrow {
+  flex-shrink: 0;
+  font-size: 0.68em;
+  line-height: 1;
+  opacity: 0.92;
 }
 
 .admin-member-list-pager {
@@ -1703,14 +1700,13 @@ tbody tr:hover td {
   max-width: 100%;
 }
 
-.admin-member-th-actions,
-.admin-member-td-actions {
-  white-space: nowrap;
-  width: 1%;
+.admin-member-nick-modal {
+  max-width: min(420px, 94vw);
 }
 
-.admin-save-nick-btn {
-  white-space: nowrap;
+.admin-member-nick-modal .admin-member-nick-input {
+  width: 100%;
+  max-width: none;
 }
 
 .admin-member-verify {
@@ -1728,12 +1724,6 @@ tbody tr:hover td {
   min-width: 100px;
   max-width: 240px;
   box-sizing: border-box;
-}
-
-.admin-member-uid {
-  font-size: 0.78rem;
-  word-break: break-all;
-  max-width: 200px;
 }
 
 .admin-login {
@@ -1797,11 +1787,6 @@ tbody tr:hover td {
 .admin-announce__wallet-segment--member-ops {
   border-left-color: #4a7ab5;
   background: linear-gradient(135deg, rgb(74 122 181 / 0.06) 0%, var(--surface) 46%);
-}
-
-.admin-announce__wallet-ops-lead {
-  margin: 0 0 4px;
-  line-height: 1.5;
 }
 
 .admin-wallet-accordion-stack {
@@ -1913,11 +1898,6 @@ tbody tr:hover td {
   font-weight: 700;
   color: var(--ink);
   letter-spacing: 0.02em;
-}
-
-.admin-announce__page-lead {
-  margin: 4px 0 0;
-  line-height: 1.5;
 }
 
 .admin-announce__block {
@@ -2957,27 +2937,18 @@ body.wheel-spectacle-lock {
   display: block;
 }
 
-.slot-spectacle-lever-knob {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 32% 28%, #ff8a8a, #d32f2f 50%, #6a1010);
-  box-shadow:
-    inset 0 2px 6px rgb(255 255 255 / 0.4),
-    0 4px 0 rgb(60 10 10 / 0.65),
-    0 6px 14px rgb(0 0 0 / 0.35);
+.slot-spectacle-lever-graphic {
+  display: block;
+  flex-shrink: 0;
+  width: 96px;
+  height: 336px;
+  object-fit: contain;
+  object-position: center bottom;
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
+  filter: drop-shadow(0 6px 12px rgb(0 0 0 / 0.4)) drop-shadow(0 0 10px rgb(255 72 52 / 0.28));
   z-index: 2;
-}
-
-.slot-spectacle-lever-arm {
-  width: 11px;
-  height: 96px;
-  margin-top: -4px;
-  border-radius: 0 0 5px 5px;
-  background: linear-gradient(90deg, #8a7020, #ffd700, #b8860b, #6a5010);
-  box-shadow:
-    inset 0 0 0 1px rgb(0 0 0 / 0.25),
-    inset 1px 0 0 rgb(255 255 255 / 0.35);
 }
 
 .slot-spectacle-payline {
@@ -3171,23 +3142,13 @@ body.wheel-spectacle-lock {
   margin-top: 18px;
 }
 
-.slot-spectacle-stage .wheel-spectacle-primary {
-  min-width: 168px;
-  padding: 12px 28px;
-  border-radius: 14px;
-  border: 2px solid rgb(255 220 140 / 0.45);
-  font-weight: 900;
-  letter-spacing: 0.1em;
-  color: #1a0a08;
-  background: linear-gradient(180deg, #ffe066 0%, #ffb300 40%, #e65100 100%);
-  box-shadow:
-    inset 0 2px 0 rgb(255 255 255 / 0.4),
-    0 4px 0 rgb(120 50 0 / 0.8),
-    0 10px 22px rgb(0 0 0 / 0.3);
-}
-
 .slot-spectacle-stage .wheel-spectacle-primary:hover:not(:disabled) {
   filter: brightness(1.06);
+}
+
+.slot-spectacle-stage .wheel-spectacle-primary:focus-visible {
+  outline: 3px solid rgb(255 220 140 / 0.95);
+  outline-offset: 4px;
 }
 
 .slot-spectacle-stage .wheel-spectacle-primary:disabled {
@@ -3690,8 +3651,8 @@ body.wheel-spectacle-lock {
   --slot-cell-h: 92px;
   /* 捲軸視窗垂直中心（自列頂起算）：main 上內距 + reel-frame 上內距 + 1.5 列高 */
   --slot-reel-mid-y: calc(22px + 18px + (var(--slot-cell-h) * 3 / 2));
-  /* 左右總留白與原先單側 124px 相當，讓主機台區塊略往右移，與右側拉桿視覺平衡 */
-  padding: 0 92px 0 32px;
+  /* 右側留白給拉桿外伸；左側加寬使「機台＋拉桿」視覺接近版面中央（對齊下方按鈕） */
+  padding: 0 174px 0 104px;
 }
 
 .slot-spectacle-machine-main {
@@ -3887,9 +3848,8 @@ body.wheel-spectacle-lock {
   position: absolute;
   display: block;
   /* 旋轉軸：桿身底部（與 .slot-spectacle-lever-swing 的 transform-origin 一致） */
-  --slot-lever-knob-h: 96px;
-  --slot-lever-arm-mt: -9px;
-  --slot-lever-arm-h: 166px;
+  --slot-lever-graphic-w: 264px;
+  --slot-lever-graphic-h: 696px;
   --slot-lever-socket-h: 88px;
   --slot-lever-socket-seat: 28px;
   /* 插座垂直置中於右側燈框／捲軸區（見 --slot-reel-mid-y） */
@@ -3897,11 +3857,11 @@ body.wheel-spectacle-lock {
   --slot-lever-socket-top: calc(
     var(--slot-reel-mid-y) - var(--slot-lever-abs-top) - var(--slot-lever-socket-h) / 2
   );
-  /* 略靠視窗右側，減少金屬底座壓到 gilt 右緣 */
-  right: 10px;
+  /* 負值：推向金框右緣；數值愈負愈靠外，與內側白邊對齊 */
+  right: -76px;
   top: var(--slot-lever-abs-top);
   bottom: 2px;
-  width: 126px;
+  width: calc(var(--slot-lever-graphic-w) + 48px);
   /* 高於機台與內框裝飾（含 reel-gilt），避免被 PNG 疊層擋住 */
   z-index: 20;
   overflow: visible;
@@ -3934,10 +3894,9 @@ body.wheel-spectacle-lock {
   flex-direction: column;
   align-items: center;
   position: absolute;
-  left: calc(18px + 31px - 34px);
+  left: calc(18px + 31px - var(--slot-lever-graphic-w) / 2);
   top: calc(
-    var(--slot-lever-socket-top) + var(--slot-lever-socket-seat) -
-      (var(--slot-lever-knob-h) + var(--slot-lever-arm-h) + var(--slot-lever-arm-mt))
+    var(--slot-lever-socket-top) + var(--slot-lever-socket-seat) - var(--slot-lever-graphic-h)
   );
   transform-origin: bottom center;
   transition: transform 0.42s cubic-bezier(0.33, 1.35, 0.52, 1);
@@ -3948,40 +3907,17 @@ body.wheel-spectacle-lock {
   transform: rotate(52deg);
 }
 
-.slot-spectacle-lever-knob {
-  width: 96px;
-  height: 96px;
-  background:
-    radial-gradient(circle at 26% 20%, #ffffff 0 7px, rgb(255 255 255 / 0.65) 8px 14px, transparent 15px),
-    radial-gradient(circle at 44% 42%, #ffb3af 0%, #ff453e 35%, #de1510 62%, #720707 88%, #2c0303 100%);
-  box-shadow:
-    inset -12px -16px 22px rgb(45 0 0 / 0.42),
-    inset 14px 14px 22px rgb(255 235 228 / 0.42),
-    inset 0 -4px 8px rgb(130 10 8 / 0.35),
-    0 10px 22px rgb(0 0 0 / 0.46),
-    0 0 26px rgb(255 72 52 / 0.52);
-}
-
-.slot-spectacle-lever-arm {
-  width: 26px;
-  height: 166px;
-  margin-top: -9px;
-  border-radius: 13px;
-  background: linear-gradient(
-    90deg,
-    #3f1c04 0%,
-    #9a5310 12%,
-    #ffd98a 35%,
-    #fffaf0 50%,
-    #ffd98a 65%,
-    #9a5310 88%,
-    #3f1c04 100%
-  );
-  box-shadow:
-    inset 4px 0 5px rgb(255 255 255 / 0.42),
-    inset -6px 0 12px rgb(0 0 0 / 0.4),
-    0 6px 14px rgb(0 0 0 / 0.42),
-    0 0 12px rgb(255 210 120 / 0.22);
+.slot-spectacle-lever-graphic {
+  display: block;
+  flex-shrink: 0;
+  width: var(--slot-lever-graphic-w);
+  height: var(--slot-lever-graphic-h);
+  object-fit: contain;
+  object-position: center bottom;
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
+  filter: drop-shadow(0 10px 18px rgb(0 0 0 / 0.44)) drop-shadow(0 0 14px rgb(255 72 52 / 0.35));
 }
 
 .slot-spectacle-pull-hint {
@@ -4117,7 +4053,7 @@ body.wheel-spectacle-lock {
   }
 
   .slot-spectacle-machine-row {
-    padding: 0 52px 0 14px;
+    padding: 0 120px 0 68px;
     --slot-reel-mid-y: calc(14px + 11px + (var(--slot-cell-h) * 3 / 2));
   }
 
@@ -4177,9 +4113,9 @@ body.wheel-spectacle-lock {
 
   .slot-spectacle-lever {
     display: block;
-    width: 70px;
-    --slot-lever-knob-h: 52px;
-    --slot-lever-arm-h: 104px;
+    width: calc(var(--slot-lever-graphic-w) + 28px);
+    --slot-lever-graphic-w: 152px;
+    --slot-lever-graphic-h: 404px;
     --slot-lever-socket-h: 64px;
     --slot-lever-socket-seat: 18px;
     --slot-lever-abs-top: 6px;
@@ -4187,7 +4123,7 @@ body.wheel-spectacle-lock {
       var(--slot-reel-mid-y) - var(--slot-lever-abs-top) - var(--slot-lever-socket-h) / 2
     );
     top: var(--slot-lever-abs-top);
-    right: 8px;
+    right: -54px;
     z-index: 20;
   }
 
@@ -4200,10 +4136,9 @@ body.wheel-spectacle-lock {
   }
 
   .slot-spectacle-lever-swing {
-    left: calc(12px + 17px - 22px);
+    left: calc(12px + 17px - var(--slot-lever-graphic-w) / 2);
     top: calc(
-      var(--slot-lever-socket-top) + var(--slot-lever-socket-seat) -
-        (var(--slot-lever-knob-h) + var(--slot-lever-arm-h) + var(--slot-lever-arm-mt))
+      var(--slot-lever-socket-top) + var(--slot-lever-socket-seat) - var(--slot-lever-graphic-h)
     );
     transform-origin: bottom center;
     transform: rotate(17deg);
@@ -4213,14 +4148,8 @@ body.wheel-spectacle-lock {
     transform: rotate(52deg);
   }
 
-  .slot-spectacle-lever-knob {
-    width: 52px;
-    height: 52px;
-  }
-
-  .slot-spectacle-lever-arm {
-    width: 14px;
-    height: 104px;
+  .slot-spectacle-lever-graphic {
+    filter: drop-shadow(0 6px 12px rgb(0 0 0 / 0.4)) drop-shadow(0 0 10px rgb(255 72 52 / 0.28));
   }
 
   .slot-spectacle-pull-hint {
@@ -4463,16 +4392,24 @@ body.wheel-spectacle-lock {
   min-width: 260px;
   padding: 16px 34px;
   border-radius: 16px;
-  border: 2px solid rgb(255 220 140 / 0.65);
+  border: none;
   font-size: 1.35rem;
   font-weight: 900;
   letter-spacing: 0.1em;
   color: #fffaf0;
-  background: linear-gradient(180deg, #ff9b19 0%, #f27515 48%, #df4a0a 100%);
+  text-shadow:
+    0 1px 0 rgb(80 20 0 / 0.85),
+    0 2px 8px rgb(60 10 0 / 0.65),
+    0 0 18px rgb(255 200 120 / 0.35);
+  background-color: #c73e08;
+  background-image: var(--slot-take-btn-bg, url("/media/slot-take-button.png"));
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
   box-shadow:
-    inset 0 3px 0 rgb(255 255 255 / 0.32),
-    0 6px 0 #9b3504,
-    0 0 22px rgb(255 154 24 / 0.5);
+    0 6px 0 rgb(100 38 4 / 0.92),
+    0 12px 28px rgb(0 0 0 / 0.38),
+    0 0 24px rgb(255 154 24 / 0.35);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -4649,7 +4586,8 @@ html.kuso-retro:not(:has(.shell.admin-mode)) a:hover {
   color: var(--accent-deep);
 }
 
-html.kuso-retro:not(:has(.shell.admin-mode)) button.primary {
+/* 排除輪盤／拉霸全螢幕主按鈕（.wheel-spectacle-primary），否則會蓋掉產圖 background-image */
+html.kuso-retro:not(:has(.shell.admin-mode)) button.primary:not(.wheel-spectacle-primary) {
   border: none;
   background: var(--accent);
   color: #ffffff;
@@ -4658,13 +4596,13 @@ html.kuso-retro:not(:has(.shell.admin-mode)) button.primary {
   border-radius: var(--radius);
 }
 
-html.kuso-retro:not(:has(.shell.admin-mode)) button.primary:hover:not(:disabled) {
+html.kuso-retro:not(:has(.shell.admin-mode)) button.primary:not(.wheel-spectacle-primary):hover:not(:disabled) {
   filter: brightness(1.05);
   background: var(--accent-hover);
   color: #ffffff;
 }
 
-html.kuso-retro:not(:has(.shell.admin-mode)) button.primary:active:not(:disabled) {
+html.kuso-retro:not(:has(.shell.admin-mode)) button.primary:not(.wheel-spectacle-primary):active:not(:disabled) {
   filter: brightness(0.95);
 }
 

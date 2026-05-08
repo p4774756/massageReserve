@@ -1367,7 +1367,7 @@ function normalizeBroadcastSubject(raw: string): string {
   return raw.replace(/\r\n/g, " ").replace(/\n/g, " ").trim().slice(0, BROADCAST_SUBJECT_MAX);
 }
 
-async function collectBroadcastRecipients(onlyEmailVerified: boolean): Promise<{
+async function collectBroadcastRecipients(): Promise<{
   recipients: { email: string; uid: string }[];
   totalUsers: number;
   withoutEmail: number;
@@ -1397,7 +1397,7 @@ async function collectBroadcastRecipients(onlyEmailVerified: boolean): Promise<{
         withoutEmail++;
         continue;
       }
-      if (onlyEmailVerified && u.emailVerified !== true) {
+      if (u.emailVerified !== true) {
         unverifiedSkipped++;
         continue;
       }
@@ -1431,8 +1431,6 @@ export const sendMembersBroadcastAdmin = onCall(
 
     const dryRun = request.data?.dryRun === true;
     const confirmSend = request.data?.confirmSend === true;
-    const onlyEmailVerified = request.data?.onlyEmailVerified !== false;
-
     const subjectRaw = typeof request.data?.subject === "string" ? request.data.subject : "";
     const bodyRaw = typeof request.data?.body === "string" ? request.data.body : "";
     const subject = normalizeBroadcastSubject(subjectRaw);
@@ -1463,7 +1461,7 @@ export const sendMembersBroadcastAdmin = onCall(
       );
     }
 
-    const stats = await collectBroadcastRecipients(onlyEmailVerified);
+    const stats = await collectBroadcastRecipients();
     const { recipients, totalUsers, withoutEmail, disabledSkipped, unverifiedSkipped, duplicateSkipped } = stats;
 
     if (recipients.length === 0) {

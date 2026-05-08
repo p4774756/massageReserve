@@ -14,7 +14,10 @@ import {
   prefetchSlotCoinSfx,
   prefetchWheelSfx,
   playBufferAt,
+  playProceduralSpinTick,
   playSlotCoinRain,
+  scheduleSlotReelCellTicks,
+  SLOT_REEL_TRANSITION_EASING,
   type PrefetchedSlotCoinSfx,
   type PrefetchedWheelSfx,
 } from "./wheelSpectacleSfx";
@@ -29,6 +32,8 @@ const CURTAIN_CLOSE_WAIT_MS = CURTAIN_MOVE_MS + 320;
 /** 須與 CSS `.slot-spectacle-machine-main-inner { --slot-cell-h }` 一致 */
 const CELL_PX = 92;
 const CENTER_ROW = 1;
+/** 捲軸 `transform` 過渡長度（與排程 tick／ easing 同步） */
+const SLOT_REEL_SPIN_MS = 8400;
 
 /** 街機捲軸符色：金、紅、綠 BAR、藍、焰橘等（呼應經典老虎機） */
 const ACCENT_COLORS = [
@@ -203,6 +208,8 @@ const SLOT_CROWN_SVG = `<svg class="slot-spectacle-crown-svg" xmlns="http://www.
 const SLOT_DRAGON_IMG_SRC = `${import.meta.env.BASE_URL}media/slot-dragon-banner.png`;
 /** 機台外框／捲軸內框華麗金屬裝飾（透明中央，見 public/media） */
 const SLOT_INNER_GILT_SRC = `${import.meta.env.BASE_URL}media/slot-inner-gilt-frame.png`;
+/** 拉桿整支（透明 PNG，見 public/media/slot-lever-full.png） */
+const SLOT_LEVER_FULL_SRC = `${import.meta.env.BASE_URL}media/slot-lever-full.png`;
 
 function appendSpectacleDragon(pairEl: HTMLElement, side: "left" | "right"): void {
   const wrap = document.createElement("span");
@@ -257,6 +264,10 @@ export function runSlotSpectacle(
 
     const stage = document.createElement("div");
     stage.className = "wheel-spectacle-stage slot-spectacle-stage";
+    stage.style.setProperty(
+      "--slot-take-btn-bg",
+      `url("${import.meta.env.BASE_URL}media/slot-take-button.png")`,
+    );
 
     const stageHead = document.createElement("div");
     stageHead.className = "slot-spectacle-stage-head";
@@ -335,15 +346,17 @@ export function runSlotSpectacle(
     lever.setAttribute("aria-label", t("slot.leverAria", "由右上往左下拉桿開始開獎"));
     const leverSwing = document.createElement("span");
     leverSwing.className = "slot-spectacle-lever-swing";
-    const leverKnob = document.createElement("span");
-    leverKnob.className = "slot-spectacle-lever-knob";
-    const leverArm = document.createElement("span");
-    leverArm.className = "slot-spectacle-lever-arm";
+    const leverGraphic = document.createElement("img");
+    leverGraphic.className = "slot-spectacle-lever-graphic";
+    leverGraphic.src = SLOT_LEVER_FULL_SRC;
+    leverGraphic.alt = "";
+    leverGraphic.decoding = "async";
+    leverGraphic.draggable = false;
     const pullHint = document.createElement("span");
     pullHint.className = "slot-spectacle-pull-hint";
     pullHint.setAttribute("aria-hidden", "true");
     pullHint.innerHTML = `<svg class="slot-spectacle-pull-hint-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 56" width="40" height="46"><path fill="none" stroke="#ff8c00" stroke-width="3" stroke-linecap="round" d="M8 8 Q28 8 32 28 T36 48"/><path fill="#ff8c00" d="M34 46l8 4-6 6z"/></svg>`;
-    leverSwing.append(leverKnob, leverArm, pullHint);
+    leverSwing.append(leverGraphic, pullHint);
     lever.append(leverSwing);
 
     machineRow.append(machineMain, lever);
@@ -579,6 +592,19 @@ export function runSlotSpectacle(
         pullBtn.setAttribute("disabled", "true");
         idleCloseBtn.setAttribute("disabled", "true");
 
+        if (audioCtx && reelBus && !reduceMotion) {
+          try {
+            void audioCtx.resume();
+            if (sfx.spinTick) {
+              playBufferAt(audioCtx, sfx.spinTick, audioCtx.currentTime + 0.02, 0.17, reelBus, 1.08, 0.095);
+            } else {
+              playProceduralSpinTick(audioCtx, reelBus, 0.11);
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+
         renderHubFlanked(hub, t("slot.hubSpinning", "連線開獎中…"));
         hub.classList.add("is-pulse");
 
@@ -623,7 +649,7 @@ export function runSlotSpectacle(
         const extraScroll = Math.round(1500 + rngExtra() * 520);
         const endY = -(stopIndex - CENTER_ROW) * CELL_PX;
         const startY = endY + extraScroll;
-        const durationMs = reduceMotion ? 0 : 2800;
+        const durationMs = reduceMotion ? 0 : SLOT_REEL_SPIN_MS;
 
         fillStripEl(stripEl, strip, workingPrizes);
         stripEl.style.transition = "none";
@@ -632,7 +658,7 @@ export function runSlotSpectacle(
         let stopDrone: (() => void) | null = null;
         if (audioCtx && reelBus && !reduceMotion) {
           try {
-            stopDrone = startSpinDrone(audioCtx, reelBus, 0.0055);
+            stopDrone = startSpinDrone(audioCtx, reelBus, 0.011);
           } catch {
             stopDrone = null;
           }
@@ -648,18 +674,27 @@ export function runSlotSpectacle(
           const onEnd = (ev: TransitionEvent) => {
             if (ev.propertyName !== "transform") return;
             stripEl.removeEventListener("transitionend", onEnd);
-            if (audioCtx && reelBus && sfx.spinTick) {
-              try {
-                playBufferAt(audioCtx, sfx.spinTick, audioCtx.currentTime + 0.01, 0.2, reelBus, 1, 0.14);
-              } catch {
-                /* ignore */
-              }
-            }
             res();
           };
           stripEl.addEventListener("transitionend", onEnd);
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
+              if (audioCtx && reelBus) {
+                try {
+                  void audioCtx.resume();
+                  scheduleSlotReelCellTicks(audioCtx, sfx.spinTick, reelBus, {
+                    durationMs,
+                    totalScrollPx: extraScroll,
+                    cellPx: CELL_PX,
+                    easing: SLOT_REEL_TRANSITION_EASING,
+                    tickGain: 0.125,
+                    proceduralGain: 0.082,
+                    landingGain: 0.19,
+                  });
+                } catch {
+                  /* ignore */
+                }
+              }
               stripEl.style.transition = `transform ${durationMs}ms cubic-bezier(0.18, 0.82, 0.32, 1)`;
               stripEl.style.transform = `translate3d(0, ${endY}px, 0)`;
             });
