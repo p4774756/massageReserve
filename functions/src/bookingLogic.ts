@@ -1,11 +1,11 @@
 import { DateTime } from "luxon";
 
 export const TIMEZONE = "Asia/Taipei";
-export const SLOT_STEP_MINUTES = 20;
-export const BOOKING_DURATION_MINUTES = 20;
+export const SLOT_STEP_MINUTES = 15;
+export const BOOKING_DURATION_MINUTES = 15;
 const LUNCH_START_MINUTES = 11 * 60 + 45;
 const LUNCH_END_MINUTES = 13 * 60 + 15;
-/** 單次服務結束不得晚於此時刻（台北當日）；最晚開始 = 此時刻 − BOOKING_DURATION（目前 16:40） */
+/** 單次服務結束不得晚於此時刻（台北當日）；最晚開始 = 此時刻 − BOOKING_DURATION（目前 16:45） */
 const SERVICE_DAY_END_HOUR = 17;
 const SERVICE_DAY_END_MINUTE = 0;
 /** 未設定 `siteSettings/bookingCaps` 時的預設值 */
@@ -42,7 +42,7 @@ export function resolveBookingCaps(raw: unknown): { maxPerDay: number; maxPerWor
 
 export const ACTIVE_STATUSES = ["pending", "confirmed", "done"] as const;
 
-/** 可預約開始時間：08:00–16:40，每 20 分鐘一格（避開 11:45–13:15 午休；開始時間須能在 SERVICE_DAY_END 前結束） */
+/** 可預約開始時間：08:00–16:45，開始時間選項每 15 分鐘一個（避開 11:45–13:15 午休；開始時間須能在 SERVICE_DAY_END 前結束） */
 export function allStartSlots(): string[] {
   const slots: string[] = [];
   const dayEndMinutes = SERVICE_DAY_END_HOUR * 60 + SERVICE_DAY_END_MINUTE;

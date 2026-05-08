@@ -337,6 +337,42 @@ function bookingIsCancelledForAdmin(status: unknown): boolean {
   return bookingStatusNorm(status) === "cancelled";
 }
 
+/** 與 getAvailability／名額統計一致：待確認、已確認、已完成 */
+function bookingCountsTowardAvailabilityCap(status: unknown): boolean {
+  const n = bookingStatusNorm(status);
+  return n === "pending" || n === "confirmed" || n === "done";
+}
+
+/** 月曆表頭：台北該日的星期（0=日 … 6=六） */
+const CAL_WD_SUN0: Record<string, number> = {
+  Sun: 0,
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
+};
+
+function taipeiWeekdaySun0FromDateKey(dateKey: string): number {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
+  if (!m) return 0;
+  const inst = new Date(`${m[1]}-${m[2]}-${m[3]}T12:00:00+08:00`);
+  const short = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Taipei", weekday: "short" }).format(inst);
+  return CAL_WD_SUN0[short as keyof typeof CAL_WD_SUN0] ?? 0;
+}
+
+function dateKeyFromYmdTaipei(y: number, month: number, day: number): string {
+  const mm = String(month).padStart(2, "0");
+  const dd = String(day).padStart(2, "0");
+  return `${y}-${mm}-${dd}`;
+}
+
+/** month：1–12 */
+function daysInMonthFromOneIndexed(y: number, month: number): number {
+  return new Date(y, month, 0).getDate();
+}
+
 /** 後台狀態下拉：與 option value（pending／confirmed／done）對齊，避免大小寫／空白導致無匹配 option、畫面卡在「待確認」 */
 function adminSelectableBookingStatus(status: unknown): "pending" | "confirmed" | "done" {
   const n = bookingStatusNorm(status);
@@ -683,7 +719,7 @@ function render() {
   const titleDesc = el("p", {}, [
     t(
       "home.subtitle",
-      "週一至週五 · 20 分鐘一格、每格 50 元 · 延長以同單位計 · 每工作週有名額上限（見下方規則）· 現場臨時預約視當日狀況 · 午休 11:45–13:15 不開放 · 最晚 16:40 開始、17:00 前結束",
+      "週一至週五 · 線上選開始時間（每 15 分鐘一個時段）· 現場約 20 分鐘一輪，若要加時請告知師傅（現場每加一輪依訂價收費）· 每工作週有名額上限（見下方規則）· 現場臨時預約視當日狀況 · 午休 11:45–13:15 不開放 · 最晚 16:45 開始、17:00 前結束",
     ),
   ]);
   const titleGuestHint = el("p", { class: "page-head-guest-hint" }, [
@@ -776,10 +812,13 @@ function render() {
     { class: "grid" },
     [
       el("label", { class: "field" }, [
-        t("field.startSlot", "開始時間（20 分鐘一格）"),
+        t("field.startSlot", "開始時間（請選預約時段）"),
         slotSelect,
         el("span", { class: "hint" }, [
-          t("field.startSlotHint", "開始時間為 20 分鐘一格；每格 50 元，延長亦以同單位計。現場臨時加鐘視當日狀況。"),
+          t(
+            "field.startSlotHint",
+            "下拉選單為每 15 分鐘一個可選開始時間。現場服務以約 20 分鐘為一輪；一輪結束後若要加時，請直接向師傅告知，現場另收費（一般每加一輪為現場單次金額）。",
+          ),
         ]),
       ]),
     ],
@@ -3129,7 +3168,7 @@ function render() {
       el("p", { class: "hint" }, [
         t(
           "admin.blocks.hintA",
-          "依星期與當日時段關閉預約；「特定日期」有填時僅該日生效（例如明天下午外出），未填則每週該星期皆套用。若一次服務（20 分鐘）與關閉區間重疊，該開始時間無法選取。例：週一、週四 14:30–15:30 關閉，則與該區間重疊的開始時間（如 14:20、14:40、15:00）皆不可選。Firestore：",
+          "依星期與當日時段關閉預約；「特定日期」有填時僅該日生效（例如明天下午外出），未填則每週該星期皆套用。若預約所佔時段（系統依開始時間與預設服務長度計算）與關閉區間重疊，該開始時間無法選取。例：週一、週四 14:30–15:30 關閉，則與該區間重疊的開始時間（如 14:15、14:30、14:45）皆不可選。Firestore：",
         ),
         el("code", {}, ["siteSettings/bookingBlocks"]),
         t("admin.blocks.hintB", " 的 "),
@@ -3471,7 +3510,202 @@ function render() {
       }
     }
 
+    let adminCalendarYear = 0;
+    let adminCalendarMonth = 0;
+    let adminCalendarLastVisible: Booking[] = [];
+
+    function syncAdminCalendarMonthFromDateInput(): void {
+      const dk = adminCapacityDateInput.value;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dk)) return;
+      const [y, m] = dk.split("-").map(Number);
+      adminCalendarYear = y;
+      adminCalendarMonth = m;
+    }
+
+    function ensureAdminCalendarCursor(): void {
+      if (adminCalendarYear !== 0) return;
+      syncAdminCalendarMonthFromDateInput();
+      if (adminCalendarYear === 0) {
+        const [y, m] = taipeiTodayDateKey().split("-").map(Number);
+        adminCalendarYear = y;
+        adminCalendarMonth = m;
+      }
+    }
+
+    const adminCalendarMonthLabel = el("span", { class: "admin-calendar__month-label" });
+    const adminCalendarGrid = el("div", { class: "admin-calendar__grid", role: "grid" });
+    adminCalendarGrid.setAttribute("aria-label", t("admin.calendar.gridAria", "預約月曆"));
+
+    function shiftAdminCalendarMonth(delta: number): void {
+      ensureAdminCalendarCursor();
+      let y = adminCalendarYear;
+      let mo = adminCalendarMonth + delta;
+      while (mo < 1) {
+        mo += 12;
+        y -= 1;
+      }
+      while (mo > 12) {
+        mo -= 12;
+        y += 1;
+      }
+      adminCalendarYear = y;
+      adminCalendarMonth = mo;
+      paintAdminBookingsCalendar();
+    }
+
+    function paintAdminBookingsCalendar(): void {
+      ensureAdminCalendarCursor();
+      const y = adminCalendarYear;
+      const mo = adminCalendarMonth;
+      const minK = taipeiTodayDateKey();
+      const maxK = taipeiLatestBookableDateKey();
+      const selected = adminCapacityDateInput.value;
+      const todayK = taipeiTodayDateKey();
+
+      adminCalendarMonthLabel.textContent = new Intl.DateTimeFormat(intlLocaleTag(), {
+        timeZone: "Asia/Taipei",
+        year: "numeric",
+        month: "long",
+      }).format(new Date(`${y}-${String(mo).padStart(2, "0")}-15T12:00:00+08:00`));
+
+      const byDay = new Map<string, Booking[]>();
+      for (const b of adminCalendarLastVisible) {
+        const dk0 = b.dateKey;
+        if (!dk0 || !/^\d{4}-\d{2}-\d{2}$/.test(dk0)) continue;
+        const arr = byDay.get(dk0) ?? [];
+        arr.push(b);
+        byDay.set(dk0, arr);
+      }
+
+      adminCalendarGrid.replaceChildren();
+      const hdrRow = el("div", { class: "admin-calendar__row admin-calendar__row--head" });
+      for (const lab of [
+        t("admin.calendar.weekSun", "日"),
+        t("admin.calendar.weekMon", "一"),
+        t("admin.calendar.weekTue", "二"),
+        t("admin.calendar.weekWed", "三"),
+        t("admin.calendar.weekThu", "四"),
+        t("admin.calendar.weekFri", "五"),
+        t("admin.calendar.weekSat", "六"),
+      ]) {
+        hdrRow.append(el("div", { class: "admin-calendar__wd" }, [lab]));
+      }
+      adminCalendarGrid.append(hdrRow);
+
+      const firstKey = dateKeyFromYmdTaipei(y, mo, 1);
+      const lead = taipeiWeekdaySun0FromDateKey(firstKey);
+      const dim = daysInMonthFromOneIndexed(y, mo);
+      const padCell = () => el("div", { class: "admin-calendar__cell admin-calendar__cell--pad" });
+      const cells: HTMLElement[] = [];
+      for (let i = 0; i < lead; i++) cells.push(padCell());
+
+      for (let dayNum = 1; dayNum <= dim; dayNum++) {
+        const dk = dateKeyFromYmdTaipei(y, mo, dayNum);
+        const monFri = isDateKeyMonFri(dk);
+        const inWin = dk >= minK && dk <= maxK;
+        const list = byDay.get(dk) ?? [];
+        const cap = list.filter((bb) => bookingCountsTowardAvailabilityCap(bb.status)).length;
+        const sorted = list.slice().sort((a, b) => (a.startSlot ?? "").localeCompare(b.startSlot ?? "", "zh-Hant"));
+        const tipLines = sorted.map((bb) => {
+          const st = bookingStatusNorm(bb.status);
+          return `${bb.startSlot ?? ""} ${(bb.displayName ?? "").trim()} · ${bookingStatusLabel(st)}`;
+        });
+        const titleAttr = tipLines.length > 0 ? tipLines.join("\n") : "";
+
+        const wrap = el("div", { class: "admin-calendar__cell" });
+        const isToday = dk === todayK;
+        const isSelected = dk === selected;
+
+        if (!monFri || !inWin) {
+          const inactive = el("div", { class: "admin-calendar__day admin-calendar__day--inactive" });
+          inactive.append(el("span", { class: "admin-calendar__day-num" }, [String(dayNum)]));
+          if (cap > 0) {
+            inactive.append(el("span", { class: "admin-calendar__badge" }, [String(cap)]));
+          } else if (list.length > 0) {
+            inactive.append(
+              el("span", { class: "admin-calendar__badge admin-calendar__badge--weak" }, [String(list.length)]),
+            );
+          }
+          if (titleAttr) inactive.title = titleAttr;
+          if (isToday) inactive.classList.add("admin-calendar__day--today");
+          if (isSelected) inactive.classList.add("admin-calendar__day--selected");
+          wrap.append(inactive);
+          cells.push(wrap);
+          continue;
+        }
+
+        const btn = el("button", { type: "button", class: "admin-calendar__day" });
+        if (isSelected) btn.classList.add("admin-calendar__day--selected");
+        if (isToday) btn.classList.add("admin-calendar__day--today");
+        btn.append(el("span", { class: "admin-calendar__day-num" }, [String(dayNum)]));
+        if (cap > 0) {
+          btn.append(el("span", { class: "admin-calendar__badge" }, [String(cap)]));
+        } else if (list.length > 0) {
+          btn.append(
+            el("span", { class: "admin-calendar__badge admin-calendar__badge--weak" }, [String(list.length)]),
+          );
+        }
+        if (titleAttr) btn.title = titleAttr;
+        btn.addEventListener("click", () => {
+          adminCapacityDateInput.value = dk;
+          syncAdminCalendarMonthFromDateInput();
+          void refreshAdminCapacityPreview();
+          paintAdminBookingsCalendar();
+        });
+        wrap.append(btn);
+        cells.push(wrap);
+      }
+
+      while (cells.length % 7 !== 0) cells.push(padCell());
+      for (let i = 0; i < cells.length; i += 7) {
+        const row = el("div", { class: "admin-calendar__row" });
+        for (let j = 0; j < 7; j++) row.append(cells[i + j]!);
+        adminCalendarGrid.append(row);
+      }
+    }
+
+    const adminCalPrev = el("button", { type: "button", class: "ghost admin-calendar__nav-btn" }, ["‹"]);
+    adminCalPrev.setAttribute("aria-label", t("admin.calendar.prevMonth", "上個月"));
+    const adminCalNext = el("button", { type: "button", class: "ghost admin-calendar__nav-btn" }, ["›"]);
+    adminCalNext.setAttribute("aria-label", t("admin.calendar.nextMonth", "下個月"));
+    const adminCalThisMonth = el("button", { type: "button", class: "ghost" }, [
+      t("admin.calendar.thisMonth", "回到本月"),
+    ]);
+    adminCalPrev.addEventListener("click", () => shiftAdminCalendarMonth(-1));
+    adminCalNext.addEventListener("click", () => shiftAdminCalendarMonth(1));
+    adminCalThisMonth.addEventListener("click", () => {
+      const [y0, m0] = taipeiTodayDateKey().split("-").map(Number);
+      adminCalendarYear = y0;
+      adminCalendarMonth = m0;
+      paintAdminBookingsCalendar();
+    });
+
+    const adminCalendarToolbar = el("div", { class: "admin-calendar__toolbar" });
+    adminCalendarToolbar.append(adminCalPrev, adminCalendarMonthLabel, adminCalNext, adminCalThisMonth);
+
+    const adminBookingsCalendarSection = el("section", { class: "admin-bookings-calendar" }, [
+      el("h4", { class: "admin-subhead" }, [t("admin.calendar.heading", "預約月曆")]),
+      el("p", { class: "hint" }, [
+        t(
+          "admin.calendar.hint",
+          "依下方列表即時統計：數字為計入名額之筆數（待確認／已確認／已完成）。點選平日可同步上方「查詢日期」並更新名額；灰底為週末或不在可預約視窗內。",
+        ),
+      ]),
+      adminCalendarToolbar,
+      adminCalendarGrid,
+    ]);
+
+    syncAdminCalendarMonthFromDateInput();
+    if (adminCalendarYear === 0) {
+      const [yInit, mInit] = taipeiTodayDateKey().split("-").map(Number);
+      adminCalendarYear = yInit;
+      adminCalendarMonth = mInit;
+    }
+    paintAdminBookingsCalendar();
+
     adminCapacityDateInput.addEventListener("change", () => {
+      syncAdminCalendarMonthFromDateInput();
+      paintAdminBookingsCalendar();
       void refreshAdminCapacityPreview();
     });
     adminCapacityRefreshBtn.addEventListener("click", () => {
@@ -4571,7 +4805,7 @@ function render() {
     tabMembers.setAttribute("aria-controls", "admin-tab-panel-members");
     tabAnnounce.setAttribute("aria-controls", "admin-tab-panel-announce");
 
-    panelBookingsActiveSub.append(adminCapacitySection, adminStatus, tableHolder);
+    panelBookingsActiveSub.append(adminCapacitySection, adminBookingsCalendarSection, adminStatus, tableHolder);
     panelMembersEl.append(membersSubTablist, membersSubPanelsWrap);
     panelAnnounceEl.append(announcementSection);
 
@@ -4835,6 +5069,7 @@ function render() {
         hiddenTable.innerHTML = "";
         hiddenTable.append(adminBookingsHeaderRow());
         hiddenAdminQueue.length = 0;
+        const visibleBookingsForCalendar: Booking[] = [];
         for (const d of snap.docs) {
           const b = { id: d.id, ...d.data() } as Booking;
           if (b.status === "deleted" || b.invisible === true) {
@@ -4843,6 +5078,7 @@ function render() {
             );
             continue;
           }
+          visibleBookingsForCalendar.push(b);
           const statusCell: HTMLElement =
             bookingIsCancelledForAdmin(b.status)
               ? el("span", { class: "admin-booking-status-readonly" }, [bookingStatusLabel("cancelled")])
@@ -4990,6 +5226,8 @@ function render() {
             ]),
           );
         }
+        adminCalendarLastVisible = visibleBookingsForCalendar;
+        paintAdminBookingsCalendar();
         paintHiddenAdminPage();
       },
       (err) => {
@@ -5003,6 +5241,8 @@ function render() {
         adminStatus.classList.add("error");
         hiddenBookingsStatus.textContent = msg;
         hiddenBookingsStatus.classList.add("error");
+        adminCalendarLastVisible = [];
+        paintAdminBookingsCalendar();
       },
     );
   }
@@ -5061,7 +5301,7 @@ function render() {
     titleDesc.textContent = isBook
       ? t(
           "home.subtitle",
-          "週一至週五 · 20 分鐘一格、每格 50 元 · 延長以同單位計 · 每工作週有名額上限（見下方規則）· 現場臨時預約視當日狀況 · 午休 11:45–13:15 不開放 · 最晚 16:40 開始、17:00 前結束",
+          "週一至週五 · 線上選開始時間（每 15 分鐘一個時段）· 現場約 20 分鐘一輪，若要加時請告知師傅（現場每加一輪依訂價收費）· 每工作週有名額上限（見下方規則）· 現場臨時預約視當日狀況 · 午休 11:45–13:15 不開放 · 最晚 16:45 開始、17:00 前結束",
         )
       : t(
           "admin.backSubtitle",

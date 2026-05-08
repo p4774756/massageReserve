@@ -1,10 +1,10 @@
-/** 與 Cloud Functions `bookingLogic.allStartSlots` 保持一致 */
+/** 與 Cloud Functions `bookingLogic.allStartSlots` 保持一致（開始時間間隔／時段長度與後端相同） */
 export function allStartSlots(): string[] {
   const slots: string[] = [];
   const lunchStartMinutes = 11 * 60 + 45;
   const lunchEndMinutes = 13 * 60 + 15;
-  const slotStepMinutes = 20;
-  const bookingDurationMinutes = 20;
+  const slotStepMinutes = 15;
+  const bookingDurationMinutes = 15;
   const dayEndMinutes = 17 * 60;
   const endMinutes = dayEndMinutes - bookingDurationMinutes;
   for (let m = 8 * 60; m <= endMinutes; m += slotStepMinutes) {

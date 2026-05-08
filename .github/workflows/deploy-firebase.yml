@@ -51,6 +51,25 @@ jobs:
           VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
           RESEND_FROM: ${{ secrets.RESEND_FROM }}
 
+      # 遠端若仍有已從程式碼移除的 Callable，firebase deploy --non-interactive 會中止。
+      # 下列為舊版街機／Little Mary 相關函式；已刪除時該次 delete 會失敗，略過即可。
+      - name: Remove orphaned legacy Cloud Functions (asia-east1)
+        run: |
+          LEGACY=(
+            exchangeSessionForArcadePoints
+            getLittleMaryAdminStats
+            littleMaryHiLoAccount
+            littleMaryHiLoRoll
+            littleMarySpin
+            littleMarySpinAccount
+            redeemArcadePointsForSession
+          )
+          for fn in "${LEGACY[@]}"; do
+            npx -y firebase-tools@latest functions:delete "$fn" --region asia-east1 --force || true
+          done
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+
       - name: Deploy to Firebase
         run: npx -y firebase-tools@latest deploy --non-interactive
         env:
