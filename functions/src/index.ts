@@ -11,7 +11,6 @@ import {
   sendBroadcastHtmlEmail,
   sendMemberBookingStatusChangedEmail,
   sendNewBookingEmailToOwner,
-  type EmailLocale,
 } from "./resendNotify";
 import {
   ACTIVE_STATUSES,
@@ -25,12 +24,7 @@ import {
   resolveBookingCaps,
   TIMEZONE,
 } from "./bookingLogic";
-import {
-  foldWalletBalanceIntoSessions,
-  resolveArcadePointsPerMassage,
-  resolvePointsPerMassage,
-  resolveSessionPriceNtd,
-} from "./pricing";
+import { foldWalletBalanceIntoSessions, resolvePointsPerMassage, resolveSessionPriceNtd } from "./pricing";
 import { parseLocale, st, type ServerLocale } from "./serverI18n";
 
 initializeApp();
@@ -116,6 +110,16 @@ function asNonNegativeInteger(v: unknown): number {
   if (typeof v !== "number" || !Number.isFinite(v)) return 0;
   const n = Math.trunc(v);
   return n >= 0 ? n : 0;
+}
+
+const STATUS_EMAIL_MESSAGE_MAX_LEN = 2000;
+
+/** 後台随預約狀態寫入、寄信後由 trigger 清除 */
+function sanitizeStatusEmailMessage(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const s = raw.trim();
+  if (!s) return undefined;
+  return s.slice(0, STATUS_EMAIL_MESSAGE_MAX_LEN);
 }
 
 function pickWeighted<T extends { weight: number }>(items: T[]): T {
@@ -451,7 +455,7 @@ export const createBooking = onCall(
         sessionCreditsDeducted,
         drawGranted: false,
         status: "pending",
-        notificationLocale: locale === "en" ? "en" : "zh-Hant",
+        notificationLocale: "zh-Hant",
         createdAt: FieldValueOrServerTimestamp(),
         updatedAt: FieldValueOrServerTimestamp(),
       });
@@ -473,7 +477,6 @@ export const createBooking = onCall(
       apiKey: key,
       from,
       to: ownerTo,
-      locale,
       payload: {
         id: bookingRef.id,
         displayName,
@@ -502,19 +505,16 @@ export const getMyWallet = onCall(publicCall, async (request) => {
     const pricingSnap = await tx.get(db.collection("siteSettings").doc("pricing"));
     const sessionPriceNtd = resolveSessionPriceNtd(pricingSnap.data());
     const pointsPerMassage = resolvePointsPerMassage(pricingSnap.data());
-    const arcadePointsPerMassage = resolveArcadePointsPerMassage(pricingSnap.data());
     const snap = await tx.get(customerRef);
     const walletBalanceRaw = snap.exists ? snap.get("walletBalance") : 0;
     const drawChancesRaw = snap.exists ? snap.get("drawChances") : 0;
     const nicknameRaw = snap.exists ? snap.get("nickname") : "";
     const sessionCreditsRaw = snap.exists ? snap.get("sessionCredits") : 0;
     const wheelPointsRaw = snap.exists ? snap.get("wheelPoints") : 0;
-    const arcadePointsRaw = snap.exists ? snap.get("arcadePoints") : 0;
     const nickname = typeof nicknameRaw === "string" ? nicknameRaw.trim() : "";
     let walletBalance = typeof walletBalanceRaw === "number" ? walletBalanceRaw : 0;
     let sessionCredits = typeof sessionCreditsRaw === "number" ? sessionCreditsRaw : 0;
     const wheelPoints = typeof wheelPointsRaw === "number" ? wheelPointsRaw : 0;
-    const arcadePoints = typeof arcadePointsRaw === "number" ? arcadePointsRaw : 0;
     const drawChances = typeof drawChancesRaw === "number" ? drawChancesRaw : 0;
     const folded = foldWalletBalanceIntoSessions(walletBalance, sessionCredits, sessionPriceNtd);
     if (folded.walletBalance !== walletBalance || folded.sessionCredits !== sessionCredits) {
@@ -527,7 +527,6 @@ export const getMyWallet = onCall(publicCall, async (request) => {
           sessionCredits,
           drawChances,
           wheelPoints,
-          arcadePoints,
           updatedAt: FieldValueOrServerTimestamp(),
         },
         { merge: true },
@@ -537,12 +536,10 @@ export const getMyWallet = onCall(publicCall, async (request) => {
       walletBalance,
       sessionCredits,
       wheelPoints,
-      arcadePoints,
       drawChances,
       nickname,
       sessionPriceNtd,
       pointsPerMassage,
-      arcadePointsPerMassage,
     };
   });
   return out;
@@ -555,7 +552,6 @@ export const getBookingPricing = onCall(publicCall, async (request) => {
   return {
     sessionPriceNtd: resolveSessionPriceNtd(snap.data()),
     pointsPerMassage: resolvePointsPerMassage(snap.data()),
-    arcadePointsPerMassage: resolveArcadePointsPerMassage(snap.data()),
   };
 });
 
@@ -961,7 +957,6 @@ export const createMemberAccount = onCall(publicCall, async (request) => {
         walletBalance: 0,
         sessionCredits: 0,
         wheelPoints: 0,
-        arcadePoints: 0,
         drawChances: 0,
         ...(nickname ? { nickname } : {}),
         createdAt: FieldValueOrServerTimestamp(),
@@ -1021,7 +1016,6 @@ type ListMembersAdminRow = {
   walletBalance: number;
   sessionCredits: number;
   wheelPoints: number;
-  arcadePoints: number;
   drawChances: number;
 };
 
@@ -1057,7 +1051,6 @@ export const listMembersAdmin = onCall(publicCall, async (request) => {
         walletBalance: typeof d.walletBalance === "number" ? d.walletBalance : 0,
         sessionCredits: typeof d.sessionCredits === "number" ? d.sessionCredits : 0,
         wheelPoints: typeof d.wheelPoints === "number" ? d.wheelPoints : 0,
-        arcadePoints: typeof d.arcadePoints === "number" ? d.arcadePoints : 0,
         drawChances: typeof d.drawChances === "number" ? d.drawChances : 0,
       });
     }
@@ -1126,6 +1119,7 @@ export const completeBooking = onCall(publicCall, async (request) => {
   if (!bookingId) {
     throw new HttpsError("invalid-argument", st(locale, "booking.idRequired", "bookingId 必填"));
   }
+  const statusEmailMessage = sanitizeStatusEmailMessage(request.data?.statusEmailMessage);
   const bookingRef = db.collection("bookings").doc(bookingId);
   await db.runTransaction(async (tx) => {
     const bookingSnap = await tx.get(bookingRef);
@@ -1167,6 +1161,7 @@ export const completeBooking = onCall(publicCall, async (request) => {
       updatedAt: FieldValueOrServerTimestamp(),
       completedAt: FieldValueOrServerTimestamp(),
       completedBy: uid,
+      ...(statusEmailMessage ? { statusEmailMessage } : {}),
     });
   });
 
@@ -1236,16 +1231,13 @@ export const testSendMemberBookingStatusEmail = onCall(
     const displayName = typeof data.displayName === "string" ? data.displayName.trim() : "";
     const dateKey = typeof data.dateKey === "string" ? data.dateKey : "";
     const startSlot = typeof data.startSlot === "string" ? data.startSlot : "";
-    const mailLocale = data.notificationLocale === "en" ? "en" : "zh-Hant";
-
     await sendMemberBookingStatusChangedEmail({
       apiKey,
       from,
-      locale: mailLocale,
       testMode: true,
       payload: {
         to,
-        displayName: displayName || (mailLocale === "en" ? "Member" : "會員"),
+        displayName: displayName || "會員",
         dateKey,
         startSlot,
         previousStatus: "pending",
@@ -1332,9 +1324,7 @@ export const testSendMemberStatusTestEmail = onCall(
         ? ((customerSnap.data() as Record<string, unknown>).nickname as string).trim()
         : "";
 
-    const mailLocale = request.data?.mailLocale === "en" ? "en" : "zh-Hant";
-    const displayName =
-      nickRaw || authDisplayName || (mailLocale === "en" ? "Member" : "會員");
+    const displayName = nickRaw || authDisplayName || "會員";
 
     const dateKeyRaw = typeof request.data?.dateKey === "string" ? request.data.dateKey.trim() : "";
     const startSlotRaw = typeof request.data?.startSlot === "string" ? request.data.startSlot.trim() : "";
@@ -1344,7 +1334,6 @@ export const testSendMemberStatusTestEmail = onCall(
     await sendMemberBookingStatusChangedEmail({
       apiKey,
       from,
-      locale: mailLocale === "en" ? "en" : "zh-Hant",
       testMode: true,
       payload: {
         to,
@@ -1495,8 +1484,7 @@ export const sendMembersBroadcastAdmin = onCall(
       );
     }
 
-    const mailLocale: EmailLocale = locale === "en" ? "en" : "zh-Hant";
-    const html = buildBroadcastEmailHtml(body, mailLocale);
+    const html = buildBroadcastEmailHtml(body);
 
     if (dryRun) {
       return {
@@ -1682,8 +1670,7 @@ export const sendMemberDirectEmailAdmin = onCall(
       );
     }
     const from = resendFrom.value().trim() || "Massage預約 <onboarding@resend.dev>";
-    const mailLocale: EmailLocale = locale === "en" ? "en" : "zh-Hant";
-    const html = buildBroadcastEmailHtml(body, mailLocale);
+    const html = buildBroadcastEmailHtml(body);
 
     try {
       await sendBroadcastHtmlEmail({ apiKey, from, to: toEmail, subject, html });
@@ -2153,6 +2140,7 @@ export const notifyMemberBookingStatusChange = onDocumentUpdated(
   async (event) => {
     const change = event.data;
     if (!change) return;
+    const bookingId = typeof event.params?.bookingId === "string" ? event.params.bookingId : "";
     const before = change.before.data() as Record<string, unknown> | undefined;
     const after = change.after.data() as Record<string, unknown> | undefined;
     if (!before || !after) return;
@@ -2191,35 +2179,32 @@ export const notifyMemberBookingStatusChange = onDocumentUpdated(
     const cancelReasonRaw = after.cancelReason;
     const cancelReason =
       nextStatus === "cancelled" && typeof cancelReasonRaw === "string" ? cancelReasonRaw.trim() : undefined;
+    const statusEmailMessage = sanitizeStatusEmailMessage(after.statusEmailMessage);
 
-    const mailLocale = after.notificationLocale === "en" ? "en" : "zh-Hant";
     try {
       await sendMemberBookingStatusChangedEmail({
         apiKey,
         from,
-        locale: mailLocale,
         payload: {
           to,
-          displayName: displayName || (mailLocale === "en" ? "Member" : "會員"),
+          displayName: displayName || "會員",
           dateKey,
           startSlot,
           previousStatus: prevStatus,
           newStatus: nextStatus,
+          statusEmailMessage,
           cancelReason: cancelReason && cancelReason.length > 0 ? cancelReason : undefined,
         },
       });
+      if (bookingId && statusEmailMessage) {
+        await db.collection("bookings").doc(bookingId).update({
+          statusEmailMessage: FieldValue.delete(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
     } catch (e) {
       console.error("notifyMemberBookingStatusChange: send failed", e);
     }
   },
 );
 
-export {
-  exchangeSessionForArcadePoints,
-  getLittleMaryAdminStats,
-  littleMaryHiLoAccount,
-  littleMaryHiLoRoll,
-  littleMarySpin,
-  littleMarySpinAccount,
-  redeemArcadePointsForSession,
-} from "./littleMary";

@@ -199,11 +199,11 @@ export function playSlotCoinRain(
     return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
   };
 
-  const n = 18;
+  const n = 22;
   for (let i = 0; i < n; i++) {
     const useRing = Boolean(coinRingHit && rng() > 0.66);
     const buf = useRing ? coinRingHit : coinMetalThunk ?? coinRingHit;
-    const when = t0 + 0.04 + i * 0.058 + rng() * 0.052;
+    const when = t0 + 0.04 + i * 0.074 + rng() * 0.056;
     const gain = useRing ? 0.12 + rng() * 0.07 : 0.15 + rng() * 0.09;
     const rate = useRing ? 1.06 + rng() * 0.2 : 0.84 + rng() * 0.3;
 

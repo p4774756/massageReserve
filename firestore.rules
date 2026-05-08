@@ -19,6 +19,12 @@ service cloud.firestore {
         || request.resource.data.get('completedAt', null) != null;
     }
 
+    /** 後台随狀態更新寫入、寄信後由 Cloud Function 刪除；僅短字串 */
+    function bookingStatusEmailMessageOk() {
+      let msg = request.resource.data.get('statusEmailMessage', null);
+      return msg == null || (msg is string && msg.size() <= 2000);
+    }
+
     match /admins/{uid} {
       allow read, write: if false;
     }
@@ -30,7 +36,8 @@ service cloud.firestore {
 
       allow update: if isAdmin()
         && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['status', 'updatedAt', 'deletedAt', 'deletedBy', 'memberLastStatus', 'invisible'])
+          .hasOnly(['status', 'updatedAt', 'deletedAt', 'deletedBy', 'memberLastStatus', 'invisible', 'statusEmailMessage'])
+        && bookingStatusEmailMessageOk()
         && (request.resource.data.get('invisible', false) != true
           || resource.data.get('invisible', false) == true
           || bookingTerminalForArchive());

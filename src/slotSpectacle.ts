@@ -199,12 +199,12 @@ const SLOT_CROWN_SVG = `<svg class="slot-spectacle-crown-svg" xmlns="http://www.
   <path fill="#ffd700" stroke="#a67c00" stroke-width="0.6" d="M22 14l1.8 4 4-2.2-1 4.5 4.8 0.6-4.8 1.8 1 4.5-4-2.2-4 2.2 1-4.5-4.8-1.8 4.8-0.6-1-4.5z" transform="translate(56,-2) scale(0.85)"/>
 </svg>`;
 
-/** 跑馬燈旁裝飾龍（AI 產製 PNG，見 public/media/slot-dragon-marquee.png） */
-const SLOT_DRAGON_IMG_SRC = `${import.meta.env.BASE_URL}media/slot-dragon-marquee.png`;
+/** 拉霸標題區旁裝飾龍（PNG：`public/media/slot-dragon-banner.png`） */
+const SLOT_DRAGON_IMG_SRC = `${import.meta.env.BASE_URL}media/slot-dragon-banner.png`;
 /** 機台外框／捲軸內框華麗金屬裝飾（透明中央，見 public/media） */
 const SLOT_INNER_GILT_SRC = `${import.meta.env.BASE_URL}media/slot-inner-gilt-frame.png`;
 
-function appendMarqueeDragon(pairEl: HTMLElement, side: "left" | "right"): void {
+function appendSpectacleDragon(pairEl: HTMLElement, side: "left" | "right"): void {
   const wrap = document.createElement("span");
   wrap.className = `slot-spectacle-dragon slot-spectacle-dragon--${side}`;
   const img = document.createElement("img");
@@ -267,13 +267,13 @@ export function runSlotSpectacle(
     idleCloseBtn.setAttribute("aria-label", t("slot.idleClose", "關閉"));
     idleCloseBtn.innerHTML = '<span class="slot-spectacle-close-x" aria-hidden="true">×</span>';
 
-    const marquee = document.createElement("div");
-    marquee.className = "slot-spectacle-marquee";
+    const titleBanner = document.createElement("div");
+    titleBanner.className = "slot-spectacle-banner";
     const dragonPair = document.createElement("div");
     dragonPair.className = "slot-spectacle-dragon-pair";
     dragonPair.setAttribute("aria-hidden", "true");
-    appendMarqueeDragon(dragonPair, "left");
-    appendMarqueeDragon(dragonPair, "right");
+    appendSpectacleDragon(dragonPair, "left");
+    appendSpectacleDragon(dragonPair, "right");
     const crownWrap = document.createElement("div");
     crownWrap.className = "slot-spectacle-crown-wrap";
     crownWrap.innerHTML = SLOT_CROWN_SVG;
@@ -281,13 +281,13 @@ export function runSlotSpectacle(
     title.id = "slot-spectacle-title";
     title.className = "wheel-spectacle-title slot-spectacle-title";
     title.textContent = t("slot.spectacleTitle", "幸運拉霸");
-    marquee.append(dragonPair, crownWrap, title);
+    titleBanner.append(dragonPair, crownWrap, title);
 
     const tagline = document.createElement("p");
     tagline.className = "slot-spectacle-tagline";
     tagline.textContent = t("slot.tagline", "✦ 試試你的手氣，贏取豐富獎勵！ ✦");
 
-    stageHead.append(idleCloseBtn, marquee, tagline);
+    stageHead.append(idleCloseBtn, titleBanner, tagline);
 
     const hub = document.createElement("div");
     hub.className = "wheel-spectacle-hub slot-spectacle-hub";
@@ -406,8 +406,8 @@ export function runSlotSpectacle(
       const x = 4 + ((i * 29) % 92);
       const sway = (i % 2 === 0 ? 1 : -1) * (18 + ((i * 7) % 42));
       const size = 22 + ((i * 11) % 30);
-      const delay = (i % 10) * 0.055 + Math.floor(i / 10) * 0.12;
-      const duration = 1.05 + ((i * 13) % 36) / 100;
+      const delay = (i % 10) * 0.065 + Math.floor(i / 10) * 0.14;
+      const duration = (1.05 + ((i * 13) % 36) / 100) * 1.45;
       coin.style.setProperty("--coin-x", `${x}%`);
       coin.style.setProperty("--coin-sway", `${sway}px`);
       coin.style.setProperty("--coin-size", `${size}px`);
@@ -552,8 +552,8 @@ export function runSlotSpectacle(
       stripEl.style.transform = `translate3d(0, ${idleOffsetY}px, 0)`;
       stripEl.style.transition = "none";
       reelWindow.append(stripEl);
-      /* 金屬燈框後畫，叠在捲軸上，避免獎項視覺穿出洞緣（見 CSS z-index） */
-      reelFrame.append(reelWindow, reelGilt);
+      /* 金框在上曾要求 PNG 中央透明；AI 產圖常為不透明白底會遮住獎項。改為先畫金框、捲軸視窗叠在上（見 CSS z-index）。 */
+      reelFrame.append(reelGilt, reelWindow);
       reelsRow.append(reelFrame);
 
       renderHubFlanked(hub, t("slot.hubPull", "由右上往左下拉桿開始開獎"));
@@ -707,6 +707,8 @@ export function runSlotSpectacle(
           closeCurtainsThen(() => resolve(data));
         };
         primaryBtn.onclick = dismiss;
+        idleCloseBtn.removeAttribute("disabled");
+        idleCloseBtn.onclick = dismiss;
         primaryBtn.focus();
       };
 

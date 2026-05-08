@@ -1,108 +1,8 @@
-export type ServerLocale = "zh-Hant" | "en";
+export type ServerLocale = "zh-Hant";
 
-export function parseLocale(data: unknown): ServerLocale {
-  if (data && typeof data === "object" && "locale" in data) {
-    const v = (data as { locale?: unknown }).locale;
-    if (v === "en") return "en";
-  }
+export function parseLocale(_data?: unknown): ServerLocale {
   return "zh-Hant";
 }
-
-const EN: Record<string, string> = {
-  "admin.only": "Admins only",
-  "member.verifyEmailFirst":
-    "Verify your email (check spam/junk folder too) before using member features.",
-  "topup.needId": "Enter member email or UID.",
-  "topup.emailNotFound": "No member account found for this email.",
-  "avail.badDateKey": "dateKey must be YYYY-MM-DD",
-  "avail.invalidDate": "Invalid date",
-  "avail.beyondWindow": "Availability is only through the Sunday of next calendar week",
-  "avail.weekdaysOnly": "Only Monday–Friday can be queried",
-  "booking.pickPayment": "Select a payment method",
-  "booking.membersOnly":
-    "Bookings are for registered members only. Guest booking is no longer available — please sign up and sign in.",
-  "booking.needMemberLogin": "You must be signed in as a member to book. Use “Member sign-in” to register or log in.",
-  "booking.memberNeedLogin": "Member payment requires sign-in",
-  "booking.nameRequired": "Enter your name (max 80 characters)",
-  "booking.noteTooLong": "Notes are too long",
-  "booking.badDateFormat": "Invalid date format",
-  "slot.invalid_dateKey": "Invalid date",
-  "slot.past_date": "Cannot book dates in the past",
-  "slot.past_slot": "That start time has passed — pick a later slot",
-  "slot.beyond_booking_window": "Bookings only through the Sunday of next week.",
-  "slot.not_weekday": "Only Monday–Friday",
-  "slot.invalid_slot": "Start time is outside bookable hours",
-  "slot.ends_after_daily_close": "This start would end after the daily service end (17:00)",
-  "slot.generic": "Cannot complete booking",
-  "booking.blockedPrefix": "This slot is closed: ",
-  "booking.blockedGeneric": "This slot is closed for booking",
-  "booking.dayFull": "This day is full (max {{max}} bookings)",
-  "booking.weekFull": "This work week is full (max {{max}} bookings)",
-  "booking.slotTaken": "This slot is already booked",
-  "booking.walletShort": "Insufficient wallet — switch to cash or top up first",
-  "booking.sessionShort": "Not enough prepaid sessions — use cash, drink option, or top up sessions first",
-  "topup.sessionsPositive": "Top-up session count must be a positive integer",
-  "redeem.pointsShort": "Not enough points to redeem yet",
-  "booking.createFailed": "Booking failed — try again later",
-  "auth.needLogin": "Please sign in",
-  "topup.amountPositive": "Top-up amount must be a positive integer",
-  "grantDraw.deltaRange": "Grant count must be an integer from 1 to {{max}}.",
-  "grantDraw.noteTooLong": "Note must be at most 200 characters.",
-  "grantDraw.defaultNote": "Admin granted wheel spin chances",
-  "adjustSessions.deltaRange": "Adjustment must be a non-zero integer with absolute value at most {{max}}.",
-  "adjustSessions.noteTooShort": "Note must be at least {{min}} characters for audit.",
-  "adjustSessions.noteTooLong": "Note must be at most {{max}} characters.",
-  "adjustSessions.insufficient": "Resulting bookable session count cannot be negative. Available to deduct: {{have}}; requested change: {{delta}}.",
-  "member.emailRequired": "Email is required",
-  "member.passwordMin": "Password must be at least 6 characters",
-  "member.createExists": "Could not create member — email may already exist",
-  "admin.customerIdRequired": "customerId is required (member UID or email)",
-  "booking.idRequired": "bookingId is required",
-  "booking.notFound": "Booking not found",
-  "booking.alreadyDone": "This booking is already completed",
-  "booking.badStateComplete": "Current status cannot be completed",
-  "cancel.notYours": "You can only cancel your own booking, or you must be an admin",
-  "cancel.alreadyCancelled": "This booking is already cancelled",
-  "cancel.deleted": "This booking is deleted",
-  "cancel.doneNoDirect": "Completed bookings cannot be cancelled this way",
-  "wheel.noPrizes": "No wheel prizes are available",
-  "wheel.noChances": "Not enough spin chances",
-  "support.needLoginOrGuest": "Sign in or start guest chat to message support",
-  "support.noThread": "No conversation history yet",
-  "support.needMessage": "Enter a message",
-  "support.messageTooLong": "Message is too long (max {{max}} characters)",
-  "support.threadClosed": "This chat is closed — tap “Resume chat” first",
-  "support.needCustomerId": "customerId is missing",
-  "support.needReply": "Enter a reply",
-  "support.threadMissing": "Conversation not found",
-  "testStatusEmail.guest": "Guest bookings do not receive member status emails.",
-  "testStatusEmail.noCustomer": "This booking has no linked member (customerId).",
-  "testStatusEmail.noMemberEmail": "The member account has no email in Firebase Auth.",
-  "testStatusEmail.noResendKey": "RESEND_API_KEY is not configured for this project.",
-  "testStatusEmail.memberNotFound": "That member was not found or Firebase Auth could not read the user.",
-  "testStatusEmail.resendOnboardingFromWarning":
-    "Sender is still Resend’s test address (onboarding@resend.dev). In this mode, mail to arbitrary member inboxes often never arrives, while “new booking” mail to your configured owner address can still work. Verify your own domain in Resend and set Cloud Functions param RESEND_FROM to an address on that domain so members receive status and test emails.",
-  "broadcast.subjectRequired": "Subject is required (1–200 characters, not only whitespace).",
-  "broadcast.bodyTooShort": "Body must be at least {{min}} characters.",
-  "broadcast.bodyTooLong": "Body must be at most {{max}} characters.",
-  "broadcast.needConfirm": "To send for real, check the confirmation box, or use preview (dry run) first.",
-  "broadcast.noRecipients": "No recipients match the filters (e.g. verified-only while no verified emails).",
-  "broadcast.tooManyRecipients": "Recipient count ({{n}}) exceeds the per-run limit of {{max}}.",
-  "directEmail.targetRequired": "Enter the member’s email or UID.",
-  "directEmail.userNotFound": "No member found for that email or UID.",
-  "directEmail.lookupFail": "Could not resolve that member identifier.",
-  "directEmail.accountDisabled": "That account is disabled — cannot send.",
-  "directEmail.noEmail": "That account has no email address.",
-  "directEmail.notVerified": "That member’s email is not verified. This action only sends to verified addresses.",
-  "directEmail.sendFailed": "Send failed: {{detail}}",
-  "lm.badBets":
-    "Bets must be 8 non-negative integers; total 1–8000; at most 999 per line.",
-  "lm.badStake": "Hi-lo stake must be an integer from 1 to 9999.",
-  "lm.arcadeShort": "Not enough arcade points for that bet.",
-  "lm.arcadeHiloUnderflow": "Not enough arcade points to settle hi-lo.",
-  "lm.noSessionToExchange": "No prepaid sessions left to exchange for arcade points.",
-  "lm.arcadeRedeemShort": "Not enough arcade points to redeem a session.",
-};
 
 function applyVars(s: string, vars?: Record<string, string | number>): string {
   if (!vars) return s;
@@ -113,11 +13,12 @@ function applyVars(s: string, vars?: Record<string, string | number>): string {
 }
 
 export function st(
-  locale: ServerLocale,
-  key: string,
+  _locale: ServerLocale,
+  _key: string,
   zh: string,
   vars?: Record<string, string | number>,
 ): string {
-  const raw = locale === "en" ? (EN[key] ?? zh) : zh;
-  return applyVars(raw, vars);
+  void _locale;
+  void _key;
+  return applyVars(zh, vars);
 }

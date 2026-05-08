@@ -43,21 +43,11 @@ import {
   topupWalletCall,
   adjustSessionCreditsAdminCall,
   grantDrawChancesAdminCall,
-  getLittleMaryAdminStatsCall,
 } from "./firebase";
 import { createVisitorStatsLine } from "./visitorStats";
 import { allStartSlots } from "./slots";
 import { runSlotSpectacle } from "./slotSpectacle";
-import {
-  clampLedSpeed,
-  createLedMarquee,
-  LED_SPEED_MAX,
-  LED_SPEED_MIN,
-  type LedMarqueeHandle,
-} from "./ledMarquee";
-import { getLocale, initI18n, intlLocaleTag, localeApiParam, setLocale, t } from "./i18n";
-import { mountArcadeSessionExchange, mountBookTabLittleMary } from "./bookTabLittleMary";
-
+import { initI18n, intlLocaleTag, localeApiParam, t } from "./i18n";
 type Booking = {
   id: string;
   displayName: string;
@@ -138,8 +128,6 @@ function paintMemberWalletSummary(
     sessions: number;
     points: number;
     per: number;
-    arcade: number;
-    perA: number;
     chances: number;
     legacy: string;
   },
@@ -156,12 +144,6 @@ function paintMemberWalletSummary(
       t("member.walletItemWheel", "輪盤點：{{pts}}／滿 {{per}} 點可換 1 次預約", {
         pts: opts.points,
         per: opts.per,
-      }),
-    ]),
-    el("li", {}, [
-      t("member.walletItemArcade", "小瑪莉：{{pts}} 點（{{perA}} 點可換 1 次預約）", {
-        pts: opts.arcade,
-        perA: opts.perA,
       }),
     ]),
     el("li", {}, [t("member.walletItemDraw", "可拉霸開獎：{{n}} 次", { n: opts.chances })]),
@@ -290,10 +272,27 @@ function isStartSlotInPastForTaipeiToday(dateKey: string, startSlot: string): bo
   return Number.isFinite(t) && t < Date.now();
 }
 
+function formatWhenOpts(): Intl.DateTimeFormatOptions {
+  return {
+    timeZone: "Asia/Taipei",
+    weekday: "short",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric",
+  };
+}
+
 function formatWhen(b: Booking): string {
   if (b.startAt?.seconds) {
     const d = new Date(b.startAt.seconds * 1000);
-    return d.toLocaleString(intlLocaleTag(), { timeZone: "Asia/Taipei" });
+    return d.toLocaleString(intlLocaleTag(), formatWhenOpts());
+  }
+  const ms = slotStartInstantMsTaipei(b.dateKey, b.startSlot);
+  if (Number.isFinite(ms)) {
+    return new Date(ms).toLocaleString(intlLocaleTag(), formatWhenOpts());
   }
   return `${b.dateKey} ${b.startSlot}`;
 }
@@ -336,6 +335,39 @@ function bookingIsDoneForAdmin(b: Pick<Booking, "status" | "completedAt">): bool
 
 function bookingIsCancelledForAdmin(status: unknown): boolean {
   return bookingStatusNorm(status) === "cancelled";
+}
+
+/** 後台狀態下拉：與 option value（pending／confirmed／done）對齊，避免大小寫／空白導致無匹配 option、畫面卡在「待確認」 */
+function adminSelectableBookingStatus(status: unknown): "pending" | "confirmed" | "done" {
+  const n = bookingStatusNorm(status);
+  if (n === "confirmed" || n === "done") return n;
+  return "pending";
+}
+
+function populateAdminBookingStatusSelect(sel: HTMLSelectElement, status: unknown): void {
+  sel.replaceChildren();
+  for (const opt of getAdminStatusSelectOptions()) {
+    sel.append(el("option", { value: opt.value }, [opt.label]));
+  }
+  sel.value = adminSelectableBookingStatus(status);
+}
+
+function adminBookingStatusUpdateError(e: unknown): string {
+  if (e && typeof e === "object" && "code" in e && "message" in e) {
+    const code = (e as { code?: unknown }).code;
+    const msg = (e as { message?: unknown }).message;
+    if (typeof code === "string" && typeof msg === "string" && msg.length > 0) {
+      const base = `${code}: ${msg}`;
+      if (code === "permission-denied") {
+        return `${base} ${t(
+          "admin.status.permissionDeniedRulesHint",
+          "（若已填寫信件附言，請確認已部署的 Firestore 規則允許欄位 statusEmailMessage。）",
+        )}`;
+      }
+      return base;
+    }
+  }
+  return e instanceof Error ? e.message : t("admin.status.updateFail", "更新失敗（你是否已加入 admins 集合？）");
 }
 
 /** 後台預約表：是否為會員預約（是／否） */
@@ -488,8 +520,12 @@ function showAdminOptionalReasonModal(args: {
   reasonLabel: string;
   placeholder: string;
   confirmText: string;
+  maxLength?: number;
+  textareaRows?: number;
 }): Promise<string | null> {
   const { title, summaryLines, reasonLabel, placeholder, confirmText } = args;
+  const maxLength = args.maxLength ?? 500;
+  const textareaRows = args.textareaRows ?? 4;
   return new Promise((resolve) => {
     const overlay = el("div", { class: "modal-overlay" });
     const dialog = el("div", { class: "modal-card" });
@@ -499,8 +535,8 @@ function showAdminOptionalReasonModal(args: {
     const heading = el("h3", { id: "admin-reason-modal-title" }, [title]);
     const body = el("pre", { class: "modal-message" }, [summaryLines]);
     const reasonInput = el("textarea", {
-      maxLength: 500,
-      rows: 4,
+      maxLength,
+      rows: textareaRows,
       placeholder,
     });
     reasonInput.setAttribute("aria-label", reasonLabel);
@@ -510,6 +546,9 @@ function showAdminOptionalReasonModal(args: {
     const actions = el("div", { class: "modal-actions" }, [dismissBtn, confirmBtn]);
     dialog.append(heading, body, reasonField, actions);
     overlay.append(dialog);
+    dialog.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+    });
 
     const finish = (reason: string | null) => {
       document.removeEventListener("keydown", onKeyDown);
@@ -544,6 +583,41 @@ function showAdminCancelBookingModal(summaryLines: string): Promise<string | nul
     reasonLabel: t("admin.cancelBooking.reasonLabel", "取消原因"),
     placeholder: t("admin.cancelBooking.reasonPlaceholder", "取消原因（選填，可不填）"),
     confirmText: t("admin.cancelBooking.confirm", "確認取消"),
+  });
+}
+
+/** 與後端寄信條件一致：會員預約（非訪客 mode、有 customerId） */
+function memberBookingGetsStatusEmail(b: Pick<Booking, "bookingMode" | "customerId">): boolean {
+  const mode = b.bookingMode;
+  if (mode === "guest_cash" || mode === "guest_beverage") return false;
+  const cid = typeof b.customerId === "string" ? b.customerId.trim() : "";
+  return cid.length > 0;
+}
+
+function showAdminBookingStatusEmailNoteModal(args: {
+  summaryLines: string;
+  prevStatusKey: string;
+  nextStatusKey: string;
+}): Promise<string | null> {
+  const prevLabel = bookingStatusLabel(args.prevStatusKey);
+  const nextLabel = bookingStatusLabel(args.nextStatusKey);
+  const intro = t(
+    "admin.statusEmail.intro",
+    "將寄發通知信給會員。以下為預約摘要；可選填要一併寫入信件的留言。",
+  );
+  const statusLine = t("admin.statusEmail.statusLine", "狀態：{{prev}} → {{next}}", {
+    prev: prevLabel,
+    next: nextLabel,
+  });
+  const fullSummary = [intro, "", args.summaryLines, "", statusLine].join("\n");
+  return showAdminOptionalReasonModal({
+    title: t("admin.statusEmail.title", "更新預約狀態並通知會員"),
+    summaryLines: fullSummary,
+    reasonLabel: t("admin.statusEmail.noteLabel", "信件附言（選填）"),
+    placeholder: t("admin.statusEmail.notePlaceholder", "會一併顯示在通知信中給會員（可不填）"),
+    confirmText: t("admin.statusEmail.confirm", "確認更新"),
+    maxLength: 2000,
+    textareaRows: 5,
   });
 }
 
@@ -595,9 +669,6 @@ function render() {
   /** 會員中心關閉時將輪盤區塊移回隱藏 holder（於下方建構後賦值） */
   let parkMemberHubGames: () => void = () => {};
   let memberHubGamesRoot: HTMLElement | null = null;
-  /** 會員中心 modal 內「按摩次數 ↔ 遊戲點」掛載：關閉 overlay 時 dispose，refreshWalletStatus 時 sync */
-  let activeMemberArcadeExchangeDispose: (() => void) | null = null;
-  let activeMemberArcadeExchangeSync: (() => Promise<void>) | null = null;
   /** 會員中心 modal 內錢包摘要節點（勿用 cloneNode，須與 `walletStatus` 同步更新） */
   let memberModalWalletMirror: HTMLElement | null = null;
 
@@ -612,7 +683,7 @@ function render() {
   const titleDesc = el("p", {}, [
     t(
       "home.subtitle",
-      "週一至週五 · 開始時間 15 分鐘一格 · 單次服務約15~50分鐘, 看情況. · 午休 11:45–13:15 不開放 · 最晚 16:30 開始、17:00 前結束",
+      "週一至週五 · 20 分鐘一格、每格 50 元 · 延長以同單位計 · 每工作週有名額上限（見下方規則）· 現場臨時預約視當日狀況 · 午休 11:45–13:15 不開放 · 最晚 16:40 開始、17:00 前結束",
     ),
   ]);
   const titleGuestHint = el("p", { class: "page-head-guest-hint" }, [
@@ -650,23 +721,9 @@ function render() {
     },
     [headSessionLine1, headSessionLine2],
   );
-  const localeField = el("label", { class: "locale-switch", htmlFor: "site-locale-select" }, [
-    t("locale.fieldLabel", "介面語言"),
-  ]);
-  const localeSelect = el("select", { id: "site-locale-select", class: "locale-select" });
-  localeSelect.append(
-    el("option", { value: "zh-Hant" }, [t("locale.option.zh", "繁體中文")]),
-    el("option", { value: "en" }, [t("locale.option.en", "English")]),
-  );
-  localeSelect.value = getLocale();
-  localeSelect.addEventListener("change", () => {
-    const v = localeSelect.value === "en" ? "en" : "zh-Hant";
-    setLocale(v);
-  });
-  const headLocale = el("div", { class: "head-locale" }, [localeField, localeSelect]);
   const headSession = el("div", { class: "head-session" }, [headSessionStatus, headMemberActions]);
-  const headToolbarAside = el("div", { class: "head-toolbar-aside" }, [headLocale, headSession]);
-  /** 標題與語系／會員同一列；極窄寬時工具列可換行 */
+  const headToolbarAside = el("div", { class: "head-toolbar-aside" }, [headSession]);
+  /** 標題與會員同一列；極窄寬時工具列可換行 */
   const pageHeadTopRow = el("div", { class: "page-head-top-row" }, [titleHeading, headToolbarAside]);
   const pageHeadBody = el("div", { class: "page-head-body" }, [pageHeadTopRow, titleTextCol]);
 
@@ -682,69 +739,6 @@ function render() {
   const shellStage = el("div", { class: "shell-stage" });
   shellStage.append(shell);
   root.append(shellStage);
-
-  const announcementBox = el("div", { class: "marquee marquee-text", hidden: true });
-  const ledHost = el("div", { class: "marquee-text-host" });
-  announcementBox.append(ledHost);
-  shell.prepend(announcementBox);
-  let ledMarquee: LedMarqueeHandle | null = null;
-
-  function disposeLedMarquee() {
-    ledMarquee?.destroy();
-    ledMarquee = null;
-  }
-
-  let ledMarqueeOn = false;
-
-  function parseMarqueeSettings(data: unknown): { text: string; enabled: boolean } {
-    const o = data as { text?: unknown; enabled?: unknown } | undefined;
-    const text = typeof o?.text === "string" ? o.text.trim() : "";
-    const enabled = typeof o?.enabled === "boolean" ? o.enabled : false;
-    return { text, enabled };
-  }
-
-  function syncMarqueeVisibilityForTab() {
-    if (tab !== "book") {
-      announcementBox.hidden = true;
-      return;
-    }
-    announcementBox.hidden = !ledMarqueeOn;
-  }
-
-  onSnapshot(
-    doc(db, "siteSettings", "marqueeLed"),
-    (snap) => {
-      if (tab !== "book") {
-        announcementBox.hidden = true;
-        return;
-      }
-      const raw = snap.data() as
-        | { text?: unknown; enabled?: unknown; speed?: unknown }
-        | undefined;
-      const { text, enabled } = parseMarqueeSettings(raw);
-      const speed = clampLedSpeed(raw?.speed);
-      if (!enabled || !text) {
-        ledMarqueeOn = false;
-        disposeLedMarquee();
-        syncMarqueeVisibilityForTab();
-        return;
-      }
-      ledMarqueeOn = true;
-      if (!ledMarquee) {
-        ledMarquee = createLedMarquee(ledHost, { speed });
-      } else {
-        ledMarquee.setSpeed(speed);
-      }
-      ledMarquee.setText(text);
-      syncMarqueeVisibilityForTab();
-    },
-    () => {
-      ledMarqueeOn = false;
-      disposeLedMarquee();
-      announcementBox.hidden = true;
-      syncMarqueeVisibilityForTab();
-    },
-  );
 
   const appVersionFooter = el("footer", { class: "app-version-footer" }, []);
   appVersionFooter.textContent = t("footer.version", "版號 {{ver}} · 最後更新 {{date}}（台北）", {
@@ -782,10 +776,10 @@ function render() {
     { class: "grid" },
     [
       el("label", { class: "field" }, [
-        t("field.startSlot", "開始時間（15 分鐘一格）"),
+        t("field.startSlot", "開始時間（20 分鐘一格）"),
         slotSelect,
         el("span", { class: "hint" }, [
-          t("field.startSlotHint", "開始時間為 15 分鐘一格；單次服務約15~50分鐘, 看情況."),
+          t("field.startSlotHint", "開始時間為 20 分鐘一格；每格 50 元，延長亦以同單位計。現場臨時加鐘視當日狀況。"),
         ]),
       ]),
     ],
@@ -845,9 +839,6 @@ function render() {
   let pointsPerMassageSetting = 10;
   let sessionPriceNtdSetting = 50;
   let drawChances = 0;
-  let arcadePointsCount = 0;
-  let arcadePointsPerMassageSetting = 100;
-
   const redeemPointsStatus = el("div", { class: "status-line", hidden: true });
   const redeemPointsBtn = el("button", { type: "button", class: "ghost" }, [
     t("member.redeemPointsBtn", "用 {{per}} 點換 1 次按摩", { per: pointsPerMassageSetting }),
@@ -1410,9 +1401,6 @@ function render() {
     const closeBtn = el("button", { class: "ghost", type: "button" }, [t("modal.close", "關閉")]);
     const dismissOverlay = () => {
       parkMemberHubGames();
-      activeMemberArcadeExchangeDispose?.();
-      activeMemberArcadeExchangeDispose = null;
-      activeMemberArcadeExchangeSync = null;
       memberModalWalletMirror = null;
       overlay.remove();
     };
@@ -1502,16 +1490,6 @@ function render() {
     const modalWalletHost = el("div", { class: "status-line" });
     memberModalWalletMirror = modalWalletHost;
     modalBody.push(modalWalletHost);
-    if (user.emailVerified) {
-      const arcadeExHost = el("div", { class: "member-modal__arcade-exchange" });
-      const { dispose, sync } = mountArcadeSessionExchange(arcadeExHost, {
-        onMutated: () => refreshWalletStatus({ keepWalletSummaryDuringFetch: true }),
-      });
-      activeMemberArcadeExchangeDispose = dispose;
-      activeMemberArcadeExchangeSync = sync;
-      void sync();
-      modalBody.push(arcadeExHost);
-    }
     if (user.emailVerified && memberHubGamesRoot) {
       dialog.classList.add("member-modal--hub");
       const gamesShell = el("div", { class: "member-modal__games" });
@@ -1525,9 +1503,6 @@ function render() {
     overlay.addEventListener("click", (ev) => {
       if (ev.target === overlay) {
         parkMemberHubGames();
-        activeMemberArcadeExchangeDispose?.();
-        activeMemberArcadeExchangeDispose = null;
-        activeMemberArcadeExchangeSync = null;
         memberModalWalletMirror = null;
         overlay.remove();
       }
@@ -1538,9 +1513,6 @@ function render() {
 
   function cleanupMemberModalResources() {
     parkMemberHubGames();
-    activeMemberArcadeExchangeDispose?.();
-    activeMemberArcadeExchangeDispose = null;
-    activeMemberArcadeExchangeSync = null;
     memberModalWalletMirror = null;
   }
 
@@ -1644,9 +1616,6 @@ function render() {
     keepWalletSummaryDuringFetch?: boolean;
   };
 
-  /** 由 mountBookTabLittleMary 註冊：錢包刷新後同步小瑪莉機台「總分」與伺服器遊戲點（含會員中心兌換） */
-  let syncLittleMaryArcadeFromWallet: (() => Promise<void>) | null = null;
-
   async function refreshWalletStatus(opts?: RefreshWalletStatusOpts) {
     try {
       const user = auth.currentUser;
@@ -1723,26 +1692,20 @@ function render() {
           walletBalance: number;
           sessionCredits: number;
           wheelPoints: number;
-          arcadePoints?: number;
           drawChances: number;
           nickname?: string;
           sessionPriceNtd?: number;
           pointsPerMassage?: number;
-          arcadePointsPerMassage?: number;
         };
         walletBalance = typeof data.walletBalance === "number" ? data.walletBalance : 0;
         sessionCreditsCount = typeof data.sessionCredits === "number" ? data.sessionCredits : 0;
         wheelPointsCount = typeof data.wheelPoints === "number" ? data.wheelPoints : 0;
-        arcadePointsCount = typeof data.arcadePoints === "number" ? data.arcadePoints : 0;
         drawChances = typeof data.drawChances === "number" ? data.drawChances : 0;
         if (typeof data.sessionPriceNtd === "number" && Number.isFinite(data.sessionPriceNtd)) {
           sessionPriceNtdSetting = Math.max(1, Math.round(data.sessionPriceNtd));
         }
         if (typeof data.pointsPerMassage === "number" && Number.isFinite(data.pointsPerMassage)) {
           pointsPerMassageSetting = Math.max(2, Math.round(data.pointsPerMassage));
-        }
-        if (typeof data.arcadePointsPerMassage === "number" && Number.isFinite(data.arcadePointsPerMassage)) {
-          arcadePointsPerMassageSetting = Math.max(1, Math.round(data.arcadePointsPerMassage));
         }
         refillBookingModes(isVerifiedMember());
         const nickFromDb =
@@ -1760,8 +1723,6 @@ function render() {
           sessions: sessionCreditsCount,
           points: wheelPointsCount,
           per: pointsPerMassageSetting,
-          arcade: arcadePointsCount,
-          perA: arcadePointsPerMassageSetting,
           chances: drawChances,
           legacy: legacyLine,
         });
@@ -1776,7 +1737,6 @@ function render() {
         walletBalance = 0;
         sessionCreditsCount = 0;
         wheelPointsCount = 0;
-        arcadePointsCount = 0;
         drawChances = 0;
         memberExtrasWrap.hidden = true;
         setMemberWalletLinePlain(errorMessage(e), "status-line error");
@@ -1787,9 +1747,7 @@ function render() {
         syncPageHeadSession();
       }
     } finally {
-      await syncLittleMaryArcadeFromWallet?.();
       syncBookMyBookingsTabVisibility();
-      void activeMemberArcadeExchangeSync?.();
     }
   }
 
@@ -1995,15 +1953,12 @@ function render() {
     try {
       const fn = getBookingPricingCall();
       const res = await fn({ ...localeApiParam() });
-      const d = res.data as { sessionPriceNtd?: number; pointsPerMassage?: number; arcadePointsPerMassage?: number };
+      const d = res.data as { sessionPriceNtd?: number; pointsPerMassage?: number };
       if (typeof d.sessionPriceNtd === "number" && Number.isFinite(d.sessionPriceNtd)) {
         sessionPriceNtdSetting = Math.max(1, Math.round(d.sessionPriceNtd));
       }
       if (typeof d.pointsPerMassage === "number" && Number.isFinite(d.pointsPerMassage)) {
         pointsPerMassageSetting = Math.max(2, Math.round(d.pointsPerMassage));
-      }
-      if (typeof d.arcadePointsPerMassage === "number" && Number.isFinite(d.arcadePointsPerMassage)) {
-        arcadePointsPerMassageSetting = Math.max(1, Math.round(d.arcadePointsPerMassage));
       }
     } catch {
       /* 使用預設 */
@@ -2244,10 +2199,23 @@ function render() {
       "拉霸規則：預約有綁定會員，且後台將該筆標為「已完成」後，可獲得 1 次開獎機會（同一筆僅發一次）。進入拉霸畫面後須由右上往左下拉桿才會消耗 1 次並向伺服器開獎；獎項由後台依權重隨機抽出（點數、加抽次數、銘謝惠顧等）。點數可累積，滿門檻可手動兌換 1 次預約次數。須完成 Email 驗證才可開獎。",
     ),
   ]);
-  const wheelRulesDetails = el("details", { class: "member-hub-wheel-card__details" });
+  const wheelRulesDetails = el("details", {
+    class: "member-hub-wheel-card__details member-hub-wheel-card__details--hint",
+  });
   wheelRulesDetails.append(
     el("summary", { class: "member-hub-wheel-card__summary" }, [
-      t("member.wheel.rulesSummary", "拉霸規則說明"),
+      el("span", { class: "member-hub-wheel-card__hint-badge", ariaHidden: "true" }, [
+        t("member.wheel.rulesHintBadge", "提示"),
+      ]),
+      el("span", { class: "member-hub-wheel-card__summary-copy" }, [
+        el("span", { class: "member-hub-wheel-card__summary-title" }, [
+          t("member.wheel.rulesSummary", "拉霸規則說明"),
+        ]),
+        el("span", { class: "member-hub-wheel-card__summary-sub" }, [
+          t("member.wheel.rulesTapExpand", "點開可查看完整說明"),
+        ]),
+      ]),
+      el("span", { class: "member-hub-wheel-card__chevron", ariaHidden: "true" }, ["▾"]),
     ]),
     wheelRulesHint,
   );
@@ -2298,14 +2266,14 @@ function render() {
     }
   });
 
-  let bookSubTab: "book" | "mybookings" | "littleMary" = "book";
+  let bookSubTab: "book" | "mybookings" = "book";
 
   const bookTabList = el("div", { class: "book-tabs", role: "tablist" });
   bookTabList.setAttribute(
     "aria-label",
     t(
       "book.tabsAria",
-      "預約按摩、我的預約；「我的預約」於登入會員後顯示。小瑪莉僅管理員可見；抽輪盤與遊戲點兌換請開啟會員中心。",
+      "預約按摩、我的預約；「我的預約」於登入會員後顯示。抽拉霸請開啟會員中心。",
     ),
   );
   const tabBook = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-book" }, [
@@ -2314,21 +2282,14 @@ function render() {
   const tabMyBookings = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-my-bookings" }, [
     t("book.tab.myBookings", "我的預約"),
   ]);
-  const tabLittleMary = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-little-mary" }, [
-    t("book.tab.littleMary", "小瑪莉"),
-  ]);
   tabBook.setAttribute("aria-controls", "book-tab-panel-book");
   tabMyBookings.setAttribute("aria-controls", "book-tab-panel-my-bookings");
-  tabLittleMary.setAttribute("aria-controls", "book-tab-panel-little-mary");
   tabBook.setAttribute("aria-selected", "true");
   tabMyBookings.setAttribute("aria-selected", "false");
-  tabLittleMary.setAttribute("aria-selected", "false");
   tabBook.tabIndex = 0;
   tabMyBookings.tabIndex = -1;
-  tabLittleMary.tabIndex = -1;
   tabMyBookings.hidden = true;
-  tabLittleMary.hidden = true;
-  bookTabList.append(tabBook, tabMyBookings, tabLittleMary);
+  bookTabList.append(tabBook, tabMyBookings);
 
   const bookPanelBook = el("div", {
     class: "book-tab-panel",
@@ -2399,49 +2360,6 @@ function render() {
   bookPanelMyBookings.setAttribute("aria-labelledby", "book-tab-my-bookings");
   bookPanelMyBookings.append(myBookingsSection);
 
-  const bookPanelLittleMary = el("div", {
-    class: "book-tab-panel book-tab-panel--little-mary",
-    id: "book-tab-panel-little-mary",
-    role: "tabpanel",
-    hidden: true,
-  });
-  bookPanelLittleMary.setAttribute("aria-labelledby", "book-tab-little-mary");
-  const littleMaryMount = el("div", { class: "book-tab-lm-mount" });
-  littleMaryMount.setAttribute("aria-hidden", "true");
-  const littleMaryRules = el("details", { class: "book-tab-lm-rules" }, [
-    el("summary", { class: "book-tab-lm-rules__summary" }, [
-      t("book.littleMary.rulesTitle", "規則"),
-    ]),
-    el("div", { class: "book-tab-lm-rules__scroll" }, [
-      el("p", { class: "book-tab-lm-rules__body", lang: getLocale() === "en" ? "en" : "zh-Hant" }, [
-        t(
-          "book.littleMary.rules",
-          "試玩分數開局；點圖示押注每次從「分數」扣 1 至該線；「+1」為八條線同時各加 1（一次扣 8 分），不足 8 分時無法使用。八種倍率：櫻桃 2×、檸檬 12×、橘子 10×、西瓜 20×、鈴鐺 20×、星星 30×、７７ 40×、BAR 50×。外圈 24 格依圖示出現次數配置（櫻桃 5、檸檬 4、橘子 4、西瓜 3、鈴鐺 3、星星 2、７７ 2、BAR 1）。須先押注才能按「開始」。外圈停格非每格均等：倍率愈高者開出機率愈低（與倍率大致成反比加權），八線均押時長期仍偏向莊家。若網站已設定 Firebase 並部署 Cloud Functions（littleMarySpin／littleMaryHiLoRoll），停格與比大小開點由伺服器亂數決定；未設定時於瀏覽器試玩亂數（同加權規則）。跑燈動畫會停至該格；若停在與你押注相同的圖示，得分 += 該線押注 × 倍率。中獎後會彈出「比大小」視窗：再開 1～12 點，大＝7～12、小＝1～6；猜中再加分、猜錯扣回該筆；「跳過」或 Esc 略過；開點後須按「確定」關閉。按「得分轉分數」亦會關閉視窗並略過比大小。每局結束押注歸零；已押未中不退，「-1」為八條線各退 1（該線有押才退），可重複按以退回押注。「得分轉分數」把得分併回試玩分數。試玩分數與畫面在前端；開獎數值可由伺服器產生（見上）。無真實金流。",
-        ),
-      ]),
-    ]),
-  ]);
-  littleMaryRules.setAttribute("aria-label", t("book.littleMary.rulesAria", "小瑪莉試玩規則"));
-
-  bookPanelLittleMary.append(
-    el("div", { class: "book-tab-lm-intro-wrap" }, [
-      el("p", { class: "hint book-tab-lm-intro" }, [
-        t(
-          "book.littleMary.hint",
-          "試玩跑燈：點圖示押注後按「開始」（空白鍵同）。點「規則」可展開／收合全文。已設定 Firebase 並部署 Functions 時由伺服器開獎；否則本機試玩。無真實金流。",
-        ),
-      ]),
-      littleMaryRules,
-    ]),
-    littleMaryMount,
-  );
-  {
-    const lmTab = mountBookTabLittleMary(littleMaryMount, {
-      onArcadeBalanceMutated: () => refreshWalletStatus({ keepWalletSummaryDuringFetch: true }),
-    });
-    syncLittleMaryArcadeFromWallet = lmTab.syncArcadeFromServer;
-  }
-
   memberHubGamesRoot = el("div", { class: "member-hub-games member-hub-games--wheel-only" });
   memberHubGamesRoot.append(memberHubPanelWheel);
   memberHubGamesHolder.append(memberHubGamesRoot);
@@ -2450,21 +2368,17 @@ function render() {
     memberHubGamesHolder.append(memberHubGamesRoot!);
   };
 
-  function setBookSubTab(which: "book" | "mybookings" | "littleMary") {
+  function setBookSubTab(which: "book" | "mybookings") {
     bookSubTab = which;
     tabBook.setAttribute("aria-selected", String(which === "book"));
     tabMyBookings.setAttribute("aria-selected", String(which === "mybookings"));
-    tabLittleMary.setAttribute("aria-selected", String(which === "littleMary"));
     tabBook.tabIndex = which === "book" ? 0 : -1;
     tabMyBookings.tabIndex = which === "mybookings" ? 0 : -1;
-    tabLittleMary.tabIndex = which === "littleMary" ? 0 : -1;
     bookPanelBook.hidden = which !== "book";
     bookPanelMyBookings.hidden = which !== "mybookings";
-    bookPanelLittleMary.hidden = which !== "littleMary";
   }
   tabBook.addEventListener("click", () => setBookSubTab("book"));
   tabMyBookings.addEventListener("click", () => setBookSubTab("mybookings"));
-  tabLittleMary.addEventListener("click", () => setBookSubTab("littleMary"));
 
   syncBookMyBookingsTabVisibility = () => {
     const u = auth.currentUser;
@@ -2478,14 +2392,13 @@ function render() {
   };
   syncBookMyBookingsTabVisibility();
 
-  panelBook.append(bookTabList, bookPanelBook, bookPanelMyBookings, bookPanelLittleMary);
+  panelBook.append(bookTabList, bookPanelBook, bookPanelMyBookings);
 
   /** --- 管理後台 --- */
   const adminWrap = el("div", {}, []);
   panelAdmin.append(adminWrap);
 
   let adminUnsub: (() => void) | null = null;
-  let adminMarqueeLedUnsub: (() => void) | null = null;
   let adminPricingUnsub: (() => void) | null = null;
   let adminBookingCapsUnsub: (() => void) | null = null;
   let adminBookingBlocksUnsub: (() => void) | null = null;
@@ -2493,10 +2406,6 @@ function render() {
     if (adminUnsub) {
       adminUnsub();
       adminUnsub = null;
-    }
-    if (adminMarqueeLedUnsub) {
-      adminMarqueeLedUnsub();
-      adminMarqueeLedUnsub = null;
     }
     if (adminPricingUnsub) {
       adminPricingUnsub();
@@ -2699,13 +2608,12 @@ function render() {
     const pricingDocRef = doc(db, "siteSettings", "pricing");
     const pricingSessionPriceInput = el("input", { type: "number", min: "1", step: "1", value: "50" });
     const pricingPointsPerInput = el("input", { type: "number", min: "2", step: "1", value: "10" });
-    const pricingArcadePerInput = el("input", { type: "number", min: "1", step: "1", value: "100" });
     const savePricingBtn = el("button", { type: "button", class: "ghost" }, [t("admin.pricing.save", "儲存定價")]);
     const pricingAdminStatus = el("div", { class: "status-line" });
     adminPricingUnsub = onSnapshot(
       pricingDocRef,
       (snap) => {
-        const d = snap.data() as { sessionPriceNtd?: unknown; pointsPerMassage?: unknown; arcadePointsPerMassage?: unknown } | undefined;
+        const d = snap.data() as { sessionPriceNtd?: unknown; pointsPerMassage?: unknown } | undefined;
         const sp = d?.sessionPriceNtd;
         if (typeof sp === "number" && Number.isFinite(sp)) {
           pricingSessionPriceInput.value = String(Math.max(1, Math.round(sp)));
@@ -2713,10 +2621,6 @@ function render() {
         const pp = d?.pointsPerMassage;
         if (typeof pp === "number" && Number.isFinite(pp)) {
           pricingPointsPerInput.value = String(Math.max(2, Math.round(pp)));
-        }
-        const apm = d?.arcadePointsPerMassage;
-        if (typeof apm === "number" && Number.isFinite(apm)) {
-          pricingArcadePerInput.value = String(Math.max(1, Math.round(apm)));
         }
       },
       () => {
@@ -2729,7 +2633,6 @@ function render() {
       pricingAdminStatus.className = "status-line";
       const sp = Number(pricingSessionPriceInput.value);
       const pp = Number(pricingPointsPerInput.value);
-      const apArc = Number(pricingArcadePerInput.value);
       if (!Number.isFinite(sp) || sp < 1 || !Number.isInteger(sp)) {
         pricingAdminStatus.textContent = t("admin.pricing.badSessionPrice", "現場單次金額需為 ≥1 的整數。");
         pricingAdminStatus.classList.add("error");
@@ -2740,11 +2643,6 @@ function render() {
         pricingAdminStatus.classList.add("error");
         return;
       }
-      if (!Number.isFinite(apArc) || apArc < 1 || !Number.isInteger(apArc)) {
-        pricingAdminStatus.textContent = t("admin.pricing.badArcadePer", "小瑪莉遊戲點門檻需為 ≥1 的整數（點／次）。");
-        pricingAdminStatus.classList.add("error");
-        return;
-      }
       savePricingBtn.setAttribute("disabled", "true");
       try {
         await setDoc(
@@ -2752,7 +2650,6 @@ function render() {
           {
             sessionPriceNtd: Math.round(sp),
             pointsPerMassage: Math.round(pp),
-            arcadePointsPerMassage: Math.round(apArc),
             updatedAt: serverTimestamp(),
           },
           { merge: true },
@@ -2774,7 +2671,7 @@ function render() {
         el("p", { class: "hint" }, [
           t(
             "admin.pricing.hint",
-            "影響訪客／會員現金預約所示金額、舊儲值金折次數之單價、輪盤點數幾點可換 1 次，以及小瑪莉遊戲點與按摩次數的兌換比例。Firestore：",
+            "影響訪客／會員現金預約所示金額、舊儲值金折次數之單價、輪盤點數幾點可換 1 次。Firestore：",
           ),
           el("code", {}, ["siteSettings/pricing"]),
           t("admin.pricing.hintEnd", "。"),
@@ -2782,7 +2679,6 @@ function render() {
         el("div", { class: "grid grid-2" }, [
           el("label", { class: "field" }, [t("admin.pricing.sessionPrice", "現場單次金額（元）"), pricingSessionPriceInput]),
           el("label", { class: "field" }, [t("admin.pricing.pointsPer", "輪盤：幾點換 1 次按摩"), pricingPointsPerInput]),
-          el("label", { class: "field" }, [t("admin.pricing.arcadePer", "小瑪莉：幾遊戲點↔1 次按摩"), pricingArcadePerInput]),
         ]),
         el("div", { class: "row-actions" }, [savePricingBtn]),
         pricingAdminStatus,
@@ -2906,29 +2802,6 @@ function render() {
       }
     });
     const announcementSection = el("div", { class: "admin-announce admin-announce--settings" }, []);
-
-    const marqueeLedEnabled = el("input", { type: "checkbox" });
-    const marqueeLedBody = el("input", {
-      type: "text",
-      maxLength: 500,
-      placeholder: t("admin.marquee.placeholder", "頂部跑馬燈內容，可較長，例如活動標語"),
-      autocomplete: "off",
-    });
-    const marqueeLedSpeed = el("input", {
-      type: "range",
-      min: String(LED_SPEED_MIN),
-      max: String(LED_SPEED_MAX),
-      step: "1",
-    });
-    const marqueeLedSpeedValue = el("span", { class: "marquee-speed-readout" }, [
-      String(clampLedSpeed(undefined)),
-    ]);
-    marqueeLedSpeed.addEventListener("input", () => {
-      marqueeLedSpeedValue.textContent = marqueeLedSpeed.value;
-    });
-    const saveMarqueeLedBtn = el("button", { class: "ghost", type: "button" }, [t("admin.marquee.save", "儲存跑馬燈")]);
-    const marqueeLedStatus = el("div", { class: "status-line" });
-    const marqueeLedDocRef = doc(db, "siteSettings", "marqueeLed");
 
     const bookingCapsDocRef = doc(db, "siteSettings", "bookingCaps");
     const capMaxPerDayInput = el("input", {
@@ -3229,85 +3102,6 @@ function render() {
       }
     });
 
-    adminMarqueeLedUnsub = onSnapshot(
-      marqueeLedDocRef,
-      (snap) => {
-        const data = snap.data() as { text?: unknown; enabled?: unknown; speed?: unknown } | undefined;
-        marqueeLedBody.value = typeof data?.text === "string" ? data.text : "";
-        marqueeLedEnabled.checked = typeof data?.enabled === "boolean" ? data.enabled : false;
-        const s = clampLedSpeed(data?.speed);
-        marqueeLedSpeed.value = String(s);
-        marqueeLedSpeedValue.textContent = String(s);
-      },
-      () => {
-        marqueeLedStatus.textContent = t("admin.snapshot.loadFail", "無法讀取跑馬燈設定。");
-        marqueeLedStatus.className = "status-line error";
-      },
-    );
-
-    saveMarqueeLedBtn.addEventListener("click", async () => {
-      marqueeLedStatus.textContent = t("admin.status.processing", "處理中…");
-      marqueeLedStatus.className = "status-line";
-      saveMarqueeLedBtn.setAttribute("disabled", "true");
-      try {
-        await setDoc(
-          marqueeLedDocRef,
-          {
-            text: marqueeLedBody.value.trim(),
-            enabled: marqueeLedEnabled.checked,
-            speed: clampLedSpeed(Number(marqueeLedSpeed.value)),
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true },
-        );
-        marqueeLedStatus.textContent = t("admin.status.updated", "已更新");
-        marqueeLedStatus.classList.add("ok");
-      } catch (e) {
-        marqueeLedStatus.textContent = e instanceof Error ? e.message : t("admin.memberList.saveFail", "儲存失敗");
-        marqueeLedStatus.classList.add("error");
-      } finally {
-        saveMarqueeLedBtn.removeAttribute("disabled");
-      }
-    });
-
-    const announceIntroDetails = el("details", { class: "admin-announce__details" }, [
-      el("summary", { class: "admin-announce__details-summary" }, [
-        t("admin.announce.detailsSummary", "Firestore 路徑與完整說明"),
-      ]),
-      el("div", { class: "admin-announce__details-body hint" }, [
-        t(
-          "admin.announce.intro",
-          "預約頁頂部跑馬燈設定於 Firestore `siteSettings/marqueeLed`（內容、啟用、捲動速度／像素每秒）。",
-        ),
-      ]),
-    ]);
-
-    const marqueeLedSub = el("div", { class: "admin-announce__sub admin-announce__sub--top" }, [
-      el("h4", { class: "admin-announce__sub-title" }, [t("admin.announce.marqueeHeading", "頂部 · 跑馬燈")]),
-      el("label", { class: "field" }, [t("admin.announce.ledLabel", "內容"), marqueeLedBody]),
-      el("label", { class: "field marquee-speed-field" }, [
-        t("admin.announce.speedLabel", "捲動速度"),
-        el("div", { class: "marquee-speed-row" }, [marqueeLedSpeed, marqueeLedSpeedValue]),
-        el("span", { class: "hint" }, [
-          t("admin.announce.speedHint", "約 {{min}}～{{max}}（數字愈大移動愈快，單位：像素／秒）。", {
-            min: LED_SPEED_MIN,
-            max: LED_SPEED_MAX,
-          }),
-        ]),
-      ]),
-      el("label", { class: "field checkbox-field" }, [marqueeLedEnabled, el("span", {}, [t("admin.announce.enable", "啟用")])]),
-      el("div", { class: "row-actions" }, [saveMarqueeLedBtn]),
-      marqueeLedStatus,
-    ]);
-
-    const blockMarquee = el("section", { class: "admin-announce__block admin-announce__block--marquee" }, [
-      el("h4", { class: "admin-announce__block-title" }, [t("admin.announce.blockMarquee", "頂部跑馬燈")]),
-      el("p", { class: "hint admin-announce__block-lead" }, [
-        t("admin.announce.blockMarqueeLead", "顯示於預約頁最上方；可調捲動速度與是否啟用。"),
-      ]),
-      marqueeLedSub,
-    ]);
-
     const blockCaps = el("section", { class: "admin-announce__block admin-announce__block--caps" }, [
       el("h4", { class: "admin-announce__block-title" }, [t("admin.announce.blockCapsTitle", "預約名額")]),
       el("p", { class: "hint admin-announce__block-lead" }, [
@@ -3315,21 +3109,6 @@ function render() {
           "admin.announce.blockCapsLead",
           "控制同一天與同一工作週（週一至週五）各最多幾筆有效預約；與下方「不開放時段」分開設定。",
         ),
-      ]),
-      el("p", { class: "hint" }, [
-        t("admin.caps.hintA", "控制「同一天」「同一工作週（週一至週五曆）」各最多幾筆有效預約（"),
-        el("code", {}, ["pending"]),
-        " / ",
-        el("code", {}, ["confirmed"]),
-        " / ",
-        el("code", {}, ["done"]),
-        t("admin.caps.hintB", "）。Firestore："),
-        el("code", {}, ["siteSettings/bookingCaps"]),
-        t("admin.caps.hintC", "（"),
-        el("code", {}, ["maxPerDay"]),
-        ", ",
-        el("code", {}, ["maxPerWorkWeek"]),
-        t("admin.caps.hintD", "，整數 1～50；未建立文件時後端預設 2 與 4）。"),
       ]),
       el("div", { class: "grid grid-2" }, [
         el("label", { class: "field" }, [t("admin.caps.perDay", "同一天最多幾筆"), capMaxPerDayInput]),
@@ -3350,7 +3129,7 @@ function render() {
       el("p", { class: "hint" }, [
         t(
           "admin.blocks.hintA",
-          "依星期與當日時段關閉預約；「特定日期」有填時僅該日生效（例如明天下午外出），未填則每週該星期皆套用。若一次服務（約 30 分鐘）與關閉區間重疊，該開始時間無法選取。例：週一、週四 14:30–15:30 關閉，則 14:30、14:45、15:00 皆不可開始。Firestore：",
+          "依星期與當日時段關閉預約；「特定日期」有填時僅該日生效（例如明天下午外出），未填則每週該星期皆套用。若一次服務（20 分鐘）與關閉區間重疊，該開始時間無法選取。例：週一、週四 14:30–15:30 關閉，則與該區間重疊的開始時間（如 14:20、14:40、15:00）皆不可選。Firestore：",
         ),
         el("code", {}, ["siteSettings/bookingBlocks"]),
         t("admin.blocks.hintB", " 的 "),
@@ -3362,10 +3141,6 @@ function render() {
       bookingBlocksStatus,
     ]);
 
-    const subTabAnnounceMarquee = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
-      t("admin.announce.subtabMarquee", "頂部跑馬燈"),
-    ]);
-    subTabAnnounceMarquee.id = "admin-announce-subtab-marquee";
     const subTabAnnounceCaps = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
       t("admin.announce.subtabCaps", "預約名額"),
     ]);
@@ -3379,19 +3154,10 @@ function render() {
     ]);
     subTabAnnouncePricing.id = "admin-announce-subtab-pricing";
 
-    const panelAnnounceMarqueeSub = el("div", {
-      class: "admin-tab-panel admin-member-subpanel admin-announce-subpanel",
-      role: "tabpanel",
-      id: "admin-announce-subpanel-marquee",
-    });
-    panelAnnounceMarqueeSub.setAttribute("aria-labelledby", "admin-announce-subtab-marquee");
-    panelAnnounceMarqueeSub.append(announceIntroDetails, blockMarquee);
-
     const panelAnnounceCapsSub = el("div", {
       class: "admin-tab-panel admin-member-subpanel admin-announce-subpanel",
       role: "tabpanel",
       id: "admin-announce-subpanel-caps",
-      hidden: true,
     });
     panelAnnounceCapsSub.setAttribute("aria-labelledby", "admin-announce-subtab-caps");
     panelAnnounceCapsSub.append(blockCaps);
@@ -3425,7 +3191,6 @@ function render() {
       ]),
     );
 
-    subTabAnnounceMarquee.setAttribute("aria-controls", "admin-announce-subpanel-marquee");
     subTabAnnounceCaps.setAttribute("aria-controls", "admin-announce-subpanel-caps");
     subTabAnnounceBlocks.setAttribute("aria-controls", "admin-announce-subpanel-blocks");
     subTabAnnouncePricing.setAttribute("aria-controls", "admin-announce-subpanel-pricing");
@@ -3435,34 +3200,14 @@ function render() {
       "aria-label",
       t("admin.announce.subtabsAria", "其他設定子分頁"),
     );
-    announceSubTablist.append(
-      subTabAnnounceMarquee,
-      subTabAnnounceCaps,
-      subTabAnnounceBlocks,
-      subTabAnnouncePricing,
-    );
+    announceSubTablist.append(subTabAnnounceCaps, subTabAnnounceBlocks, subTabAnnouncePricing);
     const announceSubPanelsWrap = el("div", { class: "admin-member-subpanels" });
-    announceSubPanelsWrap.append(
-      panelAnnounceMarqueeSub,
-      panelAnnounceCapsSub,
-      panelAnnounceBlocksSub,
-      panelAnnouncePricingSub,
-    );
+    announceSubPanelsWrap.append(panelAnnounceCapsSub, panelAnnounceBlocksSub, panelAnnouncePricingSub);
 
-    const announceSubTabButtons = [
-      subTabAnnounceMarquee,
-      subTabAnnounceCaps,
-      subTabAnnounceBlocks,
-      subTabAnnouncePricing,
-    ] as const;
-    const announceSubTabPanels = [
-      panelAnnounceMarqueeSub,
-      panelAnnounceCapsSub,
-      panelAnnounceBlocksSub,
-      panelAnnouncePricingSub,
-    ] as const;
+    const announceSubTabButtons = [subTabAnnounceCaps, subTabAnnounceBlocks, subTabAnnouncePricing] as const;
+    const announceSubTabPanels = [panelAnnounceCapsSub, panelAnnounceBlocksSub, panelAnnouncePricingSub] as const;
 
-    function selectAnnounceSubTab(index: 0 | 1 | 2 | 3) {
+    function selectAnnounceSubTab(index: 0 | 1 | 2) {
       announceSubTabButtons.forEach((btn, i) => {
         const on = i === index;
         btn.setAttribute("aria-selected", String(on));
@@ -3475,10 +3220,9 @@ function render() {
       });
     }
 
-    subTabAnnounceMarquee.addEventListener("click", () => selectAnnounceSubTab(0));
-    subTabAnnounceCaps.addEventListener("click", () => selectAnnounceSubTab(1));
-    subTabAnnounceBlocks.addEventListener("click", () => selectAnnounceSubTab(2));
-    subTabAnnouncePricing.addEventListener("click", () => selectAnnounceSubTab(3));
+    subTabAnnounceCaps.addEventListener("click", () => selectAnnounceSubTab(0));
+    subTabAnnounceBlocks.addEventListener("click", () => selectAnnounceSubTab(1));
+    subTabAnnouncePricing.addEventListener("click", () => selectAnnounceSubTab(2));
     announceSubTablist.addEventListener("keydown", (ev) => {
       if (ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;
       ev.preventDefault();
@@ -3487,7 +3231,7 @@ function render() {
       const delta = ev.key === "ArrowRight" ? 1 : -1;
       const n = announceSubTabButtons.length;
       const next = ((cur + delta) % n + n) % n;
-      selectAnnounceSubTab(next as 0 | 1 | 2 | 3);
+      selectAnnounceSubTab(next as 0 | 1 | 2);
       announceSubTabButtons[next].focus();
     });
     selectAnnounceSubTab(0);
@@ -3497,7 +3241,7 @@ function render() {
       el("p", { class: "hint admin-announce__page-lead" }, [
         t(
           "admin.announce.introShort",
-          "此分頁集中調整頂部跑馬燈、預約名額、不開放時段與定價／點數兌換；請用下方子分頁切換。技術路徑可於「頂部跑馬燈」內展開查看。（輪盤特效預覽按鈕僅管理員在預約頁可見，無須設定。）",
+          "此分頁集中調整預約名額、不開放時段與定價／點數兌換；請用下方子分頁切換。（輪盤特效預覽按鈕僅管理員在預約頁可見，無須設定。）",
         ),
       ]),
       announceSubTablist,
@@ -3776,7 +3520,6 @@ function render() {
       nickname: string;
       sessionCredits: number;
       wheelPoints: number;
-      arcadePoints: number;
       drawChances: number;
     };
     type MemberListSortKey =
@@ -3786,7 +3529,6 @@ function render() {
       | "nickname"
       | "sessionCredits"
       | "wheelPoints"
-      | "arcadePoints"
       | "drawChances";
 
     const MEMBER_LIST_PAGE_SIZE = 10;
@@ -3828,7 +3570,7 @@ function render() {
         case "email": {
           cmp = (a.email ?? "")
             .toLowerCase()
-            .localeCompare((b.email ?? "").toLowerCase(), getLocale() === "en" ? "en" : "zh-Hant", {
+            .localeCompare((b.email ?? "").toLowerCase(), "zh-Hant", {
               numeric: true,
             });
           break;
@@ -3844,7 +3586,7 @@ function render() {
           break;
         }
         case "nickname": {
-          cmp = a.nickname.localeCompare(b.nickname, getLocale() === "en" ? "en" : "zh-Hant", { numeric: true });
+          cmp = a.nickname.localeCompare(b.nickname, "zh-Hant", { numeric: true });
           break;
         }
         case "sessionCredits": {
@@ -3853,10 +3595,6 @@ function render() {
         }
         case "wheelPoints": {
           cmp = a.wheelPoints === b.wheelPoints ? 0 : a.wheelPoints < b.wheelPoints ? -1 : 1;
-          break;
-        }
-        case "arcadePoints": {
-          cmp = a.arcadePoints === b.arcadePoints ? 0 : a.arcadePoints < b.arcadePoints ? -1 : 1;
           break;
         }
         case "drawChances": {
@@ -3893,7 +3631,6 @@ function render() {
         mk(t("admin.memberList.th.nickname", "稱呼"), "nickname"),
         mk(t("admin.memberList.th.sessions", "可預約次數"), "sessionCredits"),
         mk(t("admin.memberList.th.points", "輪盤點數"), "wheelPoints"),
-        mk(t("admin.memberList.th.arcadePoints", "小瑪莉遊戲點"), "arcadePoints"),
         mk(t("admin.memberList.th.draws", "可抽次數"), "drawChances"),
         el("th", { class: "admin-member-th-actions" }, [t("admin.memberList.th.actions", "操作")]),
       ]);
@@ -3946,7 +3683,7 @@ function render() {
           emptyMsg = t("admin.memberList.searchEmpty", "沒有符合關鍵字的會員。請改關鍵字或清空篩選欄。");
         }
         memberListTable.append(
-          el("tr", {}, [el("td", { class: "hint", colSpan: 9 }, [emptyMsg])]),
+          el("tr", {}, [el("td", { class: "hint", colSpan: 8 }, [emptyMsg])]),
         );
         memberListPagePrev.disabled = true;
         memberListPageNext.disabled = true;
@@ -3998,7 +3735,6 @@ function render() {
             el("td", {}, [nickInput]),
             el("td", { class: "mono" }, [String(m.sessionCredits)]),
             el("td", { class: "mono" }, [String(m.wheelPoints)]),
-            el("td", { class: "mono" }, [String(m.arcadePoints)]),
             el("td", { class: "mono" }, [String(m.drawChances)]),
             el("td", { class: "admin-member-td-actions" }, [saveBtn]),
           ]),
@@ -4065,7 +3801,6 @@ function render() {
           nickname: typeof m.nickname === "string" ? m.nickname : "",
           sessionCredits: typeof m.sessionCredits === "number" ? m.sessionCredits : 0,
           wheelPoints: typeof m.wheelPoints === "number" ? m.wheelPoints : 0,
-          arcadePoints: typeof m.arcadePoints === "number" ? m.arcadePoints : 0,
           drawChances: typeof m.drawChances === "number" ? m.drawChances : 0,
         }));
         memberListPageIndex = 0;
@@ -4732,13 +4467,9 @@ function render() {
       t("admin.tab.announce", "其他設定"),
     ]);
     tabAnnounce.id = "admin-tab-trigger-announce";
-    const tabLittleMaryStats = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
-      t("admin.tab.littleMary", "小瑪莉數據"),
-    ]);
-    tabLittleMaryStats.id = "admin-tab-trigger-little-mary-admin";
 
     const adminTablist = el("div", { class: "admin-tabs", role: "tablist" });
-    adminTablist.append(tabBookingsHub, tabMembers, tabAnnounce, tabLittleMaryStats);
+    adminTablist.append(tabBookingsHub, tabMembers, tabAnnounce);
 
     const subBookingsActive = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
       t("admin.tab.bookings", "預約管理"),
@@ -4835,238 +4566,22 @@ function render() {
       hidden: true,
     });
     panelAnnounceEl.setAttribute("aria-labelledby", "admin-tab-trigger-announce");
-    const panelLittleMaryStatsEl = el("div", {
-      class: "admin-tab-panel",
-      role: "tabpanel",
-      id: "admin-tab-panel-little-mary-stats",
-      hidden: true,
-    });
-    panelLittleMaryStatsEl.setAttribute("aria-labelledby", "admin-tab-trigger-little-mary-admin");
 
     tabBookingsHub.setAttribute("aria-controls", "admin-tab-panel-bookings-hub");
     tabMembers.setAttribute("aria-controls", "admin-tab-panel-members");
     tabAnnounce.setAttribute("aria-controls", "admin-tab-panel-announce");
-    tabLittleMaryStats.setAttribute("aria-controls", "admin-tab-panel-little-mary-stats");
 
     panelBookingsActiveSub.append(adminCapacitySection, adminStatus, tableHolder);
     panelMembersEl.append(membersSubTablist, membersSubPanelsWrap);
     panelAnnounceEl.append(announcementSection);
 
-    const lmStatsIntro = el("p", { class: "hint admin-lm-intro" }, [
-      t(
-        "admin.littleMary.intro",
-        "以下為 Firestore 稽核流水：主遊戲開獎、比大小、預約次數與遊戲點兌換。主遊戲加總僅針對最近一筆取樣筆數內可解析的紀錄，非全站歷史精算。",
-      ),
-    ]);
-    const lmStatsStatus = el("p", { class: "status-line" });
-    const lmStatsRefresh = el("button", { type: "button", class: "ghost" }, [
-      t("admin.littleMary.refresh", "重新整理"),
-    ]);
-    const lmStatsSummary = el("div", { class: "admin-lm-summary" });
-    const lmSpinTableWrap = el("div", { class: "table-wrap admin-lm-table" });
-    const lmHiloTableWrap = el("div", { class: "table-wrap admin-lm-table" });
-    panelLittleMaryStatsEl.append(
-      lmStatsIntro,
-      lmStatsStatus,
-      lmStatsRefresh,
-      lmStatsSummary,
-      el("h3", { class: "admin-lm-subhl" }, [t("admin.littleMary.spinsTitle", "最近主遊戲（開獎）")]),
-      lmSpinTableWrap,
-      el("h3", { class: "admin-lm-subhl" }, [t("admin.littleMary.hiloTitle", "最近比大小")]),
-      lmHiloTableWrap,
-    );
-
-    function formatLmAdminTs(ms: number | null): string {
-      if (ms == null || !Number.isFinite(ms)) return "—";
-      try {
-        return new Date(ms).toLocaleString(getLocale() === "en" ? "en" : "zh-Hant", {
-          dateStyle: "short",
-          timeStyle: "medium",
-        });
-      } catch {
-        return "—";
-      }
-    }
-
-    function shortUidForAdmin(uid: string): string {
-      if (!uid) return "—";
-      return uid.length <= 12 ? uid : `${uid.slice(0, 8)}…`;
-    }
-
-    async function loadLittleMaryAdminStats() {
-      if (!isFirebaseConfigured()) {
-        lmStatsStatus.textContent = t("admin.littleMary.needFirebase", "需設定 Firebase 並部署 getLittleMaryAdminStats。");
-        lmStatsStatus.className = "status-line error";
-        return;
-      }
-      lmStatsStatus.textContent = t("admin.littleMary.loading", "讀取中…");
-      lmStatsStatus.className = "status-line";
-      lmStatsRefresh.setAttribute("disabled", "true");
-      try {
-        const fn = getLittleMaryAdminStatsCall();
-        const res = await fn({ ...localeApiParam() });
-        const d = res.data as {
-          counts?: {
-            spin?: unknown;
-            hilo?: unknown;
-            sessionToPoints?: unknown;
-            pointsToSession?: unknown;
-          };
-          spinSample?: {
-            limit?: unknown;
-            rowsFetched?: unknown;
-            parsed?: unknown;
-            wagerSum?: unknown;
-            gainSum?: unknown;
-          };
-          hiloSample?: { limit?: unknown; rowsFetched?: unknown; parsed?: unknown; hits?: unknown };
-          recentSpins?: {
-            id?: string;
-            customerId?: string;
-            createdAtMs?: number | null;
-            wager?: number;
-            stopIndex?: number;
-            hitGain?: number;
-          }[];
-          recentHilo?: {
-            id?: string;
-            customerId?: string;
-            createdAtMs?: number | null;
-            stake?: number;
-            roll?: number;
-            hit?: boolean;
-          }[];
-        };
-        const c = d.counts ?? {};
-        const spinCt = typeof c.spin === "number" ? c.spin : 0;
-        const hiloCt = typeof c.hilo === "number" ? c.hilo : 0;
-        const exCt = typeof c.sessionToPoints === "number" ? c.sessionToPoints : 0;
-        const rdCt = typeof c.pointsToSession === "number" ? c.pointsToSession : 0;
-        const ss = d.spinSample ?? {};
-        const wagerSum = typeof ss.wagerSum === "number" ? ss.wagerSum : 0;
-        const gainSum = typeof ss.gainSum === "number" ? ss.gainSum : 0;
-        const spinLimit = typeof ss.limit === "number" ? ss.limit : 0;
-        const hs = d.hiloSample ?? {};
-        const hiloHits = typeof hs.hits === "number" ? hs.hits : 0;
-        const hiloParsed = typeof hs.parsed === "number" ? hs.parsed : 0;
-        const hiloLimit = typeof hs.limit === "number" ? hs.limit : 0;
-
-        const rtpSample =
-          wagerSum > 0 ? `${((gainSum / wagerSum) * 100).toFixed(1)}%` : "—";
-        const hiloHitRate = hiloParsed > 0 ? `${((hiloHits / hiloParsed) * 100).toFixed(1)}%` : "—";
-
-        lmStatsSummary.replaceChildren(
-          el("div", { class: "admin-lm-kpi" }, [
-            el("span", { class: "admin-lm-kpi__v" }, [String(spinCt)]),
-            el("span", { class: "admin-lm-kpi__l" }, [t("admin.littleMary.kpi.spins", "主遊戲筆數（累計）")]),
-          ]),
-          el("div", { class: "admin-lm-kpi" }, [
-            el("span", { class: "admin-lm-kpi__v" }, [String(hiloCt)]),
-            el("span", { class: "admin-lm-kpi__l" }, [t("admin.littleMary.kpi.hilo", "比大小筆數（累計）")]),
-          ]),
-          el("div", { class: "admin-lm-kpi" }, [
-            el("span", { class: "admin-lm-kpi__v" }, [String(exCt)]),
-            el("span", { class: "admin-lm-kpi__l" }, [t("admin.littleMary.kpi.sessionToPts", "次數→遊戲點（筆）")]),
-          ]),
-          el("div", { class: "admin-lm-kpi" }, [
-            el("span", { class: "admin-lm-kpi__v" }, [String(rdCt)]),
-            el("span", { class: "admin-lm-kpi__l" }, [t("admin.littleMary.kpi.ptsToSession", "遊戲點→次數（筆）")]),
-          ]),
-          el("div", { class: "admin-lm-kpi admin-lm-kpi--wide" }, [
-            el("span", { class: "admin-lm-kpi__v" }, [rtpSample]),
-            el("span", { class: "admin-lm-kpi__l" }, [
-              t(
-                "admin.littleMary.kpi.rtpSample",
-                "樣本派彩／押注比（最近約 {{n}} 筆主遊戲內可解析者）",
-                { n: spinLimit },
-              ),
-            ]),
-          ]),
-          el("div", { class: "admin-lm-kpi admin-lm-kpi--wide" }, [
-            el("span", { class: "admin-lm-kpi__v" }, [hiloHitRate]),
-            el("span", { class: "admin-lm-kpi__l" }, [
-              t("admin.littleMary.kpi.hiloHitSample", "比大小猜中率（最近 {{n}} 筆樣本）", { n: hiloLimit }),
-            ]),
-          ]),
-        );
-
-        const rs = d.recentSpins ?? [];
-        const spinHead = el("tr", {}, [
-          el("th", {}, [t("admin.littleMary.col.time", "時間")]),
-          el("th", {}, [t("admin.littleMary.col.member", "會員 UID")]),
-          el("th", {}, [t("admin.littleMary.col.wager", "押注")]),
-          el("th", {}, [t("admin.littleMary.col.stop", "停格")]),
-          el("th", {}, [t("admin.littleMary.col.gain", "派彩")]),
-        ]);
-        lmSpinTableWrap.replaceChildren(
-          el("table", {}, [
-            el("thead", {}, [spinHead]),
-            el(
-              "tbody",
-              {},
-              rs.map((row) =>
-                el("tr", {}, [
-                  el("td", { class: "mono" }, [formatLmAdminTs(row.createdAtMs ?? null)]),
-                  el("td", { class: "mono", title: row.customerId ?? "" }, [
-                    shortUidForAdmin(row.customerId ?? ""),
-                  ]),
-                  el("td", { class: "mono" }, [String(row.wager ?? 0)]),
-                  el("td", { class: "mono" }, [String(row.stopIndex ?? 0)]),
-                  el("td", { class: "mono" }, [String(row.hitGain ?? 0)]),
-                ]),
-              ),
-            ),
-          ]),
-        );
-
-        const rh = d.recentHilo ?? [];
-        const hiloHead = el("tr", {}, [
-          el("th", {}, [t("admin.littleMary.col.time", "時間")]),
-          el("th", {}, [t("admin.littleMary.col.member", "會員 UID")]),
-          el("th", {}, [t("admin.littleMary.col.stake", "賭注")]),
-          el("th", {}, [t("admin.littleMary.col.roll", "點數")]),
-          el("th", {}, [t("admin.littleMary.col.hit", "猜中")]),
-        ]);
-        lmHiloTableWrap.replaceChildren(
-          el("table", {}, [
-            el("thead", {}, [hiloHead]),
-            el(
-              "tbody",
-              {},
-              rh.map((row) =>
-                el("tr", {}, [
-                  el("td", { class: "mono" }, [formatLmAdminTs(row.createdAtMs ?? null)]),
-                  el("td", { class: "mono", title: row.customerId ?? "" }, [
-                    shortUidForAdmin(row.customerId ?? ""),
-                  ]),
-                  el("td", { class: "mono" }, [String(row.stake ?? 0)]),
-                  el("td", { class: "mono" }, [String(row.roll ?? 0)]),
-                  el("td", {}, [row.hit ? "✓" : "×"]),
-                ]),
-              ),
-            ),
-          ]),
-        );
-
-        lmStatsStatus.textContent = t("admin.littleMary.loaded", "已更新。");
-        lmStatsStatus.className = "status-line ok";
-      } catch (e) {
-        lmStatsStatus.textContent = errorMessage(e);
-        lmStatsStatus.className = "status-line error";
-      } finally {
-        lmStatsRefresh.removeAttribute("disabled");
-      }
-    }
-
-    lmStatsRefresh.addEventListener("click", () => void loadLittleMaryAdminStats());
-
     const adminPanelsWrap = el("div", { class: "admin-tab-panels" });
-    adminPanelsWrap.append(panelBookingsHubEl, panelMembersEl, panelAnnounceEl, panelLittleMaryStatsEl);
+    adminPanelsWrap.append(panelBookingsHubEl, panelMembersEl, panelAnnounceEl);
 
-    const adminTabButtons = [tabBookingsHub, tabMembers, tabAnnounce, tabLittleMaryStats] as const;
-    const adminTabPanels = [panelBookingsHubEl, panelMembersEl, panelAnnounceEl, panelLittleMaryStatsEl] as const;
+    const adminTabButtons = [tabBookingsHub, tabMembers, tabAnnounce] as const;
+    const adminTabPanels = [panelBookingsHubEl, panelMembersEl, panelAnnounceEl] as const;
 
-    function selectAdminTab(index: 0 | 1 | 2 | 3) {
+    function selectAdminTab(index: 0 | 1 | 2) {
       adminTabButtons.forEach((btn, i) => {
         const on = i === index;
         btn.setAttribute("aria-selected", String(on));
@@ -5077,13 +4592,11 @@ function render() {
         panel.hidden = i !== index;
         panel.classList.toggle("is-active", i === index);
       });
-      if (index === 3) void loadLittleMaryAdminStats();
     }
 
     tabBookingsHub.addEventListener("click", () => selectAdminTab(0));
     tabMembers.addEventListener("click", () => selectAdminTab(1));
     tabAnnounce.addEventListener("click", () => selectAdminTab(2));
-    tabLittleMaryStats.addEventListener("click", () => selectAdminTab(3));
 
     adminTablist.addEventListener("keydown", (ev) => {
       if (ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;
@@ -5093,7 +4606,7 @@ function render() {
       const delta = ev.key === "ArrowRight" ? 1 : -1;
       const n = adminTabButtons.length;
       const next = ((cur + delta) % n + n) % n;
-      selectAdminTab(next as 0 | 1 | 2 | 3);
+      selectAdminTab(next as 0 | 1 | 2);
       adminTabButtons[next].focus();
     });
 
@@ -5135,23 +4648,43 @@ function render() {
       const sel =
         bookingIsCancelledForAdmin(b.status) || bookingIsDoneForAdmin(b) ? null : (statusCell as HTMLSelectElement);
       if (sel) {
-        for (const opt of getAdminStatusSelectOptions()) {
-          const o = el("option", { value: opt.value }, [opt.label]);
-          if (opt.value === b.status) o.setAttribute("selected", "selected");
-          sel.append(o);
-        }
+        populateAdminBookingStatusSelect(sel, b.status);
         sel.addEventListener("change", async () => {
           const nextStatus = sel.value;
           const prevStatus = b.status;
+          let statusEmailMessage: string | undefined;
+          if (memberBookingGetsStatusEmail(b)) {
+            const summaryCore = [
+              `${t("booking.summary.name", "姓名")}：${b.displayName ?? ""}`,
+              `${t("booking.summary.date", "日期")}：${b.dateKey ?? ""}`,
+              `${t("booking.summary.start", "開始時間")}：${b.startSlot ?? ""}`,
+              `${t("booking.summary.note", "備註")}：${(b.note ?? "").trim() || t("admin.hidden.cancelSummaryNone", "（無）")}`,
+            ].join("\n");
+            const note = await showAdminBookingStatusEmailNoteModal({
+              summaryLines: summaryCore,
+              prevStatusKey: prevStatus,
+              nextStatusKey: nextStatus,
+            });
+            if (note === null) {
+              sel.value = adminSelectableBookingStatus(prevStatus);
+              return;
+            }
+            if (note.length > 0) statusEmailMessage = note;
+          }
           hiddenBookingsStatus.textContent = t("admin.status.updating", "更新中…");
           hiddenBookingsStatus.className = "status-line";
           try {
             if (nextStatus === "done") {
               const fn = completeBookingCall();
-              await fn({ bookingId: b.id, ...localeApiParam() });
+              await fn({
+                bookingId: b.id,
+                ...(statusEmailMessage ? { statusEmailMessage } : {}),
+                ...localeApiParam(),
+              });
             } else {
               await updateDoc(doc(db, "bookings", b.id), {
                 status: nextStatus,
+                ...(statusEmailMessage ? { statusEmailMessage } : {}),
                 updatedAt: serverTimestamp(),
               });
             }
@@ -5161,9 +4694,8 @@ function render() {
               await refreshWalletStatus({ keepWalletSummaryDuringFetch: true });
             }
           } catch (e) {
-            sel.value = prevStatus;
-            hiddenBookingsStatus.textContent =
-              e instanceof Error ? e.message : t("admin.status.updateFail", "更新失敗（你是否已加入 admins 集合？）");
+            sel.value = adminSelectableBookingStatus(prevStatus);
+            hiddenBookingsStatus.textContent = adminBookingStatusUpdateError(e);
             hiddenBookingsStatus.classList.add("error");
           }
         });
@@ -5320,22 +4852,43 @@ function render() {
           const sel =
             bookingIsCancelledForAdmin(b.status) || bookingIsDoneForAdmin(b) ? null : (statusCell as HTMLSelectElement);
           if (sel) {
-            for (const opt of getAdminStatusSelectOptions()) {
-              const o = el("option", { value: opt.value }, [opt.label]);
-              if (opt.value === b.status) o.setAttribute("selected", "selected");
-              sel.append(o);
-            }
+            populateAdminBookingStatusSelect(sel, b.status);
             sel.addEventListener("change", async () => {
               const nextStatus = sel.value;
               const prevStatus = b.status;
+              let statusEmailMessage: string | undefined;
+              if (memberBookingGetsStatusEmail(b)) {
+                const summaryCore = [
+                  `${t("booking.summary.name", "姓名")}：${b.displayName ?? ""}`,
+                  `${t("booking.summary.date", "日期")}：${b.dateKey ?? ""}`,
+                  `${t("booking.summary.start", "開始時間")}：${b.startSlot ?? ""}`,
+                  `${t("booking.summary.note", "備註")}：${(b.note ?? "").trim() || t("admin.hidden.cancelSummaryNone", "（無）")}`,
+                ].join("\n");
+                const note = await showAdminBookingStatusEmailNoteModal({
+                  summaryLines: summaryCore,
+                  prevStatusKey: prevStatus,
+                  nextStatusKey: nextStatus,
+                });
+                if (note === null) {
+                  sel.value = adminSelectableBookingStatus(prevStatus);
+                  return;
+                }
+                if (note.length > 0) statusEmailMessage = note;
+              }
               adminStatus.textContent = t("admin.status.updating", "更新中…");
+              adminStatus.className = "status-line";
               try {
                 if (nextStatus === "done") {
                   const fn = completeBookingCall();
-                  await fn({ bookingId: b.id, ...localeApiParam() });
+                  await fn({
+                    bookingId: b.id,
+                    ...(statusEmailMessage ? { statusEmailMessage } : {}),
+                    ...localeApiParam(),
+                  });
                 } else {
                   await updateDoc(doc(db, "bookings", b.id), {
                     status: nextStatus,
+                    ...(statusEmailMessage ? { statusEmailMessage } : {}),
                     updatedAt: serverTimestamp(),
                   });
                 }
@@ -5345,9 +4898,8 @@ function render() {
                   await refreshWalletStatus({ keepWalletSummaryDuringFetch: true });
                 }
               } catch (e) {
-                sel.value = prevStatus;
-                adminStatus.textContent =
-                  e instanceof Error ? e.message : t("admin.status.updateFail", "更新失敗（你是否已加入 admins 集合？）");
+                sel.value = adminSelectableBookingStatus(prevStatus);
+                adminStatus.textContent = adminBookingStatusUpdateError(e);
                 adminStatus.classList.add("error");
               }
             });
@@ -5473,17 +5025,6 @@ function render() {
     wheelTestBtn.hidden = !(await canCurrentUserAccessAdmin());
   }
 
-  /** 小瑪莉尚在開發：僅後台管理員可看見預約頁分頁，避免一般用戶誤玩 */
-  async function syncBookLittleMaryTabVisibility() {
-    const allow = await canCurrentUserAccessAdmin();
-    tabLittleMary.hidden = !allow;
-    if (!allow && bookSubTab === "littleMary") {
-      setBookSubTab("book");
-    } else {
-      setBookSubTab(bookSubTab);
-    }
-  }
-
   async function syncAdminView() {
     if (tab !== "admin") return;
     const user = auth.currentUser;
@@ -5504,7 +5045,6 @@ function render() {
       await refreshBookingPricing();
       await refreshWalletStatus();
       await syncWheelPreviewBtnVisibility();
-      await syncBookLittleMaryTabVisibility();
     })();
     if (tab !== "admin") return;
     void syncAdminView();
@@ -5521,16 +5061,15 @@ function render() {
     titleDesc.textContent = isBook
       ? t(
           "home.subtitle",
-          "週一至週五 · 開始時間 15 分鐘一格 · 單次服務約15~50分鐘, 看情況. · 午休 11:45–13:15 不開放 · 最晚 16:30 開始、17:00 前結束",
+          "週一至週五 · 20 分鐘一格、每格 50 元 · 延長以同單位計 · 每工作週有名額上限（見下方規則）· 現場臨時預約視當日狀況 · 午休 11:45–13:15 不開放 · 最晚 16:40 開始、17:00 前結束",
         )
       : t(
           "admin.backSubtitle",
-          "以分頁切換：預約與封存、會員與儲值、其他設定、小瑪莉數據。",
+          "以分頁切換：預約與封存、會員與儲值、其他設定（名額、不開放時段、定價）。",
         );
     document.title = isBook ? t("meta.docTitle", "辦公室按摩預約") : t("admin.backTitle", "管理後台");
     panelBook.hidden = !isBook;
     panelAdmin.hidden = isBook;
-    syncMarqueeVisibilityForTab();
     if (isBook) {
       stopAdminListener();
     } else {
