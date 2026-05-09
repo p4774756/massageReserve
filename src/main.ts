@@ -197,7 +197,7 @@ function isDateKeySatSun(dateKey: string): boolean {
   return wd === 6 || wd === 7;
 }
 
-/** 今日日曆日（台北），YYYY-MM-DD；與 date input 的 min、後端 dateKey 一致 */
+/** 今日日曆日（台北），YYYY-MM-DD；與 date input、後端 dateKey 一致 */
 function taipeiTodayDateKey(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" });
 }
@@ -395,6 +395,31 @@ function dateKeyFromYmdTaipei(y: number, month: number, day: number): string {
 /** month：1–12 */
 function daysInMonthFromOneIndexed(y: number, month: number): number {
   return new Date(y, month, 0).getDate();
+}
+
+/** 預約視窗內，該類型第一個可選 dateKey；無則回傳 "" */
+function firstBookableDateKeyInWindow(office: boolean): string {
+  const minKey = taipeiTodayDateKey();
+  const maxKey = taipeiLatestBookableDateKey();
+  for (let i = 0; i < 20; i++) {
+    const dk = addDaysTaipeiDateKey(minKey, i);
+    if (dk > maxKey) break;
+    if (office ? isDateKeyMonFri(dk) : isDateKeySatSun(dk)) return dk;
+  }
+  return "";
+}
+
+/** 該曆月內是否至少有一天落在預約視窗且符合 office／假日類型 */
+function monthHasBookableDayInBookWindow(y: number, month: number, office: boolean): boolean {
+  const dim = daysInMonthFromOneIndexed(y, month);
+  const minKey = taipeiTodayDateKey();
+  const maxKey = taipeiLatestBookableDateKey();
+  for (let d = 1; d <= dim; d++) {
+    const dk = dateKeyFromYmdTaipei(y, month, d);
+    if (dk < minKey || dk > maxKey) continue;
+    if (office ? isDateKeyMonFri(dk) : isDateKeySatSun(dk)) return true;
+  }
+  return false;
 }
 
 /** 後台狀態下拉：與 option value（pending／confirmed／done）對齊，避免大小寫／空白導致無匹配 option、畫面卡在「待確認」 */
@@ -820,10 +845,27 @@ function render() {
     name: "displayName",
   });
   nameInput.setAttribute("aria-required", "true");
-  const dateInput = el("input", { type: "date" });
-  dateInput.min = taipeiTodayDateKey();
-  dateInput.max = taipeiLatestBookableDateKey();
+  const dateInput = el("input", { type: "hidden", id: "booking-date-value" });
+  let bookingPickCalYear = 0;
+  let bookingPickCalMonth = 0;
   const dateLabelSpan = el("span", {});
+  const dateCalendarHint = el("p", {
+    class: "hint book-date-calendar-hint",
+    id: "book-date-calendar-hint",
+  });
+  const bookPickCalMonthLabel = el("span", { class: "book-pick-calendar__month-label" });
+  const bookPickCalGrid = el("div", { class: "book-pick-calendar__grid", role: "grid" });
+  bookPickCalGrid.setAttribute("aria-label", t("booking.pickCalendarAria", "可預約日期"));
+  const bookPickCalPrev = el("button", { type: "button", class: "ghost book-pick-calendar__nav-btn" }, ["‹"]);
+  const bookPickCalNext = el("button", { type: "button", class: "ghost book-pick-calendar__nav-btn" }, ["›"]);
+  bookPickCalPrev.setAttribute("aria-label", t("booking.pickCalPrev", "上個月"));
+  bookPickCalNext.setAttribute("aria-label", t("booking.pickCalNext", "下個月"));
+  const bookPickCalToolbar = el("div", { class: "book-pick-calendar__toolbar" }, [
+    bookPickCalPrev,
+    bookPickCalMonthLabel,
+    bookPickCalNext,
+  ]);
+  const bookPickCalendar = el("div", { class: "book-pick-calendar" }, [bookPickCalToolbar, bookPickCalGrid]);
   const radioOfficeWeek = el("input", {
     type: "radio",
     name: "bookingServiceKind",
@@ -872,19 +914,176 @@ function render() {
   }
 
   function syncDateFieldLabelText(): void {
-    dateLabelSpan.textContent = isBookingHolidayOutcallMode()
+    const hol = isBookingHolidayOutcallMode();
+    dateLabelSpan.textContent = hol
       ? t("field.dateHolidayOutcall", "日期（週六、週日）")
       : t("field.date", "日期（週一至週五）");
+    dateCalendarHint.textContent = t(
+      "booking.datePickCalendarHint",
+      "請點選下方月曆；僅可選與「預約類型」相符的日期（平日為週一至週五，假日外約為週六、週日）。",
+    );
+    dateInput.setAttribute("aria-describedby", "book-date-calendar-hint");
   }
+
+  function dateAllowedForCurrentBookingMode(dk: string): boolean {
+    if (!dk) return false;
+    return isBookingHolidayOutcallMode() ? isDateKeySatSun(dk) : isDateKeyMonFri(dk);
+  }
+
+  function bookablePickCell(dk: string): boolean {
+    const minKey = taipeiTodayDateKey();
+    const maxKey = taipeiLatestBookableDateKey();
+    if (dk < minKey || dk > maxKey) return false;
+    return dateAllowedForCurrentBookingMode(dk);
+  }
+
+  function syncBookingPickCalendarCursorFromValue(): void {
+    const dk = dateInput.value;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dk)) {
+      const [y, m] = dk.split("-").map(Number);
+      bookingPickCalYear = y;
+      bookingPickCalMonth = m;
+      return;
+    }
+    const office = !isBookingHolidayOutcallMode();
+    const first = firstBookableDateKeyInWindow(office);
+    if (first) {
+      const [y, m] = first.split("-").map(Number);
+      bookingPickCalYear = y;
+      bookingPickCalMonth = m;
+    } else {
+      const [y, m] = taipeiTodayDateKey().split("-").map(Number);
+      bookingPickCalYear = y;
+      bookingPickCalMonth = m;
+    }
+  }
+
+  function bookingPickCalPrevMonth(y: number, m: number): { y: number; m: number } {
+    if (m <= 1) return { y: y - 1, m: 12 };
+    return { y, m: m - 1 };
+  }
+
+  function bookingPickCalNextMonth(y: number, m: number): { y: number; m: number } {
+    if (m >= 12) return { y: y + 1, m: 1 };
+    return { y, m: m + 1 };
+  }
+
+  function bookingPickCalCanGoPrev(y: number, m: number): boolean {
+    const office = !isBookingHolidayOutcallMode();
+    const { y: py, m: pm } = bookingPickCalPrevMonth(y, m);
+    return monthHasBookableDayInBookWindow(py, pm, office);
+  }
+
+  function bookingPickCalCanGoNext(y: number, m: number): boolean {
+    const office = !isBookingHolidayOutcallMode();
+    const { y: ny, m: nm } = bookingPickCalNextMonth(y, m);
+    return monthHasBookableDayInBookWindow(ny, nm, office);
+  }
+
+  function paintBookingPickCalendar(): void {
+    if (bookingPickCalYear === 0) {
+      syncBookingPickCalendarCursorFromValue();
+    }
+    const y = bookingPickCalYear;
+    const mo = bookingPickCalMonth;
+    const selected = dateInput.value;
+    const todayK = taipeiTodayDateKey();
+
+    bookPickCalMonthLabel.textContent = new Intl.DateTimeFormat(intlLocaleTag(), {
+      timeZone: "Asia/Taipei",
+      year: "numeric",
+      month: "long",
+    }).format(new Date(`${y}-${String(mo).padStart(2, "0")}-15T12:00:00+08:00`));
+
+    bookPickCalGrid.replaceChildren();
+    const hdrRow = el("div", { class: "book-pick-calendar__row book-pick-calendar__row--head" });
+    for (const lab of [
+      t("admin.calendar.weekSun", "日"),
+      t("admin.calendar.weekMon", "一"),
+      t("admin.calendar.weekTue", "二"),
+      t("admin.calendar.weekWed", "三"),
+      t("admin.calendar.weekThu", "四"),
+      t("admin.calendar.weekFri", "五"),
+      t("admin.calendar.weekSat", "六"),
+    ]) {
+      hdrRow.append(el("div", { class: "book-pick-calendar__wd" }, [lab]));
+    }
+    bookPickCalGrid.append(hdrRow);
+
+    const firstKey = dateKeyFromYmdTaipei(y, mo, 1);
+    const lead = taipeiWeekdaySun0FromDateKey(firstKey);
+    const dim = daysInMonthFromOneIndexed(y, mo);
+    const padCell = () => el("div", { class: "book-pick-calendar__cell book-pick-calendar__cell--pad" });
+    const cells: HTMLElement[] = [];
+    for (let i = 0; i < lead; i++) cells.push(padCell());
+    for (let dayNum = 1; dayNum <= dim; dayNum++) {
+      const dk = dateKeyFromYmdTaipei(y, mo, dayNum);
+      const wrap = el("div", { class: "book-pick-calendar__cell" });
+      const canPick = bookablePickCell(dk);
+
+      if (!canPick) {
+        const inactive = el("div", { class: "book-pick-calendar__day book-pick-calendar__day--inactive" });
+        inactive.append(el("span", { class: "book-pick-calendar__day-num" }, [String(dayNum)]));
+        if (dk === todayK) inactive.classList.add("book-pick-calendar__day--today");
+        if (dk === selected) inactive.classList.add("book-pick-calendar__day--selected");
+        wrap.append(inactive);
+        cells.push(wrap);
+        continue;
+      }
+
+      const btn = el("button", { type: "button", class: "book-pick-calendar__day" });
+      if (dk === selected) btn.classList.add("book-pick-calendar__day--selected");
+      if (dk === todayK) btn.classList.add("book-pick-calendar__day--today");
+      btn.append(el("span", { class: "book-pick-calendar__day-num" }, [String(dayNum)]));
+      btn.addEventListener("click", () => {
+        dateInput.value = dk;
+        paintBookingPickCalendar();
+        void refreshAvailability();
+      });
+      wrap.append(btn);
+      cells.push(wrap);
+    }
+    while (cells.length % 7 !== 0) cells.push(padCell());
+    for (let i = 0; i < cells.length; i += 7) {
+      const row = el("div", { class: "book-pick-calendar__row" });
+      for (let j = 0; j < 7; j++) row.append(cells[i + j]!);
+      bookPickCalGrid.append(row);
+    }
+
+    bookPickCalPrev.disabled = !bookingPickCalCanGoPrev(y, mo);
+    bookPickCalNext.disabled = !bookingPickCalCanGoNext(y, mo);
+  }
+
+  function shiftBookingPickCalMonth(delta: number): void {
+    let y = bookingPickCalYear;
+    let m = bookingPickCalMonth + delta;
+    while (m < 1) {
+      m += 12;
+      y -= 1;
+    }
+    while (m > 12) {
+      m -= 12;
+      y += 1;
+    }
+    bookingPickCalYear = y;
+    bookingPickCalMonth = m;
+    paintBookingPickCalendar();
+  }
+
+  bookPickCalPrev.addEventListener("click", () => shiftBookingPickCalMonth(-1));
+  bookPickCalNext.addEventListener("click", () => shiftBookingPickCalMonth(1));
 
   function onBookingServiceKindChange(): void {
     holidayOutcallTransportHint.hidden = !radioHolidayOutcall.checked;
     syncDateFieldLabelText();
-    const dk = dateInput.value;
-    if (dk) {
-      const ok = isBookingHolidayOutcallMode() ? isDateKeySatSun(dk) : isDateKeyMonFri(dk);
-      if (!ok) dateInput.value = "";
+    const office = !isBookingHolidayOutcallMode();
+    if (dateInput.value && !dateAllowedForCurrentBookingMode(dateInput.value)) {
+      dateInput.value = firstBookableDateKeyInWindow(office);
+    } else if (!dateInput.value) {
+      dateInput.value = firstBookableDateKeyInWindow(office);
     }
+    syncBookingPickCalendarCursorFromValue();
+    paintBookingPickCalendar();
     void refreshAvailability();
   }
   radioOfficeWeek.addEventListener("change", onBookingServiceKindChange);
@@ -2080,8 +2279,12 @@ function render() {
   }
 
   syncDateFieldLabelText();
-  refillSlots(new Set(), true, "", new Map());
-  syncBookingStepVisibility();
+  if (!dateInput.value) {
+    dateInput.value = firstBookableDateKeyInWindow(!isBookingHolidayOutcallMode());
+  }
+  syncBookingPickCalendarCursorFromValue();
+  paintBookingPickCalendar();
+  void refreshAvailability();
 
   function syncHomePageSubtitle() {
     if (tab !== "book") return;
@@ -2114,24 +2317,43 @@ function render() {
     try {
       bookingCapacityBlocksSlots = false;
       bookingAvailabilityLoading = false;
-      scheduleStatus.textContent = "";
-      scheduleStatus.className = "status-line schedule-status";
       meta.innerHTML = "";
-      const dk = dateInput.value;
-      if (!dk) {
-        refillSlots(new Set(), true, "", new Map());
-        return;
-      }
 
       const minKey = taipeiTodayDateKey();
       const maxKey = taipeiLatestBookableDateKey();
-      dateInput.min = minKey;
-      dateInput.max = maxKey;
+
+      let dk = dateInput.value;
+      if (dk && !dateAllowedForCurrentBookingMode(dk)) {
+        dateInput.value = "";
+        dk = "";
+        scheduleStatus.textContent = t(
+          "booking.dateClearedWrongWeekday",
+          "此日期與目前「預約類型」不符，已清除。平日請選週一至週五；假日外約請選週六、週日。",
+        );
+        scheduleStatus.className = "status-line schedule-status error";
+        refillSlots(new Set(), true, "", new Map());
+        syncBookingStepVisibility();
+        syncBookingPickCalendarCursorFromValue();
+        paintBookingPickCalendar();
+        return;
+      }
+
+      scheduleStatus.textContent = "";
+      scheduleStatus.className = "status-line schedule-status";
+
+      if (!dk) {
+        refillSlots(new Set(), true, "", new Map());
+        paintBookingPickCalendar();
+        return;
+      }
+
       if (dk < minKey) {
         refillSlots(new Set(), true, "", new Map());
         scheduleStatus.textContent = t("booking.datePast", "不可選擇今天以前的日期。");
         scheduleStatus.classList.add("error");
         dateInput.value = "";
+        syncBookingPickCalendarCursorFromValue();
+        paintBookingPickCalendar();
         return;
       }
 
@@ -2140,19 +2362,8 @@ function render() {
         scheduleStatus.textContent = t("booking.dateBeyond", "僅能預約至下週日為止。");
         scheduleStatus.classList.add("error");
         dateInput.value = "";
-        return;
-      }
-
-      if (!isBookingHolidayOutcallMode() && !isDateKeyMonFri(dk)) {
-        refillSlots(new Set(), true, dk, new Map());
-        scheduleStatus.textContent = t("booking.weekdayOnly", "僅能預約週一到週五。");
-        scheduleStatus.classList.add("error");
-        return;
-      }
-      if (isBookingHolidayOutcallMode() && !isDateKeySatSun(dk)) {
-        refillSlots(new Set(), true, dk, new Map());
-        scheduleStatus.textContent = t("booking.weekendOutcallOnly", "假日外約僅能選週六、週日。");
-        scheduleStatus.classList.add("error");
+        syncBookingPickCalendarCursorFromValue();
+        paintBookingPickCalendar();
         return;
       }
 
@@ -2239,10 +2450,10 @@ function render() {
       }
     } finally {
       syncBookingStepVisibility();
+      paintBookingPickCalendar();
     }
   }
 
-  dateInput.addEventListener("change", refreshAvailability);
   slotSelect.addEventListener("change", syncBookingStepVisibility);
 
   onSnapshot(
@@ -2449,7 +2660,12 @@ function render() {
     serviceKindFieldset,
     el("div", { class: "grid grid-2" }, [
       el("label", { class: "field" }, [t("field.name", "姓名（必填）"), nameInput]),
-      el("label", { class: "field" }, [dateLabelSpan, dateInput]),
+      el("label", { class: "field field--booking-date" }, [
+        dateLabelSpan,
+        dateCalendarHint,
+        bookPickCalendar,
+        dateInput,
+      ]),
     ]),
     /** 與選時段／付款區分離：未完成信箱驗證時顯示提示（餘額／輪盤／兌換在會員中心） */
     memberExtrasWrap,
