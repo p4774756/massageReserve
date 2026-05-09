@@ -45,9 +45,14 @@ import {
   grantDrawChancesAdminCall,
 } from "./firebase";
 import { createVisitorStatsLine } from "./visitorStats";
-import { allStartSlots } from "./slots";
+import { allHolidayOutcallStartSlots, allStartSlots } from "./slots";
 import { runSlotSpectacle } from "./slotSpectacle";
 import { initI18n, intlLocaleTag, localeApiParam, t } from "./i18n";
+
+/** 首頁副標「現場計價」說明（元）；預約單筆現場金額仍以 `siteSettings/pricing.sessionPriceNtd`／後端為準 */
+const HOME_ONSITE_FIRST_15_NTD = 70;
+const HOME_ONSITE_ADDON_15_NTD = 50;
+
 type Booking = {
   id: string;
   displayName: string;
@@ -65,6 +70,8 @@ type Booking = {
   completedAt?: { seconds: number };
   bookingMode?: BookingMode | string;
   customerId?: string | null;
+  /** 假日外約（週六日）；計價與平日相同，交通費由客戶負擔為現場約定 */
+  holidayOutcall?: boolean;
 };
 
 type BookingMode =
@@ -184,6 +191,12 @@ function isDateKeyMonFri(dateKey: string): boolean {
   return dow >= 1 && dow <= 5;
 }
 
+/** 週六、週日（台北日曆）；與後端假日外約可約日一致 */
+function isDateKeySatSun(dateKey: string): boolean {
+  const wd = taipeiWeekdayNumMon1Sun7(dateKey);
+  return wd === 6 || wd === 7;
+}
+
 /** 今日日曆日（台北），YYYY-MM-DD；與 date input 的 min、後端 dateKey 一致 */
 function taipeiTodayDateKey(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" });
@@ -295,6 +308,17 @@ function formatWhen(b: Booking): string {
     return new Date(ms).toLocaleString(intlLocaleTag(), formatWhenOpts());
   }
   return `${b.dateKey} ${b.startSlot}`;
+}
+
+/** 後台表格「預約時間」欄：必要時附假日外約標籤 */
+function adminWhenCellParts(b: Booking): (string | Node)[] {
+  const parts: (string | Node)[] = [formatWhen(b)];
+  if (b.holidayOutcall === true) {
+    parts.push(
+      el("div", { class: "admin-booking-kind-tag" }, [t("booking.kind.holidayOutcallShort", "假日外約")]),
+    );
+  }
+  return parts;
 }
 
 function bookingStartMs(b: Booking): number {
@@ -432,18 +456,28 @@ function buildBookingSummary(
   startSlot: string,
   note: string,
   bookingMode: BookingMode,
+  holidayOutcall: boolean,
 ): string {
   const noteSummary = note || t("booking.summary.noteEmpty", "（未填寫）");
-  return [
+  const lines = [
     t("booking.summary.intro", "請確認以下預約資訊："),
     `${t("booking.summary.name", "姓名")}：${displayName}`,
     `${t("booking.summary.date", "日期")}：${dateKey}`,
     `${t("booking.summary.start", "開始時間")}：${startSlot}`,
     `${t("booking.summary.mode", "付款方式")}：${bookingModeLabel(bookingMode)}`,
     `${t("booking.summary.note", "備註")}：${noteSummary}`,
-    "",
-    t("booking.summary.footer", "確認無誤後按「確定」送出。"),
-  ].join("\n");
+  ];
+  if (holidayOutcall) {
+    lines.push(
+      "",
+      t(
+        "booking.summary.holidayOutcallTransport",
+        "假日外約：按摩單價與平日相同；前往外約地點之交通費由您（客戶）負擔，請於現場與師傅確認。",
+      ),
+    );
+  }
+  lines.push("", t("booking.summary.footer", "確認無誤後按「確定」送出。"));
+  return lines.join("\n");
 }
 
 function showConfirmModal(
@@ -789,6 +823,73 @@ function render() {
   const dateInput = el("input", { type: "date" });
   dateInput.min = taipeiTodayDateKey();
   dateInput.max = taipeiLatestBookableDateKey();
+  const dateLabelSpan = el("span", {});
+  const radioOfficeWeek = el("input", {
+    type: "radio",
+    name: "bookingServiceKind",
+    id: "booking-svc-office",
+    value: "office",
+  }) as HTMLInputElement;
+  radioOfficeWeek.checked = true;
+  const radioHolidayOutcall = el("input", {
+    type: "radio",
+    name: "bookingServiceKind",
+    id: "booking-svc-holiday",
+    value: "holiday",
+  }) as HTMLInputElement;
+  const holidayOutcallTransportHint = el(
+    "p",
+    { class: "hint book-holiday-outcall-transport-hint", hidden: true },
+    [
+      t(
+        "booking.holidayOutcallTransportHint",
+        "單次按摩費用與平日相同；開始時間以每半小時為單位可選。師傅前往外約地點的交通費由您負擔，實際金額請當日與師傅確認。",
+      ),
+    ],
+  );
+  const serviceKindFieldset = el("fieldset", { class: "book-service-kind" });
+  serviceKindFieldset.append(
+    el("legend", { class: "book-service-kind__legend" }, [t("booking.serviceKindTitle", "預約類型")]),
+    el("div", { class: "book-service-kind__options" }, [
+      el("div", { class: "book-service-kind__option" }, [
+        radioOfficeWeek,
+        el("label", { htmlFor: "booking-svc-office" }, [
+          t("booking.serviceKind.office", "平日｜辦公室時段（週一至週五）"),
+        ]),
+      ]),
+      el("div", { class: "book-service-kind__option" }, [
+        radioHolidayOutcall,
+        el("label", { htmlFor: "booking-svc-holiday" }, [
+          t("booking.serviceKind.holidayOutcall", "假日｜外約（僅能選週六、週日）"),
+        ]),
+      ]),
+    ]),
+    holidayOutcallTransportHint,
+  );
+
+  function isBookingHolidayOutcallMode(): boolean {
+    return radioHolidayOutcall.checked;
+  }
+
+  function syncDateFieldLabelText(): void {
+    dateLabelSpan.textContent = isBookingHolidayOutcallMode()
+      ? t("field.dateHolidayOutcall", "日期（週六、週日）")
+      : t("field.date", "日期（週一至週五）");
+  }
+
+  function onBookingServiceKindChange(): void {
+    holidayOutcallTransportHint.hidden = !radioHolidayOutcall.checked;
+    syncDateFieldLabelText();
+    const dk = dateInput.value;
+    if (dk) {
+      const ok = isBookingHolidayOutcallMode() ? isDateKeySatSun(dk) : isDateKeyMonFri(dk);
+      if (!ok) dateInput.value = "";
+    }
+    void refreshAvailability();
+  }
+  radioOfficeWeek.addEventListener("change", onBookingServiceKindChange);
+  radioHolidayOutcall.addEventListener("change", onBookingServiceKindChange);
+
   const slotSelect = el("select", {}, []);
   const noteInput = el("textarea", { maxLength: 500 });
   const bookingModeSelect = el("select", { id: "booking-mode-select" }, []);
@@ -863,7 +964,7 @@ function render() {
   let sessionCreditsCount = 0;
   let wheelPointsCount = 0;
   let pointsPerMassageSetting = 10;
-  let sessionPriceNtdSetting = 50;
+  let sessionPriceNtdSetting = 70;
   let drawChances = 0;
   const redeemPointsStatus = el("div", { class: "status-line", hidden: true });
   const redeemPointsBtn = el("button", { type: "button", class: "ghost" }, [
@@ -964,8 +1065,16 @@ function render() {
     const canCancel = b.status === "pending" || b.status === "confirmed";
     const row = el("div", { class: "my-booking-row" }, []);
     const mainCol = el("div", { class: "my-booking-main" }, []);
-    mainCol.append(
+    const whenWrap = el("div", { class: "my-booking-when-block" }, [
       el("div", { class: "mono my-booking-when" }, [formatWhen(b)]),
+    ]);
+    if (b.holidayOutcall === true) {
+      whenWrap.append(
+        el("div", { class: "my-booking-kind-tag" }, [t("booking.kind.holidayOutcallShort", "假日外約")]),
+      );
+    }
+    mainCol.append(
+      whenWrap,
       el("div", { class: "my-booking-status" }, [bookingStatusLabel(b.status)]),
     );
     const actions = el("div", { class: "my-booking-actions" }, []);
@@ -1866,7 +1975,7 @@ function render() {
     slotSelect.disabled = disabled;
     const opt0 = el("option", { value: "" }, [t("slot.optionPick", "請選擇開始時間")]);
     slotSelect.append(opt0);
-    const slots = allStartSlots();
+    const slots = isBookingHolidayOutcallMode() ? allHolidayOutcallStartSlots() : allStartSlots();
     for (let i = 0; i < slots.length; ) {
       const s = slots[i]!;
       const takenHere = taken.has(s);
@@ -1949,8 +2058,9 @@ function render() {
     const minKey = taipeiTodayDateKey();
     const maxKey = taipeiLatestBookableDateKey();
     const inWindow = dk !== "" && dk >= minKey && dk <= maxKey;
-    const weekdayOk = dk !== "" && isDateKeyMonFri(dk);
-    const showSlotFields = inWindow && weekdayOk;
+    const dateOkForMode =
+      dk !== "" && (isBookingHolidayOutcallMode() ? isDateKeySatSun(dk) : isDateKeyMonFri(dk));
+    const showSlotFields = inWindow && dateOkForMode;
 
     const pickable =
       !slotSelect.disabled &&
@@ -1969,6 +2079,7 @@ function render() {
     finalizeSection.hidden = !slotPicked || !showSlotFields || hideStartTimeRow;
   }
 
+  syncDateFieldLabelText();
   refillSlots(new Set(), true, "", new Map());
   syncBookingStepVisibility();
 
@@ -1976,8 +2087,8 @@ function render() {
     if (tab !== "book") return;
     titleDesc.textContent = t(
       "home.subtitle",
-      "約每 20 分鐘一輪 · 每輪 {{price}} 元；加時亦 {{price}} 元／輪（現場收費）",
-      { price: sessionPriceNtdSetting },
+      "以 15 分鐘為計價單位：首段 {{first}} 元；每加 15 分鐘 {{addon}} 元（現場收費）",
+      { first: HOME_ONSITE_FIRST_15_NTD, addon: HOME_ONSITE_ADDON_15_NTD },
     );
   }
 
@@ -2032,9 +2143,15 @@ function render() {
         return;
       }
 
-      if (!isDateKeyMonFri(dk)) {
+      if (!isBookingHolidayOutcallMode() && !isDateKeyMonFri(dk)) {
         refillSlots(new Set(), true, dk, new Map());
         scheduleStatus.textContent = t("booking.weekdayOnly", "僅能預約週一到週五。");
+        scheduleStatus.classList.add("error");
+        return;
+      }
+      if (isBookingHolidayOutcallMode() && !isDateKeySatSun(dk)) {
+        refillSlots(new Set(), true, dk, new Map());
+        scheduleStatus.textContent = t("booking.weekendOutcallOnly", "假日外約僅能選週六、週日。");
         scheduleStatus.classList.add("error");
         return;
       }
@@ -2045,7 +2162,11 @@ function render() {
         scheduleStatus.className = "status-line schedule-status";
         syncBookingStepVisibility();
         const fn = getAvailabilityCall();
-        const res = await fn({ dateKey: dk, ...localeApiParam() });
+        const res = await fn({
+          dateKey: dk,
+          holidayOutcall: isBookingHolidayOutcallMode(),
+          ...localeApiParam(),
+        });
         const data = res.data as {
           taken: string[];
           blockedSlots?: { startSlot: string; reason?: string }[];
@@ -2098,7 +2219,20 @@ function render() {
       } catch (e) {
         console.error(e);
         refillSlots(new Set(), true, dk, new Map());
-        scheduleStatus.textContent = t("booking.loadSlotsFail", "無法載入空檔，請稍後再試。");
+        const detail = errorMessage(e);
+        const genericErr = t("errors.generic", "發生錯誤");
+        const base = t("booking.loadSlotsFail", "無法載入空檔，請稍後再試。");
+        let msg = base;
+        if (isBookingHolidayOutcallMode() && detail !== genericErr && /週一.*週五|weekday/i.test(detail)) {
+          msg = t(
+            "booking.loadSlotsFailOutcallBackend",
+            "無法載入假日外約空檔：後端仍僅開放週一至週五查詢。請部署已支援假日外約的 Cloud Functions（getAvailability），或暫改選「平日｜辦公室」。詳情：{{detail}}",
+            { detail },
+          );
+        } else if (detail && detail !== genericErr) {
+          msg = t("booking.loadSlotsFailWithDetail", "{{base}} 詳情：{{detail}}", { base, detail });
+        }
+        scheduleStatus.textContent = msg;
         scheduleStatus.classList.add("error");
       } finally {
         bookingAvailabilityLoading = false;
@@ -2157,6 +2291,17 @@ function render() {
       bookStatus.classList.add("error");
       return;
     }
+    const holidayOutcall = isBookingHolidayOutcallMode();
+    if (holidayOutcall && !isDateKeySatSun(dateKey)) {
+      bookStatus.textContent = t("booking.weekendOutcallOnly", "假日外約僅能選週六、週日。");
+      bookStatus.classList.add("error");
+      return;
+    }
+    if (!holidayOutcall && !isDateKeyMonFri(dateKey)) {
+      bookStatus.textContent = t("booking.weekdayOnly", "僅能預約週一到週五。");
+      bookStatus.classList.add("error");
+      return;
+    }
     const allowedModes: BookingMode[] = ["member_cash", "member_wallet", "member_beverage"];
     const canBookAsMember =
       allowedModes.includes(bookingMode) &&
@@ -2179,7 +2324,7 @@ function render() {
     }
     const confirmed = await showConfirmModal(
       t("booking.confirmTitle", "確認送出預約"),
-      buildBookingSummary(displayName, dateKey, startSlot, note, bookingMode),
+      buildBookingSummary(displayName, dateKey, startSlot, note, bookingMode, holidayOutcall),
       t("booking.confirmSubmit", "確認送出"),
     );
     if (!confirmed) {
@@ -2189,7 +2334,15 @@ function render() {
     submitBtn.setAttribute("disabled", "true");
     try {
       const fn = createBookingCall();
-      await fn({ displayName, note, dateKey, startSlot, bookingMode, ...localeApiParam() });
+      await fn({
+        displayName,
+        note,
+        dateKey,
+        startSlot,
+        bookingMode,
+        ...(holidayOutcall ? { holidayOutcall: true } : {}),
+        ...localeApiParam(),
+      });
       const submittedLine = t(
         "booking.submitted",
         "已送出！狀態為「待確認」，實際時間會依現場情況微調。",
@@ -2293,9 +2446,10 @@ function render() {
   });
   bookPanelBook.setAttribute("aria-labelledby", "book-tab-book");
   bookPanelBook.append(
+    serviceKindFieldset,
     el("div", { class: "grid grid-2" }, [
       el("label", { class: "field" }, [t("field.name", "姓名（必填）"), nameInput]),
-      el("label", { class: "field" }, [t("field.date", "日期（週一至週五）"), dateInput]),
+      el("label", { class: "field" }, [dateLabelSpan, dateInput]),
     ]),
     /** 與選時段／付款區分離：未完成信箱驗證時顯示提示（餘額／輪盤／兌換在會員中心） */
     memberExtrasWrap,
@@ -2578,7 +2732,7 @@ function render() {
     const grantDrawBtn = el("button", { class: "ghost", type: "button" }, [t("admin.grantDraw.btn", "贈送抽獎次數")]);
     const grantDrawStatus = el("div", { class: "status-line" });
     const pricingDocRef = doc(db, "siteSettings", "pricing");
-    const pricingSessionPriceInput = el("input", { type: "number", min: "1", step: "1", value: "50" });
+    const pricingSessionPriceInput = el("input", { type: "number", min: "1", step: "1", value: "70" });
     const pricingPointsPerInput = el("input", { type: "number", min: "2", step: "1", value: "10" });
     const savePricingBtn = el("button", { type: "button", class: "ghost" }, [t("admin.pricing.save", "儲存定價")]);
     const pricingAdminStatus = el("div", { class: "status-line" });
@@ -3366,8 +3520,8 @@ function render() {
 
       for (let dayNum = 1; dayNum <= dim; dayNum++) {
         const dk = dateKeyFromYmdTaipei(y, mo, dayNum);
-        const monFri = isDateKeyMonFri(dk);
         const inWin = dk >= minK && dk <= maxK;
+        const bookableCalDay = inWin && (isDateKeyMonFri(dk) || isDateKeySatSun(dk));
         const list = byDay.get(dk) ?? [];
         const cap = list.filter((bb) => bookingCountsTowardAvailabilityCap(bb.status)).length;
         const sorted = list.slice().sort((a, b) => (a.startSlot ?? "").localeCompare(b.startSlot ?? "", "zh-Hant"));
@@ -3381,7 +3535,7 @@ function render() {
         const isToday = dk === todayK;
         const isSelected = dk === selected;
 
-        if (!monFri || !inWin) {
+        if (!bookableCalDay) {
           const inactive = el("div", { class: "admin-calendar__day admin-calendar__day--inactive" });
           inactive.append(el("span", { class: "admin-calendar__day-num" }, [String(dayNum)]));
           if (cap > 0) {
@@ -4581,7 +4735,7 @@ function render() {
     function appendHiddenDeletedRowAdmin(b: Booking) {
       hiddenTable.append(
         el("tr", {}, [
-          el("td", { class: "mono" }, [formatWhen(b)]),
+          el("td", { class: "mono" }, adminWhenCellParts(b)),
           el("td", {}, [b.displayName ?? ""]),
           el("td", {}, [bookingMemberYesNo(b)]),
           el("td", {}, [b.note ?? ""]),
@@ -4718,7 +4872,7 @@ function render() {
       const actionCell = el("div", { class: "admin-booking-actions" }, [cancelBtn, unhideBtn]);
       hiddenTable.append(
         el("tr", {}, [
-          el("td", { class: "mono" }, [formatWhen(b)]),
+          el("td", { class: "mono" }, adminWhenCellParts(b)),
           el("td", {}, [b.displayName ?? ""]),
           el("td", {}, [bookingMemberYesNo(b)]),
           el("td", {}, [b.note ?? ""]),
@@ -4940,7 +5094,7 @@ function render() {
           const actionCell = el("div", { class: "admin-booking-actions" }, [cancelBtn, archiveBtn]);
           table.append(
             el("tr", {}, [
-              el("td", { class: "mono" }, [formatWhen(b)]),
+              el("td", { class: "mono" }, adminWhenCellParts(b)),
               el("td", {}, [b.displayName ?? ""]),
               el("td", {}, [bookingMemberYesNo(b)]),
               el("td", {}, [b.note ?? ""]),

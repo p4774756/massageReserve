@@ -38,6 +38,8 @@ export type NewBookingEmailPayload = {
   note: string;
   bookingMode: string;
   memberUid: string | null;
+  /** 假日外約（交通費由客戶負擔為現場約定，信內註記） */
+  holidayOutcall?: boolean;
 };
 
 export async function sendNewBookingEmailToOwner(opts: {
@@ -57,6 +59,9 @@ export async function sendNewBookingEmailToOwner(opts: {
     `開始時間：${payload.startSlot}`,
     `付款方式：${modeLabel}`,
   ];
+  if (payload.holidayOutcall) {
+    lines.push("服務類型：假日外約（單次計價與平日相同；交通費由客戶負擔）");
+  }
   if (payload.memberUid) {
     lines.push(`會員 UID：${payload.memberUid}`);
   }
@@ -65,7 +70,9 @@ export async function sendNewBookingEmailToOwner(opts: {
   }
   const text = lines.join("\n");
   const resend = new Resend(apiKey);
-  const subject = `新預約：${payload.displayName}｜${payload.dateKey} ${payload.startSlot}`;
+  const subject = payload.holidayOutcall
+    ? `新預約（假日外約）：${payload.displayName}｜${payload.dateKey} ${payload.startSlot}`
+    : `新預約：${payload.displayName}｜${payload.dateKey} ${payload.startSlot}`;
   const { error } = await resend.emails.send({
     from,
     to: [to],

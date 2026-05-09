@@ -1,8 +1,8 @@
 import type { DocumentData } from "firebase-admin/firestore";
 
-/** 後台 `siteSettings/pricing`：現場／現金單次金額、點數兌換次數門檻 */
+/** 後台 `siteSettings/pricing`：現場單次預約（一段 15 分鐘）金額、點數兌換次數門檻 */
 
-export const DEFAULT_SESSION_PRICE_NTD = 50;
+export const DEFAULT_SESSION_PRICE_NTD = 70;
 export const DEFAULT_POINTS_PER_MASSAGE = 10;
 
 export function resolveSessionPriceNtd(raw: DocumentData | undefined): number {

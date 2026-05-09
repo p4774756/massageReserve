@@ -16,6 +16,7 @@ import {
   ACTIVE_STATUSES,
   assertSlotAllowed,
   blockedReasonForSlot,
+  isHolidayOutcallBookableDay,
   isWeekday,
   listBlockedStartSlotsForDate,
   mondayOfWeek,
@@ -46,6 +47,8 @@ type CreateBookingInput = {
   dateKey?: unknown;
   startSlot?: unknown;
   bookingMode?: unknown;
+  /** 為 true 時僅允許週六、週日，並寫入 `holidayOutcall`（外約；交通費由客戶負擔為產品說明，計價與平日相同） */
+  holidayOutcall?: unknown;
 };
 
 type BookingStatus = "pending" | "confirmed" | "done" | "cancelled" | "deleted";
@@ -180,7 +183,15 @@ export const getAvailability = onCall(publicCall, async (request) => {
       st(locale, "avail.beyondWindow", "僅能查詢至下週日為止的日期"),
     );
   }
-  if (!isWeekday(day)) {
+  const holidayOutcall = request.data?.holidayOutcall === true;
+  if (holidayOutcall) {
+    if (!isHolidayOutcallBookableDay(day)) {
+      throw new HttpsError(
+        "invalid-argument",
+        st(locale, "avail.weekendOutcallOnly", "假日外約僅能查詢週六、週日"),
+      );
+    }
+  } else if (!isWeekday(day)) {
     throw new HttpsError("invalid-argument", st(locale, "avail.weekdaysOnly", "僅能查詢週一到週五"));
   }
 
@@ -278,6 +289,7 @@ export const createBooking = onCall(
   const note = typeof data.note === "string" ? data.note.trim() : "";
   const dateKey = typeof data.dateKey === "string" ? data.dateKey : "";
   const startSlot = typeof data.startSlot === "string" ? data.startSlot : "";
+  const holidayOutcall = data.holidayOutcall === true;
   const bookingModeRaw = typeof data.bookingMode === "string" ? data.bookingMode.trim() : "";
   const bookingMode =
     bookingModeRaw === "member_cash" ||
@@ -315,7 +327,7 @@ export const createBooking = onCall(
 
   let startLocal: DateTime;
   try {
-    startLocal = assertSlotAllowed(dateKey, startSlot);
+    startLocal = assertSlotAllowed(dateKey, startSlot, { holidayOutcall });
   } catch (e) {
     const code = e instanceof Error ? e.message : "bad_request";
     const map: Record<string, string> = {
@@ -324,6 +336,7 @@ export const createBooking = onCall(
       past_slot: st(locale, "slot.past_slot", "此開始時間已過，請選擇較晚的時段"),
       beyond_booking_window: st(locale, "slot.beyond_booking_window", "僅能預約至下週日為止。"),
       not_weekday: st(locale, "slot.not_weekday", "僅能預約週一到週五"),
+      not_weekend: st(locale, "slot.not_weekend_outcall", "假日外約僅能預約週六、週日"),
       invalid_slot: st(locale, "slot.invalid_slot", "開始時間不在可預約範圍"),
       ends_after_daily_close: st(
         locale,
@@ -456,6 +469,7 @@ export const createBooking = onCall(
         drawGranted: false,
         status: "pending",
         notificationLocale: "zh-Hant",
+        ...(holidayOutcall ? { holidayOutcall: true } : {}),
         createdAt: FieldValueOrServerTimestamp(),
         updatedAt: FieldValueOrServerTimestamp(),
       });
@@ -485,6 +499,7 @@ export const createBooking = onCall(
         note,
         bookingMode,
         memberUid,
+        holidayOutcall,
       },
     }).catch((err) => console.error("notify owner email failed", err));
   }

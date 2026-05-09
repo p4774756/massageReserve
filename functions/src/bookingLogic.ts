@@ -2,6 +2,8 @@ import { DateTime } from "luxon";
 
 export const TIMEZONE = "Asia/Taipei";
 export const SLOT_STEP_MINUTES = 15;
+/** 假日外約：開始時間選項間隔（分）；服務長度仍為 {@link BOOKING_DURATION_MINUTES} */
+export const HOLIDAY_OUTCALL_SLOT_STEP_MINUTES = 30;
 export const BOOKING_DURATION_MINUTES = 15;
 const LUNCH_START_MINUTES = 11 * 60 + 45;
 const LUNCH_END_MINUTES = 13 * 60 + 15;
@@ -58,6 +60,25 @@ export function allStartSlots(): string[] {
   return slots;
 }
 
+/**
+ * 假日外約可選開始時間：08:00 起每 {@link HOLIDAY_OUTCALL_SLOT_STEP_MINUTES} 分鐘一格，午休／17:00 前結束規則與 {@link allStartSlots} 相同；
+ * 單次服務長度仍為 {@link BOOKING_DURATION_MINUTES}。
+ */
+export function allHolidayOutcallStartSlots(): string[] {
+  const slots: string[] = [];
+  const dayEndMinutes = SERVICE_DAY_END_HOUR * 60 + SERVICE_DAY_END_MINUTE;
+  const endMinutes = dayEndMinutes - BOOKING_DURATION_MINUTES;
+  for (let m = 8 * 60; m <= endMinutes; m += HOLIDAY_OUTCALL_SLOT_STEP_MINUTES) {
+    const slotEnd = m + BOOKING_DURATION_MINUTES;
+    const overlapsLunch = m < LUNCH_END_MINUTES && slotEnd > LUNCH_START_MINUTES;
+    if (overlapsLunch) continue;
+    const h = Math.floor(m / 60);
+    const min = m % 60;
+    slots.push(`${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`);
+  }
+  return slots;
+}
+
 export function parseDateKey(dateKey: string): DateTime {
   const dt = DateTime.fromISO(dateKey, { zone: TIMEZONE });
   if (!dt.isValid) {
@@ -71,6 +92,11 @@ export function isWeekday(dt: DateTime): boolean {
   return dt.weekday >= 1 && dt.weekday <= 5;
 }
 
+/** 假日外約可選曆日：週六、週日（Luxon weekday 6–7） */
+export function isHolidayOutcallBookableDay(dt: DateTime): boolean {
+  return dt.weekday === 6 || dt.weekday === 7;
+}
+
 /** 該週的週一日期 YYYY-MM-DD（當地） */
 export function mondayOfWeek(dt: DateTime): DateTime {
   return dt.minus({ days: dt.weekday - 1 }).startOf("day");
@@ -82,7 +108,11 @@ export function taipeiLatestBookableDateKey(): string {
   return mondayOfWeek(today).plus({ days: 13 }).toISODate()!;
 }
 
-export function assertSlotAllowed(dateKey: string, startSlot: string): DateTime {
+export function assertSlotAllowed(
+  dateKey: string,
+  startSlot: string,
+  opts?: { holidayOutcall?: boolean },
+): DateTime {
   const day = parseDateKey(dateKey);
   const today = DateTime.now().setZone(TIMEZONE).startOf("day");
   if (day < today) {
@@ -92,10 +122,15 @@ export function assertSlotAllowed(dateKey: string, startSlot: string): DateTime 
   if (day > latest) {
     throw new Error("beyond_booking_window");
   }
-  if (!isWeekday(day)) {
+  const holidayOutcall = Boolean(opts?.holidayOutcall);
+  if (holidayOutcall) {
+    if (!isHolidayOutcallBookableDay(day)) {
+      throw new Error("not_weekend");
+    }
+  } else if (!isWeekday(day)) {
     throw new Error("not_weekday");
   }
-  const slots = allStartSlots();
+  const slots = holidayOutcall ? allHolidayOutcallStartSlots() : allStartSlots();
   if (!slots.includes(startSlot)) {
     throw new Error("invalid_slot");
   }
