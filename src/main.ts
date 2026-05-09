@@ -3507,12 +3507,6 @@ function render() {
         el("h4", { class: "admin-announce__block-title" }, [
           t("admin.wheelUi.heading", "會員中心輪盤預覽按鈕"),
         ]),
-        el("p", { class: "hint admin-announce__block-lead" }, [
-          t(
-            "admin.wheelUi.lead",
-            "關閉後，會員在會員中心將看不到「預覽拉霸特效」；不影響正式抽獎。",
-          ),
-        ]),
         el("label", { class: "field checkbox-field" }, [
           showWheelPreviewInput,
           el("span", {}, [
