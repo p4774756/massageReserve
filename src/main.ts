@@ -701,6 +701,9 @@ function render() {
 
   const auth = getFirebaseAuth();
   const db = getDb();
+  const wheelUiSettingsRef = doc(db, "siteSettings", "ui");
+  /** `siteSettings/ui.showWheelSlotPreviewButton`；預設 true（會員中心顯示「預覽拉霸特效」） */
+  let wheelSlotPreviewSettingFromFirestore = true;
 
   /** 會員中心關閉時將輪盤區塊移回隱藏 holder（於下方建構後賦值） */
   let parkMemberHubGames: () => void = () => {};
@@ -2376,6 +2379,7 @@ function render() {
   let adminPricingUnsub: (() => void) | null = null;
   let adminBookingCapsUnsub: (() => void) | null = null;
   let adminBookingBlocksUnsub: (() => void) | null = null;
+  let adminWheelUiUnsub: (() => void) | null = null;
   function stopAdminListener() {
     if (adminUnsub) {
       adminUnsub();
@@ -2393,11 +2397,16 @@ function render() {
       adminBookingBlocksUnsub();
       adminBookingBlocksUnsub = null;
     }
+    if (adminWheelUiUnsub) {
+      adminWheelUiUnsub();
+      adminWheelUiUnsub = null;
+    }
   }
 
   function renderAdminLoggedOut() {
     stopAdminListener();
     adminWrap.innerHTML = "";
+    adminWrap.className = "";
     const box = el("div", { class: "admin-login" }, []);
     const email = el("input", { type: "email", autocomplete: "username" });
     const password = el("input", { type: "password", autocomplete: "current-password" });
@@ -2462,6 +2471,7 @@ function render() {
   function renderAdminForbidden() {
     stopAdminListener();
     adminWrap.innerHTML = "";
+    adminWrap.className = "";
     adminWrap.append(
       el("div", { class: "admin-login" }, [
         el("p", { class: "status-line error" }, [t("admin.forbidden", "無權限：此帳號不是管理員。")]),
@@ -2626,18 +2636,15 @@ function render() {
       }
     });
 
-    const walletSegmentPricing = el(
-      "section",
-      { class: "admin-announce__wallet-segment admin-announce__wallet-segment--pricing" },
-      [
-        el("div", { class: "grid grid-2" }, [
-          el("label", { class: "field" }, [t("admin.pricing.sessionPrice", "現場單次金額（元）"), pricingSessionPriceInput]),
-          el("label", { class: "field" }, [t("admin.pricing.pointsPer", "輪盤：幾點換 1 次按摩"), pricingPointsPerInput]),
-        ]),
-        el("div", { class: "row-actions" }, [savePricingBtn]),
-        pricingAdminStatus,
-      ],
-    );
+    const announcePricingFlat = el("section", { class: "admin-announce__block admin-announce__block--pricing" }, [
+      el("h4", { class: "admin-announce__block-title" }, [t("admin.pricing.heading", "定價與點數兌換")]),
+      el("div", { class: "grid grid-2" }, [
+        el("label", { class: "field" }, [t("admin.pricing.sessionPrice", "現場單次金額（元）"), pricingSessionPriceInput]),
+        el("label", { class: "field" }, [t("admin.pricing.pointsPer", "輪盤：幾點換 1 次按摩"), pricingPointsPerInput]),
+      ]),
+      el("div", { class: "row-actions" }, [savePricingBtn]),
+      pricingAdminStatus,
+    ]);
 
     topupBtn.addEventListener("click", async () => {
       topupStatus.textContent = "";
@@ -3079,99 +3086,82 @@ function render() {
       bookingBlocksStatus,
     ]);
 
-    const subTabAnnounceCaps = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
-      t("admin.announce.subtabCaps", "預約名額"),
-    ]);
-    subTabAnnounceCaps.id = "admin-announce-subtab-caps";
-    const subTabAnnounceBlocks = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
-      t("admin.announce.subtabBlocks", "不開放時段"),
-    ]);
-    subTabAnnounceBlocks.id = "admin-announce-subtab-blocks";
-    const subTabAnnouncePricing = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
-      t("admin.announce.subtabPricing", "定價與點數兌換"),
-    ]);
-    subTabAnnouncePricing.id = "admin-announce-subtab-pricing";
+    const bookingBlocksPanelInner = el("div", { class: "admin-announce admin-announce--settings" }, [blockClosedWindows]);
 
-    const panelAnnounceCapsSub = el("div", {
-      class: "admin-tab-panel admin-member-subpanel admin-announce-subpanel",
-      role: "tabpanel",
-      id: "admin-announce-subpanel-caps",
-    });
-    panelAnnounceCapsSub.setAttribute("aria-labelledby", "admin-announce-subtab-caps");
-    panelAnnounceCapsSub.append(blockCaps);
+    const showWheelPreviewInput = el("input", { type: "checkbox" }) as HTMLInputElement;
+    const saveWheelUiBtn = el("button", { type: "button", class: "ghost" }, [
+      t("admin.wheelUi.save", "儲存前台選項"),
+    ]);
+    const wheelUiSaveStatus = el("div", { class: "status-line" });
 
-    const panelAnnounceBlocksSub = el("div", {
-      class: "admin-tab-panel admin-member-subpanel admin-announce-subpanel",
-      role: "tabpanel",
-      id: "admin-announce-subpanel-blocks",
-      hidden: true,
-    });
-    panelAnnounceBlocksSub.setAttribute("aria-labelledby", "admin-announce-subtab-blocks");
-    panelAnnounceBlocksSub.append(blockClosedWindows);
-
-    const panelAnnouncePricingSub = el("div", {
-      class: "admin-tab-panel admin-member-subpanel admin-announce-subpanel",
-      role: "tabpanel",
-      id: "admin-announce-subpanel-pricing",
-      hidden: true,
-    });
-    panelAnnouncePricingSub.setAttribute("aria-labelledby", "admin-announce-subtab-pricing");
-    panelAnnouncePricingSub.append(
-      el("div", { class: "admin-announce admin-announce--pricing" }, [
-        el("h4", { class: "admin-announce__block-title" }, [t("admin.pricing.heading", "定價與點數兌換")]),
-        walletSegmentPricing,
-      ]),
+    adminWheelUiUnsub = onSnapshot(
+      wheelUiSettingsRef,
+      (snap) => {
+        const raw = snap.data()?.showWheelSlotPreviewButton;
+        showWheelPreviewInput.checked = typeof raw === "boolean" ? raw : true;
+      },
+      () => {
+        showWheelPreviewInput.checked = true;
+      },
     );
 
-    subTabAnnounceCaps.setAttribute("aria-controls", "admin-announce-subpanel-caps");
-    subTabAnnounceBlocks.setAttribute("aria-controls", "admin-announce-subpanel-blocks");
-    subTabAnnouncePricing.setAttribute("aria-controls", "admin-announce-subpanel-pricing");
-
-    const announceSubTablist = el("div", { class: "admin-tabs admin-member-subtabs", role: "tablist" });
-    announceSubTablist.setAttribute(
-      "aria-label",
-      t("admin.announce.subtabsAria", "其他設定子分頁"),
-    );
-    announceSubTablist.append(subTabAnnounceCaps, subTabAnnounceBlocks, subTabAnnouncePricing);
-    const announceSubPanelsWrap = el("div", { class: "admin-member-subpanels" });
-    announceSubPanelsWrap.append(panelAnnounceCapsSub, panelAnnounceBlocksSub, panelAnnouncePricingSub);
-
-    const announceSubTabButtons = [subTabAnnounceCaps, subTabAnnounceBlocks, subTabAnnouncePricing] as const;
-    const announceSubTabPanels = [panelAnnounceCapsSub, panelAnnounceBlocksSub, panelAnnouncePricingSub] as const;
-
-    function selectAnnounceSubTab(index: 0 | 1 | 2) {
-      announceSubTabButtons.forEach((btn, i) => {
-        const on = i === index;
-        btn.setAttribute("aria-selected", String(on));
-        btn.classList.toggle("is-active", on);
-        btn.tabIndex = on ? 0 : -1;
-      });
-      announceSubTabPanels.forEach((panel, i) => {
-        panel.hidden = i !== index;
-        panel.classList.toggle("is-active", i === index);
-      });
-    }
-
-    subTabAnnounceCaps.addEventListener("click", () => selectAnnounceSubTab(0));
-    subTabAnnounceBlocks.addEventListener("click", () => selectAnnounceSubTab(1));
-    subTabAnnouncePricing.addEventListener("click", () => selectAnnounceSubTab(2));
-    announceSubTablist.addEventListener("keydown", (ev) => {
-      if (ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;
-      ev.preventDefault();
-      const cur = announceSubTabButtons.findIndex((b) => b.getAttribute("aria-selected") === "true");
-      if (cur < 0) return;
-      const delta = ev.key === "ArrowRight" ? 1 : -1;
-      const n = announceSubTabButtons.length;
-      const next = ((cur + delta) % n + n) % n;
-      selectAnnounceSubTab(next as 0 | 1 | 2);
-      announceSubTabButtons[next].focus();
+    saveWheelUiBtn.addEventListener("click", async () => {
+      wheelUiSaveStatus.textContent = "";
+      wheelUiSaveStatus.className = "status-line";
+      saveWheelUiBtn.setAttribute("disabled", "true");
+      wheelUiSaveStatus.textContent = t("admin.status.processing", "處理中…");
+      try {
+        await setDoc(
+          wheelUiSettingsRef,
+          {
+            showWheelSlotPreviewButton: showWheelPreviewInput.checked,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+        wheelUiSaveStatus.textContent = t("admin.status.updated", "已更新");
+        wheelUiSaveStatus.classList.add("ok");
+      } catch (e) {
+        wheelUiSaveStatus.textContent =
+          e instanceof Error ? e.message : t("admin.memberList.saveFail", "儲存失敗");
+        wheelUiSaveStatus.classList.add("error");
+      } finally {
+        saveWheelUiBtn.removeAttribute("disabled");
+      }
     });
-    selectAnnounceSubTab(0);
+
+    const wheelUiOptionsBlock = el(
+      "section",
+      { class: "admin-announce__block admin-announce__block--wheel-preview" },
+      [
+        el("h4", { class: "admin-announce__block-title" }, [
+          t("admin.wheelUi.heading", "會員中心輪盤預覽按鈕"),
+        ]),
+        el("p", { class: "hint admin-announce__block-lead" }, [
+          t(
+            "admin.wheelUi.lead",
+            "關閉後，會員在會員中心將看不到「預覽拉霸特效」；不影響正式抽獎。",
+          ),
+        ]),
+        el("label", { class: "field checkbox-field" }, [
+          showWheelPreviewInput,
+          el("span", {}, [
+            t(
+              "admin.wheelUi.showPreview",
+              "顯示「預覽拉霸特效」按鈕（僅畫面預覽，不呼叫抽獎、不扣次數）",
+            ),
+          ]),
+        ]),
+        el("div", { class: "row-actions" }, [saveWheelUiBtn]),
+        wheelUiSaveStatus,
+      ],
+    );
 
     announcementSection.append(
       el("h3", { class: "admin-announce__page-title" }, [t("admin.announce.heading", "前台與預約規則")]),
-      announceSubTablist,
-      announceSubPanelsWrap,
+      wheelUiOptionsBlock,
+      blockCaps,
+      announcePricingFlat,
     );
 
     function wireWalletAccordionsExclusive(roots: HTMLElement[]) {
@@ -4424,13 +4414,17 @@ function render() {
       t("admin.tab.members", "會員與儲值"),
     ]);
     tabMembers.id = "admin-tab-trigger-members";
+    const tabBookingBlocks = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
+      t("admin.tab.bookingBlocks", "不開放時段"),
+    ]);
+    tabBookingBlocks.id = "admin-tab-trigger-booking-blocks";
     const tabAnnounce = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
       t("admin.tab.announce", "其他設定"),
     ]);
     tabAnnounce.id = "admin-tab-trigger-announce";
 
     const adminTablist = el("div", { class: "admin-tabs", role: "tablist" });
-    adminTablist.append(tabBookingsHub, tabMembers, tabAnnounce);
+    adminTablist.append(tabBookingsHub, tabMembers, tabBookingBlocks, tabAnnounce);
 
     const subBookingsActive = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
       t("admin.tab.bookings", "預約管理"),
@@ -4509,6 +4503,14 @@ function render() {
       hidden: true,
     });
     panelMembersEl.setAttribute("aria-labelledby", "admin-tab-trigger-members");
+    const panelBookingBlocksEl = el("div", {
+      class: "admin-tab-panel",
+      role: "tabpanel",
+      id: "admin-tab-panel-booking-blocks",
+      hidden: true,
+    });
+    panelBookingBlocksEl.setAttribute("aria-labelledby", "admin-tab-trigger-booking-blocks");
+    panelBookingBlocksEl.append(bookingBlocksPanelInner);
     const panelAnnounceEl = el("div", {
       class: "admin-tab-panel",
       role: "tabpanel",
@@ -4519,6 +4521,7 @@ function render() {
 
     tabBookingsHub.setAttribute("aria-controls", "admin-tab-panel-bookings-hub");
     tabMembers.setAttribute("aria-controls", "admin-tab-panel-members");
+    tabBookingBlocks.setAttribute("aria-controls", "admin-tab-panel-booking-blocks");
     tabAnnounce.setAttribute("aria-controls", "admin-tab-panel-announce");
 
     panelBookingsActiveSub.append(adminBookingsCalendarSection, adminStatus, tableHolder);
@@ -4526,12 +4529,12 @@ function render() {
     panelAnnounceEl.append(announcementSection);
 
     const adminPanelsWrap = el("div", { class: "admin-tab-panels" });
-    adminPanelsWrap.append(panelBookingsHubEl, panelMembersEl, panelAnnounceEl);
+    adminPanelsWrap.append(panelBookingsHubEl, panelMembersEl, panelBookingBlocksEl, panelAnnounceEl);
 
-    const adminTabButtons = [tabBookingsHub, tabMembers, tabAnnounce] as const;
-    const adminTabPanels = [panelBookingsHubEl, panelMembersEl, panelAnnounceEl] as const;
+    const adminTabButtons = [tabBookingsHub, tabMembers, tabBookingBlocks, tabAnnounce] as const;
+    const adminTabPanels = [panelBookingsHubEl, panelMembersEl, panelBookingBlocksEl, panelAnnounceEl] as const;
 
-    function selectAdminTab(index: 0 | 1 | 2) {
+    function selectAdminTab(index: 0 | 1 | 2 | 3) {
       adminTabButtons.forEach((btn, i) => {
         const on = i === index;
         btn.setAttribute("aria-selected", String(on));
@@ -4546,7 +4549,8 @@ function render() {
 
     tabBookingsHub.addEventListener("click", () => selectAdminTab(0));
     tabMembers.addEventListener("click", () => selectAdminTab(1));
-    tabAnnounce.addEventListener("click", () => selectAdminTab(2));
+    tabBookingBlocks.addEventListener("click", () => selectAdminTab(2));
+    tabAnnounce.addEventListener("click", () => selectAdminTab(3));
 
     adminTablist.addEventListener("keydown", (ev) => {
       if (ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;
@@ -4556,13 +4560,16 @@ function render() {
       const delta = ev.key === "ArrowRight" ? 1 : -1;
       const n = adminTabButtons.length;
       const next = ((cur + delta) % n + n) % n;
-      selectAdminTab(next as 0 | 1 | 2);
+      selectAdminTab(next as 0 | 1 | 2 | 3);
       adminTabButtons[next].focus();
     });
 
     selectAdminTab(0);
 
-    adminWrap.append(adminTablist, adminPanelsWrap);
+    adminWrap.className = "admin-dashboard";
+    adminWrap.append(
+      el("div", { class: "admin-dashboard__shell" }, [adminTablist, adminPanelsWrap]),
+    );
 
     void loadMemberList();
 
@@ -4976,10 +4983,23 @@ function render() {
     }
   }
 
-  /** 輪盤特效預覽僅管理員可看見（與 Firestore 開關無關） */
-  async function syncWheelPreviewBtnVisibility() {
-    wheelTestBtn.hidden = !(await canCurrentUserAccessAdmin());
+  /** 輪盤特效預覽按鈕：由後台「其他設定」`siteSettings/ui.showWheelSlotPreviewButton` 控制（所有會員皆可見，與是否管理員無關） */
+  function syncWheelPreviewBtnVisibility() {
+    wheelTestBtn.hidden = !wheelSlotPreviewSettingFromFirestore;
   }
+
+  onSnapshot(
+    wheelUiSettingsRef,
+    (snap) => {
+      const raw = snap.data()?.showWheelSlotPreviewButton;
+      wheelSlotPreviewSettingFromFirestore = typeof raw === "boolean" ? raw : true;
+      syncWheelPreviewBtnVisibility();
+    },
+    () => {
+      wheelSlotPreviewSettingFromFirestore = true;
+      syncWheelPreviewBtnVisibility();
+    },
+  );
 
   async function syncAdminView() {
     if (tab !== "admin") return;
@@ -5000,7 +5020,7 @@ function render() {
     void (async () => {
       await refreshBookingPricing();
       await refreshWalletStatus();
-      await syncWheelPreviewBtnVisibility();
+      syncWheelPreviewBtnVisibility();
     })();
     syncAdminHeadSignedInHint();
     if (tab !== "admin") return;

@@ -473,6 +473,12 @@ header.page-head {
   background: var(--surface);
 }
 
+.shell.admin-mode main.panel:has(.admin-dashboard) {
+  padding-top: 26px;
+  padding-bottom: 40px;
+  background: linear-gradient(180deg, rgb(241 245 249 / 0.65) 0%, rgb(248 250 252 / 0.9) 38%, var(--surface) 100%);
+}
+
 .shell.admin-mode .admin-login {
   margin-left: auto;
   margin-right: auto;
@@ -1408,6 +1414,93 @@ tbody tr:hover td {
   display: none !important;
 }
 
+/* 後台主工作區：頂層分頁與內容合成一張抬升的卡片 */
+.admin-dashboard {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.admin-dashboard__shell {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm), 0 14px 42px rgb(15 23 42 / 0.07);
+  overflow: hidden;
+}
+
+.shell.admin-mode .admin-dashboard .admin-tabs {
+  margin: 0;
+  padding: 8px 10px 0;
+  gap: 2px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(165deg, rgb(248 250 252) 0%, rgb(255 255 255) 60%);
+}
+
+.shell.admin-mode .admin-dashboard .admin-tab {
+  padding: 11px 14px 13px;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  font-size: 0.86rem;
+  letter-spacing: 0.02em;
+}
+
+.shell.admin-mode .admin-dashboard .admin-tab.is-active,
+.shell.admin-mode .admin-dashboard .admin-tab[aria-selected="true"] {
+  color: var(--accent-2);
+  font-weight: 700;
+  border-bottom-color: var(--accent-2);
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.98) 0%, rgb(255 255 255 / 0.88) 100%);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.9);
+}
+
+.shell.admin-mode .admin-dashboard .admin-tab:focus-visible {
+  outline-color: rgb(14 165 233 / 0.55);
+}
+
+.shell.admin-mode .admin-dashboard .admin-tab-panels {
+  margin: 0;
+  padding: 22px 20px 30px;
+  background: linear-gradient(180deg, rgb(255 255 255) 0%, rgb(252 253 255) 100%);
+}
+
+/* 「其他設定」：區塊標題與卡片色條，提升可掃視性 */
+.shell.admin-mode .admin-announce--settings > .admin-announce__page-title {
+  margin: 0 0 20px;
+  padding: 4px 2px 14px 12px;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+  border-left: 4px solid var(--accent-2);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: linear-gradient(90deg, rgb(14 165 233 / 0.1) 0%, transparent 52%);
+}
+
+.admin-announce__block--wheel-preview {
+  border-left-color: #8b62b3;
+  background: linear-gradient(135deg, rgb(139 98 179 / 0.09) 0%, var(--surface) 48%);
+  box-shadow: var(--shadow-sm);
+}
+
+.admin-announce__block--caps {
+  border-left-color: #2f8f6f;
+  background: linear-gradient(135deg, rgb(47 143 111 / 0.08) 0%, var(--surface) 48%);
+  box-shadow: var(--shadow-sm);
+}
+
+.admin-announce__block--blocks {
+  border-left-color: #c97a35;
+  background: linear-gradient(135deg, rgb(201 122 53 / 0.09) 0%, var(--surface) 48%);
+  box-shadow: var(--shadow-sm);
+}
+
+.admin-announce__block--pricing {
+  border-left-color: #4a7ab5;
+  background: linear-gradient(135deg, rgb(74 122 181 / 0.1) 0%, var(--surface) 50%);
+  box-shadow: var(--shadow-sm);
+}
+
 /* 後台次層分頁：與主分頁（全寬底線）區隔——較小字、淺色帶狀底、圓角「鈕」選中態 */
 .admin-member-subtabs {
   display: flex;
@@ -1736,15 +1829,6 @@ tbody tr:hover td {
   padding-bottom: 14px;
 }
 
-/* 定價與點數兌換：其他設定子分頁內區塊 */
-.admin-announce--pricing {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding-top: 14px;
-  padding-bottom: 14px;
-}
-
 .admin-announce__wallet-segment {
   margin: 0;
   display: grid;
@@ -1755,11 +1839,6 @@ tbody tr:hover td {
   border-left-width: 4px;
   border-left-style: solid;
   background: var(--surface);
-}
-
-.admin-announce__wallet-segment--pricing {
-  border-left-color: #4a7ab5;
-  background: linear-gradient(135deg, rgb(74 122 181 / 0.08) 0%, var(--surface) 48%);
 }
 
 .admin-announce__wallet-segment--member-ops {
@@ -4366,8 +4445,8 @@ body.wheel-spectacle-lock {
 /* 注意：此鈕含 .primary，全域 button.primary:hover 使用 background 簡寫會清空 background-image，故 hover/active/disabled 須重複宣告底圖 */
 .slot-spectacle-stage .wheel-spectacle-primary.slot-spectacle-take-btn {
   --slot-take-art: url("/media/slot-take-button-luxe.png");
-  appearance: none;
   -webkit-appearance: none;
+  appearance: none;
   width: min(560px, 96vw);
   min-width: min(560px, 96vw);
   min-height: clamp(96px, 20vmin, 140px);
@@ -4821,6 +4900,21 @@ html.kuso-retro .shell.admin-mode tbody tr:hover td {
   background: var(--accent-soft);
 }
 
+html.kuso-retro .shell.admin-mode .admin-dashboard__shell {
+  border-color: var(--border);
+  border-radius: var(--radius-lg);
+  background: #ffffff;
+  box-shadow: var(--shadow-lg);
+}
+
+html.kuso-retro .shell.admin-mode .admin-dashboard .admin-tabs {
+  background: linear-gradient(165deg, var(--surface-muted) 0%, #ffffff 58%);
+}
+
+html.kuso-retro .shell.admin-mode .admin-dashboard .admin-tab-panels {
+  background: #ffffff;
+}
+
 html.kuso-retro .shell.admin-mode .admin-tabs {
   border-bottom: 1px solid var(--border);
   gap: 4px;
@@ -4889,6 +4983,10 @@ html.kuso-retro .shell.admin-mode textarea:focus-visible {
 html.kuso-retro .shell.admin-mode main.panel {
   background: #ffffff;
   border-top: none;
+}
+
+html.kuso-retro .shell.admin-mode main.panel:has(.admin-dashboard) {
+  background: linear-gradient(180deg, rgb(255 248 244 / 0.95) 0%, rgb(255 252 250) 45%, #ffffff 100%);
 }
 
 /* Modal／浮層掛在 body，用 :has 與後台同套 */
