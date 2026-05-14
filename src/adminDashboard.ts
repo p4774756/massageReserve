@@ -223,16 +223,23 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     const grantDrawStatus = el("div", { class: "status-line" });
     const pricingDocRef = doc(db, "siteSettings", "pricing");
     const pricingSessionPriceInput = el("input", { type: "number", min: "1", step: "1", value: "70" });
+    const pricingAddon15Input = el("input", { type: "number", min: "1", step: "1", value: "30" });
     const pricingPointsPerInput = el("input", { type: "number", min: "2", step: "1", value: "10" });
     const savePricingBtn = el("button", { type: "button", class: "ghost" }, [t("admin.pricing.save", "儲存定價")]);
     const pricingAdminStatus = el("div", { class: "status-line" });
     adminPricingUnsub = onSnapshot(
       pricingDocRef,
       (snap) => {
-        const d = snap.data() as { sessionPriceNtd?: unknown; pointsPerMassage?: unknown } | undefined;
+        const d = snap.data() as
+          | { sessionPriceNtd?: unknown; addon15PriceNtd?: unknown; pointsPerMassage?: unknown }
+          | undefined;
         const sp = d?.sessionPriceNtd;
         if (typeof sp === "number" && Number.isFinite(sp)) {
           pricingSessionPriceInput.value = String(Math.max(1, Math.round(sp)));
+        }
+        const ad = d?.addon15PriceNtd;
+        if (typeof ad === "number" && Number.isFinite(ad)) {
+          pricingAddon15Input.value = String(Math.max(1, Math.round(ad)));
         }
         const pp = d?.pointsPerMassage;
         if (typeof pp === "number" && Number.isFinite(pp)) {
@@ -248,9 +255,15 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       pricingAdminStatus.textContent = "";
       pricingAdminStatus.className = "status-line";
       const sp = Number(pricingSessionPriceInput.value);
+      const ad = Number(pricingAddon15Input.value);
       const pp = Number(pricingPointsPerInput.value);
       if (!Number.isFinite(sp) || sp < 1 || !Number.isInteger(sp)) {
         pricingAdminStatus.textContent = t("admin.pricing.badSessionPrice", "現場單次金額需為 ≥1 的整數。");
+        pricingAdminStatus.classList.add("error");
+        return;
+      }
+      if (!Number.isFinite(ad) || ad < 1 || !Number.isInteger(ad)) {
+        pricingAdminStatus.textContent = t("admin.pricing.badAddon15", "續時每 15 分鐘金額需為 ≥1 的整數。");
         pricingAdminStatus.classList.add("error");
         return;
       }
@@ -265,6 +278,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
           pricingDocRef,
           {
             sessionPriceNtd: Math.round(sp),
+            addon15PriceNtd: Math.round(ad),
             pointsPerMassage: Math.round(pp),
             updatedAt: serverTimestamp(),
           },
@@ -284,6 +298,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       el("h4", { class: "admin-announce__block-title" }, [t("admin.pricing.heading", "定價與點數兌換")]),
       el("div", { class: "grid grid-2" }, [
         el("label", { class: "field" }, [t("admin.pricing.sessionPrice", "現場單次金額（元）"), pricingSessionPriceInput]),
+        el("label", { class: "field" }, [t("admin.pricing.addon15", "續時每 15 分鐘（元）"), pricingAddon15Input]),
         el("label", { class: "field" }, [t("admin.pricing.pointsPer", "輪盤：幾點換 1 次按摩"), pricingPointsPerInput]),
       ]),
       el("div", { class: "row-actions" }, [savePricingBtn]),

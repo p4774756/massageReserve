@@ -51,10 +51,11 @@ import {
 import { showAlertModal, showConfirmModal } from "./modals";
 import { wrapPasswordField } from "./passwordField";
 import { paintMemberWalletSummary, type MemberWalletSummaryOpts } from "./walletSummaryUi";
-
-/** 首頁副標「現場計價」說明（元）；預約單筆現場金額仍以 `siteSettings/pricing.sessionPriceNtd`／後端為準 */
-const HOME_ONSITE_FIRST_15_NTD = 70;
-const HOME_ONSITE_ADDON_15_NTD = 50;
+import {
+  resolveAddon15PriceNtdClient,
+  resolvePointsPerMassageClient,
+  resolveSessionPriceNtdClient,
+} from "./sitePricingResolve";
 
 function render() {
   initI18n();
@@ -76,6 +77,7 @@ function render() {
 
   const auth = getFirebaseAuth();
   const db = getDb();
+  const pricingDocRef = doc(db, "siteSettings", "pricing");
   const wheelUiSettingsRef = doc(db, "siteSettings", "ui");
   /** `siteSettings/ui.showWheelSlotPreviewButton`；預設 true（會員中心顯示「預覽拉霸特效」） */
   let wheelSlotPreviewSettingFromFirestore = true;
@@ -493,7 +495,9 @@ function render() {
   let sessionCreditsCount = 0;
   let wheelPointsCount = 0;
   let pointsPerMassageSetting = 10;
+  /** 與後端 `functions/src/pricing.ts` 預設對齊（定價 API 失敗時的首屏 fallback） */
   let sessionPriceNtdSetting = 70;
+  let addon15PriceNtdSetting = 30;
   let drawChances = 0;
   const redeemPointsStatus = el("div", { class: "status-line", hidden: true });
   const redeemPointsBtn = el("button", { type: "button", class: "ghost" }, [
@@ -1202,6 +1206,7 @@ function render() {
           drawChances: number;
           nickname?: string;
           sessionPriceNtd?: number;
+          addon15PriceNtd?: number;
           pointsPerMassage?: number;
         };
         walletBalance = typeof data.walletBalance === "number" ? data.walletBalance : 0;
@@ -1210,6 +1215,9 @@ function render() {
         drawChances = typeof data.drawChances === "number" ? data.drawChances : 0;
         if (typeof data.sessionPriceNtd === "number" && Number.isFinite(data.sessionPriceNtd)) {
           sessionPriceNtdSetting = Math.max(1, Math.round(data.sessionPriceNtd));
+        }
+        if (typeof data.addon15PriceNtd === "number" && Number.isFinite(data.addon15PriceNtd)) {
+          addon15PriceNtdSetting = Math.max(1, Math.round(data.addon15PriceNtd));
         }
         if (typeof data.pointsPerMassage === "number" && Number.isFinite(data.pointsPerMassage)) {
           pointsPerMassageSetting = Math.max(2, Math.round(data.pointsPerMassage));
@@ -1371,8 +1379,8 @@ function render() {
     if (tab !== "book") return;
     titleDesc.textContent = t(
       "home.subtitle",
-      "以 15 分鐘為計價單位：首段 {{first}} 元；每加 15 分鐘 {{addon}} 元（現場收費）",
-      { first: HOME_ONSITE_FIRST_15_NTD, addon: HOME_ONSITE_ADDON_15_NTD },
+      "以 15 分鐘為計價單位：首段 {{first}} 元；續時 {{addon}} 元（現場收費）",
+      { first: sessionPriceNtdSetting, addon: addon15PriceNtdSetting },
     );
   }
 
@@ -1380,9 +1388,16 @@ function render() {
     try {
       const fn = getBookingPricingCall();
       const res = await fn({ ...localeApiParam() });
-      const d = res.data as { sessionPriceNtd?: number; pointsPerMassage?: number };
+      const d = res.data as {
+        sessionPriceNtd?: number;
+        addon15PriceNtd?: number;
+        pointsPerMassage?: number;
+      };
       if (typeof d.sessionPriceNtd === "number" && Number.isFinite(d.sessionPriceNtd)) {
         sessionPriceNtdSetting = Math.max(1, Math.round(d.sessionPriceNtd));
+      }
+      if (typeof d.addon15PriceNtd === "number" && Number.isFinite(d.addon15PriceNtd)) {
+        addon15PriceNtdSetting = Math.max(1, Math.round(d.addon15PriceNtd));
       }
       if (typeof d.pointsPerMassage === "number" && Number.isFinite(d.pointsPerMassage)) {
         pointsPerMassageSetting = Math.max(2, Math.round(d.pointsPerMassage));
@@ -1852,6 +1867,23 @@ function render() {
     () => {
       wheelSlotPreviewSettingFromFirestore = true;
       syncWheelPreviewBtnVisibility();
+    },
+  );
+
+  /** 後台寫入 `siteSettings/pricing` 後即時反映（不依賴 Cloud Functions 是否已部署 `addon15PriceNtd`） */
+  onSnapshot(
+    pricingDocRef,
+    (snap) => {
+      const raw = snap.data() as Record<string, unknown> | undefined;
+      sessionPriceNtdSetting = resolveSessionPriceNtdClient(raw);
+      addon15PriceNtdSetting = resolveAddon15PriceNtdClient(raw);
+      pointsPerMassageSetting = resolvePointsPerMassageClient(raw);
+      syncHomePageSubtitle();
+      refillBookingModes(isVerifiedMember());
+      syncRedeemPointsUi();
+    },
+    () => {
+      /* 讀取失敗時保留上一輪數值與 Callable 結果 */
     },
   );
 

@@ -1,8 +1,11 @@
 import type { DocumentData } from "firebase-admin/firestore";
 
-/** 後台 `siteSettings/pricing`：現場單次預約（一段 15 分鐘）金額、點數兌換次數門檻 */
+/**
+ * 後台 `siteSettings/pricing`：現場首段（一段 15 分鐘）金額、同單位續時加價、點數兌換次數門檻
+ */
 
 export const DEFAULT_SESSION_PRICE_NTD = 70;
+export const DEFAULT_ADDON_15_PRICE_NTD = 30;
 export const DEFAULT_POINTS_PER_MASSAGE = 10;
 
 export function resolveSessionPriceNtd(raw: DocumentData | undefined): number {
@@ -11,6 +14,16 @@ export function resolveSessionPriceNtd(raw: DocumentData | undefined): number {
   const v = o.sessionPriceNtd;
   const n = typeof v === "number" && Number.isFinite(v) ? Math.round(v) : Number(v);
   if (!Number.isInteger(n) || n < 1 || n > 500_000) return DEFAULT_SESSION_PRICE_NTD;
+  return n;
+}
+
+/** 現場續時：每加一段 15 分鐘（僅說明／定價；預約扣款仍以單次首段為準） */
+export function resolveAddon15PriceNtd(raw: DocumentData | undefined): number {
+  if (!raw || typeof raw !== "object") return DEFAULT_ADDON_15_PRICE_NTD;
+  const o = raw as Record<string, unknown>;
+  const v = o.addon15PriceNtd;
+  const n = typeof v === "number" && Number.isFinite(v) ? Math.round(v) : Number(v);
+  if (!Number.isInteger(n) || n < 1 || n > 500_000) return DEFAULT_ADDON_15_PRICE_NTD;
   return n;
 }
 
