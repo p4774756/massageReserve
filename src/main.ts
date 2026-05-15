@@ -13,6 +13,7 @@ import { doc, onSnapshot } from "firebase/firestore";
 import {
   createBookingCall,
   getAvailabilityCall,
+  getBookingDayCountsCall,
   getBookingPricingCall,
   getDb,
   getFirebaseAuth,
@@ -47,6 +48,7 @@ import {
   taipeiLatestBookableDateKey,
   taipeiTodayDateKey,
   taipeiWeekdaySun0FromDateKey,
+  weekdayZhFromDateKeyTaipei,
 } from "./taipeiDates";
 import { showAlertModal, showConfirmModal } from "./modals";
 import { wrapPasswordField } from "./passwordField";
@@ -166,6 +168,8 @@ function render() {
   const dateInput = el("input", { type: "hidden", id: "booking-date-value" });
   let bookingPickCalYear = 0;
   let bookingPickCalMonth = 0;
+  let bookingPickCalDayCounts: Record<string, number> = {};
+  let bookingPickCalCountsReq = 0;
   const dateLabelSpan = el("span", {});
   const dateCalendarHint = el("p", {
     class: "hint book-date-calendar-hint",
@@ -298,6 +302,91 @@ function render() {
     return monthHasBookableDayInBookWindow(ny, nm, office);
   }
 
+  function appendBookingPickCalDayBadge(parent: HTMLElement, dk: string): void {
+    const count = bookingPickCalDayCounts[dk] ?? 0;
+    if (count <= 0) return;
+    const badge = el("span", { class: "book-pick-calendar__badge" }, [String(count)]);
+    badge.title = t("booking.calDayBookings", "{{count}} 筆有效預約", { count });
+    parent.append(badge);
+  }
+
+  function mergeBookingPickCalDayCount(dk: string, count: number): void {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dk)) return;
+    const n = Math.trunc(count);
+    if (n > 0) bookingPickCalDayCounts[dk] = n;
+    else delete bookingPickCalDayCounts[dk];
+  }
+
+  function bookableDateKeysInPickMonth(y: number, mo: number): string[] {
+    const dim = daysInMonthFromOneIndexed(y, mo);
+    const keys: string[] = [];
+    for (let dayNum = 1; dayNum <= dim; dayNum++) {
+      const dk = dateKeyFromYmdTaipei(y, mo, dayNum);
+      if (bookablePickCell(dk)) keys.push(dk);
+    }
+    return keys;
+  }
+
+  async function refreshBookingPickCalDayCountsViaAvailability(
+    y: number,
+    mo: number,
+    reqId: number,
+  ): Promise<void> {
+    const keys = bookableDateKeysInPickMonth(y, mo);
+    if (keys.length === 0) {
+      bookingPickCalDayCounts = {};
+      return;
+    }
+    const fn = getAvailabilityCall();
+    const holidayOutcall = isBookingHolidayOutcallMode();
+    const next: Record<string, number> = {};
+    await Promise.all(
+      keys.map(async (dateKey) => {
+        try {
+          const res = await fn({ dateKey, holidayOutcall, ...localeApiParam() });
+          if (reqId !== bookingPickCalCountsReq) return;
+          const data = res.data as { dayCount?: number };
+          if (typeof data.dayCount === "number" && data.dayCount > 0) {
+            next[dateKey] = Math.trunc(data.dayCount);
+          }
+        } catch {
+          /* 單日失敗略過 */
+        }
+      }),
+    );
+    if (reqId !== bookingPickCalCountsReq) return;
+    bookingPickCalDayCounts = next;
+  }
+
+  async function refreshBookingPickCalDayCounts(): Promise<void> {
+    if (bookingPickCalYear === 0) syncBookingPickCalendarCursorFromValue();
+    const y = bookingPickCalYear;
+    const mo = bookingPickCalMonth;
+    if (y === 0 || mo === 0) return;
+    const reqId = ++bookingPickCalCountsReq;
+    try {
+      const fn = getBookingDayCountsCall();
+      const res = await fn({ year: y, month: mo, ...localeApiParam() });
+      if (reqId !== bookingPickCalCountsReq) return;
+      const data = res.data as { counts?: Record<string, number> };
+      const raw = data.counts;
+      if (raw && typeof raw === "object") {
+        const next: Record<string, number> = {};
+        for (const [dk, n] of Object.entries(raw)) {
+          if (typeof n === "number" && Number.isFinite(n) && n > 0) next[dk] = Math.trunc(n);
+        }
+        bookingPickCalDayCounts = next;
+      } else {
+        bookingPickCalDayCounts = {};
+      }
+    } catch {
+      if (reqId !== bookingPickCalCountsReq) return;
+      await refreshBookingPickCalDayCountsViaAvailability(y, mo, reqId);
+    }
+    if (reqId !== bookingPickCalCountsReq) return;
+    paintBookingPickCalendar();
+  }
+
   function paintBookingPickCalendar(): void {
     if (bookingPickCalYear === 0) {
       syncBookingPickCalendarCursorFromValue();
@@ -342,6 +431,7 @@ function render() {
       if (!canPick) {
         const inactive = el("div", { class: "book-pick-calendar__day book-pick-calendar__day--inactive" });
         inactive.append(el("span", { class: "book-pick-calendar__day-num" }, [String(dayNum)]));
+        appendBookingPickCalDayBadge(inactive, dk);
         if (dk === todayK) inactive.classList.add("book-pick-calendar__day--today");
         if (dk === selected) inactive.classList.add("book-pick-calendar__day--selected");
         wrap.append(inactive);
@@ -353,6 +443,7 @@ function render() {
       if (dk === selected) btn.classList.add("book-pick-calendar__day--selected");
       if (dk === todayK) btn.classList.add("book-pick-calendar__day--today");
       btn.append(el("span", { class: "book-pick-calendar__day-num" }, [String(dayNum)]));
+      appendBookingPickCalDayBadge(btn, dk);
       btn.addEventListener("click", () => {
         dateInput.value = dk;
         paintBookingPickCalendar();
@@ -385,7 +476,7 @@ function render() {
     }
     bookingPickCalYear = y;
     bookingPickCalMonth = m;
-    paintBookingPickCalendar();
+    void refreshBookingPickCalDayCounts();
   }
 
   bookPickCalPrev.addEventListener("click", () => shiftBookingPickCalMonth(-1));
@@ -402,6 +493,7 @@ function render() {
     }
     syncBookingPickCalendarCursorFromValue();
     paintBookingPickCalendar();
+    void refreshBookingPickCalDayCounts();
     void refreshAvailability();
   }
   radioOfficeWeek.addEventListener("change", onBookingServiceKindChange);
@@ -1376,6 +1468,7 @@ function render() {
   }
   syncBookingPickCalendarCursorFromValue();
   paintBookingPickCalendar();
+  void refreshBookingPickCalDayCounts();
   void refreshAvailability();
 
   function syncHomePageSubtitle() {
@@ -1492,6 +1585,8 @@ function render() {
         const taken = new Set(data.taken);
         const dayFull = data.dayCount >= data.dayCap;
         const weekFull = data.weekCount >= data.weekCap;
+        mergeBookingPickCalDayCount(dk, data.dayCount);
+        paintBookingPickCalendar();
         const blocked = dayFull || weekFull;
         bookingCapacityBlocksSlots = blocked;
         const blockedMap = new Map<string, string>();
@@ -1503,9 +1598,12 @@ function render() {
 
         setBookFooterFromCaps(data.dayCap, data.weekCap);
         runRefillSlots(taken, blocked, dk, blockedMap);
+        const weekdayZh = weekdayZhFromDateKeyTaipei(dk);
         meta.replaceChildren(
           el("span", { class: "pill" }, [
-            t("booking.metaDay", "當日已預約 "),
+            weekdayZh ?
+              t("booking.metaDayWithWeekday", "當日（{{weekday}}）已預約 ", { weekday: weekdayZh })
+            : t("booking.metaDay", "當日已預約 "),
             el("strong", {}, [String(data.dayCount)]),
             ` / ${data.dayCap}`,
           ]),
@@ -1527,7 +1625,12 @@ function render() {
         if (dayPeers.length) {
           peerLines.push(
             el("div", { class: "booking-peers-line" }, [
-              t("booking.peersDay", "當日（匿名）：{{list}}", { list: dayPeers.join("、") }),
+              weekdayZh ?
+                t("booking.peersDayWithWeekday", "當日（{{weekday}}｜匿名）：{{list}}", {
+                  weekday: weekdayZh,
+                  list: dayPeers.join("、"),
+                })
+              : t("booking.peersDay", "當日（匿名）：{{list}}", { list: dayPeers.join("、") }),
             ]),
           );
         }
@@ -1699,6 +1802,7 @@ function render() {
       nameInput.value = "";
       noteInput.value = "";
       await refreshAvailability();
+      void refreshBookingPickCalDayCounts();
       await refreshWalletStatus({ keepWalletSummaryDuringFetch: true });
     } catch (e) {
       bookStatus.textContent = errorMessage(e);

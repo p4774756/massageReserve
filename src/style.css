@@ -696,13 +696,13 @@ main.panel[hidden] {
 }
 
 .book-pick-calendar__cell--pad {
-  min-height: 2.65rem;
+  min-height: 3.1rem;
   pointer-events: none;
 }
 
 .book-pick-calendar__day {
   width: 100%;
-  min-height: 2.65rem;
+  min-height: 3.1rem;
   margin: 0;
   padding: 5px 3px 4px;
   display: flex;
@@ -736,6 +736,16 @@ main.panel[hidden] {
   font-size: 0.8rem;
   font-weight: 700;
   line-height: 1.1;
+}
+
+.book-pick-calendar__badge {
+  font-size: 0.65rem;
+  font-weight: 800;
+  line-height: 1.2;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgb(var(--accent-rgb) / 0.18);
+  color: var(--accent-deep);
 }
 
 .book-pick-calendar__day--today:not(.book-pick-calendar__day--inactive) {

@@ -87,6 +87,29 @@ export function parseDateKey(dateKey: string): DateTime {
   return dt.startOf("day");
 }
 
+const WEEKDAY_ZH_MON1: readonly string[] = ["週一", "週二", "週三", "週四", "週五", "週六", "週日"];
+
+/** 寄信／通知用：YYYY-MM-DD（週X），台北日曆 */
+export function formatDateKeyWithWeekdayZh(dateKey: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return dateKey;
+  try {
+    const wd = WEEKDAY_ZH_MON1[parseDateKey(dateKey).weekday - 1];
+    return wd ? `${dateKey}（${wd}）` : dateKey;
+  } catch {
+    return dateKey;
+  }
+}
+
+/** 台北日曆：週一 … 週日；無效 dateKey 回傳空字串 */
+export function weekdayZhFromDateKey(dateKey: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return "";
+  try {
+    return WEEKDAY_ZH_MON1[parseDateKey(dateKey).weekday - 1] ?? "";
+  } catch {
+    return "";
+  }
+}
+
 /** 該日是否為週一～週五（1–5） */
 export function isWeekday(dt: DateTime): boolean {
   return dt.weekday >= 1 && dt.weekday <= 5;

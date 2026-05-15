@@ -38,6 +38,7 @@ export function getFns() {
 
 export const createBookingCall = () => httpsCallable(getFns(), "createBooking");
 export const getAvailabilityCall = () => httpsCallable(getFns(), "getAvailability");
+export const getBookingDayCountsCall = () => httpsCallable(getFns(), "getBookingDayCounts");
 export const getBookingPricingCall = () => httpsCallable(getFns(), "getBookingPricing");
 export const getMyWalletCall = () => httpsCallable(getFns(), "getMyWallet");
 export const redeemWheelPointsCall = () => httpsCallable(getFns(), "redeemWheelPoints");

@@ -1,5 +1,6 @@
 import { HttpsError } from "firebase-functions/v2/https";
 import { Resend } from "resend";
+import { formatDateKeyWithWeekdayZh } from "./bookingLogic";
 
 /** Resend `emails.send` 的 `error` 為純物件，不可直接拋給 Callable（會變成 INTERNAL）。 */
 function throwResendEmailError(error: unknown): never {
@@ -50,12 +51,13 @@ export async function sendNewBookingEmailToOwner(opts: {
 }): Promise<void> {
   const { apiKey, from, to, payload } = opts;
   const modeLabel = BOOKING_MODE_LABEL[payload.bookingMode] ?? payload.bookingMode;
+  const dateLabel = formatDateKeyWithWeekdayZh(payload.dateKey);
   const lines: string[] = [
     "有新的按摩預約。",
     "",
     `預約編號：${payload.id}`,
     `姓名：${payload.displayName}`,
-    `日期：${payload.dateKey}`,
+    `日期：${dateLabel}`,
     `開始時間：${payload.startSlot}`,
     `付款方式：${modeLabel}`,
   ];
@@ -71,8 +73,8 @@ export async function sendNewBookingEmailToOwner(opts: {
   const text = lines.join("\n");
   const resend = new Resend(apiKey);
   const subject = payload.holidayOutcall
-    ? `新預約（假日外約）：${payload.displayName}｜${payload.dateKey} ${payload.startSlot}`
-    : `新預約：${payload.displayName}｜${payload.dateKey} ${payload.startSlot}`;
+    ? `新預約（假日外約）：${payload.displayName}｜${dateLabel} ${payload.startSlot}`
+    : `新預約：${payload.displayName}｜${dateLabel} ${payload.startSlot}`;
   const { error } = await resend.emails.send({
     from,
     to: [to],
@@ -116,6 +118,7 @@ export async function sendMemberBookingStatusChangedEmail(opts: {
   const testMode = opts.testMode === true;
   const prev = STATUS_LABEL_ZH[payload.previousStatus] ?? payload.previousStatus;
   const next = STATUS_LABEL_ZH[payload.newStatus] ?? payload.newStatus;
+  const dateLabel = formatDateKeyWithWeekdayZh(payload.dateKey);
   const lines: string[] = testMode
     ? [
         `${payload.displayName} 您好，`,
@@ -123,7 +126,7 @@ export async function sendMemberBookingStatusChangedEmail(opts: {
         "【測試】此信由管理員在後台按下「測試通知信」寄出，您的預約狀態不會因此改變。",
         "以下「狀態」為範例文案（待確認→已確認），用於確認會員信箱能否收到、版面是否正常。",
         "",
-        `此筆預約日期：${payload.dateKey}`,
+        `此筆預約日期：${dateLabel}`,
         `開始時間：${payload.startSlot}`,
         `狀態（僅示範）：${prev} → ${next}`,
       ]
@@ -132,7 +135,7 @@ export async function sendMemberBookingStatusChangedEmail(opts: {
         "",
         "您在按摩預約系統中的預約狀態已更新。",
         "",
-        `日期：${payload.dateKey}`,
+        `日期：${dateLabel}`,
         `開始時間：${payload.startSlot}`,
         `狀態：${prev} → ${next}`,
       ];
@@ -152,8 +155,8 @@ export async function sendMemberBookingStatusChangedEmail(opts: {
   const text = lines.join("\n");
   const resend = new Resend(apiKey);
   const subject = testMode
-    ? `[測試] 預約狀態通知信測試｜${payload.dateKey} ${payload.startSlot}`
-    : `預約狀態更新：${next}｜${payload.dateKey} ${payload.startSlot}`;
+    ? `[測試] 預約狀態通知信測試｜${dateLabel} ${payload.startSlot}`
+    : `預約狀態更新：${next}｜${dateLabel} ${payload.startSlot}`;
   const { error } = await resend.emails.send({
     from,
     to: [payload.to],

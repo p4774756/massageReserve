@@ -33,6 +33,15 @@ export function taipeiWeekdayNumMon1Sun7(dateKey: string): number {
   return TAIPEI_LONG_WD[long as keyof typeof TAIPEI_LONG_WD] ?? Number.NaN;
 }
 
+const WEEKDAY_ZH_MON1: readonly string[] = ["週一", "週二", "週三", "週四", "週五", "週六", "週日"];
+
+/** 台北日曆：週一 … 週日；無效 dateKey 回傳空字串 */
+export function weekdayZhFromDateKeyTaipei(dateKey: string): string {
+  const wd = taipeiWeekdayNumMon1Sun7(dateKey);
+  if (!Number.isFinite(wd) || wd < 1 || wd > 7) return "";
+  return WEEKDAY_ZH_MON1[wd - 1] ?? "";
+}
+
 /** 週六、週日（台北日曆）；與後端假日外約可約日一致 */
 export function isDateKeySatSun(dateKey: string): boolean {
   const wd = taipeiWeekdayNumMon1Sun7(dateKey);

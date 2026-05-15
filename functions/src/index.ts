@@ -24,6 +24,7 @@ import {
   parseDateKey,
   resolveBookingCaps,
   TIMEZONE,
+  weekdayZhFromDateKey,
 } from "./bookingLogic";
 import {
   foldWalletBalanceIntoSessions,
@@ -182,6 +183,24 @@ function listMaskedActiveBookerLabels(docs: QueryDocumentSnapshot[]): string[] {
   return Array.from(byKey.values()).sort((a, b) => a.localeCompare(b, "en"));
 }
 
+/** 本工作週名單：每筆預約附星期（週一 Jxxx），依日期與時段排序 */
+function listMaskedWeekBookerLabels(docs: QueryDocumentSnapshot[]): string[] {
+  const rows: { sortKey: string; label: string }[] = [];
+  for (const d of docs) {
+    const masked = maskDisplayNameForPublic(d.get("displayName"));
+    if (!masked) continue;
+    const dateKeyRaw = d.get("dateKey");
+    const dateKey = typeof dateKeyRaw === "string" ? dateKeyRaw : "";
+    const startSlotRaw = d.get("startSlot");
+    const startSlot = typeof startSlotRaw === "string" ? startSlotRaw : "";
+    const weekday = weekdayZhFromDateKey(dateKey);
+    const label = weekday ? `${weekday} ${masked}` : masked;
+    rows.push({ sortKey: `${dateKey}\t${startSlot}\t${d.id}`, label });
+  }
+  rows.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+  return rows.map((r) => r.label);
+}
+
 export const getAvailability = onCall(publicCall, async (request) => {
   const locale = parseLocale(request.data);
   const dateKey = request.data?.dateKey;
@@ -236,7 +255,7 @@ export const getAvailability = onCall(publicCall, async (request) => {
   const blockWindows = parseBookingBlockWindows(blocksSnap.data());
   const blockedSlots = listBlockedStartSlotsForDate(dateKey, blockWindows);
   const dayPeersMasked = listMaskedActiveBookerLabels(daySnap.docs);
-  const weekPeersMasked = listMaskedActiveBookerLabels(weekSnap.docs);
+  const weekPeersMasked = listMaskedWeekBookerLabels(weekSnap.docs);
   return {
     taken,
     blockedSlots,
@@ -247,6 +266,43 @@ export const getAvailability = onCall(publicCall, async (request) => {
     dayPeersMasked,
     weekPeersMasked,
   };
+});
+
+/** 公開：月曆格顯示每日有效預約筆數（與名額統計相同之 ACTIVE_STATUSES） */
+export const getBookingDayCounts = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
+  const yearRaw = request.data?.year;
+  const monthRaw = request.data?.month;
+  const year = typeof yearRaw === "number" && Number.isFinite(yearRaw) ? Math.round(yearRaw) : Number(yearRaw);
+  const month = typeof monthRaw === "number" && Number.isFinite(monthRaw) ? Math.round(monthRaw) : Number(monthRaw);
+  if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+    throw new HttpsError("invalid-argument", st(locale, "dayCounts.badYear", "year 無效"));
+  }
+  if (!Number.isInteger(month) || month < 1 || month > 12) {
+    throw new HttpsError("invalid-argument", st(locale, "dayCounts.badMonth", "month 須為 1–12"));
+  }
+  const monthStart = DateTime.fromObject({ year, month, day: 1 }, { zone: TIMEZONE }).startOf("day");
+  if (!monthStart.isValid) {
+    throw new HttpsError("invalid-argument", st(locale, "dayCounts.badMonth", "month 須為 1–12"));
+  }
+  const monthEnd = monthStart.endOf("month");
+  const startKey = monthStart.toISODate()!;
+  const endKey = monthEnd.toISODate()!;
+
+  const snap = await db
+    .collection("bookings")
+    .where("dateKey", ">=", startKey)
+    .where("dateKey", "<=", endKey)
+    .where("status", "in", [...ACTIVE_STATUSES])
+    .get();
+
+  const counts: Record<string, number> = {};
+  for (const d of snap.docs) {
+    const dk = d.get("dateKey");
+    if (typeof dk !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(dk)) continue;
+    counts[dk] = (counts[dk] ?? 0) + 1;
+  }
+  return { counts };
 });
 
 /**
