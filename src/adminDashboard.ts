@@ -263,7 +263,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         return;
       }
       if (!Number.isFinite(ad) || ad < 1 || !Number.isInteger(ad)) {
-        pricingAdminStatus.textContent = t("admin.pricing.badAddon15", "續時每 15 分鐘金額需為 ≥1 的整數。");
+        pricingAdminStatus.textContent = t("admin.pricing.badAddon15", "超過半小時加價金額需為 ≥1 的整數。");
         pricingAdminStatus.classList.add("error");
         return;
       }
@@ -298,7 +298,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       el("h4", { class: "admin-announce__block-title" }, [t("admin.pricing.heading", "定價與點數兌換")]),
       el("div", { class: "grid grid-2" }, [
         el("label", { class: "field" }, [t("admin.pricing.sessionPrice", "現場單次金額（元）"), pricingSessionPriceInput]),
-        el("label", { class: "field" }, [t("admin.pricing.addon15", "續時每 15 分鐘（元）"), pricingAddon15Input]),
+        el("label", { class: "field" }, [t("admin.pricing.addon15", "超過半小時加價（元）"), pricingAddon15Input]),
         el("label", { class: "field" }, [t("admin.pricing.pointsPer", "輪盤：幾點換 1 次按摩"), pricingPointsPerInput]),
       ]),
       el("div", { class: "row-actions" }, [savePricingBtn]),

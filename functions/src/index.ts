@@ -641,7 +641,7 @@ export const getMyWallet = onCall(publicCall, async (request) => {
   return out;
 });
 
-/** 前台／訪客：讀取現場首段／續時單價與點數兌換門檻（無需登入） */
+/** 前台／訪客：讀取現場按次／超過半小時加價與點數兌換門檻（無需登入） */
 export const getBookingPricing = onCall(publicCall, async (request) => {
   parseLocale(request.data);
   const snap = await db.collection("siteSettings").doc("pricing").get();

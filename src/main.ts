@@ -1475,7 +1475,7 @@ function render() {
     if (tab !== "book") return;
     titleDesc.textContent = t(
       "home.subtitle",
-      "以 15 分鐘為計價單位：首段 {{first}} 元；續時 {{addon}} 元（現場收費）",
+      "按次 {{first}} 元；超過半小時再加 {{addon}} 元（現場收費）",
       { first: sessionPriceNtdSetting, addon: addon15PriceNtdSetting },
     );
   }
