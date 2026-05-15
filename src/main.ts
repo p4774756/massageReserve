@@ -436,6 +436,8 @@ function render() {
   });
   const bookStatus = el("div", { class: "status-line book-submit-status", role: "status", ariaLive: "polite" });
   const meta = el("div", { class: "meta-pills" });
+  /** getAvailability 回傳之匿名預約者（首字 + x），置於名額 pill 下方 */
+  const bookingPeersHint = el("div", { class: "booking-peers-hint hint", hidden: true });
   const slotFieldWrap = el(
     "div",
     { class: "grid" },
@@ -450,6 +452,7 @@ function render() {
     slotFieldWrap,
     scheduleStatus,
     meta,
+    bookingPeersHint,
   ]);
   const bookFooterNote = el("div", { class: "footer-note" });
   bookFooterNote.textContent = t(
@@ -1414,6 +1417,8 @@ function render() {
       bookingCapacityBlocksSlots = false;
       bookingAvailabilityLoading = false;
       meta.innerHTML = "";
+      bookingPeersHint.replaceChildren();
+      bookingPeersHint.hidden = true;
 
       const minKey = taipeiTodayDateKey();
       const maxKey = taipeiLatestBookableDateKey();
@@ -1481,6 +1486,8 @@ function render() {
           weekCount: number;
           dayCap: number;
           weekCap: number;
+          dayPeersMasked?: string[];
+          weekPeersMasked?: string[];
         };
         const taken = new Set(data.taken);
         const dayFull = data.dayCount >= data.dayCap;
@@ -1496,7 +1503,7 @@ function render() {
 
         setBookFooterFromCaps(data.dayCap, data.weekCap);
         runRefillSlots(taken, blocked, dk, blockedMap);
-        meta.append(
+        meta.replaceChildren(
           el("span", { class: "pill" }, [
             t("booking.metaDay", "當日已預約 "),
             el("strong", {}, [String(data.dayCount)]),
@@ -1508,6 +1515,36 @@ function render() {
             ` / ${data.weekCap}`,
           ]),
         );
+        const dayPeers =
+          Array.isArray(data.dayPeersMasked) ?
+            data.dayPeersMasked.filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+          : [];
+        const weekPeers =
+          Array.isArray(data.weekPeersMasked) ?
+            data.weekPeersMasked.filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+          : [];
+        const peerLines: HTMLElement[] = [];
+        if (dayPeers.length) {
+          peerLines.push(
+            el("div", { class: "booking-peers-line" }, [
+              t("booking.peersDay", "當日（匿名）：{{list}}", { list: dayPeers.join("、") }),
+            ]),
+          );
+        }
+        if (weekPeers.length) {
+          peerLines.push(
+            el("div", { class: "booking-peers-line" }, [
+              t("booking.peersWeek", "本工作週（匿名）：{{list}}", { list: weekPeers.join("、") }),
+            ]),
+          );
+        }
+        if (peerLines.length) {
+          bookingPeersHint.replaceChildren(...peerLines);
+          bookingPeersHint.hidden = false;
+        } else {
+          bookingPeersHint.replaceChildren();
+          bookingPeersHint.hidden = true;
+        }
         if (dayFull) {
           scheduleStatus.textContent = t("booking.dayFull", "這一天已額滿。");
           scheduleStatus.classList.add("error");
@@ -1525,6 +1562,8 @@ function render() {
         }
       } catch (e) {
         console.error(e);
+        bookingPeersHint.replaceChildren();
+        bookingPeersHint.hidden = true;
         runRefillSlots(new Set(), true, dk, new Map());
         const detail = errorMessage(e);
         const genericErr = t("errors.generic", "發生錯誤");

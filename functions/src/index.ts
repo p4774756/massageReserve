@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
-import { FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
+import { FieldValue, getFirestore, Timestamp, type QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { defineSecret, defineString } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
@@ -32,6 +32,7 @@ import {
   resolveSessionPriceNtd,
 } from "./pricing";
 import { parseLocale, st, type ServerLocale } from "./serverI18n";
+import { maskDisplayNameForPublic } from "./maskDisplayName";
 
 initializeApp();
 const db = getFirestore();
@@ -168,6 +169,19 @@ async function loadActiveWheelPrizes(): Promise<WheelPrizeRow[]> {
   return prizes;
 }
 
+function listMaskedActiveBookerLabels(docs: QueryDocumentSnapshot[]): string[] {
+  const byKey = new Map<string, string>();
+  for (const d of docs) {
+    const masked = maskDisplayNameForPublic(d.get("displayName"));
+    if (!masked) continue;
+    const customerIdRaw = d.get("customerId");
+    const cid = typeof customerIdRaw === "string" && customerIdRaw.trim() ? customerIdRaw.trim() : "";
+    const key = cid || d.id;
+    if (!byKey.has(key)) byKey.set(key, masked);
+  }
+  return Array.from(byKey.values()).sort((a, b) => a.localeCompare(b, "en"));
+}
+
 export const getAvailability = onCall(publicCall, async (request) => {
   const locale = parseLocale(request.data);
   const dateKey = request.data?.dateKey;
@@ -221,6 +235,8 @@ export const getAvailability = onCall(publicCall, async (request) => {
   const taken = daySnap.docs.map((d) => d.get("startSlot") as string).filter(Boolean);
   const blockWindows = parseBookingBlockWindows(blocksSnap.data());
   const blockedSlots = listBlockedStartSlotsForDate(dateKey, blockWindows);
+  const dayPeersMasked = listMaskedActiveBookerLabels(daySnap.docs);
+  const weekPeersMasked = listMaskedActiveBookerLabels(weekSnap.docs);
   return {
     taken,
     blockedSlots,
@@ -228,6 +244,8 @@ export const getAvailability = onCall(publicCall, async (request) => {
     weekCount: weekSnap.size,
     dayCap: caps.maxPerDay,
     weekCap: caps.maxPerWorkWeek,
+    dayPeersMasked,
+    weekPeersMasked,
   };
 });
 
