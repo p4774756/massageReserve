@@ -1908,6 +1908,37 @@ tbody tr:hover td {
   outline-offset: 2px;
 }
 
+/* 稱呼未填：避免「空白按鈕」難以點擊／看不出可編輯 */
+.admin-member-nick-trigger--empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 6px 8px;
+  margin: -2px 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  font-weight: 500;
+  color: var(--muted);
+  border: 1px dashed var(--border-strong);
+  background: var(--surface-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.admin-member-nick-trigger--empty:hover {
+  color: var(--accent-deep);
+  border-color: var(--accent);
+  background: var(--accent-muted-bg);
+}
+
+.admin-member-nick-trigger--empty:focus-visible {
+  border-style: solid;
+}
+
 .admin-member-sort-btn {
   display: inline-flex;
   flex-direction: row;

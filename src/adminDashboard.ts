@@ -1396,12 +1396,26 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       }
 
       for (const m of pageRows) {
+        const nickTrimmed = (m.nickname ?? "").trim();
+        const nickEmpty = nickTrimmed.length === 0;
         const nickOpen = el("button", {
           type: "button",
-          class: "admin-member-nick-trigger",
-          title: t("admin.memberList.nickClickToEdit", "點擊編輯稱呼"),
+          class: nickEmpty
+            ? "admin-member-nick-trigger admin-member-nick-trigger--empty"
+            : "admin-member-nick-trigger",
         });
-        nickOpen.textContent = m.nickname;
+        nickOpen.title = nickEmpty
+          ? t("admin.memberList.nickUnsetTitle", "目前無稱呼，點擊以編輯")
+          : t("admin.memberList.nickClickToEdit", "點擊編輯稱呼");
+        if (nickEmpty) {
+          nickOpen.textContent = t("admin.memberList.nickUnsetClick", "未設定");
+          nickOpen.setAttribute(
+            "aria-label",
+            t("admin.memberList.nickUnsetAria", "尚未設定稱呼，點擊以編輯"),
+          );
+        } else {
+          nickOpen.textContent = m.nickname;
+        }
         nickOpen.addEventListener("click", (ev) => {
           ev.stopPropagation();
           openAdminNicknameModal(m);
