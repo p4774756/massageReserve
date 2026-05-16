@@ -72,6 +72,10 @@ export type AdminDashboardControls = {
   renderAdminLoggedOut: () => void;
   renderAdminForbidden: () => void;
   renderAdminTable: (userId: string) => void;
+  /** 後台「不開放預約時段」有未儲存變更時為 true（無後台表單時為 false） */
+  hasUnsavedBookingBlocks: () => boolean;
+  /** 若有未儲存的不開放時段，顯示確認；回傳 true 表示可繼續離開／切換 */
+  confirmLeaveUnsavedBookingBlocks: () => Promise<boolean>;
 };
 
 export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboardControls {
@@ -82,8 +86,17 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
   let adminBookingCapsUnsub: (() => void) | null = null;
   let adminBookingBlocksUnsub: (() => void) | null = null;
   let adminWheelUiUnsub: (() => void) | null = null;
+  let bookingBlocksBeforeUnloadHandler: ((ev: BeforeUnloadEvent) => void) | null = null;
+  let bookingBlocksHasUnsavedSnapshot: () => boolean = () => false;
+  let bookingBlocksConfirmLeave: () => Promise<boolean> = async () => true;
 
   function stopAdminListener() {
+    if (bookingBlocksBeforeUnloadHandler) {
+      window.removeEventListener("beforeunload", bookingBlocksBeforeUnloadHandler);
+      bookingBlocksBeforeUnloadHandler = null;
+    }
+    bookingBlocksHasUnsavedSnapshot = () => false;
+    bookingBlocksConfirmLeave = async () => true;
     if (adminUnsub) {
       adminUnsub();
       adminUnsub = null;
@@ -128,6 +141,8 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     stopAdminListener();
     adminWrap.innerHTML = "";
     syncAdminHeadSignedInHint(userId);
+    bookingBlocksHasUnsavedSnapshot = () => false;
+    bookingBlocksConfirmLeave = async () => true;
 
     const adminStatus = el("div", { class: "status-line" });
     const walletTopupSection = el("div", { class: "admin-announce admin-announce--wallet" }, []);
@@ -504,6 +519,14 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       dateKey: string;
     };
 
+    type BookingBlockPersistRow = {
+      weekday: number;
+      start: string;
+      end: string;
+      reason: string;
+      dateKey?: string;
+    };
+
     function normalizeTimeForBookingBlock(v: string): string | null {
       const m = /^(\d{1,2}):(\d{2})$/.exec(v.trim());
       if (!m) return null;
@@ -546,6 +569,123 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         out.push({ weekday: wd, start: ns, end: ne, reason: reason.slice(0, 200), dateKey: "" });
       }
       return out;
+    }
+
+    function normalizeBookingBlocksWindowsForSign(windows: BookingBlockPersistRow[]): string {
+      const sorted = [...windows].sort((a, b) => {
+        const dkA = a.dateKey ?? "";
+        const dkB = b.dateKey ?? "";
+        return (
+          a.weekday - b.weekday ||
+          dkA.localeCompare(dkB) ||
+          a.start.localeCompare(b.start) ||
+          a.end.localeCompare(b.end) ||
+          a.reason.localeCompare(b.reason)
+        );
+      });
+      return JSON.stringify(sorted);
+    }
+
+    function signatureFromBookingBlockModels(models: BookingBlockRowModel[]): string {
+      const windows: BookingBlockPersistRow[] = [];
+      for (const m of models) {
+        const dk = m.dateKey.trim();
+        if (dk !== "") {
+          windows.push({ weekday: m.weekday, start: m.start, end: m.end, reason: m.reason, dateKey: dk });
+        } else {
+          windows.push({ weekday: m.weekday, start: m.start, end: m.end, reason: m.reason });
+        }
+      }
+      return normalizeBookingBlocksWindowsForSign(windows);
+    }
+
+    function appendBookingBlockRowToWindows(row: Element, windows: BookingBlockPersistRow[]): string | null {
+      const wd = Number((row.querySelector(".bb-weekday") as HTMLSelectElement)?.value);
+      const st = (row.querySelector(".bb-start") as HTMLInputElement)?.value ?? "";
+      const en = (row.querySelector(".bb-end") as HTMLInputElement)?.value ?? "";
+      const re = (row.querySelector(".bb-reason") as HTMLInputElement)?.value ?? "";
+      const dateRaw = ((row.querySelector(".bb-date") as HTMLInputElement)?.value ?? "").trim();
+      if (!Number.isInteger(wd) || wd < 1 || wd > 5) {
+        return t("admin.blocks.invalidWeekday", "每一列的星期需為週一到週五。");
+      }
+      const ns = normalizeTimeForBookingBlock(st);
+      const ne = normalizeTimeForBookingBlock(en);
+      if (!ns || !ne) {
+        return t("admin.blocks.invalidTime", "請確認每一列的時間格式正確。");
+      }
+      const m0 = Number(ns.slice(0, 2)) * 60 + Number(ns.slice(3, 5));
+      const m1 = Number(ne.slice(0, 2)) * 60 + Number(ne.slice(3, 5));
+      if (m0 >= m1) {
+        return t(
+          "admin.blocks.invalidRange",
+          "每一列的「迄」需晚於「起」。區間為左閉右開：迄那一刻起已不再封鎖。",
+        );
+      }
+      const reasonTrim = re.trim().slice(0, 200);
+      if (dateRaw !== "") {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateRaw)) {
+          return t(
+            "admin.blocks.invalidSpecificDate",
+            "「特定日期」須為 YYYY-MM-DD 之週一至週五，且與「星期」欄一致。",
+          );
+        }
+        const wn = taipeiWeekdayNumMon1Sun7(dateRaw);
+        if (!Number.isFinite(wn) || wn < 1 || wn > 5 || wn !== wd) {
+          return t(
+            "admin.blocks.invalidSpecificDate",
+            "「特定日期」須為 YYYY-MM-DD 之週一至週五，且與「星期」欄一致。",
+          );
+        }
+        windows.push({ weekday: wd, start: ns, end: ne, reason: reasonTrim, dateKey: dateRaw });
+      } else {
+        windows.push({ weekday: wd, start: ns, end: ne, reason: reasonTrim });
+      }
+      return null;
+    }
+
+    function collectBookingBlockWindowsWithErrors():
+      | { ok: true; windows: BookingBlockPersistRow[] }
+      | { ok: false; error: string } {
+      const rowEls = bookingBlocksRows.querySelectorAll(".admin-booking-block-row");
+      if (rowEls.length > 40) {
+        return { ok: false, error: t("admin.blocks.tooMany", "最多 40 筆規則，請刪減後再儲存。") };
+      }
+      const windows: BookingBlockPersistRow[] = [];
+      for (const row of rowEls) {
+        const err = appendBookingBlockRowToWindows(row, windows);
+        if (err !== null) return { ok: false, error: err };
+      }
+      return { ok: true, windows };
+    }
+
+    let bookingBlocksSavedSig = normalizeBookingBlocksWindowsForSign([]);
+
+    const bookingBlocksDirtyBanner = el(
+      "div",
+      {
+        class: "admin-booking-blocks-dirty-banner",
+        hidden: true,
+        role: "status",
+      },
+      [
+        t(
+          "admin.blocks.unsavedBanner",
+          "有未儲存的變更，請按「儲存不開放時段」寫入資料庫。",
+        ),
+      ],
+    );
+
+    function isBookingBlocksDirty(): boolean {
+      const collected = collectBookingBlockWindowsWithErrors();
+      if (!collected.ok) return true;
+      return normalizeBookingBlocksWindowsForSign(collected.windows) !== bookingBlocksSavedSig;
+    }
+
+    function syncBookingBlocksDirtyUi(): void {
+      const dirty = isBookingBlocksDirty();
+      bookingBlocksDirtyBanner.hidden = !dirty;
+      bookingBlocksDirtyBanner.classList.toggle("admin-booking-blocks-dirty-banner--on", dirty);
+      saveBookingBlocksBtn.classList.toggle("admin-booking-blocks-save--attention", dirty);
     }
 
     function renderBookingBlockRow(model: BookingBlockRowModel): HTMLElement {
@@ -602,17 +742,39 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         autocomplete: "off",
       });
       reasonIn.value = model.reason;
-      const removeBtn = el("button", { type: "button", class: "ghost" }, [t("admin.blocks.rowRemove", "刪除此列")]);
+      reasonIn.setAttribute("aria-label", t("admin.blocks.reason", "前台顯示原因"));
+      const removeBtn = el(
+        "button",
+        { type: "button", class: "ghost admin-booking-block-row__remove" },
+        [t("admin.blocks.rowRemove", "刪除此列")],
+      );
       removeBtn.addEventListener("click", () => {
         row.remove();
+        syncBookingBlocksDirtyUi();
       });
-      row.append(
+      const whenFields = el("div", { class: "bb-group-fields" }, [
         el("label", { class: "field bb-field-wd" }, [t("admin.blocks.weekday", "星期"), weekdaySel]),
         el("label", { class: "field bb-field-date" }, [t("admin.blocks.specificDate", "特定日期（選填）"), dateIn]),
+      ]);
+      const timeFields = el("div", { class: "bb-group-fields bb-group-fields--time" }, [
         el("label", { class: "field bb-field-t" }, [t("admin.blocks.start", "起（含）"), startIn]),
+        el("span", { class: "bb-time-sep", ariaHidden: "true" }, ["～"]),
         el("label", { class: "field bb-field-t" }, [t("admin.blocks.end", "迄（不含）"), endIn]),
-        el("label", { class: "field bb-field-reason" }, [t("admin.blocks.reason", "前台顯示原因"), reasonIn]),
-        removeBtn,
+      ]);
+      row.append(
+        el("div", { class: "admin-booking-block-row__head" }, [removeBtn]),
+        el("div", { class: "bb-group bb-group--when" }, [
+          el("span", { class: "bb-group-title" }, [t("admin.blocks.groupWhen", "套用日期")]),
+          whenFields,
+        ]),
+        el("div", { class: "bb-group bb-group--slot" }, [
+          el("span", { class: "bb-group-title" }, [t("admin.blocks.groupSlot", "不開放區間（當日）")]),
+          timeFields,
+        ]),
+        el("div", { class: "bb-group bb-group--reason" }, [
+          el("span", { class: "bb-group-title" }, [t("admin.blocks.reason", "前台顯示原因")]),
+          reasonIn,
+        ]),
       );
       return row;
     }
@@ -622,12 +784,15 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       for (const m of models) {
         bookingBlocksRows.append(renderBookingBlockRow(m));
       }
+      bookingBlocksSavedSig = signatureFromBookingBlockModels(models);
+      syncBookingBlocksDirtyUi();
     }
 
     addBookingBlockRowBtn.addEventListener("click", () => {
       bookingBlocksRows.append(
         renderBookingBlockRow({ weekday: 1, start: "15:30", end: "16:30", reason: "", dateKey: "" }),
       );
+      syncBookingBlocksDirtyUi();
     });
 
     adminBookingBlocksUnsub = onSnapshot(
@@ -645,65 +810,14 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     saveBookingBlocksBtn.addEventListener("click", async () => {
       bookingBlocksStatus.textContent = "";
       bookingBlocksStatus.className = "status-line";
-      const rowEls = bookingBlocksRows.querySelectorAll(".admin-booking-block-row");
-      const windows: { weekday: number; start: string; end: string; reason: string; dateKey?: string }[] = [];
-      if (rowEls.length > 40) {
-        bookingBlocksStatus.textContent = t("admin.blocks.tooMany", "最多 40 筆規則，請刪減後再儲存。");
+      const collected = collectBookingBlockWindowsWithErrors();
+      if (!collected.ok) {
+        bookingBlocksStatus.textContent = collected.error;
         bookingBlocksStatus.classList.add("error");
+        syncBookingBlocksDirtyUi();
         return;
       }
-      for (const row of rowEls) {
-        const wd = Number((row.querySelector(".bb-weekday") as HTMLSelectElement)?.value);
-        const st = (row.querySelector(".bb-start") as HTMLInputElement)?.value ?? "";
-        const en = (row.querySelector(".bb-end") as HTMLInputElement)?.value ?? "";
-        const re = (row.querySelector(".bb-reason") as HTMLInputElement)?.value ?? "";
-        const dateRaw = ((row.querySelector(".bb-date") as HTMLInputElement)?.value ?? "").trim();
-        if (!Number.isInteger(wd) || wd < 1 || wd > 5) {
-          bookingBlocksStatus.textContent = t("admin.blocks.invalidWeekday", "每一列的星期需為週一到週五。");
-          bookingBlocksStatus.classList.add("error");
-          return;
-        }
-        const ns = normalizeTimeForBookingBlock(st);
-        const ne = normalizeTimeForBookingBlock(en);
-        if (!ns || !ne) {
-          bookingBlocksStatus.textContent = t("admin.blocks.invalidTime", "請確認每一列的時間格式正確。");
-          bookingBlocksStatus.classList.add("error");
-          return;
-        }
-        const m0 = Number(ns.slice(0, 2)) * 60 + Number(ns.slice(3, 5));
-        const m1 = Number(ne.slice(0, 2)) * 60 + Number(ne.slice(3, 5));
-        if (m0 >= m1) {
-          bookingBlocksStatus.textContent = t(
-            "admin.blocks.invalidRange",
-            "每一列的「迄」需晚於「起」。區間為左閉右開：迄那一刻起已不再封鎖。",
-          );
-          bookingBlocksStatus.classList.add("error");
-          return;
-        }
-        const reasonTrim = re.trim().slice(0, 200);
-        if (dateRaw !== "") {
-          if (!/^\d{4}-\d{2}-\d{2}$/.test(dateRaw)) {
-            bookingBlocksStatus.textContent = t(
-              "admin.blocks.invalidSpecificDate",
-              "「特定日期」須為 YYYY-MM-DD 之週一至週五，且與「星期」欄一致。",
-            );
-            bookingBlocksStatus.classList.add("error");
-            return;
-          }
-          const wn = taipeiWeekdayNumMon1Sun7(dateRaw);
-          if (!Number.isFinite(wn) || wn < 1 || wn > 5 || wn !== wd) {
-            bookingBlocksStatus.textContent = t(
-              "admin.blocks.invalidSpecificDate",
-              "「特定日期」須為 YYYY-MM-DD 之週一至週五，且與「星期」欄一致。",
-            );
-            bookingBlocksStatus.classList.add("error");
-            return;
-          }
-          windows.push({ weekday: wd, start: ns, end: ne, reason: reasonTrim, dateKey: dateRaw });
-        } else {
-          windows.push({ weekday: wd, start: ns, end: ne, reason: reasonTrim });
-        }
-      }
+      const { windows } = collected;
       saveBookingBlocksBtn.setAttribute("disabled", "true");
       bookingBlocksStatus.textContent = t("admin.status.processing", "處理中…");
       try {
@@ -712,6 +826,8 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
           { windows, updatedAt: serverTimestamp() },
           { merge: true },
         );
+        bookingBlocksSavedSig = normalizeBookingBlocksWindowsForSign(windows);
+        syncBookingBlocksDirtyUi();
         bookingBlocksStatus.textContent = t("admin.status.updated", "已更新");
         bookingBlocksStatus.classList.add("ok");
       } catch (e) {
@@ -721,6 +837,20 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         saveBookingBlocksBtn.removeAttribute("disabled");
       }
     });
+
+    bookingBlocksRows.addEventListener("input", () => {
+      syncBookingBlocksDirtyUi();
+    });
+    bookingBlocksRows.addEventListener("change", () => {
+      syncBookingBlocksDirtyUi();
+    });
+
+    bookingBlocksBeforeUnloadHandler = (ev: BeforeUnloadEvent) => {
+      if (!isBookingBlocksDirty()) return;
+      ev.preventDefault();
+      ev.returnValue = "";
+    };
+    window.addEventListener("beforeunload", bookingBlocksBeforeUnloadHandler);
 
     const blockCaps = el("section", { class: "admin-announce__block admin-announce__block--caps" }, [
       el("h4", { class: "admin-announce__block-title" }, [t("admin.announce.blockCapsTitle", "預約名額")]),
@@ -734,14 +864,20 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
 
     const blockClosedWindows = el("section", { class: "admin-announce__block admin-announce__block--blocks" }, [
       el("h4", { class: "admin-announce__block-title" }, [t("admin.announce.blockBlocksTitle", "不開放預約時段")]),
-      el("p", { class: "hint admin-announce__block-lead" }, [
-        t(
-          "admin.announce.blockBlocksLead",
-          "依星期與當日時段關閉預約；與「預約名額」分開設定。",
-        ),
+      el("div", { class: "admin-blocks-intro" }, [
+        el("p", { class: "hint admin-announce__block-lead" }, [
+          t("admin.announce.blockBlocksLead", "依星期或特定日期關閉預約時段；與「預約名額」分開設定。"),
+        ]),
+        el("p", { class: "hint admin-blocks-intro-note" }, [
+          t(
+            "admin.announce.blockBlocksNote",
+            "未填「特定日期」表示每週該日重複生效。區間為起（含）、迄（不含）。",
+          ),
+        ]),
       ]),
+      bookingBlocksDirtyBanner,
       bookingBlocksRows,
-      el("div", { class: "row-actions" }, [addBookingBlockRowBtn, saveBookingBlocksBtn]),
+      el("div", { class: "row-actions admin-booking-blocks-actions" }, [addBookingBlockRowBtn, saveBookingBlocksBtn]),
       bookingBlocksStatus,
     ]);
 
@@ -2214,10 +2350,39 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       });
     }
 
-    tabBookingsHub.addEventListener("click", () => selectAdminTab(0));
-    tabMembers.addEventListener("click", () => selectAdminTab(1));
-    tabBookingBlocks.addEventListener("click", () => selectAdminTab(2));
-    tabAnnounce.addEventListener("click", () => selectAdminTab(3));
+    async function trySelectAdminTab(next: 0 | 1 | 2 | 3) {
+      const cur = adminTabButtons.findIndex((b) => b.getAttribute("aria-selected") === "true");
+      if (cur === 2 && next !== 2 && isBookingBlocksDirty()) {
+        const ok = await showConfirmModal(
+          t("admin.blocks.unsavedLeaveTitle", "不開放時段尚未儲存"),
+          t(
+            "admin.blocks.unsavedLeaveMessage",
+            "目前有未儲存的變更。若離開此分頁，這些修改將不會寫入資料庫。\n\n仍要離開嗎？請先按「儲存不開放時段」以保留設定。",
+          ),
+          t("admin.blocks.unsavedLeaveConfirm", "仍要離開"),
+        );
+        if (!ok) return;
+      }
+      selectAdminTab(next);
+    }
+
+    bookingBlocksHasUnsavedSnapshot = isBookingBlocksDirty;
+    bookingBlocksConfirmLeave = async () => {
+      if (!isBookingBlocksDirty()) return true;
+      return showConfirmModal(
+        t("admin.blocks.unsavedLeaveTitle", "不開放時段尚未儲存"),
+        t(
+          "admin.blocks.unsavedLeaveMessage",
+          "目前有未儲存的變更。若離開此分頁或重新整理，未儲存的內容將不會寫入資料庫。\n\n仍要離開嗎？請先按「儲存不開放時段」以保留設定。",
+        ),
+        t("admin.blocks.unsavedLeaveConfirm", "仍要離開"),
+      );
+    };
+
+    tabBookingsHub.addEventListener("click", () => void trySelectAdminTab(0));
+    tabMembers.addEventListener("click", () => void trySelectAdminTab(1));
+    tabBookingBlocks.addEventListener("click", () => void trySelectAdminTab(2));
+    tabAnnounce.addEventListener("click", () => void trySelectAdminTab(3));
 
     adminTablist.addEventListener("keydown", (ev) => {
       if (ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;
@@ -2227,8 +2392,11 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       const delta = ev.key === "ArrowRight" ? 1 : -1;
       const n = adminTabButtons.length;
       const next = ((cur + delta) % n + n) % n;
-      selectAdminTab(next as 0 | 1 | 2 | 3);
-      adminTabButtons[next].focus();
+      void (async () => {
+        await trySelectAdminTab(next as 0 | 1 | 2 | 3);
+        const sel = adminTabButtons.findIndex((b) => b.getAttribute("aria-selected") === "true");
+        if (sel >= 0) adminTabButtons[sel].focus();
+      })();
     });
 
     selectAdminTab(0);
@@ -2637,6 +2805,13 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     );
   }
 
-  return { stopAdminListener, renderAdminLoggedOut, renderAdminForbidden, renderAdminTable };
+  return {
+    stopAdminListener,
+    renderAdminLoggedOut,
+    renderAdminForbidden,
+    renderAdminTable,
+    hasUnsavedBookingBlocks: () => bookingBlocksHasUnsavedSnapshot(),
+    confirmLeaveUnsavedBookingBlocks: () => bookingBlocksConfirmLeave(),
+  };
 }
 

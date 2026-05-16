@@ -1714,6 +1714,55 @@ tbody tr:hover td {
   box-shadow: var(--shadow-sm);
 }
 
+.admin-announce__block--blocks .admin-blocks-intro {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.admin-announce__block--blocks .admin-blocks-intro .admin-announce__block-lead {
+  margin: -4px 0 0;
+}
+
+.admin-blocks-intro-note {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.admin-booking-blocks-dirty-banner {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgb(201 122 53 / 0.45);
+  background: rgb(201 122 53 / 0.12);
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ink);
+}
+
+.admin-booking-blocks-dirty-banner[hidden] {
+  display: none !important;
+}
+
+.admin-booking-blocks-dirty-banner--on {
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.35);
+}
+
+.shell.admin-mode .admin-booking-blocks-save--attention {
+  border-color: rgb(201 122 53 / 0.85);
+  box-shadow: 0 0 0 2px rgb(201 122 53 / 0.2);
+}
+
+.admin-booking-blocks-actions {
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 4px;
+}
+
 .admin-announce__block--pricing {
   border-left-color: #4a7ab5;
   background: linear-gradient(135deg, rgb(74 122 181 / 0.1) 0%, var(--surface) 50%);
@@ -2287,16 +2336,75 @@ tbody tr:hover td {
 
 .admin-booking-blocks-rows {
   display: grid;
-  gap: 0;
+  gap: 12px;
 }
 
 .admin-booking-block-row {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.55);
+}
+
+.admin-booking-block-row__head {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin: -2px 0 -6px;
+}
+
+.admin-booking-block-row__remove {
+  flex-shrink: 0;
+  font-size: 0.84rem;
+}
+
+.admin-booking-block-row .bb-group {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.admin-booking-block-row .bb-group-title {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.admin-booking-block-row .bb-group-fields {
   display: flex;
   flex-wrap: wrap;
   gap: 10px 14px;
   align-items: flex-end;
-  padding: 12px 0;
-  border-top: 1px dashed var(--border);
+}
+
+.admin-booking-block-row .bb-group-fields--time {
+  align-items: flex-end;
+}
+
+.admin-booking-block-row .bb-time-sep {
+  flex-shrink: 0;
+  align-self: flex-end;
+  padding-bottom: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--muted);
+  line-height: 1;
+}
+
+.admin-booking-block-row .bb-group--reason {
+  gap: 6px;
+}
+
+.admin-booking-block-row .bb-group--reason .bb-reason {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .admin-booking-block-row .bb-field-wd {
@@ -2309,11 +2417,6 @@ tbody tr:hover td {
 
 .admin-booking-block-row .bb-field-t {
   min-width: 132px;
-}
-
-.admin-booking-block-row .bb-field-reason {
-  flex: 1 1 200px;
-  min-width: 180px;
 }
 
 .member-typeahead-wrap {
