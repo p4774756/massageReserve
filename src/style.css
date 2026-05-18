@@ -627,6 +627,7 @@ main.panel[hidden] {
 }
 
 .book-pick-calendar {
+  position: relative;
   margin-top: 10px;
   padding: 12px 12px 14px;
   border-radius: var(--radius-lg);
@@ -634,6 +635,25 @@ main.panel[hidden] {
   background: var(--surface-muted);
   box-shadow: var(--shadow-sm);
   max-width: 22rem;
+}
+
+.book-pick-calendar__hover-tip {
+  position: absolute;
+  z-index: 30;
+  max-width: 14rem;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+  white-space: normal;
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+  transform: translate(-50%, -100%);
 }
 
 .book-pick-calendar__toolbar {
@@ -746,6 +766,7 @@ main.panel[hidden] {
   border-radius: 999px;
   background: rgb(var(--accent-rgb) / 0.18);
   color: var(--accent-deep);
+  pointer-events: none;
 }
 
 .book-pick-calendar__day--today:not(.book-pick-calendar__day--inactive) {
