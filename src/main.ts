@@ -169,6 +169,7 @@ function render() {
   let bookingPickCalYear = 0;
   let bookingPickCalMonth = 0;
   let bookingPickCalDayCounts: Record<string, number> = {};
+  let bookingPickCalDayPeers: Record<string, string[]> = {};
   let bookingPickCalCountsReq = 0;
   const dateLabelSpan = el("span", {});
   const dateCalendarHint = el("p", {
@@ -302,6 +303,17 @@ function render() {
     return monthHasBookableDayInBookWindow(ny, nm, office);
   }
 
+  function bookingPickCalDayHoverTitle(dk: string): string {
+    const peers = bookingPickCalDayPeers[dk];
+    if (!peers?.length) return "";
+    return t("booking.calDayPeers", "當日預約：{{list}}", { list: peers.join("、") });
+  }
+
+  function applyBookingPickCalDayHoverTitle(node: HTMLElement, dk: string): void {
+    const title = bookingPickCalDayHoverTitle(dk);
+    if (title) node.title = title;
+  }
+
   function appendBookingPickCalDayBadge(parent: HTMLElement, dk: string): void {
     const count = bookingPickCalDayCounts[dk] ?? 0;
     if (count <= 0) return;
@@ -315,6 +327,13 @@ function render() {
     const n = Math.trunc(count);
     if (n > 0) bookingPickCalDayCounts[dk] = n;
     else delete bookingPickCalDayCounts[dk];
+  }
+
+  function mergeBookingPickCalDayPeers(dk: string, peers: string[]): void {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dk)) return;
+    const list = peers.filter((x) => x.trim().length > 0);
+    if (list.length) bookingPickCalDayPeers[dk] = list;
+    else delete bookingPickCalDayPeers[dk];
   }
 
   function bookableDateKeysInPickMonth(y: number, mo: number): string[] {
@@ -335,20 +354,27 @@ function render() {
     const keys = bookableDateKeysInPickMonth(y, mo);
     if (keys.length === 0) {
       bookingPickCalDayCounts = {};
+      bookingPickCalDayPeers = {};
       return;
     }
     const fn = getAvailabilityCall();
     const holidayOutcall = isBookingHolidayOutcallMode();
     const next: Record<string, number> = {};
+    const nextPeers: Record<string, string[]> = {};
     await Promise.all(
       keys.map(async (dateKey) => {
         try {
           const res = await fn({ dateKey, holidayOutcall, ...localeApiParam() });
           if (reqId !== bookingPickCalCountsReq) return;
-          const data = res.data as { dayCount?: number };
+          const data = res.data as { dayCount?: number; dayPeersMasked?: string[] };
           if (typeof data.dayCount === "number" && data.dayCount > 0) {
             next[dateKey] = Math.trunc(data.dayCount);
           }
+          const peers =
+            Array.isArray(data.dayPeersMasked) ?
+              data.dayPeersMasked.filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+            : [];
+          if (peers.length) nextPeers[dateKey] = peers;
         } catch {
           /* 單日失敗略過 */
         }
@@ -356,6 +382,7 @@ function render() {
     );
     if (reqId !== bookingPickCalCountsReq) return;
     bookingPickCalDayCounts = next;
+    bookingPickCalDayPeers = nextPeers;
   }
 
   async function refreshBookingPickCalDayCounts(): Promise<void> {
@@ -368,7 +395,7 @@ function render() {
       const fn = getBookingDayCountsCall();
       const res = await fn({ year: y, month: mo, ...localeApiParam() });
       if (reqId !== bookingPickCalCountsReq) return;
-      const data = res.data as { counts?: Record<string, number> };
+      const data = res.data as { counts?: Record<string, number>; peersByDay?: Record<string, string[]> };
       const raw = data.counts;
       if (raw && typeof raw === "object") {
         const next: Record<string, number> = {};
@@ -378,6 +405,18 @@ function render() {
         bookingPickCalDayCounts = next;
       } else {
         bookingPickCalDayCounts = {};
+      }
+      const rawPeers = data.peersByDay;
+      if (rawPeers && typeof rawPeers === "object") {
+        const nextPeers: Record<string, string[]> = {};
+        for (const [dk, list] of Object.entries(rawPeers)) {
+          if (!Array.isArray(list)) continue;
+          const peers = list.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
+          if (peers.length) nextPeers[dk] = peers;
+        }
+        bookingPickCalDayPeers = nextPeers;
+      } else {
+        bookingPickCalDayPeers = {};
       }
     } catch {
       if (reqId !== bookingPickCalCountsReq) return;
@@ -434,6 +473,7 @@ function render() {
         appendBookingPickCalDayBadge(inactive, dk);
         if (dk === todayK) inactive.classList.add("book-pick-calendar__day--today");
         if (dk === selected) inactive.classList.add("book-pick-calendar__day--selected");
+        applyBookingPickCalDayHoverTitle(wrap, dk);
         wrap.append(inactive);
         cells.push(wrap);
         continue;
@@ -444,6 +484,7 @@ function render() {
       if (dk === todayK) btn.classList.add("book-pick-calendar__day--today");
       btn.append(el("span", { class: "book-pick-calendar__day-num" }, [String(dayNum)]));
       appendBookingPickCalDayBadge(btn, dk);
+      applyBookingPickCalDayHoverTitle(btn, dk);
       btn.addEventListener("click", () => {
         dateInput.value = dk;
         paintBookingPickCalendar();
@@ -1586,6 +1627,11 @@ function render() {
         const dayFull = data.dayCount >= data.dayCap;
         const weekFull = data.weekCount >= data.weekCap;
         mergeBookingPickCalDayCount(dk, data.dayCount);
+        const dayPeersForCal =
+          Array.isArray(data.dayPeersMasked) ?
+            data.dayPeersMasked.filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+          : [];
+        mergeBookingPickCalDayPeers(dk, dayPeersForCal);
         paintBookingPickCalendar();
         const blocked = dayFull || weekFull;
         bookingCapacityBlocksSlots = blocked;

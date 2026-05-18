@@ -296,13 +296,22 @@ export const getBookingDayCounts = onCall(publicCall, async (request) => {
     .where("status", "in", [...ACTIVE_STATUSES])
     .get();
 
-  const counts: Record<string, number> = {};
+  const byDay = new Map<string, QueryDocumentSnapshot[]>();
   for (const d of snap.docs) {
     const dk = d.get("dateKey");
     if (typeof dk !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(dk)) continue;
-    counts[dk] = (counts[dk] ?? 0) + 1;
+    const arr = byDay.get(dk) ?? [];
+    arr.push(d);
+    byDay.set(dk, arr);
   }
-  return { counts };
+  const counts: Record<string, number> = {};
+  const peersByDay: Record<string, string[]> = {};
+  for (const [dk, docs] of byDay) {
+    counts[dk] = docs.length;
+    const peers = listMaskedActiveBookerLabels(docs);
+    if (peers.length) peersByDay[dk] = peers;
+  }
+  return { counts, peersByDay };
 });
 
 /**
