@@ -57,6 +57,11 @@ service cloud.firestore {
     /** 會員餘額／次數／點數：僅 Cloud Functions（Admin SDK）讀寫 */
     match /customers/{uid} {
       allow read, write: if false;
+
+      /** 後台客戶情況筆記（內部）：僅 Cloud Functions */
+      match /adminNotes/{noteId} {
+        allow read, write: if false;
+      }
     }
 
     /** 儲值與扣款紀錄：僅後台／Functions */

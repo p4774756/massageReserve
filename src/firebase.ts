@@ -56,6 +56,11 @@ export const listMembersAdminCall = () => httpsCallable(getFns(), "listMembersAd
 export const sendMembersBroadcastAdminCall = () => httpsCallable(getFns(), "sendMembersBroadcastAdmin");
 export const sendMemberDirectEmailAdminCall = () => httpsCallable(getFns(), "sendMemberDirectEmailAdmin");
 export const updateMemberNicknameAdminCall = () => httpsCallable(getFns(), "updateMemberNicknameAdmin");
+export const batchGetCustomerAdminBriefsAdminCall = () =>
+  httpsCallable(getFns(), "batchGetCustomerAdminBriefsAdmin");
+export const getCustomerAdminProfileAdminCall = () => httpsCallable(getFns(), "getCustomerAdminProfileAdmin");
+export const setCustomerAdminBriefAdminCall = () => httpsCallable(getFns(), "setCustomerAdminBriefAdmin");
+export const addCustomerAdminNoteAdminCall = () => httpsCallable(getFns(), "addCustomerAdminNoteAdmin");
 export const recordSiteVisitCall = () => httpsCallable(getFns(), "recordSiteVisit");
 export function getDb() {
   return getFirestore(getFirebaseApp());

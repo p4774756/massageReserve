@@ -19,8 +19,14 @@ import {
   sendMembersBroadcastAdminCall,
   sendMemberDirectEmailAdminCall,
   topupWalletCall,
-  updateMemberNicknameAdminCall,
+  batchGetCustomerAdminBriefsAdminCall,
 } from "./firebase";
+import {
+  applyAdminBriefsToBookingTable,
+  collectMemberCustomerIdsFromBookings,
+  createAdminBookingBriefCell,
+  openAdminCustomerProfileModal,
+} from "./adminCustomerProfile";
 import { renderAdminForbidden as paintAdminForbiddenView, renderAdminLoggedOut as paintAdminLoginView } from "./adminLoginViews";
 import {
   memberBookingGetsStatusEmail,
@@ -1055,9 +1061,62 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         el("th", {}, [t("admin.table.name", "姓名")]),
         el("th", { title: memberThTitle }, [t("admin.table.member", "會員")]),
         el("th", {}, [t("admin.table.note", "備註")]),
+        el("th", {}, [t("admin.customerProfile.thBrief", "客戶摘要（內部）")]),
         el("th", {}, [t("admin.table.status", "狀態")]),
         el("th", {}, [t("admin.table.actions", "操作")]),
       ]);
+    }
+
+    let adminBriefByCustomerId: Record<string, string> = {};
+    let adminBriefFetchGen = 0;
+
+    function openMemberCustomerProfile(customerId: string, email?: string | null) {
+      openAdminCustomerProfileModal({
+        customerId,
+        email,
+        onSaved: () => {
+          void loadMemberList();
+          void refreshAdminBookingBriefsFromTables();
+        },
+      });
+    }
+
+    async function refreshAdminBookingBriefsForBookings(bookings: Booking[]) {
+      const ids = collectMemberCustomerIdsFromBookings(bookings);
+      if (ids.length === 0) {
+        adminBriefByCustomerId = {};
+        applyAdminBriefsToBookingTable(table, {});
+        applyAdminBriefsToBookingTable(hiddenTable, {});
+        return;
+      }
+      const gen = ++adminBriefFetchGen;
+      try {
+        const fn = batchGetCustomerAdminBriefsAdminCall();
+        const res = await fn({ customerIds: ids, ...localeApiParam() });
+        if (gen !== adminBriefFetchGen) return;
+        const data = res.data as { briefs?: Record<string, string> };
+        adminBriefByCustomerId = data.briefs && typeof data.briefs === "object" ? data.briefs : {};
+        applyAdminBriefsToBookingTable(table, adminBriefByCustomerId);
+        applyAdminBriefsToBookingTable(hiddenTable, adminBriefByCustomerId);
+        paintAdminBookingsCalendar();
+      } catch (e) {
+        console.error("refreshAdminBookingBriefsForBookings", e);
+      }
+    }
+
+    async function refreshAdminBookingBriefsFromTables() {
+      const ids = new Set<string>();
+      for (const td of table.querySelectorAll<HTMLElement>("[data-admin-brief-for]")) {
+        const cid = td.getAttribute("data-admin-brief-for");
+        if (cid) ids.add(cid);
+      }
+      for (const td of hiddenTable.querySelectorAll<HTMLElement>("[data-admin-brief-for]")) {
+        const cid = td.getAttribute("data-admin-brief-for");
+        if (cid) ids.add(cid);
+      }
+      await refreshAdminBookingBriefsForBookings(
+        [...ids].map((customerId) => ({ customerId } as Booking)),
+      );
     }
     table.append(adminBookingsHeaderRow());
     tableHolder.append(table);
@@ -1162,7 +1221,10 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         const sorted = list.slice().sort((a, b) => (a.startSlot ?? "").localeCompare(b.startSlot ?? "", "zh-Hant"));
         const tipLines = sorted.map((bb) => {
           const st = bookingStatusNorm(bb.status);
-          return `${bb.startSlot ?? ""} ${(bb.displayName ?? "").trim()} · ${bookingStatusLabel(st)}`;
+          const cid = typeof bb.customerId === "string" ? bb.customerId.trim() : "";
+          const brief = cid ? (adminBriefByCustomerId[cid] ?? "").trim() : "";
+          const briefPart = brief ? ` · ${brief}` : "";
+          return `${bb.startSlot ?? ""} ${(bb.displayName ?? "").trim()} · ${bookingStatusLabel(st)}${briefPart}`;
         });
         const titleAttr = tipLines.length > 0 ? tipLines.join("\n") : "";
 
@@ -1290,6 +1352,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       email: string | null;
       emailVerified: boolean;
       nickname: string;
+      adminBrief: string;
       sessionCredits: number;
       wheelPoints: number;
       drawChances: number;
@@ -1418,79 +1481,8 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       );
     }
 
-    function openAdminNicknameModal(m: AdminMemberListRow) {
-      const overlay = el("div", { class: "modal-overlay" });
-      const dialog = el("div", { class: "modal-card admin-member-nick-modal" });
-      dialog.setAttribute("role", "dialog");
-      dialog.setAttribute("aria-modal", "true");
-      const titleId = "admin-member-nick-modal-title";
-      dialog.setAttribute("aria-labelledby", titleId);
-      const heading = el("h3", { id: titleId }, [t("admin.memberList.editNickTitle", "編輯稱呼")]);
-      const whoLine = el("p", { class: "hint admin-member-nick-modal-who" }, [(m.email ?? m.uid).trim()]);
-      const nickInput = el("input", {
-        type: "text",
-        maxLength: 80,
-        value: m.nickname,
-        class: "admin-member-nick-input",
-        autocomplete: "off",
-      });
-      const nickField = el("label", { class: "field" }, [
-        t("admin.memberList.nickFieldLabel", "稱呼"),
-        nickInput,
-      ]);
-      const cancelBtn = el("button", { class: "ghost", type: "button" }, [t("modal.cancel", "取消")]);
-      const saveBtn = el("button", { class: "primary", type: "button" }, [
-        t("admin.memberList.modalSaveNick", "儲存"),
-      ]);
-      const actions = el("div", { class: "modal-actions" }, [cancelBtn, saveBtn]);
-
-      const dismiss = () => {
-        document.removeEventListener("keydown", onKeyDown);
-        overlay.remove();
-      };
-      const onKeyDown = (ev: KeyboardEvent) => {
-        if (ev.key === "Escape") {
-          ev.preventDefault();
-          dismiss();
-        }
-      };
-
-      cancelBtn.addEventListener("click", () => dismiss());
-      overlay.addEventListener("click", (ev) => {
-        if (ev.target === overlay) dismiss();
-      });
-      document.addEventListener("keydown", onKeyDown);
-
-      saveBtn.addEventListener("click", async () => {
-        memberListStatus.textContent = "";
-        memberListStatus.className = "status-line";
-        saveBtn.setAttribute("disabled", "true");
-        cancelBtn.setAttribute("disabled", "true");
-        try {
-          const updateFn = updateMemberNicknameAdminCall();
-          await updateFn({ customerId: m.uid, nickname: nickInput.value, ...localeApiParam() });
-          const cached = memberListCache.find((r) => r.uid === m.uid);
-          if (cached) cached.nickname = nickInput.value.trim();
-          memberListStatus.textContent = t("admin.memberList.nickUpdated", "已更新 {{email}} 的稱呼。", {
-            email: m.email ?? m.uid,
-          });
-          memberListStatus.classList.add("ok");
-          dismiss();
-          paintMemberListTable();
-        } catch (e) {
-          memberListStatus.textContent = e instanceof Error ? e.message : t("admin.memberList.saveFail", "儲存失敗");
-          memberListStatus.classList.add("error");
-        } finally {
-          saveBtn.removeAttribute("disabled");
-          cancelBtn.removeAttribute("disabled");
-        }
-      });
-
-      dialog.append(heading, whoLine, nickField, actions);
-      overlay.append(dialog);
-      document.body.append(overlay);
-      nickInput.focus();
-      nickInput.select();
+    function openAdminMemberProfileModal(m: AdminMemberListRow) {
+      openMemberCustomerProfile(m.uid, m.email);
     }
 
     function paintMemberListTable() {
@@ -1541,8 +1533,8 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
             : "admin-member-nick-trigger",
         });
         nickOpen.title = nickEmpty
-          ? t("admin.memberList.nickUnsetTitle", "目前無稱呼，點擊以編輯")
-          : t("admin.memberList.nickClickToEdit", "點擊編輯稱呼");
+          ? t("admin.memberList.nickUnsetTitle", "目前無稱呼，點擊開啟客戶檔案")
+          : t("admin.memberList.nickClickToEdit", "點擊開啟客戶檔案");
         if (nickEmpty) {
           nickOpen.textContent = t("admin.memberList.nickUnsetClick", "未設定");
           nickOpen.setAttribute(
@@ -1554,7 +1546,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         }
         nickOpen.addEventListener("click", (ev) => {
           ev.stopPropagation();
-          openAdminNicknameModal(m);
+          openAdminMemberProfileModal(m);
         });
         const verified = m.emailVerified === true;
         const verifyCell = el("td", { class: verified ? "admin-member-verify ok" : "admin-member-verify" }, [
@@ -1565,10 +1557,27 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
           class: "admin-member-email-cell",
           title: emailStr,
         });
-        emailTd.textContent = emailStr;
+        const emailInner = el("span", { class: "admin-member-email-cell__text" }, [emailStr]);
+        emailTd.append(emailInner);
+        if ((m.adminBrief ?? "").trim().length > 0) {
+          emailInner.append(
+            el("span", {
+              class: "admin-member-brief-dot",
+              title: t("admin.customerProfile.hasBrief", "已設定客戶摘要"),
+              ariaHidden: "true",
+            }),
+          );
+        }
+        const profileBtn = el("button", { type: "button", class: "ghost admin-member-profile-btn" }, [
+          t("admin.customerProfile.openProfile", "檔案"),
+        ]);
+        profileBtn.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          openAdminMemberProfileModal(m);
+        });
         memberListTable.append(
           el("tr", {}, [
-            emailTd,
+            el("td", { class: "admin-member-email-cell-wrap" }, [emailTd, profileBtn]),
             verifyCell,
             el("td", { class: "admin-member-nick-cell" }, [nickOpen]),
             el("td", { class: "mono" }, [String(m.sessionCredits)]),
@@ -1636,6 +1645,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
           email: m.email ?? null,
           emailVerified: m.emailVerified === true,
           nickname: typeof m.nickname === "string" ? m.nickname : "",
+          adminBrief: typeof m.adminBrief === "string" ? m.adminBrief.trim() : "",
           sessionCredits: typeof m.sessionCredits === "number" ? m.sessionCredits : 0,
           wheelPoints: typeof m.wheelPoints === "number" ? m.wheelPoints : 0,
           drawChances: typeof m.drawChances === "number" ? m.drawChances : 0,
@@ -2414,12 +2424,14 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     const hiddenAdminQueue: AdminHiddenQueueItem[] = [];
 
     function appendHiddenDeletedRowAdmin(b: Booking) {
+      const cid = typeof b.customerId === "string" ? b.customerId.trim() : "";
       hiddenTable.append(
         el("tr", {}, [
           el("td", { class: "mono" }, adminWhenCellParts(b)),
           el("td", {}, [b.displayName ?? ""]),
           el("td", {}, [bookingMemberYesNo(b)]),
           el("td", {}, [b.note ?? ""]),
+          createAdminBookingBriefCell(cid || null, cid ? adminBriefByCustomerId[cid] : undefined, openMemberCustomerProfile),
           el("td", {}, [
             el("span", { class: "admin-booking-status-readonly" }, [
               t("admin.hidden.deletedLabel", "已刪除（舊資料）"),
@@ -2551,12 +2563,18 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         }
       });
       const actionCell = el("div", { class: "admin-booking-actions" }, [cancelBtn, unhideBtn]);
+      const cidHidden = typeof b.customerId === "string" ? b.customerId.trim() : "";
       hiddenTable.append(
         el("tr", {}, [
           el("td", { class: "mono" }, adminWhenCellParts(b)),
           el("td", {}, [b.displayName ?? ""]),
           el("td", {}, [bookingMemberYesNo(b)]),
           el("td", {}, [b.note ?? ""]),
+          createAdminBookingBriefCell(
+            cidHidden || null,
+            cidHidden ? adminBriefByCustomerId[cidHidden] : undefined,
+            openMemberCustomerProfile,
+          ),
           el("td", {}, [statusCell]),
           el("td", {}, [actionCell]),
         ]),
@@ -2571,7 +2589,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       if (total === 0) {
         hiddenTable.append(
           el("tr", {}, [
-            el("td", { class: "hint", colSpan: 6 }, [t("admin.hidden.empty", "目前沒有封存中的預約，也沒有舊版已刪除資料。")]),
+            el("td", { class: "hint", colSpan: 7 }, [t("admin.hidden.empty", "目前沒有封存中的預約，也沒有舊版已刪除資料。")]),
           ]),
         );
         hiddenPagePrev.disabled = true;
@@ -2773,18 +2791,25 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
             }
           });
           const actionCell = el("div", { class: "admin-booking-actions" }, [cancelBtn, archiveBtn]);
+          const cid = typeof b.customerId === "string" ? b.customerId.trim() : "";
           table.append(
             el("tr", {}, [
               el("td", { class: "mono" }, adminWhenCellParts(b)),
               el("td", {}, [b.displayName ?? ""]),
               el("td", {}, [bookingMemberYesNo(b)]),
               el("td", {}, [b.note ?? ""]),
+              createAdminBookingBriefCell(cid || null, cid ? adminBriefByCustomerId[cid] : undefined, openMemberCustomerProfile),
               el("td", {}, [statusCell]),
               el("td", {}, [actionCell]),
             ]),
           );
         }
         adminCalendarLastVisible = visibleBookingsForCalendar;
+        const allForBriefs = [
+          ...visibleBookingsForCalendar,
+          ...hiddenAdminQueue.map((item) => item.b),
+        ];
+        void refreshAdminBookingBriefsForBookings(allForBriefs);
         paintAdminBookingsCalendar();
         paintHiddenAdminPage();
       },

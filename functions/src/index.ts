@@ -1138,11 +1138,33 @@ export const searchMemberUsers = onCall(publicCall, async (request) => {
   return { users: matches };
 });
 
+const ADMIN_BRIEF_MAX = 300;
+const ADMIN_NOTE_MAX = 2000;
+const ADMIN_NOTES_LIST_MAX = 20;
+const BATCH_ADMIN_BRIEFS_MAX = 100;
+
+const ADMIN_NOTE_CATEGORIES = new Set(["general", "health", "preference", "incident"]);
+
+function readAdminBriefFromCustomerData(d: Record<string, unknown> | undefined): string {
+  if (!d) return "";
+  const raw = d.adminBrief;
+  return typeof raw === "string" ? raw.trim() : "";
+}
+
+function firestoreTimestampToSeconds(v: unknown): number | null {
+  if (v instanceof Timestamp) return v.seconds;
+  if (v && typeof v === "object" && "seconds" in v && typeof (v as { seconds: unknown }).seconds === "number") {
+    return (v as { seconds: number }).seconds;
+  }
+  return null;
+}
+
 type ListMembersAdminRow = {
   uid: string;
   email: string | null;
   emailVerified: boolean;
   nickname: string;
+  adminBrief: string;
   walletBalance: number;
   sessionCredits: number;
   wheelPoints: number;
@@ -1178,6 +1200,7 @@ export const listMembersAdmin = onCall(publicCall, async (request) => {
         email: u.email ?? null,
         emailVerified: u.emailVerified === true,
         nickname: typeof d.nickname === "string" ? d.nickname : "",
+        adminBrief: readAdminBriefFromCustomerData(d),
         walletBalance: typeof d.walletBalance === "number" ? d.walletBalance : 0,
         sessionCredits: typeof d.sessionCredits === "number" ? d.sessionCredits : 0,
         wheelPoints: typeof d.wheelPoints === "number" ? d.wheelPoints : 0,
@@ -1235,6 +1258,199 @@ export const updateMemberNicknameAdmin = onCall(publicCall, async (request) => {
   }
 
   return { ok: true };
+});
+
+/** 後台：批次取得會員客戶摘要（預約列表顯示用） */
+export const batchGetCustomerAdminBriefsAdmin = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
+  }
+  await assertAdminByUid(uid, locale);
+
+  const idsRaw = request.data?.customerIds;
+  if (!Array.isArray(idsRaw)) {
+    return { briefs: {} as Record<string, string> };
+  }
+  const ids = [
+    ...new Set(
+      idsRaw
+        .filter((x): x is string => typeof x === "string")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0),
+    ),
+  ].slice(0, BATCH_ADMIN_BRIEFS_MAX);
+
+  const briefs: Record<string, string> = {};
+  if (ids.length === 0) return { briefs };
+
+  const refs = ids.map((id) => db.collection("customers").doc(id));
+  const snaps = await db.getAll(...refs);
+  for (const snap of snaps) {
+    if (!snap.exists) continue;
+    const brief = readAdminBriefFromCustomerData(snap.data() as Record<string, unknown>);
+    if (brief) briefs[snap.id] = brief;
+  }
+  return { briefs };
+});
+
+/** 後台：取得會員客戶檔案（摘要 + 最近筆記） */
+export const getCustomerAdminProfileAdmin = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
+  }
+  await assertAdminByUid(uid, locale);
+
+  const customerRaw = typeof request.data?.customerId === "string" ? request.data.customerId.trim() : "";
+  if (!customerRaw) {
+    throw new HttpsError(
+      "invalid-argument",
+      st(locale, "admin.customerIdRequired", "customerId 必填（會員 UID 或 Email）"),
+    );
+  }
+
+  const customerId = await resolveCustomerUidForTopup(customerRaw, locale);
+  const snap = await db.collection("customers").doc(customerId).get();
+  const d = snap.exists ? (snap.data() as Record<string, unknown>) : {};
+  const adminBrief = readAdminBriefFromCustomerData(d);
+  const nickname = typeof d.nickname === "string" ? d.nickname.trim() : "";
+
+  const notesSnap = await db
+    .collection("customers")
+    .doc(customerId)
+    .collection("adminNotes")
+    .orderBy("createdAt", "desc")
+    .limit(ADMIN_NOTES_LIST_MAX)
+    .get();
+
+  const notes = notesSnap.docs.map((docSnap) => {
+    const nd = docSnap.data();
+    const catRaw = nd.category;
+    const category =
+      typeof catRaw === "string" && ADMIN_NOTE_CATEGORIES.has(catRaw) ? catRaw : "general";
+    return {
+      id: docSnap.id,
+      text: typeof nd.text === "string" ? nd.text : "",
+      category,
+      createdAt: firestoreTimestampToSeconds(nd.createdAt),
+      createdBy: typeof nd.createdBy === "string" ? nd.createdBy : "",
+    };
+  });
+
+  let email: string | null = null;
+  try {
+    const userRecord = await getAuth().getUser(customerId);
+    email = userRecord.email ?? null;
+  } catch {
+    email = null;
+  }
+
+  return {
+    customerId,
+    email,
+    nickname,
+    adminBrief,
+    adminBriefUpdatedAt: firestoreTimestampToSeconds(d.adminBriefUpdatedAt),
+    adminBriefUpdatedBy: typeof d.adminBriefUpdatedBy === "string" ? d.adminBriefUpdatedBy : "",
+    notes,
+  };
+});
+
+/** 後台：更新會員客戶摘要（`customers.adminBrief`） */
+export const setCustomerAdminBriefAdmin = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
+  }
+  await assertAdminByUid(uid, locale);
+
+  const customerRaw = typeof request.data?.customerId === "string" ? request.data.customerId.trim() : "";
+  const briefRaw = typeof request.data?.adminBrief === "string" ? request.data.adminBrief.trim() : "";
+  if (!customerRaw) {
+    throw new HttpsError(
+      "invalid-argument",
+      st(locale, "admin.customerIdRequired", "customerId 必填（會員 UID 或 Email）"),
+    );
+  }
+  if (briefRaw.length > ADMIN_BRIEF_MAX) {
+    throw new HttpsError(
+      "invalid-argument",
+      st(locale, "customerProfile.briefTooLong", "客戶摘要不可超過 {{max}} 字。", { max: ADMIN_BRIEF_MAX }),
+    );
+  }
+
+  const customerId = await resolveCustomerUidForTopup(customerRaw, locale);
+  const now = FieldValueOrServerTimestamp();
+  if (briefRaw.length === 0) {
+    await db.collection("customers").doc(customerId).set(
+      {
+        adminBrief: FieldValue.delete(),
+        adminBriefUpdatedAt: FieldValue.delete(),
+        adminBriefUpdatedBy: FieldValue.delete(),
+        updatedAt: now,
+      },
+      { merge: true },
+    );
+  } else {
+    await db.collection("customers").doc(customerId).set(
+      {
+        adminBrief: briefRaw,
+        adminBriefUpdatedAt: now,
+        adminBriefUpdatedBy: uid,
+        updatedAt: now,
+      },
+      { merge: true },
+    );
+  }
+  return { ok: true, adminBrief: briefRaw };
+});
+
+/** 後台：新增一筆客戶情況筆記 */
+export const addCustomerAdminNoteAdmin = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
+  }
+  await assertAdminByUid(uid, locale);
+
+  const customerRaw = typeof request.data?.customerId === "string" ? request.data.customerId.trim() : "";
+  const textRaw = typeof request.data?.text === "string" ? request.data.text.trim() : "";
+  const categoryRaw = typeof request.data?.category === "string" ? request.data.category.trim() : "general";
+  const category = ADMIN_NOTE_CATEGORIES.has(categoryRaw) ? categoryRaw : "general";
+
+  if (!customerRaw) {
+    throw new HttpsError(
+      "invalid-argument",
+      st(locale, "admin.customerIdRequired", "customerId 必填（會員 UID 或 Email）"),
+    );
+  }
+  if (textRaw.length < 1) {
+    throw new HttpsError("invalid-argument", st(locale, "customerProfile.noteEmpty", "請輸入筆記內容。"));
+  }
+  if (textRaw.length > ADMIN_NOTE_MAX) {
+    throw new HttpsError(
+      "invalid-argument",
+      st(locale, "customerProfile.noteTooLong", "筆記不可超過 {{max}} 字。", { max: ADMIN_NOTE_MAX }),
+    );
+  }
+
+  const customerId = await resolveCustomerUidForTopup(customerRaw, locale);
+  const noteRef = db.collection("customers").doc(customerId).collection("adminNotes").doc();
+  const now = FieldValueOrServerTimestamp();
+  await noteRef.set({
+    text: textRaw,
+    category,
+    createdAt: now,
+    createdBy: uid,
+  });
+  await db.collection("customers").doc(customerId).set({ updatedAt: now }, { merge: true });
+
+  return { ok: true, noteId: noteRef.id };
 });
 
 export const completeBooking = onCall(publicCall, async (request) => {
