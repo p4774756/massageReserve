@@ -312,10 +312,46 @@ function render() {
     return monthHasBookableDayInBookWindow(ny, nm, office);
   }
 
-  function bookingPickCalDayHoverTitle(dk: string): string {
-    const peers = bookingPickCalDayPeers[dk];
-    if (!peers?.length) return "";
-    return t("booking.calDayPeers", "當日預約：{{list}}", { list: peers.join("、") });
+  function nonEmptyStringLines(list: unknown): string[] {
+    return Array.isArray(list) ?
+        list.filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+      : [];
+  }
+
+  function daySlotLinesFromAvailability(data: {
+    daySlotsMasked?: unknown;
+    dayPeersMasked?: unknown;
+  }): string[] {
+    const slots = nonEmptyStringLines(data.daySlotsMasked);
+    if (slots.length) return slots;
+    return nonEmptyStringLines(data.dayPeersMasked);
+  }
+
+  function buildBookingPeersLine(label: string, lines: string[]): HTMLElement {
+    const row = el("div", { class: "booking-peers-line" });
+    row.append(el("span", { class: "booking-peers-line__label" }, [label]));
+    if (lines.length) {
+      const list = el("ul", { class: "booking-peers-slot-list" });
+      for (const line of lines) {
+        list.append(el("li", {}, [line]));
+      }
+      row.append(list);
+    }
+    return row;
+  }
+
+  function fillBookPickCalHoverTip(lines: string[]): void {
+    bookPickCalHoverTip.replaceChildren();
+    bookPickCalHoverTip.append(
+      el("span", { class: "book-pick-calendar__hover-tip-label" }, [
+        t("booking.calDaySlotsLabel", "當日預約時段"),
+      ]),
+    );
+    const list = el("ul", { class: "book-pick-calendar__hover-tip-list" });
+    for (const line of lines) {
+      list.append(el("li", {}, [line]));
+    }
+    bookPickCalHoverTip.append(list);
   }
 
   function hideBookPickCalHoverTip(): void {
@@ -345,13 +381,10 @@ function render() {
           holidayOutcall: isBookingHolidayOutcallMode(),
           ...localeApiParam(),
         });
-        const data = res.data as { dayPeersMasked?: string[] };
-        const peers =
-          Array.isArray(data.dayPeersMasked) ?
-            data.dayPeersMasked.filter((x): x is string => typeof x === "string" && x.trim().length > 0)
-          : [];
-        mergeBookingPickCalDayPeers(dk, peers);
-        return peers;
+        const data = res.data as { daySlotsMasked?: string[]; dayPeersMasked?: string[] };
+        const lines = daySlotLinesFromAvailability(data);
+        mergeBookingPickCalDayPeers(dk, lines);
+        return lines;
       } finally {
         bookingPickCalPeersFetch.delete(dk);
       }
@@ -372,22 +405,31 @@ function render() {
   async function showBookPickCalHoverTip(anchor: HTMLElement, dk: string): Promise<void> {
     window.clearTimeout(bookPickCalHoverHideTimer);
     bookPickCalHoverShowDk = dk;
-    const peers = bookingPickCalDayPeers[dk];
-    if (peers?.length) {
-      bookPickCalHoverTip.textContent = bookingPickCalDayHoverTitle(dk);
+    const cached = bookingPickCalDayPeers[dk];
+    if (cached?.length) {
+      fillBookPickCalHoverTip(cached);
       positionBookPickCalHoverTip(anchor);
       bookPickCalHoverTip.hidden = false;
       return;
     }
-    bookPickCalHoverTip.textContent = t("booking.calDayPeersLoading", "載入預約名單…");
+    bookPickCalHoverTip.replaceChildren(
+      el("span", { class: "book-pick-calendar__hover-tip-label" }, [
+        t("booking.calDayPeersLoading", "載入預約時段…"),
+      ]),
+    );
     positionBookPickCalHoverTip(anchor);
     bookPickCalHoverTip.hidden = false;
     const loaded = await ensureBookingPickCalDayPeers(dk);
     if (bookPickCalHoverShowDk !== dk) return;
-    bookPickCalHoverTip.textContent =
-      loaded.length ?
-        bookingPickCalDayHoverTitle(dk)
-      : t("booking.calDayPeersEmpty", "當日無其他有效預約");
+    if (loaded.length) {
+      fillBookPickCalHoverTip(loaded);
+    } else {
+      bookPickCalHoverTip.replaceChildren(
+        el("span", { class: "book-pick-calendar__hover-tip-label" }, [
+          t("booking.calDayPeersEmpty", "當日無其他有效預約時段"),
+        ]),
+      );
+    }
   }
 
   function wireBookPickCalDayHover(node: HTMLElement, dk: string): void {
@@ -456,15 +498,16 @@ function render() {
         try {
           const res = await fn({ dateKey, holidayOutcall, ...localeApiParam() });
           if (reqId !== bookingPickCalCountsReq) return;
-          const data = res.data as { dayCount?: number; dayPeersMasked?: string[] };
+          const data = res.data as {
+            dayCount?: number;
+            daySlotsMasked?: string[];
+            dayPeersMasked?: string[];
+          };
           if (typeof data.dayCount === "number" && data.dayCount > 0) {
             next[dateKey] = Math.trunc(data.dayCount);
           }
-          const peers =
-            Array.isArray(data.dayPeersMasked) ?
-              data.dayPeersMasked.filter((x): x is string => typeof x === "string" && x.trim().length > 0)
-            : [];
-          if (peers.length) nextPeers[dateKey] = peers;
+          const lines = daySlotLinesFromAvailability(data);
+          if (lines.length) nextPeers[dateKey] = lines;
         } catch {
           /* 單日失敗略過 */
         }
@@ -485,7 +528,11 @@ function render() {
       const fn = getBookingDayCountsCall();
       const res = await fn({ year: y, month: mo, ...localeApiParam() });
       if (reqId !== bookingPickCalCountsReq) return;
-      const data = res.data as { counts?: Record<string, number>; peersByDay?: Record<string, string[]> };
+      const data = res.data as {
+        counts?: Record<string, number>;
+        peersByDay?: Record<string, string[]>;
+        slotsByDay?: Record<string, string[]>;
+      };
       const raw = data.counts;
       if (raw && typeof raw === "object") {
         const next: Record<string, number> = {};
@@ -496,8 +543,17 @@ function render() {
       } else {
         bookingPickCalDayCounts = {};
       }
+      const rawSlots = data.slotsByDay;
       const rawPeers = data.peersByDay;
-      if (rawPeers && typeof rawPeers === "object") {
+      if (rawSlots && typeof rawSlots === "object") {
+        const nextSlots: Record<string, string[]> = {};
+        for (const [dk, list] of Object.entries(rawSlots)) {
+          if (!Array.isArray(list)) continue;
+          const lines = list.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
+          if (lines.length) nextSlots[dk] = lines;
+        }
+        bookingPickCalDayPeers = nextSlots;
+      } else if (rawPeers && typeof rawPeers === "object") {
         const nextPeers: Record<string, string[]> = {};
         for (const [dk, list] of Object.entries(rawPeers)) {
           if (!Array.isArray(list)) continue;
@@ -1719,17 +1775,14 @@ function render() {
           dayCap: number;
           weekCap: number;
           dayPeersMasked?: string[];
+          daySlotsMasked?: string[];
           weekPeersMasked?: string[];
         };
         const taken = new Set(data.taken);
         const dayFull = data.dayCount >= data.dayCap;
         const weekFull = data.weekCount >= data.weekCap;
         mergeBookingPickCalDayCount(dk, data.dayCount);
-        const dayPeersForCal =
-          Array.isArray(data.dayPeersMasked) ?
-            data.dayPeersMasked.filter((x): x is string => typeof x === "string" && x.trim().length > 0)
-          : [];
-        mergeBookingPickCalDayPeers(dk, dayPeersForCal);
+        mergeBookingPickCalDayPeers(dk, daySlotLinesFromAvailability(data));
         paintBookingPickCalendar();
         const blocked = dayFull || weekFull;
         bookingCapacityBlocksSlots = blocked;
@@ -1757,32 +1810,22 @@ function render() {
             ` / ${data.weekCap}`,
           ]),
         );
-        const dayPeers =
-          Array.isArray(data.dayPeersMasked) ?
-            data.dayPeersMasked.filter((x): x is string => typeof x === "string" && x.trim().length > 0)
-          : [];
-        const weekPeers =
-          Array.isArray(data.weekPeersMasked) ?
-            data.weekPeersMasked.filter((x): x is string => typeof x === "string" && x.trim().length > 0)
-          : [];
+        const daySlots = daySlotLinesFromAvailability(data);
+        const weekPeers = nonEmptyStringLines(data.weekPeersMasked);
         const peerLines: HTMLElement[] = [];
-        if (dayPeers.length) {
+        if (daySlots.length) {
           peerLines.push(
-            el("div", { class: "booking-peers-line" }, [
+            buildBookingPeersLine(
               weekdayZh ?
-                t("booking.peersDayWithWeekday", "當日（{{weekday}}｜匿名）：{{list}}", {
-                  weekday: weekdayZh,
-                  list: dayPeers.join("、"),
-                })
-              : t("booking.peersDay", "當日（匿名）：{{list}}", { list: dayPeers.join("、") }),
-            ]),
+                t("booking.peersDayLabelWeekday", "當日（{{weekday}}｜匿名時段）", { weekday: weekdayZh })
+              : t("booking.peersDayLabel", "當日（匿名時段）"),
+              daySlots,
+            ),
           );
         }
         if (weekPeers.length) {
           peerLines.push(
-            el("div", { class: "booking-peers-line" }, [
-              t("booking.peersWeek", "本工作週（匿名）：{{list}}", { list: weekPeers.join("、") }),
-            ]),
+            buildBookingPeersLine(t("booking.peersWeekLabel", "本工作週（匿名時段）"), weekPeers),
           );
         }
         if (peerLines.length) {

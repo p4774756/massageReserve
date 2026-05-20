@@ -183,7 +183,22 @@ function listMaskedActiveBookerLabels(docs: QueryDocumentSnapshot[]): string[] {
   return Array.from(byKey.values()).sort((a, b) => a.localeCompare(b, "en"));
 }
 
-/** 本工作週名單：每筆預約附星期（週一 Jxxx），依日期與時段排序 */
+/** 單日名單：每筆預約附開始時段（08:00 Jxxx），依時段排序 */
+function listMaskedDaySlotLabels(docs: QueryDocumentSnapshot[]): string[] {
+  const rows: { sortKey: string; label: string }[] = [];
+  for (const d of docs) {
+    const masked = maskDisplayNameForPublic(d.get("displayName"));
+    if (!masked) continue;
+    const startSlotRaw = d.get("startSlot");
+    const startSlot = typeof startSlotRaw === "string" ? startSlotRaw.trim() : "";
+    const label = startSlot ? `${startSlot} ${masked}` : masked;
+    rows.push({ sortKey: `${startSlot}\t${d.id}`, label });
+  }
+  rows.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+  return rows.map((r) => r.label);
+}
+
+/** 本工作週名單：每筆預約附星期與時段（週一 08:00 Jxxx），依日期與時段排序 */
 function listMaskedWeekBookerLabels(docs: QueryDocumentSnapshot[]): string[] {
   const rows: { sortKey: string; label: string }[] = [];
   for (const d of docs) {
@@ -192,9 +207,13 @@ function listMaskedWeekBookerLabels(docs: QueryDocumentSnapshot[]): string[] {
     const dateKeyRaw = d.get("dateKey");
     const dateKey = typeof dateKeyRaw === "string" ? dateKeyRaw : "";
     const startSlotRaw = d.get("startSlot");
-    const startSlot = typeof startSlotRaw === "string" ? startSlotRaw : "";
+    const startSlot = typeof startSlotRaw === "string" ? startSlotRaw.trim() : "";
     const weekday = weekdayZhFromDateKey(dateKey);
-    const label = weekday ? `${weekday} ${masked}` : masked;
+    const label =
+      weekday && startSlot ? `${weekday} ${startSlot} ${masked}`
+      : weekday ? `${weekday} ${masked}`
+      : startSlot ? `${startSlot} ${masked}`
+      : masked;
     rows.push({ sortKey: `${dateKey}\t${startSlot}\t${d.id}`, label });
   }
   rows.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
@@ -255,6 +274,7 @@ export const getAvailability = onCall(publicCall, async (request) => {
   const blockWindows = parseBookingBlockWindows(blocksSnap.data());
   const blockedSlots = listBlockedStartSlotsForDate(dateKey, blockWindows);
   const dayPeersMasked = listMaskedActiveBookerLabels(daySnap.docs);
+  const daySlotsMasked = listMaskedDaySlotLabels(daySnap.docs);
   const weekPeersMasked = listMaskedWeekBookerLabels(weekSnap.docs);
   return {
     taken,
@@ -264,6 +284,7 @@ export const getAvailability = onCall(publicCall, async (request) => {
     dayCap: caps.maxPerDay,
     weekCap: caps.maxPerWorkWeek,
     dayPeersMasked,
+    daySlotsMasked,
     weekPeersMasked,
   };
 });
@@ -306,12 +327,15 @@ export const getBookingDayCounts = onCall(publicCall, async (request) => {
   }
   const counts: Record<string, number> = {};
   const peersByDay: Record<string, string[]> = {};
+  const slotsByDay: Record<string, string[]> = {};
   for (const [dk, docs] of byDay) {
     counts[dk] = docs.length;
     const peers = listMaskedActiveBookerLabels(docs);
     if (peers.length) peersByDay[dk] = peers;
+    const slots = listMaskedDaySlotLabels(docs);
+    if (slots.length) slotsByDay[dk] = slots;
   }
-  return { counts, peersByDay };
+  return { counts, peersByDay, slotsByDay };
 });
 
 /**
