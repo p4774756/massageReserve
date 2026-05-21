@@ -174,6 +174,8 @@ function render() {
   const bookingPickCalPeersFetch = new Map<string, Promise<string[]>>();
   let bookPickCalHoverHideTimer = 0;
   let bookPickCalHoverShowDk = "";
+  /** 點選／重繪月曆後短暫不顯示 hover 提示，避免 focusin 或重繪觸發的假 mouseenter */
+  let bookPickCalHoverCooldownUntil = 0;
   const dateLabelSpan = el("span", {});
   const dateCalendarHint = el("p", {
     class: "hint book-date-calendar-hint",
@@ -355,8 +357,18 @@ function render() {
   }
 
   function hideBookPickCalHoverTip(): void {
+    window.clearTimeout(bookPickCalHoverHideTimer);
+    bookPickCalHoverHideTimer = 0;
     bookPickCalHoverTip.hidden = true;
     bookPickCalHoverShowDk = "";
+  }
+
+  function bumpBookPickCalHoverCooldown(ms = 400): void {
+    bookPickCalHoverCooldownUntil = Date.now() + ms;
+  }
+
+  function bookPickCalHoverCooldownActive(): boolean {
+    return Date.now() < bookPickCalHoverCooldownUntil;
   }
 
   function positionBookPickCalHoverTip(anchor: HTMLElement): void {
@@ -403,6 +415,7 @@ function render() {
   }
 
   async function showBookPickCalHoverTip(anchor: HTMLElement, dk: string): Promise<void> {
+    if (bookPickCalHoverCooldownActive()) return;
     window.clearTimeout(bookPickCalHoverHideTimer);
     bookPickCalHoverShowDk = dk;
     const cached = bookingPickCalDayPeers[dk];
@@ -420,7 +433,11 @@ function render() {
     positionBookPickCalHoverTip(anchor);
     bookPickCalHoverTip.hidden = false;
     const loaded = await ensureBookingPickCalDayPeers(dk);
-    if (bookPickCalHoverShowDk !== dk) return;
+    if (bookPickCalHoverCooldownActive() || bookPickCalHoverShowDk !== dk) return;
+    if (!anchor.isConnected) {
+      hideBookPickCalHoverTip();
+      return;
+    }
     if (loaded.length) {
       fillBookPickCalHoverTip(loaded);
     } else {
@@ -577,6 +594,7 @@ function render() {
   }
 
   function paintBookingPickCalendar(): void {
+    hideBookPickCalHoverTip();
     if (bookingPickCalYear === 0) {
       syncBookingPickCalendarCursorFromValue();
     }
@@ -635,10 +653,27 @@ function render() {
       btn.append(el("span", { class: "book-pick-calendar__day-num" }, [String(dayNum)]));
       appendBookingPickCalDayBadge(btn, dk);
       wireBookPickCalDayHover(btn, dk);
+      btn.addEventListener("pointerdown", () => {
+        hideBookPickCalHoverTip();
+        bumpBookPickCalHoverCooldown();
+      });
       btn.addEventListener("click", () => {
+        const showTipOnSelect = (bookingPickCalDayCounts[dk] ?? 0) > 0;
+        hideBookPickCalHoverTip();
+        bumpBookPickCalHoverCooldown();
         dateInput.value = dk;
         paintBookingPickCalendar();
         void refreshAvailability();
+        if (showTipOnSelect) {
+          requestAnimationFrame(() => {
+            const sel = bookPickCalGrid.querySelector(
+              ".book-pick-calendar__day.book-pick-calendar__day--selected",
+            ) as HTMLElement | null;
+            if (!sel) return;
+            bookPickCalHoverCooldownUntil = 0;
+            void showBookPickCalHoverTip(sel, dk);
+          });
+        }
       });
       wrap.append(btn);
       cells.push(wrap);
@@ -672,10 +707,11 @@ function render() {
 
   bookPickCalPrev.addEventListener("click", () => shiftBookingPickCalMonth(-1));
   bookPickCalNext.addEventListener("click", () => shiftBookingPickCalMonth(1));
-  bookPickCalHoverTip.addEventListener("mouseenter", () => {
-    window.clearTimeout(bookPickCalHoverHideTimer);
+  bookPickCalendar.addEventListener("mouseleave", (ev) => {
+    const next = ev.relatedTarget;
+    if (next instanceof Node && bookPickCalendar.contains(next)) return;
+    hideBookPickCalHoverTip();
   });
-  bookPickCalHoverTip.addEventListener("mouseleave", () => hideBookPickCalHoverTip());
 
   function onBookingServiceKindChange(): void {
     holidayOutcallTransportHint.hidden = !radioHolidayOutcall.checked;

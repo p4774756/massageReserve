@@ -561,6 +561,10 @@ main.panel[hidden] {
   min-width: 0;
 }
 
+.booking-peers-hint[hidden] {
+  display: none !important;
+}
+
 .booking-peers-hint {
   display: flex;
   flex-direction: column;
@@ -665,6 +669,10 @@ main.panel[hidden] {
   background: var(--surface-muted);
   box-shadow: var(--shadow-sm);
   max-width: 22rem;
+}
+
+.book-pick-calendar__hover-tip[hidden] {
+  display: none !important;
 }
 
 .book-pick-calendar__hover-tip {
