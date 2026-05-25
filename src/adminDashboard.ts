@@ -2645,16 +2645,18 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         hiddenTable.innerHTML = "";
         hiddenTable.append(adminBookingsHeaderRow());
         hiddenAdminQueue.length = 0;
-        const visibleBookingsForCalendar: Booking[] = [];
+        const bookingsForAdminCalendar: Booking[] = [];
         for (const d of snap.docs) {
           const b = { id: d.id, ...d.data() } as Booking;
+          if (b.status !== "deleted") {
+            bookingsForAdminCalendar.push(b);
+          }
           if (b.status === "deleted" || b.invisible === true) {
             hiddenAdminQueue.push(
               b.status === "deleted" ? { kind: "deleted", b } : { kind: "invisible", b },
             );
             continue;
           }
-          visibleBookingsForCalendar.push(b);
           const statusCell: HTMLElement =
             bookingIsCancelledForAdmin(b.status)
               ? el("span", { class: "admin-booking-status-readonly" }, [bookingStatusLabel("cancelled")])
@@ -2804,10 +2806,10 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
             ]),
           );
         }
-        adminCalendarLastVisible = visibleBookingsForCalendar;
+        adminCalendarLastVisible = bookingsForAdminCalendar;
         const allForBriefs = [
-          ...visibleBookingsForCalendar,
-          ...hiddenAdminQueue.map((item) => item.b),
+          ...bookingsForAdminCalendar,
+          ...hiddenAdminQueue.filter((item) => item.kind === "deleted").map((item) => item.b),
         ];
         void refreshAdminBookingBriefsForBookings(allForBriefs);
         paintAdminBookingsCalendar();
