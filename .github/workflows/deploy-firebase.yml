@@ -38,18 +38,24 @@ jobs:
           npm ci --prefix functions
           npm run build --prefix functions
 
-      # defineString("RESEND_FROM") 在非互動 deploy 時須有 dotenv，否則 firebase-tools 會中止
-      # （與程式內 default 無關）。可選 GitHub secret RESEND_FROM；未設則與程式預設相同。
-      - name: Write Functions dotenv (RESEND_FROM)
+      # defineString(...) 參數在非互動 deploy 時仍需 dotenv 提供值，否則 firebase-tools 會中止
+      # （與程式內 default 無關）。可選 GitHub secrets：RESEND_FROM、EMAIL_PUBLIC_ORIGIN。
+      - name: Write Functions dotenv (RESEND_FROM / EMAIL_PUBLIC_ORIGIN)
         run: |
           set -euo pipefail
           PROJECT_ID="${VITE_FIREBASE_PROJECT_ID:?VITE_FIREBASE_PROJECT_ID is required}"
           DEFAULT_FROM='Massage預約 <onboarding@resend.dev>'
+          DEFAULT_EMAIL_ORIGIN="https://${PROJECT_ID}.web.app"
           FROM="${RESEND_FROM:-$DEFAULT_FROM}"
-          printf '%s\n' "RESEND_FROM=$FROM" > "functions/.env.${PROJECT_ID}"
+          EMAIL_ORIGIN="${EMAIL_PUBLIC_ORIGIN:-$DEFAULT_EMAIL_ORIGIN}"
+          {
+            printf '%s\n' "RESEND_FROM=$FROM"
+            printf '%s\n' "EMAIL_PUBLIC_ORIGIN=$EMAIL_ORIGIN"
+          } > "functions/.env.${PROJECT_ID}"
         env:
           VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
           RESEND_FROM: ${{ secrets.RESEND_FROM }}
+          EMAIL_PUBLIC_ORIGIN: ${{ secrets.EMAIL_PUBLIC_ORIGIN }}
 
       # 遠端若仍有已從程式碼移除的 Callable，firebase deploy --non-interactive 會中止。
       # 下列為舊版街機／Little Mary 相關函式；已刪除時該次 delete 會失敗，略過即可。
