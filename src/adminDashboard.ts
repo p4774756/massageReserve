@@ -1166,6 +1166,16 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       paintAdminBookingsCalendar();
     }
 
+    function attachAdminCalendarCellTooltip(wrap: HTMLElement, lines: string[]): void {
+      wrap.classList.add("admin-calendar__cell--has-tip");
+      wrap.setAttribute("aria-label", lines.join("；"));
+      const tip = el("div", { class: "admin-calendar__tip", role: "tooltip" });
+      for (const line of lines) {
+        tip.append(el("div", { class: "admin-calendar__tip-line" }, [line]));
+      }
+      wrap.append(tip);
+    }
+
     function paintAdminBookingsCalendar(): void {
       ensureAdminCalendarCursor();
       const y = adminCalendarYear;
@@ -1226,8 +1236,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
           const briefPart = brief ? ` · ${brief}` : "";
           return `${bb.startSlot ?? ""} ${(bb.displayName ?? "").trim()} · ${bookingStatusLabel(st)}${briefPart}`;
         });
-        const titleAttr = tipLines.length > 0 ? tipLines.join("\n") : "";
-
         const wrap = el("div", { class: "admin-calendar__cell" });
         const isToday = dk === todayK;
         const isSelected = dk === selected;
@@ -1242,32 +1250,29 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
               el("span", { class: "admin-calendar__badge admin-calendar__badge--weak" }, [String(list.length)]),
             );
           }
-          if (titleAttr) inactive.title = titleAttr;
           if (isToday) inactive.classList.add("admin-calendar__day--today");
           if (isSelected) inactive.classList.add("admin-calendar__day--selected");
           wrap.append(inactive);
-          cells.push(wrap);
-          continue;
+        } else {
+          const btn = el("button", { type: "button", class: "admin-calendar__day" });
+          if (isSelected) btn.classList.add("admin-calendar__day--selected");
+          if (isToday) btn.classList.add("admin-calendar__day--today");
+          btn.append(el("span", { class: "admin-calendar__day-num" }, [String(dayNum)]));
+          if (cap > 0) {
+            btn.append(el("span", { class: "admin-calendar__badge" }, [String(cap)]));
+          } else if (list.length > 0) {
+            btn.append(
+              el("span", { class: "admin-calendar__badge admin-calendar__badge--weak" }, [String(list.length)]),
+            );
+          }
+          btn.addEventListener("click", () => {
+            adminBookingsCalendarSelectedDateKey = dk;
+            syncAdminCalendarMonthFromDateInput();
+            paintAdminBookingsCalendar();
+          });
+          wrap.append(btn);
         }
-
-        const btn = el("button", { type: "button", class: "admin-calendar__day" });
-        if (isSelected) btn.classList.add("admin-calendar__day--selected");
-        if (isToday) btn.classList.add("admin-calendar__day--today");
-        btn.append(el("span", { class: "admin-calendar__day-num" }, [String(dayNum)]));
-        if (cap > 0) {
-          btn.append(el("span", { class: "admin-calendar__badge" }, [String(cap)]));
-        } else if (list.length > 0) {
-          btn.append(
-            el("span", { class: "admin-calendar__badge admin-calendar__badge--weak" }, [String(list.length)]),
-          );
-        }
-        if (titleAttr) btn.title = titleAttr;
-        btn.addEventListener("click", () => {
-          adminBookingsCalendarSelectedDateKey = dk;
-          syncAdminCalendarMonthFromDateInput();
-          paintAdminBookingsCalendar();
-        });
-        wrap.append(btn);
+        if (tipLines.length > 0) attachAdminCalendarCellTooltip(wrap, tipLines);
         cells.push(wrap);
       }
 
