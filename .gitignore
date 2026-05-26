@@ -7,4 +7,5 @@ functions/.env.*
 *-debug.log
 *-debug.*.log
 functions/lib
+functions/email-previews
 .DS_Store

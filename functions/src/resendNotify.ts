@@ -1,6 +1,20 @@
+import { defineString } from "firebase-functions/params";
 import { HttpsError } from "firebase-functions/v2/https";
 import { Resend } from "resend";
 import { formatDateKeyWithWeekdayZh } from "./bookingLogic";
+
+const emailPublicOrigin = defineString("EMAIL_PUBLIC_ORIGIN", {
+  default: "https://my-massage-reserve.web.app",
+});
+
+/** 通知信 logo（Firebase Hosting `dist` 內，建置時自 `public/media` 複製） */
+export const EMAIL_LOGO_PATH = "/media/email-logo.png";
+
+/** 寄信 HTML 用的 logo 絕對網址（須已 deploy hosting） */
+export function getEmailLogoUrl(): string {
+  const origin = emailPublicOrigin.value().replace(/\/+$/, "");
+  return `${origin}${EMAIL_LOGO_PATH}`;
+}
 
 /** Resend `emails.send` 的 `error` 為純物件，不可直接拋給 Callable（會變成 INTERNAL）。 */
 function throwResendEmailError(error: unknown): never {
@@ -33,14 +47,14 @@ const BOOKING_MODE_LABEL: Record<string, string> = {
 
 const EMAIL_FONT =
   "system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue','Noto Sans TC','PingFang TC','Microsoft JhengHei',sans-serif";
-const EMAIL_ACCENT = "#FC5B14";
 const EMAIL_ACCENT_DEEP = "#D94A0E";
+const EMAIL_BG = "#ececec";
 const EMAIL_SITE_NAME = "辦公室按摩預約";
 
 export type EmailDetailRow = {
   label: string;
   value: string;
-  /** 重點列（例如狀態變更） */
+  /** 重點列（例如狀態變更）— HTML 以大號字顯示 */
   emphasize?: boolean;
 };
 
@@ -53,29 +67,54 @@ function escapeHtmlForEmail(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function emailMultilineHtml(s: string): string {
-  return escapeHtmlForEmail(s).replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n").join("<br>");
+function normalizePlainLines(s: string): string {
+  return s.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 }
 
-function buildDetailRowsTableHtml(rows: EmailDetailRow[]): string {
+function emailMultilineHtml(s: string): string {
+  return escapeHtmlForEmail(normalizePlainLines(s)).split("\n").join("<br>");
+}
+
+function buildEmailLogoImgHtml(logoSrc: string, sizePx: number): string {
+  const src = escapeHtmlForEmail(logoSrc);
+  const alt = escapeHtmlForEmail(EMAIL_SITE_NAME);
+  const s = String(sizePx);
+  return `<img src="${src}" width="${s}" height="${s}" alt="${alt}" style="display:block;width:${s}px;height:${s}px;border-radius:6px;border:0;outline:none;text-decoration:none;">`;
+}
+
+function buildEmailBrandRowHtml(logoSrc: string, logoSizePx: number): string {
+  const logo = buildEmailLogoImgHtml(logoSrc, logoSizePx);
+  const siteName = escapeHtmlForEmail(EMAIL_SITE_NAME);
+  return `<table role="presentation" cellspacing="0" cellpadding="0"><tr>
+<td style="vertical-align:middle;">${logo}</td>
+<td style="padding-left:12px;vertical-align:middle;">
+<div style="font-family:${EMAIL_FONT};font-size:15px;font-weight:700;color:${EMAIL_ACCENT_DEEP};">${siteName}</div>
+</td>
+</tr></table>`;
+}
+
+function buildDetailRowsHtml(rows: EmailDetailRow[]): string {
   if (rows.length === 0) return "";
-  const cells = rows
-    .map((row, i) => {
-      const bg = i % 2 === 0 ? "#f3f4f6" : "#ffffff";
-      const valueStyle = row.emphasize
-        ? `color:${EMAIL_ACCENT_DEEP};font-weight:700;`
-        : "color:#1a1a1a;font-weight:600;";
-      return `<tr>
-<td style="width:34%;padding:12px 14px;background:${bg};border-bottom:1px solid #e5e7eb;font-family:${EMAIL_FONT};font-size:14px;line-height:1.45;color:#6b7280;vertical-align:top;">${escapeHtmlForEmail(row.label)}</td>
-<td style="padding:12px 14px;background:${bg};border-bottom:1px solid #e5e7eb;font-family:${EMAIL_FONT};font-size:14px;line-height:1.5;${valueStyle}vertical-align:top;">${emailMultilineHtml(row.value)}</td>
-</tr>`;
+  return rows
+    .map((row) => {
+      const label = escapeHtmlForEmail(row.label);
+      const valueHtml = emailMultilineHtml(row.value);
+      if (row.emphasize) {
+        return `<div style="margin:0 0 22px;">
+<p style="margin:0 0 6px;font-family:${EMAIL_FONT};font-size:13px;line-height:1.4;color:#737373;">${label}</p>
+<p style="margin:0;font-family:${EMAIL_FONT};font-size:26px;font-weight:800;line-height:1.25;letter-spacing:0.02em;color:#1a1a1a;">${valueHtml}</p>
+</div>`;
+      }
+      return `<div style="margin:0 0 14px;">
+<p style="margin:0 0 4px;font-family:${EMAIL_FONT};font-size:13px;line-height:1.4;color:#737373;">${label}</p>
+<p style="margin:0;font-family:${EMAIL_FONT};font-size:15px;font-weight:600;line-height:1.5;color:#1a1a1a;">${valueHtml}</p>
+</div>`;
     })
     .join("");
-  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin:0 0 20px;">${cells}</table>`;
 }
 
-/** 預約／狀態通知共用 HTML 版型（表格列、品牌色；多數信箱相容） */
-export function buildNotifyEmailHtml(opts: {
+/** 與 HTML 信內文相同結構的純文字（供預覽或與 text 欄對照） */
+export function buildNotifyEmailPlainText(opts: {
   title: string;
   greeting?: string;
   introLines?: string[];
@@ -84,27 +123,78 @@ export function buildNotifyEmailHtml(opts: {
   footer: string;
   testBanner?: boolean;
 }): string {
+  const lines: string[] = [];
+  if (opts.testBanner) {
+    lines.push("【測試信】此信不會變更您的預約狀態", "");
+  }
+  lines.push(opts.title, "");
+  if (opts.greeting?.trim()) {
+    lines.push(opts.greeting.trim(), "");
+  }
+  for (const line of opts.introLines ?? []) {
+    if (line.trim()) lines.push(line);
+  }
+  if ((opts.introLines ?? []).some((l) => l.trim())) {
+    lines.push("");
+  }
+  for (const row of opts.rows ?? []) {
+    const value = normalizePlainLines(row.value);
+    if (value.includes("\n")) {
+      lines.push(`${row.label}：`, ...value.split("\n"));
+    } else {
+      lines.push(`${row.label}：${value}`);
+    }
+  }
+  if ((opts.rows ?? []).length > 0) {
+    lines.push("");
+  }
+  for (const line of opts.outroLines ?? []) {
+    if (line.trim()) lines.push(line);
+  }
+  if ((opts.outroLines ?? []).some((l) => l.trim())) {
+    lines.push("");
+  }
+  lines.push(opts.footer);
+  return lines.join("\n");
+}
+
+/** 預約／狀態通知共用 HTML（灰底白卡片、品牌色；多數信箱相容） */
+export function buildNotifyEmailHtml(opts: {
+  title: string;
+  greeting?: string;
+  introLines?: string[];
+  rows?: EmailDetailRow[];
+  outroLines?: string[];
+  footer: string;
+  testBanner?: boolean;
+  /** 預覽用相對路徑；未指定則用 Hosting 絕對網址 */
+  logoSrc?: string;
+}): string {
+  const logoSrc = opts.logoSrc?.trim() || getEmailLogoUrl();
   const intro = (opts.introLines ?? [])
+    .filter((line) => line.trim())
     .map(
       (line) =>
-        `<p style="margin:0 0 10px;font-family:${EMAIL_FONT};font-size:15px;line-height:1.6;color:#374151;">${escapeHtmlForEmail(line)}</p>`,
+        `<p style="margin:0 0 12px;font-family:${EMAIL_FONT};font-size:15px;line-height:1.55;color:#333333;">${escapeHtmlForEmail(line)}</p>`,
     )
     .join("");
   const outro = (opts.outroLines ?? [])
+    .filter((line) => line.trim())
     .map(
       (line) =>
-        `<p style="margin:0 0 8px;font-family:${EMAIL_FONT};font-size:15px;line-height:1.6;color:#374151;">${escapeHtmlForEmail(line)}</p>`,
+        `<p style="margin:0 0 10px;font-family:${EMAIL_FONT};font-size:15px;line-height:1.55;color:#333333;">${escapeHtmlForEmail(line)}</p>`,
     )
     .join("");
-  const greeting = opts.greeting
-    ? `<p style="margin:0 0 12px;font-family:${EMAIL_FONT};font-size:16px;line-height:1.5;color:#1a1a1a;font-weight:600;">${escapeHtmlForEmail(opts.greeting)}</p>`
+  const greeting = opts.greeting?.trim()
+    ? `<p style="margin:0 0 14px;font-family:${EMAIL_FONT};font-size:15px;line-height:1.55;color:#333333;">${escapeHtmlForEmail(opts.greeting.trim())}</p>`
     : "";
   const testBanner = opts.testBanner
-    ? `<p style="margin:0 0 14px;padding:10px 12px;background:#FEF3C7;border:1px solid #FCD34D;border-radius:8px;font-family:${EMAIL_FONT};font-size:13px;line-height:1.45;color:#92400E;font-weight:600;">【測試信】此信不會變更您的預約狀態</p>`
+    ? `<p style="margin:0 0 18px;padding:12px 14px;background:#FEF3C7;border-left:4px solid #F59E0B;font-family:${EMAIL_FONT};font-size:14px;line-height:1.45;color:#92400E;font-weight:600;">【測試信】此信不會變更您的預約狀態</p>`
     : "";
-  const rowsTable = buildDetailRowsTableHtml(opts.rows ?? []);
+  const rowsBlock = buildDetailRowsHtml(opts.rows ?? []);
   const title = escapeHtmlForEmail(opts.title);
   const footer = escapeHtmlForEmail(opts.footer);
+  const siteName = escapeHtmlForEmail(EMAIL_SITE_NAME);
 
   return `<!DOCTYPE html>
 <html lang="zh-Hant">
@@ -113,19 +203,27 @@ export function buildNotifyEmailHtml(opts: {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${title}</title>
 </head>
-<body style="margin:0;padding:0;background:#f3f4f6;">
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f3f4f6;">
-<tr><td align="center" style="padding:28px 16px;">
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;border-collapse:separate;">
-<tr><td style="height:6px;background:${EMAIL_ACCENT};border-radius:12px 12px 0 0;font-size:0;line-height:0;">&nbsp;</td></tr>
-<tr><td style="background:#FFF4ED;padding:18px 22px;border-left:1px solid #e5e7eb;border-right:1px solid #e5e7eb;">
-<div style="font-family:${EMAIL_FONT};font-size:18px;font-weight:800;color:${EMAIL_ACCENT_DEEP};letter-spacing:0.02em;">${EMAIL_SITE_NAME}</div>
-<div style="margin-top:4px;font-family:${EMAIL_FONT};font-size:12px;color:#6b7280;">Massage Reserve</div>
+<body style="margin:0;padding:0;background:${EMAIL_BG};">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:${EMAIL_BG};">
+<tr><td align="center" style="padding:32px 16px 40px;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;">
+<tr><td style="background:#ffffff;padding:32px 28px 28px;border-radius:4px;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+<tr><td style="padding-bottom:22px;">
+${buildEmailBrandRowHtml(logoSrc, 48)}
 </td></tr>
-<tr><td style="background:#ffffff;padding:26px 22px 22px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;">
-<h1 style="margin:0 0 18px;font-family:${EMAIL_FONT};font-size:20px;font-weight:800;line-height:1.35;color:#1a1a1a;text-align:center;">— ${title} —</h1>
-${testBanner}${greeting}${intro}${rowsTable}${outro}
-<p style="margin:18px 0 0;padding-top:16px;border-top:1px solid #e5e7eb;font-family:${EMAIL_FONT};font-size:12px;line-height:1.5;color:#9ca3af;">${footer}</p>
+<tr><td>
+<h1 style="margin:0 0 20px;font-family:${EMAIL_FONT};font-size:28px;font-weight:800;line-height:1.3;color:#1a1a1a;">${title}</h1>
+${testBanner}${greeting}${intro}${rowsBlock}${outro}
+</td></tr>
+<tr><td style="padding-top:24px;border-top:1px solid #e5e5e5;">
+<table role="presentation" cellspacing="0" cellpadding="0" style="margin-top:20px;"><tr>
+<td style="vertical-align:middle;">${buildEmailLogoImgHtml(logoSrc, 28)}</td>
+<td style="padding-left:10px;vertical-align:middle;font-family:${EMAIL_FONT};font-size:13px;font-weight:600;color:${EMAIL_ACCENT_DEEP};">${siteName}</td>
+</tr></table>
+<p style="margin:14px 0 0;font-family:${EMAIL_FONT};font-size:12px;line-height:1.55;color:#737373;">${footer}</p>
+</td></tr>
+</table>
 </td></tr>
 </table>
 </td></tr>
@@ -134,14 +232,15 @@ ${testBanner}${greeting}${intro}${rowsTable}${outro}
 </html>`;
 }
 
-/** 管理員群發：純文字轉為與通知信相同外框的 HTML */
-export function buildBroadcastEmailHtml(bodyPlain: string): string {
+/** 管理員群發：純文字轉為與通知信相同版型 HTML */
+export function buildBroadcastEmailHtml(bodyPlain: string, logoSrc?: string): string {
   const safe = bodyPlain.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
   const introLines = safe ? safe.split("\n") : ["（無內文）"];
   return buildNotifyEmailHtml({
     title: "店家訊息",
     introLines,
     footer: "此信由店家透過預約系統發送；如需回覆請直接聯絡店家。",
+    logoSrc,
   });
 }
 
@@ -187,7 +286,7 @@ export async function sendNewBookingEmailToOwner(opts: {
   const text = lines.join("\n");
   const rows: EmailDetailRow[] = [
     { label: "預約編號", value: payload.id },
-    { label: "姓名", value: payload.displayName },
+    { label: "姓名", value: payload.displayName, emphasize: true },
     { label: "日期", value: dateLabel },
     { label: "開始時間", value: payload.startSlot },
     { label: "付款方式", value: modeLabel },
