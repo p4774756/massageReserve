@@ -1,6 +1,7 @@
 import type { Auth } from "firebase/auth";
 import {
   collection,
+  deleteField,
   doc,
   onSnapshot,
   orderBy,
@@ -59,15 +60,15 @@ import {
   taipeiWeekdayNumMon1Sun7,
   taipeiWeekdaySun0FromDateKey,
 } from "./taipeiDates";
+import { PUBLIC_NOTICE_DOC_ID } from "./sitePublicNotice";
 import { intlLocaleTag, localeApiParam, t } from "./i18n";
-import type { DocumentReference, Firestore } from "firebase/firestore";
+import type { Firestore } from "firebase/firestore";
 import { showConfirmModal } from "./modals";
 
 export type AdminDashboardContext = {
   adminWrap: HTMLElement;
   auth: Auth;
   db: Firestore;
-  wheelUiSettingsRef: DocumentReference;
   syncAdminHeadSignedInHint: (fallbackUid?: string) => void;
   /** 後台操作後同步前台錢包／次數顯示（與 `main` 內實作相同） */
   refreshWalletStatus: (opts?: { keepWalletSummaryDuringFetch?: boolean }) => Promise<void>;
@@ -85,13 +86,13 @@ export type AdminDashboardControls = {
 };
 
 export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboardControls {
-  const { adminWrap, auth, db, wheelUiSettingsRef, syncAdminHeadSignedInHint, refreshWalletStatus } = ctx;
+  const { adminWrap, auth, db, syncAdminHeadSignedInHint, refreshWalletStatus } = ctx;
 
   let adminUnsub: (() => void) | null = null;
   let adminPricingUnsub: (() => void) | null = null;
   let adminBookingCapsUnsub: (() => void) | null = null;
   let adminBookingBlocksUnsub: (() => void) | null = null;
-  let adminWheelUiUnsub: (() => void) | null = null;
+  let adminPublicNoticeUnsub: (() => void) | null = null;
   let bookingBlocksBeforeUnloadHandler: ((ev: BeforeUnloadEvent) => void) | null = null;
   let bookingBlocksHasUnsavedSnapshot: () => boolean = () => false;
   let bookingBlocksConfirmLeave: () => Promise<boolean> = async () => true;
@@ -119,9 +120,9 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       adminBookingBlocksUnsub();
       adminBookingBlocksUnsub = null;
     }
-    if (adminWheelUiUnsub) {
-      adminWheelUiUnsub();
-      adminWheelUiUnsub = null;
+    if (adminPublicNoticeUnsub) {
+      adminPublicNoticeUnsub();
+      adminPublicNoticeUnsub = null;
     }
   }
 
@@ -244,7 +245,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     const grantDrawStatus = el("div", { class: "status-line" });
     const pricingDocRef = doc(db, "siteSettings", "pricing");
     const pricingSessionPriceInput = el("input", { type: "number", min: "1", step: "1", value: "70" });
-    const pricingAddon15Input = el("input", { type: "number", min: "1", step: "1", value: "30" });
     const pricingPointsPerInput = el("input", { type: "number", min: "2", step: "1", value: "10" });
     const savePricingBtn = el("button", { type: "button", class: "ghost" }, [t("admin.pricing.save", "儲存定價")]);
     const pricingAdminStatus = el("div", { class: "status-line" });
@@ -252,15 +252,11 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       pricingDocRef,
       (snap) => {
         const d = snap.data() as
-          | { sessionPriceNtd?: unknown; addon15PriceNtd?: unknown; pointsPerMassage?: unknown }
+          | { sessionPriceNtd?: unknown; pointsPerMassage?: unknown }
           | undefined;
         const sp = d?.sessionPriceNtd;
         if (typeof sp === "number" && Number.isFinite(sp)) {
           pricingSessionPriceInput.value = String(Math.max(1, Math.round(sp)));
-        }
-        const ad = d?.addon15PriceNtd;
-        if (typeof ad === "number" && Number.isFinite(ad)) {
-          pricingAddon15Input.value = String(Math.max(1, Math.round(ad)));
         }
         const pp = d?.pointsPerMassage;
         if (typeof pp === "number" && Number.isFinite(pp)) {
@@ -276,15 +272,9 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       pricingAdminStatus.textContent = "";
       pricingAdminStatus.className = "status-line";
       const sp = Number(pricingSessionPriceInput.value);
-      const ad = Number(pricingAddon15Input.value);
       const pp = Number(pricingPointsPerInput.value);
       if (!Number.isFinite(sp) || sp < 1 || !Number.isInteger(sp)) {
         pricingAdminStatus.textContent = t("admin.pricing.badSessionPrice", "現場單次金額需為 ≥1 的整數。");
-        pricingAdminStatus.classList.add("error");
-        return;
-      }
-      if (!Number.isFinite(ad) || ad < 1 || !Number.isInteger(ad)) {
-        pricingAdminStatus.textContent = t("admin.pricing.badAddon15", "超過半小時加價金額需為 ≥1 的整數。");
         pricingAdminStatus.classList.add("error");
         return;
       }
@@ -299,7 +289,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
           pricingDocRef,
           {
             sessionPriceNtd: Math.round(sp),
-            addon15PriceNtd: Math.round(ad),
             pointsPerMassage: Math.round(pp),
             updatedAt: serverTimestamp(),
           },
@@ -319,7 +308,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       el("h4", { class: "admin-announce__block-title" }, [t("admin.pricing.heading", "定價與點數兌換")]),
       el("div", { class: "grid grid-2" }, [
         el("label", { class: "field" }, [t("admin.pricing.sessionPrice", "現場單次金額（元）"), pricingSessionPriceInput]),
-        el("label", { class: "field" }, [t("admin.pricing.addon15", "超過半小時加價（元）"), pricingAddon15Input]),
         el("label", { class: "field" }, [t("admin.pricing.pointsPer", "輪盤：幾點換 1 次按摩"), pricingPointsPerInput]),
       ]),
       el("div", { class: "row-actions" }, [savePricingBtn]),
@@ -858,6 +846,101 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     };
     window.addEventListener("beforeunload", bookingBlocksBeforeUnloadHandler);
 
+    const publicNoticeDocRef = doc(db, "siteSettings", PUBLIC_NOTICE_DOC_ID);
+    const publicNoticeTextInput = el("textarea", {
+      class: "site-public-notice-admin__text",
+      rows: 3,
+      maxLength: 400,
+      placeholder: t("admin.notice.textPlaceholder", "例：本週五下午臨時休診，請改選其他日期。"),
+    });
+    const publicNoticeExpiresInput = el("input", { type: "date" });
+    const savePublicNoticeBtn = el("button", { type: "button", class: "ghost" }, [
+      t("admin.notice.save", "儲存前台公告"),
+    ]);
+    const clearPublicNoticeBtn = el("button", { type: "button", class: "ghost" }, [
+      t("admin.notice.clear", "清空公告"),
+    ]);
+    const publicNoticeStatus = el("div", { class: "status-line" });
+
+    adminPublicNoticeUnsub = onSnapshot(
+      publicNoticeDocRef,
+      (snap) => {
+        const data = snap.data() as { text?: unknown; expiresOn?: unknown } | undefined;
+        publicNoticeTextInput.value = typeof data?.text === "string" ? data.text : "";
+        publicNoticeExpiresInput.value =
+          typeof data?.expiresOn === "string" && /^\d{4}-\d{2}-\d{2}$/.test(data.expiresOn.trim())
+            ? data.expiresOn.trim()
+            : "";
+      },
+      () => {
+        publicNoticeStatus.textContent = t("admin.notice.loadFail", "無法讀取前台公告。");
+        publicNoticeStatus.className = "status-line error";
+      },
+    );
+
+    async function persistPublicNotice(clear: boolean) {
+      publicNoticeStatus.textContent = "";
+      publicNoticeStatus.className = "status-line";
+      const text = clear ? "" : publicNoticeTextInput.value.trim().slice(0, 400);
+      const expiresRaw = publicNoticeExpiresInput.value.trim();
+      const expiresOn = /^\d{4}-\d{2}-\d{2}$/.test(expiresRaw) ? expiresRaw : "";
+      if (!clear && expiresOn && expiresOn < taipeiTodayDateKey()) {
+        publicNoticeStatus.textContent = t(
+          "admin.notice.expiresPast",
+          "到期日不可早於今日（台北）；請改選今日或未來日期，或留空表示不自動下架。",
+        );
+        publicNoticeStatus.classList.add("error");
+        return;
+      }
+      savePublicNoticeBtn.setAttribute("disabled", "true");
+      clearPublicNoticeBtn.setAttribute("disabled", "true");
+      publicNoticeStatus.textContent = t("admin.status.processing", "處理中…");
+      try {
+        const payload: Record<string, unknown> = {
+          text,
+          updatedAt: serverTimestamp(),
+        };
+        if (expiresOn) payload.expiresOn = expiresOn;
+        else payload.expiresOn = deleteField();
+        await setDoc(publicNoticeDocRef, payload, { merge: true });
+        if (clear) {
+          publicNoticeTextInput.value = "";
+          publicNoticeExpiresInput.value = "";
+        }
+        publicNoticeStatus.textContent = t("admin.status.updated", "已更新");
+        publicNoticeStatus.classList.add("ok");
+      } catch (e) {
+        publicNoticeStatus.textContent = e instanceof Error ? e.message : t("admin.memberList.saveFail", "儲存失敗");
+        publicNoticeStatus.classList.add("error");
+      } finally {
+        savePublicNoticeBtn.removeAttribute("disabled");
+        clearPublicNoticeBtn.removeAttribute("disabled");
+      }
+    }
+
+    savePublicNoticeBtn.addEventListener("click", () => void persistPublicNotice(false));
+    clearPublicNoticeBtn.addEventListener("click", () => void persistPublicNotice(true));
+
+    const blockPublicNotice = el("section", { class: "admin-announce__block admin-announce__block--public-notice" }, [
+      el("h4", { class: "admin-announce__block-title" }, [t("admin.notice.blockTitle", "前台小公告")]),
+      el("p", { class: "hint admin-announce__block-lead" }, [
+        t(
+          "admin.notice.blockLead",
+          "顯示於預約頁訪次統計下方、分頁上方；訪客與會員皆可見。可選到期日（台北）後自動隱藏；訪客可按「關閉」在本機暫時隱藏至您更新公告為止。",
+        ),
+      ]),
+      el("label", { class: "field" }, [
+        t("admin.notice.textLabel", "公告內文（留空即不顯示）"),
+        publicNoticeTextInput,
+      ]),
+      el("label", { class: "field" }, [
+        t("admin.notice.expiresLabel", "到期日（選填，台北時區）"),
+        publicNoticeExpiresInput,
+      ]),
+      el("div", { class: "row-actions" }, [savePublicNoticeBtn, clearPublicNoticeBtn]),
+      publicNoticeStatus,
+    ]);
+
     const blockCaps = el("section", { class: "admin-announce__block admin-announce__block--caps" }, [
       el("h4", { class: "admin-announce__block-title" }, [t("admin.announce.blockCapsTitle", "預約名額")]),
       el("div", { class: "grid grid-2" }, [
@@ -889,72 +972,9 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
 
     const bookingBlocksPanelInner = el("div", { class: "admin-announce admin-announce--settings" }, [blockClosedWindows]);
 
-    const showWheelPreviewInput = el("input", { type: "checkbox" }) as HTMLInputElement;
-    const saveWheelUiBtn = el("button", { type: "button", class: "ghost" }, [
-      t("admin.wheelUi.save", "儲存前台選項"),
-    ]);
-    const wheelUiSaveStatus = el("div", { class: "status-line" });
-
-    adminWheelUiUnsub = onSnapshot(
-      wheelUiSettingsRef,
-      (snap) => {
-        const raw = snap.data()?.showWheelSlotPreviewButton;
-        showWheelPreviewInput.checked = typeof raw === "boolean" ? raw : true;
-      },
-      () => {
-        showWheelPreviewInput.checked = true;
-      },
-    );
-
-    saveWheelUiBtn.addEventListener("click", async () => {
-      wheelUiSaveStatus.textContent = "";
-      wheelUiSaveStatus.className = "status-line";
-      saveWheelUiBtn.setAttribute("disabled", "true");
-      wheelUiSaveStatus.textContent = t("admin.status.processing", "處理中…");
-      try {
-        await setDoc(
-          wheelUiSettingsRef,
-          {
-            showWheelSlotPreviewButton: showWheelPreviewInput.checked,
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true },
-        );
-        wheelUiSaveStatus.textContent = t("admin.status.updated", "已更新");
-        wheelUiSaveStatus.classList.add("ok");
-      } catch (e) {
-        wheelUiSaveStatus.textContent =
-          e instanceof Error ? e.message : t("admin.memberList.saveFail", "儲存失敗");
-        wheelUiSaveStatus.classList.add("error");
-      } finally {
-        saveWheelUiBtn.removeAttribute("disabled");
-      }
-    });
-
-    const wheelUiOptionsBlock = el(
-      "section",
-      { class: "admin-announce__block admin-announce__block--wheel-preview" },
-      [
-        el("h4", { class: "admin-announce__block-title" }, [
-          t("admin.wheelUi.heading", "會員中心輪盤預覽按鈕"),
-        ]),
-        el("label", { class: "field checkbox-field" }, [
-          showWheelPreviewInput,
-          el("span", {}, [
-            t(
-              "admin.wheelUi.showPreview",
-              "顯示「預覽拉霸特效」按鈕（僅畫面預覽，不呼叫抽獎、不扣次數）",
-            ),
-          ]),
-        ]),
-        el("div", { class: "row-actions" }, [saveWheelUiBtn]),
-        wheelUiSaveStatus,
-      ],
-    );
-
     announcementSection.append(
       el("h3", { class: "admin-announce__page-title" }, [t("admin.announce.heading", "前台與預約規則")]),
-      wheelUiOptionsBlock,
+      blockPublicNotice,
       blockCaps,
       announcePricingFlat,
     );

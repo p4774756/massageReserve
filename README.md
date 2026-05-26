@@ -57,14 +57,17 @@
 
 在 Repo Secrets 新增 `FIREBASE_TOKEN`（本機執行 `npx -y firebase-tools@latest login:ci` 取得）。推送至 `main` 時 workflow 會建置並部署。
 
+寄信相關（選用，供非互動 deploy 寫入 Functions dotenv）：`RESEND_FROM`、`EMAIL_PUBLIC_ORIGIN`。未設定時 workflow 會使用 `onboarding@resend.dev` 與 `https://<PROJECT_ID>.web.app` 作為預設。
+
 ## 專案結構
 
-- 架構與流程（含預約、錢包、輪盤、客服）：[`docs/architecture-and-flows.md`](docs/architecture-and-flows.md)。
-- `src/`：Vite 前端（預約表單、會員中心、管理分頁；入口 `src/main.ts`，Firebase Callable 封裝 `src/firebase.ts`）。
+- 架構與流程（含預約、錢包、輪盤、後台封存、營運設定）：[`docs/architecture-and-flows.md`](docs/architecture-and-flows.md)。
+- `src/`：Vite 前端；入口 [`src/main.ts`](src/main.ts)（預約／會員）、[`src/adminDashboard.ts`](src/adminDashboard.ts)（管理後台）、[`src/myBookingsPanel.ts`](src/myBookingsPanel.ts)（我的預約）；Callable 封裝 [`src/firebase.ts`](src/firebase.ts)。
 - `functions/`：Cloud Functions 主程式 [`functions/src/index.ts`](functions/src/index.ts)；預約時段與上限規則 [`functions/src/bookingLogic.ts`](functions/src/bookingLogic.ts)；**Resend 寄信** [`functions/src/resendNotify.ts`](functions/src/resendNotify.ts)。
-  - **Callable**（名稱與權限摘要見架構文件）：`getAvailability`、`recordSiteVisit`、`createBooking`、`getMyWallet`、`getAdminStatus`、`topupWallet`、`adjustSessionCreditsAdmin`、`grantDrawChancesAdmin`、`createMemberAccount`、`searchMemberUsers`、`listMembersAdmin`、`updateMemberNicknameAdmin`、`testSendMemberBookingStatusEmail`（依預約）、`testSendMemberStatusTestEmail`（依會員 UID；僅後端 Callable，後台無按鈕）、`sendMembersBroadcastAdmin`（群發自訂信）、`sendMemberDirectEmailAdmin`（單一已驗證會員自訂信）、`completeBooking`、`cancelBooking`、`listActiveWheelPrizes`、`spinWheel`、`seedWheelPrizes`、`sendSupportChatMessage`、`sendSupportChatAdminReply`、`setSupportThreadStatusAdmin`。
+  - **Callable**（完整表格見架構文件）：含 `getAvailability`、`getBookingDayCounts`、`getBookingPricing`、`createBooking`、`getMyWallet`、`redeemWheelPoints`、`completeBooking`、`cancelBooking`、輪盤與會員管理、群發／單封郵件等；客服對話 Callable（`sendSupportChat*`）**後端已有、前端尚未接上**。
   - **Firestore 觸發器**（非 Callable）：`notifyMemberBookingStatusChange` — `bookings/{id}` 更新且 `status` 變更時，對會員預約寄送狀態通知信（訪客模式略過）。
-- `firestore.rules`：僅 `admins/{uid}` 可讀取預約；管理員可更新 `status` / `updatedAt`（含軟刪除欄位），不開放硬刪除；公告設定提供公開讀取、管理員可寫入。
+  - **郵件 HTML 預覽**（本機）：`cd functions && npm run preview:emails` → 開啟 `functions/email-previews/index.html`。
+- `firestore.rules`：預約僅管理員或本人可讀；建立／刪除關閉；管理員可更新狀態、封存（`invisible`）、狀態信留言等允許欄位。**`siteSettings`**（定價、名額、不開放時段、前台小公告 `publicNotice` 等）公開讀、管理員寫；舊版跑馬燈 `marqueeText`／`marqueeLed` 已停用。
 
 ## 輪盤獎項初始化（必要）
 

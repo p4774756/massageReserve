@@ -23,6 +23,7 @@ import {
   spinWheelCall,
   listActiveWheelPrizesCall,
 } from "./firebase";
+import { createSitePublicNoticeBanner } from "./sitePublicNotice";
 import { createVisitorStatsLine } from "./visitorStats";
 import { runSlotSpectacle } from "./slotSpectacle";
 import { initI18n, intlLocaleTag, localeApiParam, t } from "./i18n";
@@ -53,11 +54,7 @@ import {
 import { showAlertModal, showConfirmModal } from "./modals";
 import { wrapPasswordField } from "./passwordField";
 import { paintMemberWalletSummary, type MemberWalletSummaryOpts } from "./walletSummaryUi";
-import {
-  resolveAddon15PriceNtdClient,
-  resolvePointsPerMassageClient,
-  resolveSessionPriceNtdClient,
-} from "./sitePricingResolve";
+import { resolvePointsPerMassageClient, resolveSessionPriceNtdClient } from "./sitePricingResolve";
 
 function render() {
   initI18n();
@@ -80,9 +77,8 @@ function render() {
   const auth = getFirebaseAuth();
   const db = getDb();
   const pricingDocRef = doc(db, "siteSettings", "pricing");
-  const wheelUiSettingsRef = doc(db, "siteSettings", "ui");
-  /** `siteSettings/ui.showWheelSlotPreviewButton`；預設 true（會員中心顯示「預覽拉霸特效」） */
-  let wheelSlotPreviewSettingFromFirestore = true;
+  /** 管理員在會員中心可見「預覽拉霸特效」（不經後台開關） */
+  let currentUserIsAdmin = false;
 
   /** 會員中心關閉時將輪盤區塊移回隱藏 holder（於下方建構後賦值） */
   let parkMemberHubGames: () => void = () => {};
@@ -136,7 +132,7 @@ function render() {
   const pageHeadTopRow = el("div", { class: "page-head-top-row" }, [titleHeading, headToolbarAside]);
   const pageHeadBody = el("div", { class: "page-head-body" }, [pageHeadTopRow, titleTextCol]);
 
-  const panelBook = el("main", { class: "panel" });
+  const panelBook = el("main", { class: "panel panel-book" });
   const panelAdmin = el("main", { class: "panel", hidden: true });
 
   const shell = el("div", { class: "shell" }, [
@@ -823,7 +819,6 @@ function render() {
   let pointsPerMassageSetting = 10;
   /** 與後端 `functions/src/pricing.ts` 預設對齊（定價 API 失敗時的首屏 fallback） */
   let sessionPriceNtdSetting = 70;
-  let addon15PriceNtdSetting = 30;
   let drawChances = 0;
   const redeemPointsStatus = el("div", { class: "status-line", hidden: true });
   const redeemPointsBtn = el("button", { type: "button", class: "ghost" }, [
@@ -1532,7 +1527,6 @@ function render() {
           drawChances: number;
           nickname?: string;
           sessionPriceNtd?: number;
-          addon15PriceNtd?: number;
           pointsPerMassage?: number;
         };
         walletBalance = typeof data.walletBalance === "number" ? data.walletBalance : 0;
@@ -1541,9 +1535,6 @@ function render() {
         drawChances = typeof data.drawChances === "number" ? data.drawChances : 0;
         if (typeof data.sessionPriceNtd === "number" && Number.isFinite(data.sessionPriceNtd)) {
           sessionPriceNtdSetting = Math.max(1, Math.round(data.sessionPriceNtd));
-        }
-        if (typeof data.addon15PriceNtd === "number" && Number.isFinite(data.addon15PriceNtd)) {
-          addon15PriceNtdSetting = Math.max(1, Math.round(data.addon15PriceNtd));
         }
         if (typeof data.pointsPerMassage === "number" && Number.isFinite(data.pointsPerMassage)) {
           pointsPerMassageSetting = Math.max(2, Math.round(data.pointsPerMassage));
@@ -1706,8 +1697,8 @@ function render() {
     if (tab !== "book") return;
     titleDesc.textContent = t(
       "home.subtitle",
-      "按次 {{first}} 元；超過半小時再加 {{addon}} 元（現場收費）",
-      { first: sessionPriceNtdSetting, addon: addon15PriceNtdSetting },
+      "每次半小時 {{first}} 元",
+      { first: sessionPriceNtdSetting },
     );
   }
 
@@ -1717,14 +1708,10 @@ function render() {
       const res = await fn({ ...localeApiParam() });
       const d = res.data as {
         sessionPriceNtd?: number;
-        addon15PriceNtd?: number;
         pointsPerMassage?: number;
       };
       if (typeof d.sessionPriceNtd === "number" && Number.isFinite(d.sessionPriceNtd)) {
         sessionPriceNtdSetting = Math.max(1, Math.round(d.sessionPriceNtd));
-      }
-      if (typeof d.addon15PriceNtd === "number" && Number.isFinite(d.addon15PriceNtd)) {
-        addon15PriceNtdSetting = Math.max(1, Math.round(d.addon15PriceNtd));
       }
       if (typeof d.pointsPerMassage === "number" && Number.isFinite(d.pointsPerMassage)) {
         pointsPerMassageSetting = Math.max(2, Math.round(d.pointsPerMassage));
@@ -2201,7 +2188,12 @@ function render() {
   };
   syncBookMyBookingsTabVisibility();
 
-  panelBook.append(bookTabList, bookPanelBook, bookPanelMyBookings);
+  const sitePublicNotice = createSitePublicNoticeBanner(db, {
+    onVisibilityChange(visible) {
+      panelBook.classList.toggle("panel-book--has-notice", visible);
+    },
+  });
+  panelBook.append(sitePublicNotice.element, bookTabList, bookPanelBook, bookPanelMyBookings);
 
   /** --- 管理後台 --- */
   const adminWrap = el("div", {}, []);
@@ -2211,38 +2203,22 @@ function render() {
     adminWrap,
     auth,
     db,
-    wheelUiSettingsRef,
     syncAdminHeadSignedInHint,
     refreshWalletStatus,
   });
   const { stopAdminListener, renderAdminLoggedOut, renderAdminForbidden, renderAdminTable } = adminDashboard;
 
 
-  /** 輪盤特效預覽按鈕：由後台「其他設定」`siteSettings/ui.showWheelSlotPreviewButton` 控制（所有會員皆可見，與是否管理員無關） */
   function syncWheelPreviewBtnVisibility() {
-    wheelTestBtn.hidden = !wheelSlotPreviewSettingFromFirestore;
+    wheelTestBtn.hidden = !currentUserIsAdmin;
   }
 
-  onSnapshot(
-    wheelUiSettingsRef,
-    (snap) => {
-      const raw = snap.data()?.showWheelSlotPreviewButton;
-      wheelSlotPreviewSettingFromFirestore = typeof raw === "boolean" ? raw : true;
-      syncWheelPreviewBtnVisibility();
-    },
-    () => {
-      wheelSlotPreviewSettingFromFirestore = true;
-      syncWheelPreviewBtnVisibility();
-    },
-  );
-
-  /** 後台寫入 `siteSettings/pricing` 後即時反映（不依賴 Cloud Functions 是否已部署 `addon15PriceNtd`） */
+  /** 後台寫入 `siteSettings/pricing` 後即時反映 */
   onSnapshot(
     pricingDocRef,
     (snap) => {
       const raw = snap.data() as Record<string, unknown> | undefined;
       sessionPriceNtdSetting = resolveSessionPriceNtdClient(raw);
-      addon15PriceNtdSetting = resolveAddon15PriceNtdClient(raw);
       pointsPerMassageSetting = resolvePointsPerMassageClient(raw);
       syncHomePageSubtitle();
       refillBookingModes(isVerifiedMember());
@@ -2270,9 +2246,10 @@ function render() {
 
   onAuthStateChanged(auth, () => {
     void (async () => {
+      currentUserIsAdmin = await canCurrentUserAccessAdmin(auth);
+      syncWheelPreviewBtnVisibility();
       await refreshBookingPricing();
       await refreshWalletStatus();
-      syncWheelPreviewBtnVisibility();
     })();
     syncAdminHeadSignedInHint();
     if (tab !== "admin") return;

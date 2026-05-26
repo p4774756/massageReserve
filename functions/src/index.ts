@@ -28,7 +28,6 @@ import {
 } from "./bookingLogic";
 import {
   foldWalletBalanceIntoSessions,
-  resolveAddon15PriceNtd,
   resolvePointsPerMassage,
   resolveSessionPriceNtd,
 } from "./pricing";
@@ -631,7 +630,6 @@ export const getMyWallet = onCall(publicCall, async (request) => {
   const out = await db.runTransaction(async (tx) => {
     const pricingSnap = await tx.get(db.collection("siteSettings").doc("pricing"));
     const sessionPriceNtd = resolveSessionPriceNtd(pricingSnap.data());
-    const addon15PriceNtd = resolveAddon15PriceNtd(pricingSnap.data());
     const pointsPerMassage = resolvePointsPerMassage(pricingSnap.data());
     const snap = await tx.get(customerRef);
     const walletBalanceRaw = snap.exists ? snap.get("walletBalance") : 0;
@@ -667,20 +665,18 @@ export const getMyWallet = onCall(publicCall, async (request) => {
       drawChances,
       nickname,
       sessionPriceNtd,
-      addon15PriceNtd,
       pointsPerMassage,
     };
   });
   return out;
 });
 
-/** 前台／訪客：讀取現場按次／超過半小時加價與點數兌換門檻（無需登入） */
+/** 前台／訪客：讀取現場按次金額與點數兌換門檻（無需登入） */
 export const getBookingPricing = onCall(publicCall, async (request) => {
   parseLocale(request.data);
   const snap = await db.collection("siteSettings").doc("pricing").get();
   return {
     sessionPriceNtd: resolveSessionPriceNtd(snap.data()),
-    addon15PriceNtd: resolveAddon15PriceNtd(snap.data()),
     pointsPerMassage: resolvePointsPerMassage(snap.data()),
   };
 });

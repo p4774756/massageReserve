@@ -4,7 +4,6 @@
  */
 
 const DEFAULT_SESSION_PRICE_NTD = 70;
-const DEFAULT_ADDON_15_PRICE_NTD = 30;
 const DEFAULT_POINTS_PER_MASSAGE = 10;
 
 function asIntInRange(
@@ -23,10 +22,6 @@ function asIntInRange(
 
 export function resolveSessionPriceNtdClient(raw: Record<string, unknown> | undefined): number {
   return asIntInRange(raw, "sessionPriceNtd", DEFAULT_SESSION_PRICE_NTD, 1, 500_000);
-}
-
-export function resolveAddon15PriceNtdClient(raw: Record<string, unknown> | undefined): number {
-  return asIntInRange(raw, "addon15PriceNtd", DEFAULT_ADDON_15_PRICE_NTD, 1, 500_000);
 }
 
 export function resolvePointsPerMassageClient(raw: Record<string, unknown> | undefined): number {

@@ -42,7 +42,10 @@ flowchart LR
 
 | 路徑 | 用途 |
 |------|------|
-| `src/` | 預約表單、跑馬燈、會員登入、輪盤 UI、管理後台 UI |
+| `src/main.ts` | 預約表單、會員登入／中心、預約月曆與空檔、路由 `/`／`/admin` |
+| `src/adminDashboard.ts` | 管理後台 UI（預約列表／封存、會員、不開放時段、其他設定） |
+| `src/myBookingsPanel.ts` | 會員「我的預約」（尚未開始／已結束、取消） |
+| `src/firebase.ts` | Firebase 初始化與 Callable 封裝（**不含**客服對話 Callable） |
 | `functions/src/index.ts` | 所有 Callable、Firestore 觸發器（預約狀態變更寄信） |
 | `functions/src/bookingLogic.ts` | 時段、容量、週曆規則（與前端 `src/slots.ts` 對齊概念） |
 | `functions/src/resendNotify.ts` | Resend：新預約通知擁有者、會員預約狀態變更信（由 `createBooking`／觸發器呼叫） |
@@ -63,11 +66,33 @@ flowchart LR
 | `wheelPrizes` | 輪盤獎項設定：`active`、`type`、`value`、`weight` |
 | `wheelSpins` | 每次抽獎結果與 `prizeSnapshot` |
 | `admins` | 管理員白名單（文件 ID = Auth UID） |
-| `siteSettings` | 網站公告／跑馬燈等（規則：公開讀、管理員寫） |
+| `siteSettings` | 營運設定（規則：**公開讀**、**管理員寫**）；見下表子文件 |
 | `siteStats` | 訪次聚合（如 `visitorCounters`；由 `recordSiteVisit` 以交易累加） |
-| `supportThreads` | 客服對話主檔；子集合 `messages` 為往來訊息 |
+| `supportThreads` | 客服對話主檔；子集合 `messages` 為往來訊息（後端 Callable 已實作，**前台 UI 尚未接上**） |
+
+#### `siteSettings` 子文件（目前程式有讀寫）
+
+| 文件 ID | 用途 | 讀取 | 寫入 |
+|---------|------|------|------|
+| `pricing` | 按次金額、點數兌換門檻 | 前台 `onSnapshot`、Functions 交易 | 後台「其他設定」 |
+| `bookingCaps` | 每日／每工作週可預約筆數上限 | 前台即時、Functions 建單 | 後台「其他設定」 |
+| `bookingBlocks` | 依星期或特定日期關閉時段 | Functions、`getAvailability` | 後台「不開放預約時段」分頁 |
+| `publicNotice` | 前台小公告（內文、選填到期日） | 預約頁 `onSnapshot` | 後台「前台與預約規則」→「前台小公告」 |
+
+**說明**：歷史版本曾使用 `siteSettings/marqueeText`、`siteSettings/marqueeLed` 做站內 LED／文字跑馬燈；**現行前端已不再讀寫**。Firestore 若仍留有舊文件可手動刪除，不影響現有功能。
+
+**對外消息（現況）**
+
+| 方式 | 誰看得到 | 備註 |
+|------|----------|------|
+| 預約頁副標 `home.subtitle` | 所有人 | 價格文案；定價數字來自 `getBookingPricing`／`siteSettings/pricing` |
+| 後台群發／單封郵件 | 已驗證 Email 的會員 | `sendMembersBroadcastAdmin`、`sendMemberDirectEmailAdmin` |
+| 預約狀態信 | 該筆預約的會員 | `notifyMemberBookingStatusChange`；後台更新狀態時可帶 `statusEmailMessage` |
+| 前台小公告 | 所有人（預約頁） | `siteSettings/publicNotice`；可關閉至後台更新為止 |
 
 **預約狀態**（後台可選）：`pending` → `confirmed` → `done`；另有 `cancelled`、`deleted`（軟刪相關欄位依規則與實作）。
+
+**封存**：管理員可將已結案預約設 `invisible: true`（自「預約管理」主列表隱藏，移至「封存的預約」）；須為已完成、已取消或具 `completedAt`（見 `firestore.rules` 的 `bookingTerminalForArchive`）。
 
 **`drawGranted`**：同一筆預約僅能透過「完成預約」流程發放 **一次** 抽獎次數，避免重複 +1。
 
@@ -75,14 +100,17 @@ flowchart LR
 
 ## 4. Callable Functions 一覽
 
-所有可呼叫函式定義於 `functions/src/index.ts`，前端封裝於 `src/firebase.ts`（含 `seedWheelPrizesCall`、`migrateLegacyWalletsAdminCall`、`sendMembersBroadcastAdminCall`、`sendMemberDirectEmailAdminCall`、`adjustSessionCreditsAdminCall`、`grantDrawChancesAdminCall`：後台分別可初始化空獎項、折換全體 customers 未折抵金額、群發自訂郵件、單一已驗證會員自訂郵件、增減可預約次數（稽核）、贈送輪盤可抽次數；`testSendMemberStatusTestEmail` 仍為管理員 Callable 但前端未封裝）。
+所有可呼叫函式定義於 `functions/src/index.ts`；多數由 `src/firebase.ts` 封裝。後台另透過 `httpsCallable` 直接呼叫 `seedWheelPrizes`、`migrateLegacyWalletsAdmin`（見 `src/adminDashboard.ts`）。**未**封裝於前端的 Callable：`sendSupportChatMessage`、`sendSupportChatAdminReply`、`setSupportThreadStatusAdmin`、`testSendMemberStatusTestEmail`。
 
 | 函式 | 誰可呼叫 | 用途摘要 |
 |------|-----------|----------|
-| `getAvailability` | 公開 | 依 `dateKey` 回傳可預約時段（已佔用時段由後端計算） |
+| `getAvailability` | 公開 | 依 `dateKey` 回傳可預約時段（已佔用時段由後端計算；可含同日匿名顯示名遮罩） |
+| `getBookingDayCounts` | 公開 | 月曆用：指定月份各日預約筆數（不含 `cancelled`） |
+| `getBookingPricing` | 公開 | 回傳現場定價與點數兌換門檻（與 `siteSettings/pricing` 對齊） |
 | `recordSiteVisit` | 公開 | 訪次統計（`siteStats/visitorCounters`，台北日曆日／週）；前端每瀏覽器分頁工作階段建議最多呼叫一次 |
 | `createBooking` | 公開（會員模式需登入） | 建立預約、名額檢查、會員錢包扣款等；可搭配 Resend 通知擁有者 |
 | `getMyWallet` | 已登入 | 讀取自己的餘額、可抽次數、暱稱 |
+| `redeemWheelPoints` | 已登入且 **Email 已驗證** | 點數兌換為可預約次數（依 `pricing` 門檻） |
 | `getAdminStatus` | 已登入 | 是否為管理員 |
 | `completeBooking` | 管理員 | 將預約標為完成；符合條件時 **顧客 `drawChances + 1`** |
 | `cancelBooking` | 預約本人或管理員 | 取消預約；若曾錢包扣款則退款 |
@@ -91,6 +119,8 @@ flowchart LR
 | `grantDrawChancesAdmin` | 管理員 | 贈送輪盤 **`drawChances`**（1～50／次），並寫入 `walletTransactions`（`type: "admin_grant_draw"`） |
 | `createMemberAccount` | 管理員 | 建立 Auth 使用者 + `customers` 初始文件 |
 | `searchMemberUsers` / `listMembersAdmin` / `updateMemberNicknameAdmin` / `migrateLegacyWalletsAdmin` | 管理員 | 會員搜尋、列表、暱稱；一鍵依定價折換 `customers` 未折抵金額→次數 |
+| `batchGetCustomerAdminBriefsAdmin` / `getCustomerAdminProfileAdmin` / `setCustomerAdminBriefAdmin` / `addCustomerAdminNoteAdmin` | 管理員 | 會員列表摘要、客戶檔案、內部備註（`customers/{uid}/adminNotes` 僅 Functions 寫入） |
+| `testSendMemberBookingStatusEmail` | 管理員 | 依預約 ID 寄【測試】狀態通知（後台可觸發） |
 | `testSendMemberStatusTestEmail` | 管理員 | 依 UID 寄【測試】狀態通知樣板信（後端 Callable；前端未封裝／無後台按鈕） |
 | `sendMembersBroadcastAdmin` | 管理員 | 依 Auth 列舉會員信箱，**群發**自訂主旨／純文字內文（轉 HTML）；`dryRun` 僅統計人數，實寄需 `confirmSend: true`；需 **Resend**（`RESEND_API_KEY`） |
 | `sendMemberDirectEmailAdmin` | 管理員 | 依 Email 或 UID 查單一 Auth 使用者，**僅**在 **Email 已驗證** 時寄一封自訂主旨／內文（與群發相同 HTML 管線）；`dryRun: true` 僅驗證對象，實寄需 `confirmSend: true`；需 **Resend** |
@@ -107,7 +137,7 @@ flowchart LR
 
 ## 5. 安全模型（重點）
 
-- **`firestore.rules`**：`bookings` 僅 **管理員** 或 **`customerId == request.auth.uid` 的本人** 可讀；**建立／刪除** 關閉，**更新** 僅管理員且僅限特定欄位（狀態、軟刪等）。因此一般預約建立 **不走** 客戶端直接 `addDoc`，而走 **`createBooking` Callable**（Admin SDK 寫入）。
+- **`firestore.rules`**：`bookings` 僅 **管理員** 或 **`customerId == request.auth.uid` 的本人** 可讀；**建立／刪除** 關閉，**更新** 僅管理員且僅限 `status`、`updatedAt`、`deletedAt`、`deletedBy`、`memberLastStatus`、`invisible`、`statusEmailMessage`（封存須符合終態條件；`statusEmailMessage` 長度上限 2000）。因此一般預約建立 **不走** 客戶端直接 `addDoc`，而走 **`createBooking` Callable**（Admin SDK 寫入）。
 - **`customers`、`walletTransactions`、`wheelPrizes`、`wheelSpins`**：規則檔中未對一般使用者開放直接寫入；餘額與抽獎次數應僅由 **Functions** 更新。
 - **管理員**：後端以 `admins/{uid}` **存在與否** 判斷（例如 `completeBooking`、`topupWallet`、`adjustSessionCreditsAdmin`、`grantDrawChancesAdmin`）。
 
@@ -210,19 +240,21 @@ sequenceDiagram
 
 ## 7. 前端畫面分工（概念）
 
-- **預約**：呼叫 `getAvailability`、`createBooking`；訪客／會員付款選項見 `BookingMode`。
+- **預約**：`getAvailability`、`getBookingDayCounts`（月曆筆數／同日匿名遮罩提示）、`createBooking`；訪客／會員付款選項見 `BookingMode`；副標價格來自 `getBookingPricing` 與 `siteSettings/pricing` 即時同步。
+- **我的預約**：登入會員於「我的預約」分頁以 `onSnapshot` 讀取本人 `bookings`；可 **`cancelBooking`** 取消。
 - **訪次**：首載可呼叫一次 `recordSiteVisit`（每分頁工作階段建議不重複）。
-- **登入／會員**：Auth 狀態變化時刷新 `getMyWallet`、啟用或停用輪盤按鈕。
-- **輪盤**：先 `listActiveWheelPrizes`（已驗證會員）再抽；`spinWheel` 成功後顯示獎項並刷新錢包狀態。
-- **客服**：會員或匿名訪客透過 `sendSupportChatMessage`；後台以 `sendSupportChatAdminReply`、`setSupportThreadStatusAdmin` 回覆與結案。
-- **管理**：`onSnapshot` 訂閱 `bookings`（僅管理員可讀規則允許之資料）；狀態更新透過 `updateDoc` 與規則允許之欄位，或使用 Callable（依實作）— **完成／取消** 以 **`completeBooking` / `cancelBooking`** 為準（與發放次數、退款一致）。
+- **登入／會員**：Auth 狀態變化時刷新 `getMyWallet`、啟用或停用輪盤按鈕；**管理員**在會員中心可見「預覽拉霸特效」（僅畫面、不扣次數，無後台開關）。
+- **輪盤**：先 `listActiveWheelPrizes`（已驗證會員）再抽；`spinWheel` 成功後顯示獎項並刷新錢包狀態；點數兌換走 `redeemWheelPoints`。
+- **客服**：後端已有 `supportThreads` 與對應 Callable，**目前前端未接上**（無 `src/firebase.ts` 封裝與聊天 UI）。
+- **管理**（`src/adminDashboard.ts`）：`onSnapshot` 訂閱 `bookings`；**完成／取消** 以 **`completeBooking` / `cancelBooking`** 為準；可 **`updateDoc`** 設 `invisible` 封存、帶 `statusEmailMessage` 寄狀態信；預約月曆格 hover 顯示當日不開放規則 tooltip；會員分頁支援群發／單封郵件、儲值、次數調整、客戶備註；「其他設定」寫入 `siteSettings`（定價、名額、輪盤預覽開關等）。
 
 ---
 
 ## 8. 測試與部署
 
 - **E2E**：`tests/e2e/`（例如會員預約 → 後台完成 → 抽輪盤）；環境變數見 `README.md` 與 `.env.e2e.example`。
-- **部署**：`npm run build` 後 Firebase CLI 部署 Hosting + Functions；CI 見 `.github/workflows/deploy-firebase.yml`。
+- **部署**：`npm run build` 後 Firebase CLI 部署 Hosting + Functions；CI 見 `.github/workflows/deploy-firebase.yml`（非互動 deploy 時會寫入 `functions/.env.<PROJECT_ID>`，含 `RESEND_FROM`、`EMAIL_PUBLIC_ORIGIN`，見 workflow 註解）。
+- **郵件樣板預覽**（本機）：於 `functions/` 執行 `npm run preview:emails`，產出 `functions/email-previews/index.html`。
 
 ---
 

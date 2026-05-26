@@ -518,6 +518,66 @@ main.panel {
   gap: var(--section-gap);
 }
 
+main.panel.panel-book--has-notice {
+  padding-top: 14px;
+}
+
+.site-public-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 12px;
+  margin: 0 0 2px;
+  padding: 10px 12px 11px;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface));
+  box-shadow: var(--shadow-sm);
+}
+
+.site-public-notice[hidden] {
+  display: none !important;
+}
+
+.site-public-notice__label {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: var(--surface);
+}
+
+.site-public-notice__body {
+  flex: 1 1 12rem;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.site-public-notice__dismiss {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 4px 10px;
+  font-size: 0.82rem;
+}
+
+.site-public-notice-admin__text {
+  width: 100%;
+  min-height: 4.5rem;
+  resize: vertical;
+  font: inherit;
+  line-height: 1.5;
+}
+
 /* 作者樣式若指定 display:flex，會蓋過部分瀏覽器對 [hidden] 的預設，導致兩個 main 同時可見 */
 main.panel[hidden] {
   display: none !important;
@@ -1931,37 +1991,39 @@ tbody tr:hover td {
   background: #ffffff;
 }
 
-/* 「其他設定」：區塊標題與卡片色條，提升可掃視性 */
+/* 「其他設定」：與會員清單等分頁相同的灰色面板 */
 .shell.admin-mode .admin-announce--settings > .admin-announce__page-title {
-  margin: 0 0 20px;
-  padding: 0 0 10px 12px;
-  font-size: 1.05rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  color: #1a1a1a;
+  margin: 0 0 16px;
+  padding: 0;
+  font-size: 0.98rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ink);
   border: none;
-  border-left: 4px solid #6001d2;
-  border-bottom: 1px solid #d4d4d4;
   border-radius: 0;
   background: transparent;
 }
 
-.admin-announce__block--wheel-preview {
-  border-left-color: #8b62b3;
-  background: linear-gradient(135deg, rgb(139 98 179 / 0.09) 0%, var(--surface) 48%);
-  box-shadow: var(--shadow-sm);
+.shell.admin-mode .admin-announce--settings .admin-announce__block {
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  border-left-width: 1px;
+  box-shadow: none;
 }
 
-.admin-announce__block--caps {
-  border-left-color: #2f8f6f;
-  background: linear-gradient(135deg, rgb(47 143 111 / 0.08) 0%, var(--surface) 48%);
-  box-shadow: var(--shadow-sm);
+.shell.admin-mode .admin-announce--settings .admin-announce__block--wheel-preview,
+.shell.admin-mode .admin-announce--settings .admin-announce__block--caps,
+.shell.admin-mode .admin-announce--settings .admin-announce__block--blocks,
+.shell.admin-mode .admin-announce--settings .admin-announce__block--pricing,
+.shell.admin-mode .admin-announce--settings .admin-announce__block--rules {
+  border-left-color: var(--border);
+  background: var(--surface-muted);
 }
 
-.admin-announce__block--blocks {
-  border-left-color: #c97a35;
-  background: linear-gradient(135deg, rgb(201 122 53 / 0.09) 0%, var(--surface) 48%);
-  box-shadow: var(--shadow-sm);
+.shell.admin-mode .admin-announce--settings .admin-announce__sub {
+  background: var(--surface);
 }
 
 .admin-announce__block--blocks .admin-blocks-intro {
@@ -2011,12 +2073,6 @@ tbody tr:hover td {
   flex-wrap: wrap;
   gap: 10px;
   padding-top: 4px;
-}
-
-.admin-announce__block--pricing {
-  border-left-color: #4a7ab5;
-  background: linear-gradient(135deg, rgb(74 122 181 / 0.1) 0%, var(--surface) 50%);
-  box-shadow: var(--shadow-sm);
 }
 
 /* 後台次層分頁：與主分頁（全寬底線）區隔——較小字、淺色帶狀底、圓角「鈕」選中態 */
@@ -2525,8 +2581,8 @@ tbody tr:hover td {
 }
 
 .admin-announce__block--rules {
-  border-left-color: #3d9a78;
-  background: linear-gradient(135deg, rgb(61 154 120 / 0.07) 0%, var(--surface) 42%);
+  border-left-color: var(--border);
+  background: var(--surface-muted);
 }
 
 .admin-announce__block-title {
@@ -5655,34 +5711,14 @@ html.kuso-retro .shell.admin-mode .admin-announce__block {
   border-color: #d4d4d4;
 }
 
-html.kuso-retro .shell.admin-mode .admin-announce__block--rules {
-  border-left-color: #6001d2;
-  background: linear-gradient(135deg, rgb(96 1 210 / 0.06) 0%, #ffffff 42%);
-}
-
-html.kuso-retro .shell.admin-mode .admin-announce__block--caps {
-  border-left-color: #7b2cbf;
-  background: linear-gradient(135deg, rgb(123 44 191 / 0.06) 0%, #ffffff 48%);
-}
-
-html.kuso-retro .shell.admin-mode .admin-announce__block--blocks {
-  border-left-color: #8b5cf6;
-  background: linear-gradient(135deg, rgb(139 92 246 / 0.06) 0%, #ffffff 48%);
-}
-
-html.kuso-retro .shell.admin-mode .admin-announce__block--pricing {
-  border-left-color: #6001d2;
-  background: linear-gradient(135deg, rgb(96 1 210 / 0.07) 0%, #ffffff 50%);
-}
-
-html.kuso-retro .shell.admin-mode .admin-announce__block--wheel-preview {
-  border-left-color: #9333ea;
-  background: linear-gradient(135deg, rgb(147 51 234 / 0.07) 0%, #ffffff 48%);
+html.kuso-retro .shell.admin-mode .admin-announce--settings .admin-announce__block {
+  border-color: #d4d4d4;
+  background: #f5f5f5;
 }
 
 html.kuso-retro .shell.admin-mode .admin-announce__wallet-segment--member-ops {
   border-left-color: #6001d2;
-  background: linear-gradient(135deg, rgb(96 1 210 / 0.05) 0%, #ffffff 46%);
+  background: #ffffff;
 }
 
 html.kuso-retro .shell.admin-mode .admin-login {
