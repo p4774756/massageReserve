@@ -444,13 +444,14 @@ header.page-head {
 }
 
 .shell.admin-mode {
-  border-color: var(--border-strong);
-  box-shadow: var(--shadow-sm);
+  border-color: #c8c8c8;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.12);
 }
 
 .shell.admin-mode header.page-head {
-  background: var(--surface-muted);
-  border-bottom-color: var(--border);
+  background: #6001d2;
+  border-bottom: 2px solid #410092;
+  color: #ffffff;
 }
 
 .shell.admin-mode .page-head-top-row .head-toolbar-aside {
@@ -474,9 +475,9 @@ header.page-head {
 }
 
 .shell.admin-mode main.panel:has(.admin-dashboard) {
-  padding-top: 26px;
-  padding-bottom: 40px;
-  background: linear-gradient(180deg, rgb(241 245 249 / 0.65) 0%, rgb(248 250 252 / 0.9) 38%, var(--surface) 100%);
+  padding-top: 20px;
+  padding-bottom: 36px;
+  background: #ececec;
 }
 
 .shell.admin-mode .admin-login {
@@ -1888,59 +1889,61 @@ tbody tr:hover td {
 }
 
 .admin-dashboard__shell {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--surface);
-  box-shadow: var(--shadow-sm), 0 14px 42px rgb(15 23 42 / 0.07);
+  border: 1px solid #c8c8c8;
+  border-radius: 2px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
   overflow: hidden;
 }
 
 .shell.admin-mode .admin-dashboard .admin-tabs {
   margin: 0;
-  padding: 8px 10px 0;
-  gap: 2px;
+  padding: 0 8px;
+  gap: 0;
   border: none;
-  border-bottom: 1px solid var(--border);
-  background: linear-gradient(165deg, rgb(248 250 252) 0%, rgb(255 255 255) 60%);
+  border-bottom: 1px solid #c8c8c8;
+  background: #f5f5f5;
 }
 
 .shell.admin-mode .admin-dashboard .admin-tab {
-  padding: 11px 14px 13px;
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  font-size: 0.86rem;
-  letter-spacing: 0.02em;
+  padding: 10px 14px 11px;
+  border-radius: 0;
+  font-size: 0.84rem;
+  letter-spacing: 0.01em;
 }
 
 .shell.admin-mode .admin-dashboard .admin-tab.is-active,
 .shell.admin-mode .admin-dashboard .admin-tab[aria-selected="true"] {
-  color: var(--accent-2);
+  color: #6001d2;
   font-weight: 700;
-  border-bottom-color: var(--accent-2);
-  background: linear-gradient(180deg, rgb(255 255 255 / 0.98) 0%, rgb(255 255 255 / 0.88) 100%);
-  box-shadow: 0 1px 0 rgb(255 255 255 / 0.9);
+  border-bottom-color: #6001d2;
+  background: #ffffff;
+  box-shadow: none;
 }
 
 .shell.admin-mode .admin-dashboard .admin-tab:focus-visible {
-  outline-color: rgb(14 165 233 / 0.55);
+  outline-color: rgb(96 1 210 / 0.45);
 }
 
 .shell.admin-mode .admin-dashboard .admin-tab-panels {
   margin: 0;
-  padding: 22px 20px 30px;
-  background: linear-gradient(180deg, rgb(255 255 255) 0%, rgb(252 253 255) 100%);
+  padding: 18px 16px 24px;
+  background: #ffffff;
 }
 
 /* 「其他設定」：區塊標題與卡片色條，提升可掃視性 */
 .shell.admin-mode .admin-announce--settings > .admin-announce__page-title {
   margin: 0 0 20px;
-  padding: 4px 2px 14px 12px;
+  padding: 0 0 10px 12px;
   font-size: 1.05rem;
   font-weight: 800;
-  letter-spacing: 0.06em;
-  color: var(--ink);
-  border-left: 4px solid var(--accent-2);
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  background: linear-gradient(90deg, rgb(14 165 233 / 0.1) 0%, transparent 52%);
+  letter-spacing: 0.04em;
+  color: #1a1a1a;
+  border: none;
+  border-left: 4px solid #6001d2;
+  border-bottom: 1px solid #d4d4d4;
+  border-radius: 0;
+  background: transparent;
 }
 
 .admin-announce__block--wheel-preview {
@@ -2052,17 +2055,17 @@ tbody tr:hover td {
 
 .admin-member-subtabs .admin-tab:hover {
   color: var(--ink);
-  background: rgb(255 255 255 / 0.7);
-  border-color: rgb(221 184 200 / 0.65);
+  background: rgb(255 255 255 / 0.85);
+  border-color: #c8c8c8;
 }
 
 .admin-member-subtabs .admin-tab.is-active,
 .admin-member-subtabs .admin-tab[aria-selected="true"] {
-  color: var(--accent-deep);
+  color: #6001d2;
   font-weight: 600;
   background: var(--surface);
-  border-color: var(--border-strong);
-  box-shadow: var(--shadow-sm);
+  border-color: #6001d2;
+  box-shadow: none;
 }
 
 .admin-member-subtabs .admin-tab:focus-visible {
@@ -2347,7 +2350,13 @@ tbody tr:hover td {
   display: grid;
   gap: 18px;
   max-width: 440px;
-  padding: 12px 0 8px;
+  margin-top: 8px;
+  padding: 20px 22px 22px;
+  border: 1px solid #c8c8c8;
+  border-top: 4px solid #6001d2;
+  border-radius: 2px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
 }
 
 .admin-login .hint,
@@ -5166,7 +5175,7 @@ body.wheel-spectacle-lock {
 }
 
 /* -------------------------------------------------------------------------- */
-/* 前台：無名小站粉系（後台主色見下方 .shell.admin-mode，靛／天青）         */
+/* 前台：無名小站粉系（後台主色見下方 .shell.admin-mode，Yahoo 奇摩紫）       */
 /* -------------------------------------------------------------------------- */
 
 html.kuso-retro body {
@@ -5338,7 +5347,7 @@ html.kuso-retro:not(:has(.shell.admin-mode)) main.panel {
 /* -------------------------------------------------------------------------- */
 
 html.kuso-retro:has(.shell.admin-mode) body {
-  background-color: #f1f5f9;
+  background-color: #ececec;
   background-image: none;
 }
 
@@ -5363,43 +5372,49 @@ html.kuso-retro:has(.shell.admin-mode) #app::after {
 }
 
 html.kuso-retro .shell.admin-mode {
-  --ink: #0f172a;
-  --muted: #64748b;
-  --border: #e5e7eb;
-  --border-strong: #d1d5db;
+  --ink: #1a1a1a;
+  --muted: #666666;
+  --border: #d4d4d4;
+  --border-strong: #b8b8b8;
   --surface: #ffffff;
-  --surface-muted: #f8f9fa;
+  --surface-muted: #f5f5f5;
   --surface-elevated: #ffffff;
-  --accent-rgb: 99 102 241;
-  --accent: #6366f1;
-  --accent-bright: #818cf8;
-  --accent-deep: #4f46e5;
-  --accent-hover: #4338ca;
-  --accent-soft: #eef2ff;
-  --accent-muted-bg: #f8fafc;
-  --accent-2: #0ea5e9;
-  --danger: #dc2626;
-  font-family: var(--font);
+  --accent-rgb: 96 1 210;
+  --accent: #6001d2;
+  --accent-bright: #7b2cbf;
+  --accent-deep: #410092;
+  --accent-hover: #5000a8;
+  --accent-soft: #f4eefb;
+  --accent-muted-bg: #faf8fc;
+  --accent-2: #6001d2;
+  --link: #6001d2;
+  --link-visited: #410092;
+  --danger: #cc0000;
+  --radius: 2px;
+  --radius-sm: 2px;
+  --radius-lg: 4px;
+  font-family: Arial, Helvetica, "PingFang TC", "Microsoft JhengHei", sans-serif;
   color: var(--ink);
   background: #ffffff;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
+  border: 1px solid #c8c8c8;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.12);
 }
 
 html.kuso-retro .shell.admin-mode header.page-head {
-  background: #ffffff;
-  border-bottom: 1px solid var(--border);
+  background: #6001d2;
+  border-bottom: 2px solid #410092;
+  color: #ffffff;
 }
 
 html.kuso-retro .shell.admin-mode .page-head h1 {
-  font-family: var(--font-head);
-  font-size: 1.38rem;
+  font-family: Arial, Helvetica, "PingFang TC", "Microsoft JhengHei", sans-serif;
+  font-size: 1.35rem;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
   line-height: 1.35;
-  color: var(--ink);
-  -webkit-text-fill-color: unset;
+  color: #ffffff;
+  -webkit-text-fill-color: #ffffff;
   background: none;
   background-image: none;
   background-size: auto;
@@ -5409,34 +5424,40 @@ html.kuso-retro .shell.admin-mode .page-head h1 {
 }
 
 html.kuso-retro .shell.admin-mode .tabs {
-  background: var(--surface-muted);
-  border-bottom: 1px solid var(--border);
+  background: rgb(0 0 0 / 0.12);
+  border-bottom: none;
+  padding: 0 4px;
 }
 
 html.kuso-retro .shell.admin-mode .tab {
   font-weight: 600;
   text-shadow: none;
-  color: var(--muted);
+  color: rgb(255 255 255 / 0.88);
+  border-bottom: 2px solid transparent;
+}
+
+html.kuso-retro .shell.admin-mode .tab:hover {
+  color: #ffffff;
 }
 
 html.kuso-retro .shell.admin-mode .tab[aria-selected="true"] {
-  color: var(--accent);
+  color: #6001d2;
   font-weight: 700;
   background: #ffffff;
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  border: 1px solid var(--border);
+  border-radius: 2px 2px 0 0;
+  border: 1px solid #ececec;
   border-bottom: none;
   margin-bottom: -1px;
-  padding-inline: 10px;
+  padding-inline: 12px;
   padding-bottom: 11px;
   box-shadow: none;
 }
 
 html.kuso-retro .shell.admin-mode .app-version-footer {
-  background: var(--surface-muted);
-  color: var(--muted);
-  border-top: 1px solid var(--border);
-  font-family: var(--font);
+  background: #f5f5f5;
+  color: #666666;
+  border-top: 1px solid #d4d4d4;
+  font-family: Arial, Helvetica, "PingFang TC", sans-serif;
 }
 
 html.kuso-retro .shell.admin-mode .app-version-footer::before {
@@ -5444,9 +5465,35 @@ html.kuso-retro .shell.admin-mode .app-version-footer::before {
   display: none;
 }
 
+html.kuso-retro .shell.admin-mode .admin-head-signed-in {
+  color: rgb(255 255 255 / 0.9);
+}
+
+html.kuso-retro .shell.admin-mode .head-toolbar-aside .member-entry,
+html.kuso-retro .shell.admin-mode .head-toolbar-aside button.ghost {
+  border-color: rgb(255 255 255 / 0.55);
+  color: #ffffff;
+  background: rgb(255 255 255 / 0.12);
+}
+
+html.kuso-retro .shell.admin-mode .head-toolbar-aside .member-entry:hover,
+html.kuso-retro .shell.admin-mode .head-toolbar-aside button.ghost:hover:not(:disabled) {
+  background: rgb(255 255 255 / 0.22);
+  border-color: #ffffff;
+  color: #ffffff;
+}
+
+html.kuso-retro .shell.admin-mode a {
+  color: #6001d2;
+}
+
+html.kuso-retro .shell.admin-mode a:visited {
+  color: #410092;
+}
+
 html.kuso-retro .shell.admin-mode a:hover {
-  background: rgb(var(--accent-rgb) / 0.08);
-  color: var(--accent-hover);
+  background: rgb(96 1 210 / 0.08);
+  color: #5000a8;
 }
 
 html.kuso-retro .shell.admin-mode button.primary {
@@ -5492,23 +5539,29 @@ html.kuso-retro .shell.admin-mode button.ghost:active:not(:disabled) {
 }
 
 html.kuso-retro .shell.admin-mode th {
-  background: var(--surface-muted);
-  color: var(--ink);
+  background: #e8e8e8;
+  color: #1a1a1a;
+  border-bottom: 1px solid #c8c8c8;
+  font-weight: 700;
+}
+
+html.kuso-retro .shell.admin-mode td {
+  border-bottom: 1px solid #e0e0e0;
 }
 
 html.kuso-retro .shell.admin-mode tbody tr:hover td {
-  background: var(--accent-soft);
+  background: #f4eefb;
 }
 
 html.kuso-retro .shell.admin-mode .admin-dashboard__shell {
-  border-color: var(--border);
-  border-radius: var(--radius-lg);
+  border-color: #c8c8c8;
+  border-radius: 2px;
   background: #ffffff;
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
 }
 
 html.kuso-retro .shell.admin-mode .admin-dashboard .admin-tabs {
-  background: linear-gradient(165deg, var(--surface-muted) 0%, #ffffff 58%);
+  background: #f5f5f5;
 }
 
 html.kuso-retro .shell.admin-mode .admin-dashboard .admin-tab-panels {
@@ -5516,34 +5569,35 @@ html.kuso-retro .shell.admin-mode .admin-dashboard .admin-tab-panels {
 }
 
 html.kuso-retro .shell.admin-mode .admin-tabs {
-  border-bottom: 1px solid var(--border);
-  gap: 4px;
+  border-bottom: 1px solid #c8c8c8;
+  gap: 0;
 }
 
 html.kuso-retro .shell.admin-mode .admin-tab.is-active,
 html.kuso-retro .shell.admin-mode .admin-tab[aria-selected="true"] {
-  color: var(--accent);
+  color: #6001d2;
   font-weight: 700;
-  border-bottom-color: var(--accent);
+  border-bottom-color: #6001d2;
   background: #ffffff;
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  border-radius: 0;
 }
 
 html.kuso-retro .shell.admin-mode .admin-tab:focus-visible {
-  outline-color: var(--accent);
+  outline-color: #6001d2;
 }
 
 html.kuso-retro .shell.admin-mode .admin-member-subtabs {
-  border-bottom: 1px solid var(--border);
-  background: var(--surface-muted);
+  border: 1px solid #d4d4d4;
+  background: #f5f5f5;
   box-shadow: none;
+  border-radius: 2px;
 }
 
 html.kuso-retro .shell.admin-mode .admin-member-subtabs .admin-tab {
-  border-radius: var(--radius-sm);
+  border-radius: 2px;
   font-size: 0.8rem;
   font-weight: 500;
-  color: #64748b;
+  color: #666666;
   background: transparent;
   border: 1px solid transparent;
   border-bottom: none !important;
@@ -5552,18 +5606,18 @@ html.kuso-retro .shell.admin-mode .admin-member-subtabs .admin-tab {
 }
 
 html.kuso-retro .shell.admin-mode .admin-member-subtabs .admin-tab:hover {
-  color: #334155;
-  background: rgb(255 255 255 / 0.8);
-  border-color: #cbd5e1;
+  color: #1a1a1a;
+  background: #ffffff;
+  border-color: #c8c8c8;
 }
 
 html.kuso-retro .shell.admin-mode .admin-member-subtabs .admin-tab.is-active,
 html.kuso-retro .shell.admin-mode .admin-member-subtabs .admin-tab[aria-selected="true"] {
-  color: var(--accent);
+  color: #6001d2;
   font-weight: 600;
-  background: #fff;
-  border-color: var(--border-strong);
-  box-shadow: var(--shadow-sm);
+  background: #ffffff;
+  border-color: #6001d2;
+  box-shadow: none;
 }
 
 html.kuso-retro .shell.admin-mode input,
@@ -5586,7 +5640,70 @@ html.kuso-retro .shell.admin-mode main.panel {
 }
 
 html.kuso-retro .shell.admin-mode main.panel:has(.admin-dashboard) {
-  background: linear-gradient(180deg, rgb(255 248 244 / 0.95) 0%, rgb(255 252 250) 45%, #ffffff 100%);
+  background: #ececec;
+}
+
+html.kuso-retro .shell.admin-mode .admin-announce,
+html.kuso-retro .shell.admin-mode .admin-member-list {
+  border-color: #d4d4d4;
+  border-radius: 2px;
+  box-shadow: none;
+}
+
+html.kuso-retro .shell.admin-mode .admin-announce__block {
+  border-radius: 2px;
+  border-color: #d4d4d4;
+}
+
+html.kuso-retro .shell.admin-mode .admin-announce__block--rules {
+  border-left-color: #6001d2;
+  background: linear-gradient(135deg, rgb(96 1 210 / 0.06) 0%, #ffffff 42%);
+}
+
+html.kuso-retro .shell.admin-mode .admin-announce__block--caps {
+  border-left-color: #7b2cbf;
+  background: linear-gradient(135deg, rgb(123 44 191 / 0.06) 0%, #ffffff 48%);
+}
+
+html.kuso-retro .shell.admin-mode .admin-announce__block--blocks {
+  border-left-color: #8b5cf6;
+  background: linear-gradient(135deg, rgb(139 92 246 / 0.06) 0%, #ffffff 48%);
+}
+
+html.kuso-retro .shell.admin-mode .admin-announce__block--pricing {
+  border-left-color: #6001d2;
+  background: linear-gradient(135deg, rgb(96 1 210 / 0.07) 0%, #ffffff 50%);
+}
+
+html.kuso-retro .shell.admin-mode .admin-announce__block--wheel-preview {
+  border-left-color: #9333ea;
+  background: linear-gradient(135deg, rgb(147 51 234 / 0.07) 0%, #ffffff 48%);
+}
+
+html.kuso-retro .shell.admin-mode .admin-announce__wallet-segment--member-ops {
+  border-left-color: #6001d2;
+  background: linear-gradient(135deg, rgb(96 1 210 / 0.05) 0%, #ffffff 46%);
+}
+
+html.kuso-retro .shell.admin-mode .admin-login {
+  border-top-color: #6001d2;
+}
+
+html.kuso-retro .shell.admin-mode .admin-bookings-calendar {
+  border-color: #d4d4d4;
+  border-radius: 2px;
+  box-shadow: none;
+}
+
+html.kuso-retro .shell.admin-mode .admin-calendar__day--selected {
+  outline-color: #6001d2;
+  border-color: #6001d2;
+  background: #f4eefb;
+}
+
+html.kuso-retro .shell.admin-mode .admin-calendar__day--today:not(.admin-calendar__day--inactive) {
+  border-color: #6001d2;
+  box-shadow: 0 0 0 1px rgb(96 1 210 / 0.25);
 }
 
 /* Modal／浮層掛在 body，用 :has 與後台同套 */
