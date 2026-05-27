@@ -90,7 +90,7 @@ export function createAdminBookingBriefCell(
     textEl.classList.add("hint");
   }
   const editBtn = el("button", { type: "button", class: "ghost admin-booking-brief-cell__edit" }, [
-    t("admin.customerProfile.briefEdit", "檔案"),
+    t("admin.customerProfile.briefEdit", "備註"),
   ]);
   editBtn.addEventListener("click", (ev) => {
     ev.stopPropagation();
