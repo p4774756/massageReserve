@@ -16,6 +16,7 @@ import {
   ACTIVE_STATUSES,
   assertSlotAllowed,
   blockedReasonForSlot,
+  isBookingStartInPastTaipei,
   isHolidayOutcallBookableDay,
   isWeekday,
   listBlockedStartSlotsForDate,
@@ -207,6 +208,7 @@ function listMaskedWeekBookerLabels(docs: QueryDocumentSnapshot[]): string[] {
     const dateKey = typeof dateKeyRaw === "string" ? dateKeyRaw : "";
     const startSlotRaw = d.get("startSlot");
     const startSlot = typeof startSlotRaw === "string" ? startSlotRaw.trim() : "";
+    if (isBookingStartInPastTaipei(dateKey, startSlot)) continue;
     const weekday = weekdayZhFromDateKey(dateKey);
     const label =
       weekday && startSlot ? `${weekday} ${startSlot} ${masked}`

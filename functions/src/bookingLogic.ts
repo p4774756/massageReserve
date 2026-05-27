@@ -176,6 +176,25 @@ export function assertSlotAllowed(
   return start;
 }
 
+/** 該 dateKey + startSlot 的開始時間是否已早於現在（台北）；無 startSlot 則以該日是否早於今日判斷 */
+export function isBookingStartInPastTaipei(dateKey: string, startSlot: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return false;
+  try {
+    const day = parseDateKey(dateKey);
+    const slot = typeof startSlot === "string" ? startSlot.trim() : "";
+    if (!slot) {
+      const today = DateTime.now().setZone(TIMEZONE).startOf("day");
+      return day < today;
+    }
+    const [hh, mm] = slot.split(":").map((x) => Number(x));
+    if (!Number.isFinite(hh) || !Number.isFinite(mm)) return false;
+    const start = day.set({ hour: hh, minute: mm, second: 0, millisecond: 0 });
+    return start < DateTime.now().setZone(TIMEZONE);
+  } catch {
+    return false;
+  }
+}
+
 /** 後台設定的「不開放預約」區間（Luxon：週一 = 1 … 週五 = 5；同一日內 HH:mm） */
 export type BookingBlockWindow = {
   weekday: number;

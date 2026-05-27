@@ -42,6 +42,7 @@ import {
   dateKeyFromYmdTaipei,
   daysInMonthFromOneIndexed,
   firstBookableDateKeyInWindow,
+  filterFutureWeekPeerLabels,
   isDateKeyMonFri,
   isDateKeySatSun,
   isStartSlotInPastForTaipeiToday,
@@ -1697,7 +1698,7 @@ function render() {
     if (tab !== "book") return;
     titleDesc.textContent = t(
       "home.subtitle",
-      "每次半小時 {{first}} 元",
+      "20分鐘{{first}}元",
       { first: sessionPriceNtdSetting },
     );
   }
@@ -1834,7 +1835,7 @@ function render() {
           ]),
         );
         const daySlots = daySlotLinesFromAvailability(data);
-        const weekPeers = nonEmptyStringLines(data.weekPeersMasked);
+        const weekPeers = filterFutureWeekPeerLabels(dk, nonEmptyStringLines(data.weekPeersMasked));
         const peerLines: HTMLElement[] = [];
         if (daySlots.length) {
           peerLines.push(

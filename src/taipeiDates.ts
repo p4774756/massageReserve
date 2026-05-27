@@ -106,8 +106,30 @@ export function slotStartInstantMsTaipei(dateKey: string, startSlot: string): nu
 /** 選「今天」且該格開始時間已早於現在（台北當日） */
 export function isStartSlotInPastForTaipeiToday(dateKey: string, startSlot: string): boolean {
   if (dateKey !== taipeiTodayDateKey()) return false;
-  const t = slotStartInstantMsTaipei(dateKey, startSlot);
+  return isStartSlotInPastTaipei(dateKey, startSlot);
+}
+
+/** 該 dateKey + startSlot 的開始時間是否已早於現在（台北）；無 startSlot 則以該日是否早於今日判斷 */
+export function isStartSlotInPastTaipei(dateKey: string, startSlot: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return false;
+  const slot = startSlot.trim();
+  if (!slot) return dateKey < taipeiTodayDateKey();
+  const t = slotStartInstantMsTaipei(dateKey, slot);
   return Number.isFinite(t) && t < Date.now();
+}
+
+/** 本工作週匿名時段列：略過已過的開始時間（標籤格式如「週二 15:15 Rexx」） */
+export function filterFutureWeekPeerLabels(selectedDateKey: string, labels: string[]): string[] {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(selectedDateKey)) return labels;
+  const weekStart = taipeiMondayOfSameWeek(selectedDateKey);
+  return labels.filter((label) => {
+    const m = /^(週[一二三四五六日])\s+(\d{1,2}:\d{2})(?:\s|$)/.exec(label.trim());
+    if (!m) return true;
+    const wdIndex = WEEKDAY_ZH_MON1.indexOf(m[1]);
+    if (wdIndex < 0) return true;
+    const peerDateKey = addDaysTaipeiDateKey(weekStart, wdIndex);
+    return !isStartSlotInPastTaipei(peerDateKey, m[2]);
+  });
 }
 
 /** 月曆表頭：台北該日的星期（0=日 … 6=六） */
