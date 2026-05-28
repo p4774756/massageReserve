@@ -1698,7 +1698,7 @@ function render() {
     if (tab !== "book") return;
     titleDesc.textContent = t(
       "home.subtitle",
-      "20分鐘{{first}}元",
+      "一次15分鐘{{first}}元，通常按 20~40 分鐘，具體看情況",
       { first: sessionPriceNtdSetting },
     );
   }
