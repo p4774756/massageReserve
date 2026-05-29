@@ -44,7 +44,6 @@ import {
   firstBookableDateKeyInWindow,
   filterFutureWeekPeerLabels,
   isDateKeyMonFri,
-  isDateKeySatSun,
   isStartSlotInPastForTaipeiToday,
   monthHasBookableDayInBookWindow,
   taipeiLatestBookableDateKey,
@@ -55,7 +54,12 @@ import {
 import { showAlertModal, showConfirmModal } from "./modals";
 import { wrapPasswordField } from "./passwordField";
 import { paintMemberWalletSummary, type MemberWalletSummaryOpts } from "./walletSummaryUi";
-import { resolvePointsPerMassageClient, resolveSessionPriceNtdClient } from "./sitePricingResolve";
+import {
+  resolveMaxUnitsPerBookingClient,
+  resolvePointsPerMassageClient,
+  resolveSessionPriceNtdClient,
+  resolveUnitMinutesClient,
+} from "./sitePricingResolve";
 
 function render() {
   initI18n();
@@ -197,68 +201,18 @@ function render() {
     bookPickCalGrid,
     bookPickCalHoverTip,
   ]);
-  const radioOfficeWeek = el("input", {
-    type: "radio",
-    name: "bookingServiceKind",
-    id: "booking-svc-office",
-    value: "office",
-  }) as HTMLInputElement;
-  radioOfficeWeek.checked = true;
-  const radioHolidayOutcall = el("input", {
-    type: "radio",
-    name: "bookingServiceKind",
-    id: "booking-svc-holiday",
-    value: "holiday",
-  }) as HTMLInputElement;
-  const holidayOutcallTransportHint = el(
-    "p",
-    { class: "hint book-holiday-outcall-transport-hint", hidden: true },
-    [
-      t(
-        "booking.holidayOutcallTransportHint",
-        "單次按摩費用與平日相同；開始時間以每半小時為單位可選。師傅前往外約地點的交通費由您負擔，實際金額請當日與師傅確認。",
-      ),
-    ],
-  );
-  const serviceKindFieldset = el("fieldset", { class: "book-service-kind" });
-  serviceKindFieldset.append(
-    el("legend", { class: "book-service-kind__legend" }, [t("booking.serviceKindTitle", "預約類型")]),
-    el("div", { class: "book-service-kind__options" }, [
-      el("div", { class: "book-service-kind__option" }, [
-        radioOfficeWeek,
-        el("label", { htmlFor: "booking-svc-office" }, [
-          t("booking.serviceKind.office", "平日｜辦公室時段（週一至週五）"),
-        ]),
-      ]),
-      el("div", { class: "book-service-kind__option" }, [
-        radioHolidayOutcall,
-        el("label", { htmlFor: "booking-svc-holiday" }, [
-          t("booking.serviceKind.holidayOutcall", "假日｜外約（僅能選週六、週日）"),
-        ]),
-      ]),
-    ]),
-    holidayOutcallTransportHint,
-  );
-
-  function isBookingHolidayOutcallMode(): boolean {
-    return radioHolidayOutcall.checked;
-  }
-
   function syncDateFieldLabelText(): void {
-    const hol = isBookingHolidayOutcallMode();
-    dateLabelSpan.textContent = hol
-      ? t("field.dateHolidayOutcall", "日期（週六、週日）")
-      : t("field.date", "日期（週一至週五）");
+    dateLabelSpan.textContent = t("field.date", "日期（週一至週五）");
     dateCalendarHint.textContent = t(
-      "booking.datePickCalendarHint",
-      "請點選下方月曆；僅可選與「預約類型」相符的日期（平日為週一至週五，假日外約為週六、週日）。",
+      "booking.datePickCalendarHintWeekday",
+      "請點選下方月曆；僅可選週一至週五。",
     );
     dateInput.setAttribute("aria-describedby", "book-date-calendar-hint");
   }
 
   function dateAllowedForCurrentBookingMode(dk: string): boolean {
     if (!dk) return false;
-    return isBookingHolidayOutcallMode() ? isDateKeySatSun(dk) : isDateKeyMonFri(dk);
+    return isDateKeyMonFri(dk);
   }
 
   function bookablePickCell(dk: string): boolean {
@@ -276,8 +230,7 @@ function render() {
       bookingPickCalMonth = m;
       return;
     }
-    const office = !isBookingHolidayOutcallMode();
-    const first = firstBookableDateKeyInWindow(office);
+    const first = firstBookableDateKeyInWindow(true);
     if (first) {
       const [y, m] = first.split("-").map(Number);
       bookingPickCalYear = y;
@@ -300,15 +253,13 @@ function render() {
   }
 
   function bookingPickCalCanGoPrev(y: number, m: number): boolean {
-    const office = !isBookingHolidayOutcallMode();
     const { y: py, m: pm } = bookingPickCalPrevMonth(y, m);
-    return monthHasBookableDayInBookWindow(py, pm, office);
+    return monthHasBookableDayInBookWindow(py, pm, true);
   }
 
   function bookingPickCalCanGoNext(y: number, m: number): boolean {
-    const office = !isBookingHolidayOutcallMode();
     const { y: ny, m: nm } = bookingPickCalNextMonth(y, m);
-    return monthHasBookableDayInBookWindow(ny, nm, office);
+    return monthHasBookableDayInBookWindow(ny, nm, true);
   }
 
   function nonEmptyStringLines(list: unknown): string[] {
@@ -387,7 +338,6 @@ function render() {
         const fn = getAvailabilityCall();
         const res = await fn({
           dateKey: dk,
-          holidayOutcall: isBookingHolidayOutcallMode(),
           ...localeApiParam(),
         });
         const data = res.data as { daySlotsMasked?: string[]; dayPeersMasked?: string[] };
@@ -504,13 +454,12 @@ function render() {
       return;
     }
     const fn = getAvailabilityCall();
-    const holidayOutcall = isBookingHolidayOutcallMode();
     const next: Record<string, number> = {};
     const nextPeers: Record<string, string[]> = {};
     await Promise.all(
       keys.map(async (dateKey) => {
         try {
-          const res = await fn({ dateKey, holidayOutcall, ...localeApiParam() });
+          const res = await fn({ dateKey, ...localeApiParam() });
           if (reqId !== bookingPickCalCountsReq) return;
           const data = res.data as {
             dayCount?: number;
@@ -710,37 +659,37 @@ function render() {
     hideBookPickCalHoverTip();
   });
 
-  function onBookingServiceKindChange(): void {
-    holidayOutcallTransportHint.hidden = !radioHolidayOutcall.checked;
-    syncDateFieldLabelText();
-    const office = !isBookingHolidayOutcallMode();
-    if (dateInput.value && !dateAllowedForCurrentBookingMode(dateInput.value)) {
-      dateInput.value = firstBookableDateKeyInWindow(office);
-    } else if (!dateInput.value) {
-      dateInput.value = firstBookableDateKeyInWindow(office);
-    }
-    syncBookingPickCalendarCursorFromValue();
-    paintBookingPickCalendar();
-    void refreshBookingPickCalDayCounts();
-    void refreshAvailability();
-  }
-  radioOfficeWeek.addEventListener("change", onBookingServiceKindChange);
-  radioHolidayOutcall.addEventListener("change", onBookingServiceKindChange);
-
   const slotSelect = el("select", {}, []);
+  const unitsSelect = el("select", {}, [
+    el("option", { value: "1" }, [t("booking.unitsOption1", "1 單位（20 分鐘）")]),
+    el("option", { value: "2" }, [t("booking.unitsOption2", "2 單位（40 分鐘）")]),
+  ]);
+  function selectedBookingUnits(): number {
+    const n = Number(unitsSelect.value);
+    return Number.isInteger(n) && n >= 1 ? n : 1;
+  }
+  function syncUnitsSelectOptions() {
+    const prev = unitsSelect.value;
+    unitsSelect.innerHTML = "";
+    const max = Math.max(1, maxUnitsPerBookingSetting);
+    for (let u = 1; u <= max; u++) {
+      const mins = u * unitMinutesSetting;
+      unitsSelect.append(
+        el("option", { value: String(u) }, [
+          t("booking.unitsOption", "{{units}} 單位（{{minutes}} 分鐘）", { units: u, minutes: mins }),
+        ]),
+      );
+    }
+    const keep = [...unitsSelect.options].some((o) => o.value === prev);
+    unitsSelect.value = keep ? prev : "1";
+  }
   function runRefillSlots(
     taken: Set<string>,
     disabled: boolean,
     selectedDateKey: string,
     blockedReasonBySlot: Map<string, string> = new Map(),
   ) {
-    refillSlots(
-      { slotSelect, isHolidayOutcallMode: () => isBookingHolidayOutcallMode() },
-      taken,
-      disabled,
-      selectedDateKey,
-      blockedReasonBySlot,
-    );
+    refillSlots({ slotSelect }, taken, disabled, selectedDateKey, blockedReasonBySlot);
   }
   const noteInput = el("textarea", { maxLength: 500 });
   const bookingModeSelect = el("select", { id: "booking-mode-select" }, []);
@@ -758,10 +707,32 @@ function render() {
   const meta = el("div", { class: "meta-pills" });
   /** getAvailability 回傳之匿名預約者（首字 + x），置於名額 pill 下方 */
   const bookingPeersHint = el("div", { class: "booking-peers-hint hint", hidden: true });
+  /** 與後端 `functions/src/pricing.ts` 預設對齊（定價 API 失敗時的首屏 fallback） */
+  let sessionPriceNtdSetting = 130;
+  let unitMinutesSetting = 20;
+  let maxUnitsPerBookingSetting = 2;
+  const bookingUnitsHint = el("span", { class: "hint" }, []);
+  function syncBookingUnitsHint() {
+    bookingUnitsHint.textContent = t(
+      "field.bookingUnitsHint",
+      "每 1 單位 {{minutes}} 分鐘、{{price}} 元；最多 {{max}} 單位。",
+      {
+        minutes: unitMinutesSetting,
+        price: sessionPriceNtdSetting,
+        max: maxUnitsPerBookingSetting,
+      },
+    );
+  }
+  syncBookingUnitsHint();
   const slotFieldWrap = el(
     "div",
     { class: "grid" },
     [
+      el("label", { class: "field" }, [
+        t("field.bookingUnits", "預約時長（單位）"),
+        unitsSelect,
+        bookingUnitsHint,
+      ]),
       el("label", { class: "field" }, [
         t("field.startSlot", "開始時間（請選預約時段）"),
         slotSelect,
@@ -818,8 +789,6 @@ function render() {
   let sessionCreditsCount = 0;
   let wheelPointsCount = 0;
   let pointsPerMassageSetting = 10;
-  /** 與後端 `functions/src/pricing.ts` 預設對齊（定價 API 失敗時的首屏 fallback） */
-  let sessionPriceNtdSetting = 70;
   let drawChances = 0;
   const redeemPointsStatus = el("div", { class: "status-line", hidden: true });
   const redeemPointsBtn = el("button", { type: "button", class: "ghost" }, [
@@ -1367,15 +1336,25 @@ function render() {
   function refillBookingModes(isMember: boolean) {
     const current = bookingModeSelect.value as BookingMode;
     bookingModeSelect.innerHTML = "";
-    const price = sessionPriceNtdSetting;
+    const units = selectedBookingUnits();
+    const unitPrice = sessionPriceNtdSetting;
+    const totalPrice = unitPrice * units;
     bookingModeSelect.disabled = false;
     bookingModeSelect.removeAttribute("disabled");
     bookingModeSelect.removeAttribute("aria-disabled");
     bookingPaymentWrap.querySelector(".booking-payment-lock-shield")?.remove();
 
+    const walletShort = sessionCreditsCount < units;
     const modes: { value: BookingMode; label: string; disabled?: boolean }[] = [
-      { value: "member_wallet", label: t("member.mode.wallet", "會員次數（扣 1 次）") },
-      { value: "member_cash", label: t("member.mode.cash", "會員現金（{{price}} 元）", { price }) },
+      {
+        value: "member_wallet",
+        label: t("member.mode.walletUnits", "會員次數（扣 {{units}} 單位）", { units }),
+        disabled: walletShort,
+      },
+      {
+        value: "member_cash",
+        label: t("member.mode.cashTotal", "會員現金（{{total}} 元）", { total: totalPrice }),
+      },
       { value: "member_beverage", label: bookingModeLabel("member_beverage") },
     ];
     for (const mode of modes) {
@@ -1383,13 +1362,15 @@ function render() {
       bookingModeSelect.append(opt);
     }
     const values = modes.map((m) => m.value);
-    bookingModeSelect.value = values.includes(current) ? current : modes[0].value;
+    const currentMode = modes.find((m) => m.value === current);
+    bookingModeSelect.value =
+      currentMode && !currentMode.disabled && values.includes(current) ? current : modes[0].value;
 
     if (isMember) {
       bookingModeHint.textContent = t(
-        "member.modeHint.member",
-        "可選次數扣 1 次、會員現金（{{price}} 元），或「請師傅一杯飲料」（依現場約定）。",
-        { price },
+        "member.modeHint.memberUnits",
+        "可扣 {{units}} 單位、現金 {{total}} 元，或「請師傅一杯飲料」（依現場約定）。",
+        { units, total: totalPrice },
       );
     } else {
       const loggedInUnverified = Boolean(
@@ -1528,20 +1509,20 @@ function render() {
           drawChances: number;
           nickname?: string;
           sessionPriceNtd?: number;
+          unitMinutes?: number;
+          maxUnitsPerBooking?: number;
           pointsPerMassage?: number;
         };
         walletBalance = typeof data.walletBalance === "number" ? data.walletBalance : 0;
         sessionCreditsCount = typeof data.sessionCredits === "number" ? data.sessionCredits : 0;
         wheelPointsCount = typeof data.wheelPoints === "number" ? data.wheelPoints : 0;
         drawChances = typeof data.drawChances === "number" ? data.drawChances : 0;
-        if (typeof data.sessionPriceNtd === "number" && Number.isFinite(data.sessionPriceNtd)) {
-          sessionPriceNtdSetting = Math.max(1, Math.round(data.sessionPriceNtd));
-        }
-        if (typeof data.pointsPerMassage === "number" && Number.isFinite(data.pointsPerMassage)) {
-          pointsPerMassageSetting = Math.max(2, Math.round(data.pointsPerMassage));
-        }
-        syncHomePageSubtitle();
-        refillBookingModes(isVerifiedMember());
+        applyBookingPricingFromApi({
+          sessionPriceNtd: data.sessionPriceNtd,
+          unitMinutes: data.unitMinutes,
+          maxUnitsPerBooking: data.maxUnitsPerBooking,
+          pointsPerMassage: data.pointsPerMassage,
+        });
         const nickFromDb =
           typeof data.nickname === "string" && data.nickname.trim() ? data.nickname.trim() : "";
         const nickFromAuth = user.displayName?.trim() ?? "";
@@ -1664,8 +1645,7 @@ function render() {
     const minKey = taipeiTodayDateKey();
     const maxKey = taipeiLatestBookableDateKey();
     const inWindow = dk !== "" && dk >= minKey && dk <= maxKey;
-    const dateOkForMode =
-      dk !== "" && (isBookingHolidayOutcallMode() ? isDateKeySatSun(dk) : isDateKeyMonFri(dk));
+    const dateOkForMode = dk !== "" && isDateKeyMonFri(dk);
     const showSlotFields = inWindow && dateOkForMode;
 
     const pickable =
@@ -1687,7 +1667,7 @@ function render() {
 
   syncDateFieldLabelText();
   if (!dateInput.value) {
-    dateInput.value = firstBookableDateKeyInWindow(!isBookingHolidayOutcallMode());
+    dateInput.value = firstBookableDateKeyInWindow(true);
   }
   syncBookingPickCalendarCursorFromValue();
   paintBookingPickCalendar();
@@ -1698,30 +1678,50 @@ function render() {
     if (tab !== "book") return;
     titleDesc.textContent = t(
       "home.subtitle",
-      "一次15分鐘{{first}}元，通常按 20~40 分鐘，具體看情況",
-      { first: sessionPriceNtdSetting },
+      "每 {{minutes}} 分鐘 1 單位（{{price}} 元），預約時可選 1–{{max}} 單位。",
+      {
+        minutes: unitMinutesSetting,
+        price: sessionPriceNtdSetting,
+        max: maxUnitsPerBookingSetting,
+      },
     );
+  }
+
+  function applyBookingPricingFromApi(d: {
+    sessionPriceNtd?: number;
+    unitMinutes?: number;
+    maxUnitsPerBooking?: number;
+    pointsPerMassage?: number;
+  }) {
+    if (typeof d.sessionPriceNtd === "number" && Number.isFinite(d.sessionPriceNtd)) {
+      sessionPriceNtdSetting = Math.max(1, Math.round(d.sessionPriceNtd));
+    }
+    if (typeof d.unitMinutes === "number" && Number.isFinite(d.unitMinutes)) {
+      unitMinutesSetting = Math.max(5, Math.round(d.unitMinutes));
+    }
+    if (typeof d.maxUnitsPerBooking === "number" && Number.isFinite(d.maxUnitsPerBooking)) {
+      maxUnitsPerBookingSetting = Math.max(1, Math.round(d.maxUnitsPerBooking));
+    }
+    if (typeof d.pointsPerMassage === "number" && Number.isFinite(d.pointsPerMassage)) {
+      pointsPerMassageSetting = Math.max(2, Math.round(d.pointsPerMassage));
+    }
+    syncUnitsSelectOptions();
+    syncBookingUnitsHint();
+    syncHomePageSubtitle();
+    refillBookingModes(isVerifiedMember());
+    syncRedeemPointsUi();
   }
 
   async function refreshBookingPricing() {
     try {
       const fn = getBookingPricingCall();
       const res = await fn({ ...localeApiParam() });
-      const d = res.data as {
-        sessionPriceNtd?: number;
-        pointsPerMassage?: number;
-      };
-      if (typeof d.sessionPriceNtd === "number" && Number.isFinite(d.sessionPriceNtd)) {
-        sessionPriceNtdSetting = Math.max(1, Math.round(d.sessionPriceNtd));
-      }
-      if (typeof d.pointsPerMassage === "number" && Number.isFinite(d.pointsPerMassage)) {
-        pointsPerMassageSetting = Math.max(2, Math.round(d.pointsPerMassage));
-      }
+      applyBookingPricingFromApi(res.data as Record<string, unknown>);
     } catch {
       /* 使用預設 */
+      syncHomePageSubtitle();
+      refillBookingModes(isVerifiedMember());
     }
-    syncHomePageSubtitle();
-    refillBookingModes(isVerifiedMember());
   }
 
   async function refreshAvailability() {
@@ -1741,7 +1741,7 @@ function render() {
         dk = "";
         scheduleStatus.textContent = t(
           "booking.dateClearedWrongWeekday",
-          "此日期與目前「預約類型」不符，已清除。平日請選週一至週五；假日外約請選週六、週日。",
+          "此日期非週一至週五，已清除。",
         );
         scheduleStatus.className = "status-line schedule-status error";
         runRefillSlots(new Set(), true, "", new Map());
@@ -1788,7 +1788,7 @@ function render() {
         const fn = getAvailabilityCall();
         const res = await fn({
           dateKey: dk,
-          holidayOutcall: isBookingHolidayOutcallMode(),
+          units: selectedBookingUnits(),
           ...localeApiParam(),
         });
         const data = res.data as {
@@ -1883,13 +1883,7 @@ function render() {
         const genericErr = t("errors.generic", "發生錯誤");
         const base = t("booking.loadSlotsFail", "無法載入空檔，請稍後再試。");
         let msg = base;
-        if (isBookingHolidayOutcallMode() && detail !== genericErr && /週一.*週五|weekday/i.test(detail)) {
-          msg = t(
-            "booking.loadSlotsFailOutcallBackend",
-            "無法載入假日外約空檔：後端仍僅開放週一至週五查詢。請部署已支援假日外約的 Cloud Functions（getAvailability），或暫改選「平日｜辦公室」。詳情：{{detail}}",
-            { detail },
-          );
-        } else if (detail && detail !== genericErr) {
+        if (detail && detail !== genericErr) {
           msg = t("booking.loadSlotsFailWithDetail", "{{base}} 詳情：{{detail}}", { base, detail });
         }
         scheduleStatus.textContent = msg;
@@ -1904,6 +1898,10 @@ function render() {
   }
 
   slotSelect.addEventListener("change", syncBookingStepVisibility);
+  unitsSelect.addEventListener("change", () => {
+    refillBookingModes(isVerifiedMember());
+    void refreshAvailability();
+  });
 
   onSnapshot(
     doc(db, "siteSettings", "bookingCaps"),
@@ -1951,13 +1949,7 @@ function render() {
       bookStatus.classList.add("error");
       return;
     }
-    const holidayOutcall = isBookingHolidayOutcallMode();
-    if (holidayOutcall && !isDateKeySatSun(dateKey)) {
-      bookStatus.textContent = t("booking.weekendOutcallOnly", "假日外約僅能選週六、週日。");
-      bookStatus.classList.add("error");
-      return;
-    }
-    if (!holidayOutcall && !isDateKeyMonFri(dateKey)) {
+    if (!isDateKeyMonFri(dateKey)) {
       bookStatus.textContent = t("booking.weekdayOnly", "僅能預約週一到週五。");
       bookStatus.classList.add("error");
       return;
@@ -1974,7 +1966,7 @@ function render() {
       );
       return;
     }
-    if (bookingMode === "member_wallet" && sessionCreditsCount < 1) {
+    if (bookingMode === "member_wallet" && sessionCreditsCount < selectedBookingUnits()) {
       bookStatus.textContent = t(
         "booking.sessionShort",
         "預約次數不足，請改用現金、「請師傅一杯飲料」或先儲值次數。",
@@ -1982,9 +1974,14 @@ function render() {
       bookStatus.classList.add("error");
       return;
     }
+    const bookingUnits = selectedBookingUnits();
     const confirmed = await showConfirmModal(
       t("booking.confirmTitle", "確認送出預約"),
-      buildBookingSummary(displayName, dateKey, startSlot, note, bookingMode, holidayOutcall),
+      buildBookingSummary(displayName, dateKey, startSlot, note, bookingMode, false, {
+        units: bookingUnits,
+        unitMinutes: unitMinutesSetting,
+        unitPriceNtd: sessionPriceNtdSetting,
+      }),
       t("booking.confirmSubmit", "確認送出"),
     );
     if (!confirmed) {
@@ -1999,8 +1996,8 @@ function render() {
         note,
         dateKey,
         startSlot,
+        units: bookingUnits,
         bookingMode,
-        ...(holidayOutcall ? { holidayOutcall: true } : {}),
         ...localeApiParam(),
       });
       const submittedLine = t(
@@ -2107,7 +2104,6 @@ function render() {
   });
   bookPanelBook.setAttribute("aria-labelledby", "book-tab-book");
   bookPanelBook.append(
-    serviceKindFieldset,
     el("div", { class: "grid grid-2" }, [
       el("label", { class: "field" }, [t("field.name", "姓名（必填）"), nameInput]),
       el("label", { class: "field field--booking-date" }, [
@@ -2219,11 +2215,12 @@ function render() {
     pricingDocRef,
     (snap) => {
       const raw = snap.data() as Record<string, unknown> | undefined;
-      sessionPriceNtdSetting = resolveSessionPriceNtdClient(raw);
-      pointsPerMassageSetting = resolvePointsPerMassageClient(raw);
-      syncHomePageSubtitle();
-      refillBookingModes(isVerifiedMember());
-      syncRedeemPointsUi();
+      applyBookingPricingFromApi({
+        sessionPriceNtd: resolveSessionPriceNtdClient(raw),
+        unitMinutes: resolveUnitMinutesClient(raw),
+        maxUnitsPerBooking: resolveMaxUnitsPerBookingClient(raw),
+        pointsPerMassage: resolvePointsPerMassageClient(raw),
+      });
     },
     () => {
       /* 讀取失敗時保留上一輪數值與 Callable 結果 */

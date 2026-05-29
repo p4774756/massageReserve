@@ -2,6 +2,7 @@ import { el } from "./domUtil";
 import { t } from "./i18n";
 import type { Booking, BookingMode } from "./bookingTypes";
 import { bookingModeLabel } from "./bookingDisplay";
+import { endSlotFromStartAndDuration } from "./slots";
 
 export function buildBookingSummary(
   displayName: string,
@@ -10,14 +11,40 @@ export function buildBookingSummary(
   note: string,
   bookingMode: BookingMode,
   holidayOutcall: boolean,
+  opts?: {
+    units?: number;
+    unitMinutes?: number;
+    unitPriceNtd?: number;
+  },
 ): string {
   const noteSummary = note || t("booking.summary.noteEmpty", "（未填寫）");
+  const units = opts?.units ?? 1;
+  const unitMinutes = opts?.unitMinutes ?? 20;
+  const durationMinutes = units * unitMinutes;
+  const endSlot = endSlotFromStartAndDuration(startSlot, durationMinutes);
+  const unitPrice = opts?.unitPriceNtd ?? 0;
+  const totalPrice = unitPrice > 0 ? unitPrice * units : 0;
   const lines = [
     t("booking.summary.intro", "請確認以下預約資訊："),
     `${t("booking.summary.name", "姓名")}：${displayName}`,
     `${t("booking.summary.date", "日期")}：${dateKey}`,
     `${t("booking.summary.start", "開始時間")}：${startSlot}`,
-    `${t("booking.summary.mode", "付款方式")}：${bookingModeLabel(bookingMode)}`,
+    t("booking.summary.durationLine", "時長：{{units}} 單位（{{minutes}} 分鐘，約 {{start}}–{{end}}）", {
+      units,
+      minutes: durationMinutes,
+      start: startSlot,
+      end: endSlot,
+    }),
+    ...(totalPrice > 0 && bookingMode === "member_cash"
+      ? [
+          t("booking.summary.cashTotal", "現金參考：{{total}} 元（{{price}} 元／單位 × {{units}}）", {
+            total: totalPrice,
+            price: unitPrice,
+            units,
+          }),
+        ]
+      : []),
+    `${t("booking.summary.mode", "付款方式")}：${bookingModeLabel(bookingMode, { units, unitPriceNtd: unitPrice })}`,
     `${t("booking.summary.note", "備註")}：${noteSummary}`,
   ];
   if (holidayOutcall) {

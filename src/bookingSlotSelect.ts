@@ -1,4 +1,4 @@
-import { allHolidayOutcallStartSlots, allStartSlots } from "./slots";
+import { allStartSlots } from "./slots";
 import { isStartSlotInPastForTaipeiToday } from "./taipeiDates";
 import { el } from "./domUtil";
 import { t } from "./i18n";
@@ -12,7 +12,6 @@ export function blockNoteForSlot(blockReason: string | undefined, blockedHere: b
 
 export type RefillSlotsContext = {
   slotSelect: HTMLSelectElement;
-  isHolidayOutcallMode: () => boolean;
 };
 
 export function refillSlots(
@@ -22,13 +21,13 @@ export function refillSlots(
   selectedDateKey: string,
   blockedReasonBySlot: Map<string, string> = new Map(),
 ): void {
-  const { slotSelect, isHolidayOutcallMode } = ctx;
+  const { slotSelect } = ctx;
   const prev = slotSelect.value;
   slotSelect.innerHTML = "";
   slotSelect.disabled = disabled;
   const opt0 = el("option", { value: "" }, [t("slot.optionPick", "請選擇開始時間")]);
   slotSelect.append(opt0);
-  const slots = isHolidayOutcallMode() ? allHolidayOutcallStartSlots() : allStartSlots();
+  const slots = allStartSlots();
   for (let i = 0; i < slots.length; ) {
     const s = slots[i]!;
     const takenHere = taken.has(s);

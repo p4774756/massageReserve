@@ -1,18 +1,41 @@
 import type { DocumentData } from "firebase-admin/firestore";
 
 /**
- * 後台 `siteSettings/pricing`：現場按次金額、點數兌換次數門檻
+ * 後台 `siteSettings/pricing`：每單位金額／分鐘、點數兌換門檻、單筆最多單位數
+ * `sessionPriceNtd` 語意為「每 1 單位現場金額」（與舊版欄位名相容）。
  */
 
-export const DEFAULT_SESSION_PRICE_NTD = 70;
+export const DEFAULT_SESSION_PRICE_NTD = 130;
+export const DEFAULT_UNIT_MINUTES = 20;
+export const DEFAULT_MAX_UNITS_PER_BOOKING = 2;
 export const DEFAULT_POINTS_PER_MASSAGE = 10;
+
+const MAX_UNITS_CAP = 10;
 
 export function resolveSessionPriceNtd(raw: DocumentData | undefined): number {
   if (!raw || typeof raw !== "object") return DEFAULT_SESSION_PRICE_NTD;
   const o = raw as Record<string, unknown>;
-  const v = o.sessionPriceNtd;
+  const v = o.sessionPriceNtd ?? o.unitPriceNtd;
   const n = typeof v === "number" && Number.isFinite(v) ? Math.round(v) : Number(v);
   if (!Number.isInteger(n) || n < 1 || n > 500_000) return DEFAULT_SESSION_PRICE_NTD;
+  return n;
+}
+
+export function resolveUnitMinutes(raw: DocumentData | undefined): number {
+  if (!raw || typeof raw !== "object") return DEFAULT_UNIT_MINUTES;
+  const o = raw as Record<string, unknown>;
+  const v = o.unitMinutes;
+  const n = typeof v === "number" && Number.isFinite(v) ? Math.round(v) : Number(v);
+  if (!Number.isInteger(n) || n < 5 || n > 240) return DEFAULT_UNIT_MINUTES;
+  return n;
+}
+
+export function resolveMaxUnitsPerBooking(raw: DocumentData | undefined): number {
+  if (!raw || typeof raw !== "object") return DEFAULT_MAX_UNITS_PER_BOOKING;
+  const o = raw as Record<string, unknown>;
+  const v = o.maxUnitsPerBooking;
+  const n = typeof v === "number" && Number.isFinite(v) ? Math.round(v) : Number(v);
+  if (!Number.isInteger(n) || n < 1 || n > MAX_UNITS_CAP) return DEFAULT_MAX_UNITS_PER_BOOKING;
   return n;
 }
 
@@ -22,6 +45,18 @@ export function resolvePointsPerMassage(raw: DocumentData | undefined): number {
   const v = o.pointsPerMassage;
   const n = typeof v === "number" && Number.isFinite(v) ? Math.round(v) : Number(v);
   if (!Number.isInteger(n) || n < 2 || n > 1000) return DEFAULT_POINTS_PER_MASSAGE;
+  return n;
+}
+
+export function durationMinutesForUnits(units: number, unitMinutes: number): number {
+  return units * unitMinutes;
+}
+
+/** 解析預約單位數（1 … maxUnits） */
+export function parseBookingUnits(raw: unknown, maxUnits: number): number | null {
+  const cap = Math.max(1, Math.min(MAX_UNITS_CAP, Math.floor(maxUnits)));
+  const n = typeof raw === "number" && Number.isFinite(raw) ? Math.round(raw) : Number(raw);
+  if (!Number.isInteger(n) || n < 1 || n > cap) return null;
   return n;
 }
 

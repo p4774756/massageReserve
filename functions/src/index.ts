@@ -16,21 +16,29 @@ import {
   ACTIVE_STATUSES,
   assertSlotAllowed,
   blockedReasonForSlot,
+  bookingIntervalFromStartSlot,
+  bookingRangeOverlaps,
   isBookingStartInPastTaipei,
   isHolidayOutcallBookableDay,
   isWeekday,
   listBlockedStartSlotsForDate,
+  listUnavailableStartSlotsForDay,
   mondayOfWeek,
   parseBookingBlockWindows,
   parseDateKey,
   resolveBookingCaps,
+  resolveBookingDurationMinutesFromData,
   TIMEZONE,
   weekdayZhFromDateKey,
 } from "./bookingLogic";
 import {
+  durationMinutesForUnits as pricingDurationMinutesForUnits,
   foldWalletBalanceIntoSessions,
+  parseBookingUnits,
+  resolveMaxUnitsPerBooking,
   resolvePointsPerMassage,
   resolveSessionPriceNtd,
+  resolveUnitMinutes,
 } from "./pricing";
 import { parseLocale, st, type ServerLocale } from "./serverI18n";
 import { maskDisplayNameForPublic } from "./maskDisplayName";
@@ -56,6 +64,8 @@ type CreateBookingInput = {
   bookingMode?: unknown;
   /** 為 true 時僅允許週六、週日，並寫入 `holidayOutcall`（外約；交通費由客戶負擔為產品說明，計價與平日相同） */
   holidayOutcall?: unknown;
+  /** 預約單位數（1 單位 = unitMinutes 分鐘） */
+  units?: unknown;
 };
 
 type BookingStatus = "pending" | "confirmed" | "done" | "cancelled" | "deleted";
@@ -271,14 +281,36 @@ export const getAvailability = onCall(publicCall, async (request) => {
   ]);
 
   const caps = resolveBookingCaps(capsSnap.data());
-  const taken = daySnap.docs.map((d) => d.get("startSlot") as string).filter(Boolean);
+  const pricingSnap = await db.collection("siteSettings").doc("pricing").get();
+  const unitMinutes = resolveUnitMinutes(pricingSnap.data());
+  const maxUnits = resolveMaxUnitsPerBooking(pricingSnap.data());
+  const units = parseBookingUnits(request.data?.units, maxUnits) ?? 1;
+  const durationMinutes = pricingDurationMinutesForUnits(units, unitMinutes);
   const blockWindows = parseBookingBlockWindows(blocksSnap.data());
-  const blockedSlots = listBlockedStartSlotsForDate(dateKey, blockWindows);
+  const existingBookings = daySnap.docs.map((d) => ({
+    startSlot: String(d.get("startSlot") ?? ""),
+    durationMinutes: resolveBookingDurationMinutesFromData(
+      d.data() as Record<string, unknown>,
+      unitMinutes,
+    ),
+  }));
+  const unavailableStarts = listUnavailableStartSlotsForDay({
+    dateKey,
+    durationMinutes,
+    existingBookings,
+    blockWindows,
+    holidayOutcall,
+  });
+  const blockedSlots = listBlockedStartSlotsForDate(dateKey, blockWindows, durationMinutes);
   const dayPeersMasked = listMaskedActiveBookerLabels(daySnap.docs);
   const daySlotsMasked = listMaskedDaySlotLabels(daySnap.docs);
   const weekPeersMasked = listMaskedWeekBookerLabels(weekSnap.docs);
   return {
-    taken,
+    taken: unavailableStarts,
+    unavailableStarts,
+    units,
+    durationMinutes,
+    unitMinutes,
     blockedSlots,
     dayCount: daySnap.size,
     weekCount: weekSnap.size,
@@ -438,9 +470,21 @@ export const createBooking = onCall(
     throw new HttpsError("invalid-argument", st(locale, "booking.badDateFormat", "日期格式錯誤"));
   }
 
+  const pricingSnapPre = await db.collection("siteSettings").doc("pricing").get();
+  const unitMinutesPre = resolveUnitMinutes(pricingSnapPre.data());
+  const maxUnitsPre = resolveMaxUnitsPerBooking(pricingSnapPre.data());
+  const units = parseBookingUnits(data.units, maxUnitsPre);
+  if (!units) {
+    throw new HttpsError(
+      "invalid-argument",
+      st(locale, "booking.badUnits", "請選擇有效的預約單位數（1–{{max}}）。", { max: maxUnitsPre }),
+    );
+  }
+  const durationMinutesPre = pricingDurationMinutesForUnits(units, unitMinutesPre);
+
   let startLocal: DateTime;
   try {
-    startLocal = assertSlotAllowed(dateKey, startSlot, { holidayOutcall });
+    startLocal = assertSlotAllowed(dateKey, startSlot, { holidayOutcall, units, unitMinutes: unitMinutesPre });
   } catch (e) {
     const code = e instanceof Error ? e.message : "bad_request";
     const map: Record<string, string> = {
@@ -461,7 +505,12 @@ export const createBooking = onCall(
   }
 
   const blocksSnap = await db.collection("siteSettings").doc("bookingBlocks").get();
-  const blockReason = blockedReasonForSlot(dateKey, startSlot, parseBookingBlockWindows(blocksSnap.data()));
+  const blockReason = blockedReasonForSlot(
+    dateKey,
+    startSlot,
+    parseBookingBlockWindows(blocksSnap.data()),
+    durationMinutesPre,
+  );
   const closedZh = "此時段不開放預約";
   if (blockReason) {
     const prefix = st(locale, "booking.blockedPrefix", "此時段不開放預約：");
@@ -478,6 +527,9 @@ export const createBooking = onCall(
     await db.runTransaction(async (tx) => {
       const pricingSnap = await tx.get(db.collection("siteSettings").doc("pricing"));
       const sessionPriceNtd = resolveSessionPriceNtd(pricingSnap.data());
+      const unitMinutes = resolveUnitMinutes(pricingSnap.data());
+      const durationMinutes = pricingDurationMinutesForUnits(units, unitMinutes);
+      const totalPrice = sessionPriceNtd * units;
       const capsRef = db.collection("siteSettings").doc("bookingCaps");
       const dayQ = db
         .collection("bookings")
@@ -504,9 +556,28 @@ export const createBooking = onCall(
         );
       }
 
-      const sameSlot = daySnap.docs.find((d) => d.get("startSlot") === startSlot);
-      if (sameSlot) {
-        throw new HttpsError("already-exists", st(locale, "booking.slotTaken", "此時段已被預約"));
+      const newInterval = bookingIntervalFromStartSlot(startSlot, durationMinutes);
+      if (!newInterval) {
+        throw new HttpsError("failed-precondition", st(locale, "slot.invalid_slot", "開始時間不在可預約範圍"));
+      }
+      for (const d of daySnap.docs) {
+        const existingStart = typeof d.get("startSlot") === "string" ? d.get("startSlot") : "";
+        const existingDuration = resolveBookingDurationMinutesFromData(
+          d.data() as Record<string, unknown>,
+          unitMinutes,
+        );
+        const existingInterval = bookingIntervalFromStartSlot(existingStart, existingDuration);
+        if (
+          existingInterval &&
+          bookingRangeOverlaps(
+            newInterval.start,
+            newInterval.end,
+            existingInterval.start,
+            existingInterval.end,
+          )
+        ) {
+          throw new HttpsError("already-exists", st(locale, "booking.slotTaken", "此時段已被預約"));
+        }
       }
 
       let customerId: string | null = null;
@@ -515,7 +586,7 @@ export const createBooking = onCall(
       let sessionCreditsDeducted = 0;
       if (bookingMode === "member_cash") {
         customerId = uid!;
-        paidCash = sessionPriceNtd;
+        paidCash = totalPrice;
       } else if (bookingMode === "member_beverage") {
         customerId = uid!;
       } else {
@@ -533,14 +604,18 @@ export const createBooking = onCall(
         const folded = foldWalletBalanceIntoSessions(walletBalance, sessionCredits, sessionPriceNtd);
         walletBalance = folded.walletBalance;
         sessionCredits = folded.sessionCredits;
-        if (sessionCredits < 1) {
+        if (sessionCredits < units) {
           throw new HttpsError(
             "resource-exhausted",
-            st(locale, "booking.sessionShort", "預約次數不足，請改用現金、飲料折抵或先儲值次數。"),
+            st(
+              locale,
+              "booking.sessionShort",
+              "預約次數不足，請改用現金、飲料折抵或先儲值次數。",
+            ),
           );
         }
-        sessionCredits -= 1;
-        sessionCreditsDeducted = 1;
+        sessionCredits -= units;
+        sessionCreditsDeducted = units;
         tx.set(
           customerRef,
           {
@@ -558,9 +633,9 @@ export const createBooking = onCall(
           bookingId: bookingRef.id,
           type: "session_charge",
           amount: 0,
-          sessionsDelta: -1,
+          sessionsDelta: -units,
           sessionPriceSnapshot: sessionPriceNtd,
-          note: `預約扣次數 1 次（現場單價參考 ${sessionPriceNtd} 元）`,
+          note: `預約扣次數 ${units} 單位（每單位 ${sessionPriceNtd} 元）`,
           operatorId: uid!,
           createdAt: FieldValueOrServerTimestamp(),
         });
@@ -571,11 +646,14 @@ export const createBooking = onCall(
         note,
         dateKey,
         startSlot,
+        units,
+        durationMinutes,
+        unitMinutesSnapshot: unitMinutes,
         weekStart,
         startAt,
         bookingMode,
         customerId,
-        price: sessionPriceNtd,
+        price: totalPrice,
         walletDeducted,
         paidCash,
         sessionCreditsDeducted,
@@ -667,6 +745,8 @@ export const getMyWallet = onCall(publicCall, async (request) => {
       drawChances,
       nickname,
       sessionPriceNtd,
+      unitMinutes: resolveUnitMinutes(pricingSnap.data()),
+      maxUnitsPerBooking: resolveMaxUnitsPerBooking(pricingSnap.data()),
       pointsPerMassage,
     };
   });
@@ -677,9 +757,12 @@ export const getMyWallet = onCall(publicCall, async (request) => {
 export const getBookingPricing = onCall(publicCall, async (request) => {
   parseLocale(request.data);
   const snap = await db.collection("siteSettings").doc("pricing").get();
+  const raw = snap.data();
   return {
-    sessionPriceNtd: resolveSessionPriceNtd(snap.data()),
-    pointsPerMassage: resolvePointsPerMassage(snap.data()),
+    sessionPriceNtd: resolveSessionPriceNtd(raw),
+    unitMinutes: resolveUnitMinutes(raw),
+    maxUnitsPerBooking: resolveMaxUnitsPerBooking(raw),
+    pointsPerMassage: resolvePointsPerMassage(raw),
   };
 });
 

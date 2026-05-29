@@ -244,7 +244,9 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     const grantDrawBtn = el("button", { class: "ghost", type: "button" }, [t("admin.grantDraw.btn", "贈送抽獎次數")]);
     const grantDrawStatus = el("div", { class: "status-line" });
     const pricingDocRef = doc(db, "siteSettings", "pricing");
-    const pricingSessionPriceInput = el("input", { type: "number", min: "1", step: "1", value: "70" });
+    const pricingSessionPriceInput = el("input", { type: "number", min: "1", step: "1", value: "130" });
+    const pricingUnitMinutesInput = el("input", { type: "number", min: "5", step: "1", value: "20" });
+    const pricingMaxUnitsInput = el("input", { type: "number", min: "1", step: "1", value: "2" });
     const pricingPointsPerInput = el("input", { type: "number", min: "2", step: "1", value: "10" });
     const savePricingBtn = el("button", { type: "button", class: "ghost" }, [t("admin.pricing.save", "儲存定價")]);
     const pricingAdminStatus = el("div", { class: "status-line" });
@@ -252,11 +254,24 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       pricingDocRef,
       (snap) => {
         const d = snap.data() as
-          | { sessionPriceNtd?: unknown; pointsPerMassage?: unknown }
+          | {
+              sessionPriceNtd?: unknown;
+              unitMinutes?: unknown;
+              maxUnitsPerBooking?: unknown;
+              pointsPerMassage?: unknown;
+            }
           | undefined;
         const sp = d?.sessionPriceNtd;
         if (typeof sp === "number" && Number.isFinite(sp)) {
           pricingSessionPriceInput.value = String(Math.max(1, Math.round(sp)));
+        }
+        const um = d?.unitMinutes;
+        if (typeof um === "number" && Number.isFinite(um)) {
+          pricingUnitMinutesInput.value = String(Math.max(5, Math.round(um)));
+        }
+        const mu = d?.maxUnitsPerBooking;
+        if (typeof mu === "number" && Number.isFinite(mu)) {
+          pricingMaxUnitsInput.value = String(Math.max(1, Math.round(mu)));
         }
         const pp = d?.pointsPerMassage;
         if (typeof pp === "number" && Number.isFinite(pp)) {
@@ -272,9 +287,21 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       pricingAdminStatus.textContent = "";
       pricingAdminStatus.className = "status-line";
       const sp = Number(pricingSessionPriceInput.value);
+      const um = Number(pricingUnitMinutesInput.value);
+      const mu = Number(pricingMaxUnitsInput.value);
       const pp = Number(pricingPointsPerInput.value);
       if (!Number.isFinite(sp) || sp < 1 || !Number.isInteger(sp)) {
-        pricingAdminStatus.textContent = t("admin.pricing.badSessionPrice", "現場單次金額需為 ≥1 的整數。");
+        pricingAdminStatus.textContent = t("admin.pricing.badSessionPrice", "每單位金額需為 ≥1 的整數。");
+        pricingAdminStatus.classList.add("error");
+        return;
+      }
+      if (!Number.isFinite(um) || um < 5 || !Number.isInteger(um)) {
+        pricingAdminStatus.textContent = t("admin.pricing.badUnitMinutes", "每單位分鐘數需為 ≥5 的整數。");
+        pricingAdminStatus.classList.add("error");
+        return;
+      }
+      if (!Number.isFinite(mu) || mu < 1 || !Number.isInteger(mu)) {
+        pricingAdminStatus.textContent = t("admin.pricing.badMaxUnits", "單筆最多單位數需為 ≥1 的整數。");
         pricingAdminStatus.classList.add("error");
         return;
       }
@@ -289,6 +316,8 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
           pricingDocRef,
           {
             sessionPriceNtd: Math.round(sp),
+            unitMinutes: Math.round(um),
+            maxUnitsPerBooking: Math.round(mu),
             pointsPerMassage: Math.round(pp),
             updatedAt: serverTimestamp(),
           },
@@ -307,8 +336,10 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     const announcePricingFlat = el("section", { class: "admin-announce__block admin-announce__block--pricing" }, [
       el("h4", { class: "admin-announce__block-title" }, [t("admin.pricing.heading", "定價與點數兌換")]),
       el("div", { class: "grid grid-2" }, [
-        el("label", { class: "field" }, [t("admin.pricing.sessionPrice", "現場單次金額（元）"), pricingSessionPriceInput]),
-        el("label", { class: "field" }, [t("admin.pricing.pointsPer", "輪盤：幾點換 1 次按摩"), pricingPointsPerInput]),
+        el("label", { class: "field" }, [t("admin.pricing.sessionPrice", "每單位金額（元）"), pricingSessionPriceInput]),
+        el("label", { class: "field" }, [t("admin.pricing.unitMinutes", "每單位分鐘數"), pricingUnitMinutesInput]),
+        el("label", { class: "field" }, [t("admin.pricing.maxUnits", "單筆最多單位數"), pricingMaxUnitsInput]),
+        el("label", { class: "field" }, [t("admin.pricing.pointsPer", "輪盤：幾點換 1 單位"), pricingPointsPerInput]),
       ]),
       el("div", { class: "row-actions" }, [savePricingBtn]),
       pricingAdminStatus,

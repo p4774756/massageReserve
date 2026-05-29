@@ -7,12 +7,20 @@ function beverageOptionLabel(): string {
   return t("booking.beverageOption", "請師傅一杯飲料");
 }
 
-export function bookingModeLabel(mode: BookingMode): string {
+export function bookingModeLabel(
+  mode: BookingMode,
+  opts?: { units?: number; unitPriceNtd?: number },
+): string {
+  const units = opts?.units ?? 1;
+  const unitPrice = opts?.unitPriceNtd ?? 0;
   const labels: Record<BookingMode, string> = {
     guest_cash: t("booking.mode.guest_cash", "訪客現金"),
     guest_beverage: beverageOptionLabel(),
-    member_cash: t("booking.mode.member_cash", "會員現金"),
-    member_wallet: t("booking.mode.member_wallet", "會員次數"),
+    member_cash:
+      unitPrice > 0
+        ? t("booking.mode.member_cashTotal", "會員現金（{{total}} 元）", { total: unitPrice * units })
+        : t("booking.mode.member_cash", "會員現金"),
+    member_wallet: t("booking.mode.member_walletUnits", "會員次數（扣 {{units}} 單位）", { units }),
     member_beverage: beverageOptionLabel(),
   };
   return labels[mode];

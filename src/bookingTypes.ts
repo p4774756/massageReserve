@@ -24,4 +24,11 @@ export type Booking = {
   customerId?: string | null;
   /** 假日外約（週六日）；計價與平日相同，交通費由客戶負擔為現場約定 */
   holidayOutcall?: boolean;
+  /** 預約單位數（1 單位 = unitMinutes 分鐘） */
+  units?: number;
+  /** 服務總長度（分鐘） */
+  durationMinutes?: number;
+  /** 建立時每單位分鐘數快照 */
+  unitMinutesSnapshot?: number;
+  price?: number;
 };
