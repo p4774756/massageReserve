@@ -272,6 +272,103 @@ header.page-head {
   line-height: 1.62;
 }
 
+/* 頁首 · 運動按摩技術員證（點擊開大圖） */
+.therapist-credential[hidden] {
+  display: none !important;
+}
+
+.therapist-credential__open {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: min(100%, 420px);
+  margin: 0;
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.therapist-credential__open:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  box-shadow: var(--shadow-md);
+}
+
+.therapist-credential__open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.therapist-credential__thumb {
+  flex: 0 0 auto;
+  width: auto;
+  height: 52px;
+  max-width: 88px;
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.06);
+}
+
+.therapist-credential__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.therapist-credential__title {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--ink);
+  line-height: 1.35;
+}
+
+.therapist-credential__org,
+.therapist-credential__validity,
+.therapist-credential__tap {
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.therapist-credential__tap {
+  margin-top: 2px;
+  color: var(--accent);
+}
+
+.therapist-credential-modal {
+  width: min(920px, 100%);
+  padding: 18px 20px 20px;
+}
+
+.therapist-credential-modal__figure {
+  margin: 0;
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+}
+
+.therapist-credential-modal__img {
+  display: block;
+  width: 100%;
+  max-height: min(72vh, 640px);
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+.therapist-credential-modal__caption {
+  margin: 0;
+  text-align: center;
+  max-width: 48ch;
+}
+
 .page-head .page-head-guest-hint {
   margin: 0;
   max-width: 56ch;
@@ -1017,6 +1114,36 @@ textarea {
   transition: border-color 0.12s var(--ease), box-shadow 0.12s var(--ease);
 }
 
+.booking-payment-qr {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.booking-payment-qr[hidden] {
+  display: none !important;
+}
+
+.booking-payment-qr__img {
+  display: block;
+  width: min(100%, 280px);
+  height: auto;
+  border-radius: var(--radius-md);
+}
+
+.booking-payment-qr__caption {
+  margin: 0;
+  max-width: 36ch;
+  text-align: center;
+  line-height: 1.5;
+}
+
 .booking-payment-wrap {
   position: relative;
   width: 100%;
@@ -1612,6 +1739,38 @@ button.ghost:disabled {
   font-weight: 700;
 }
 
+.pill--cap-full {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border-strong));
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  color: var(--ink);
+}
+
+/* 預約名額：加價選項與上方兩欄 grid 對齊；核取方塊列與右側數字輸入底線對齊 */
+.admin-caps-overflow-grid {
+  margin-top: 2px;
+}
+
+.admin-caps-overflow-grid > label.checkbox-field {
+  align-self: end;
+  min-height: 46px;
+  box-sizing: border-box;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.admin-caps-overflow-grid > label.field:not(.checkbox-field) input[type="number"] {
+  min-height: 46px;
+  box-sizing: border-box;
+}
+
+@media (max-width: 520px) {
+  .admin-caps-overflow-grid > label.checkbox-field {
+    align-self: start;
+    min-height: 0;
+    padding-top: 4px;
+  }
+}
+
 .table-wrap {
   overflow: auto;
   border: 1px solid var(--border);
@@ -1763,15 +1922,23 @@ button.ghost:disabled {
 
 .admin-member-email-cell-wrap {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: row;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 6px 10px;
+  gap: 8px;
+  min-width: 0;
+  max-width: 22rem;
 }
 
 .admin-member-email-cell__text {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .admin-member-brief-dot {
@@ -1784,8 +1951,10 @@ button.ghost:disabled {
 }
 
 .admin-member-profile-btn {
+  flex: 0 0 auto;
   font-size: 0.82rem;
-  padding: 2px 8px;
+  padding: 4px 10px;
+  white-space: nowrap;
 }
 
 .admin-bookings-table select {
@@ -2191,10 +2360,7 @@ tbody tr:hover td {
 
 .admin-member-list-table td:nth-child(1) {
   min-width: 13rem;
-  max-width: 22rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  max-width: 24rem;
 }
 
 .admin-member-email-cell {

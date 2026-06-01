@@ -75,7 +75,7 @@ flowchart LR
 | 文件 ID | 用途 | 讀取 | 寫入 |
 |---------|------|------|------|
 | `pricing` | 按次金額、點數兌換門檻 | 前台 `onSnapshot`、Functions 交易 | 後台「其他設定」 |
-| `bookingCaps` | 每日／每工作週可預約筆數上限 | 前台即時、Functions 建單 | 後台「其他設定」 |
+| `bookingCaps` | 每日／每工作週可預約筆數上限；可選 `capOverflowEnabled`、`capOverflowSurchargeNtd`（名額已滿時加價現金） | 前台即時、Functions 建單 | 後台「其他設定」 |
 | `bookingBlocks` | 依星期或特定日期關閉時段 | Functions、`getAvailability` | 後台「不開放預約時段」分頁 |
 | `publicNotice` | 前台小公告（內文、選填到期日） | 預約頁 `onSnapshot` | 後台「前台與預約規則」→「前台小公告」 |
 
@@ -108,15 +108,15 @@ flowchart LR
 | `getBookingDayCounts` | 公開 | 月曆用：指定月份各日預約筆數（不含 `cancelled`） |
 | `getBookingPricing` | 公開 | 回傳現場定價與點數兌換門檻（與 `siteSettings/pricing` 對齊） |
 | `recordSiteVisit` | 公開 | 訪次統計（`siteStats/visitorCounters`，台北日曆日／週）；前端每瀏覽器分頁工作階段建議最多呼叫一次 |
-| `createBooking` | 公開（會員模式需登入） | 建立預約、名額檢查、會員錢包扣款等；可搭配 Resend 通知擁有者 |
+| `createBooking` | 會員（須登入驗證） | 建立預約、名額檢查、錢包扣款；名額已滿且 `bookingCaps` 開放時可 `capOverflow`＋`member_cap_overflow`（按摩費＋加價現金）；可通知擁有者 |
 | `getMyWallet` | 已登入 | 讀取自己的餘額、可抽次數、暱稱 |
 | `redeemWheelPoints` | 已登入且 **Email 已驗證** | 點數兌換為可預約次數（依 `pricing` 門檻） |
 | `getAdminStatus` | 已登入 | 是否為管理員 |
 | `completeBooking` | 管理員 | 將預約標為完成；符合條件時 **顧客 `drawChances + 1`** |
 | `cancelBooking` | 預約本人或管理員 | 取消預約；若曾錢包扣款則退款 |
-| `topupWallet` | 管理員 | 後台儲值（次數／金額；不變更可抽次數） |
-| `adjustSessionCreditsAdmin` | 管理員 | 依定價折疊餘額後調整 **`sessionCredits`**（單次 −50～+50、非零），必填備註；寫入 `walletTransactions`（`type: "admin_session_adjust"`） |
-| `grantDrawChancesAdmin` | 管理員 | 贈送輪盤 **`drawChances`**（1～50／次），並寫入 `walletTransactions`（`type: "admin_grant_draw"`） |
+| `topupWallet` | 管理員 | 後台儲值（次數／金額；不變更可抽次數）；成功後若會員 **Email 已驗證** 則寄「會員帳戶異動」通知（Resend） |
+| `adjustSessionCreditsAdmin` | 管理員 | 依定價折疊餘額後調整 **`sessionCredits`**（單次 −50～+50、非零），必填備註；寫入 `walletTransactions`（`type: "admin_session_adjust"`）；同上寄信 |
+| `grantDrawChancesAdmin` | 管理員 | 贈送輪盤 **`drawChances`**（1～50／次），並寫入 `walletTransactions`（`type: "admin_grant_draw"`）；同上寄信 |
 | `createMemberAccount` | 管理員 | 建立 Auth 使用者 + `customers` 初始文件 |
 | `searchMemberUsers` / `listMembersAdmin` / `updateMemberNicknameAdmin` / `migrateLegacyWalletsAdmin` | 管理員 | 會員搜尋、列表、暱稱；一鍵依定價折換 `customers` 未折抵金額→次數 |
 | `batchGetCustomerAdminBriefsAdmin` / `getCustomerAdminProfileAdmin` / `setCustomerAdminBriefAdmin` / `addCustomerAdminNoteAdmin` | 管理員 | 會員列表摘要、客戶檔案、內部備註（`customers/{uid}/adminNotes` 僅 Functions 寫入） |

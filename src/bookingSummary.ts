@@ -15,6 +15,7 @@ export function buildBookingSummary(
     units?: number;
     unitMinutes?: number;
     unitPriceNtd?: number;
+    capOverflowSurchargeNtd?: number;
   },
 ): string {
   const noteSummary = note || t("booking.summary.noteEmpty", "（未填寫）");
@@ -23,7 +24,12 @@ export function buildBookingSummary(
   const durationMinutes = units * unitMinutes;
   const endSlot = endSlotFromStartAndDuration(startSlot, durationMinutes);
   const unitPrice = opts?.unitPriceNtd ?? 0;
-  const totalPrice = unitPrice > 0 ? unitPrice * units : 0;
+  const massageTotal = unitPrice > 0 ? unitPrice * units : 0;
+  const surcharge =
+    typeof opts?.capOverflowSurchargeNtd === "number" && opts.capOverflowSurchargeNtd > 0
+      ? opts.capOverflowSurchargeNtd
+      : 0;
+  const totalPrice = massageTotal + (bookingMode === "member_cap_overflow" ? surcharge : 0);
   const lines = [
     t("booking.summary.intro", "請確認以下預約資訊："),
     `${t("booking.summary.name", "姓名")}：${displayName}`,
@@ -35,16 +41,29 @@ export function buildBookingSummary(
       start: startSlot,
       end: endSlot,
     }),
-    ...(totalPrice > 0 && bookingMode === "member_cash"
+    ...(massageTotal > 0 &&
+    (bookingMode === "member_cash" || bookingMode === "member_qr" || bookingMode === "member_cap_overflow")
       ? [
           t("booking.summary.cashTotal", "現金參考：{{total}} 元（{{price}} 元／單位 × {{units}}）", {
-            total: totalPrice,
+            total: bookingMode === "member_cap_overflow" ? massageTotal : totalPrice,
             price: unitPrice,
             units,
           }),
         ]
       : []),
-    `${t("booking.summary.mode", "付款方式")}：${bookingModeLabel(bookingMode, { units, unitPriceNtd: unitPrice })}`,
+    ...(bookingMode === "member_cap_overflow" && surcharge > 0
+      ? [
+          t("booking.summary.capOverflowSurcharge", "名額加價：{{surcharge}} 元／張（當日或本週預約張數已滿）", {
+            surcharge,
+          }),
+          t("booking.summary.capOverflowPayTotal", "現場合計：{{total}} 元", { total: totalPrice }),
+        ]
+      : []),
+    `${t("booking.summary.mode", "付款方式")}：${bookingModeLabel(bookingMode, {
+      units,
+      unitPriceNtd: unitPrice,
+      capOverflowSurchargeNtd: surcharge > 0 ? surcharge : undefined,
+    })}`,
     `${t("booking.summary.note", "備註")}：${noteSummary}`,
   ];
   if (holidayOutcall) {

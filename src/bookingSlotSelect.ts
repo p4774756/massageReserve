@@ -77,6 +77,23 @@ export function refillSlots(
       }
     }
 
+    /** 連續「已佔用」合併成一列（例如 11:30–13:00（已佔用）） */
+    if (takenHere) {
+      let j = i;
+      while (j + 1 < slots.length) {
+        const s2 = slots[j + 1]!;
+        if (!taken.has(s2)) break;
+        j++;
+      }
+      if (j > i) {
+        const timePart = t("slot.takenRangeTimes", "{{from}}–{{to}}", { from: s, to: slots[j]! });
+        const takenNote = t("slot.taken", "（已佔用）");
+        slotSelect.append(el("option", { value: "", disabled: true }, [`${timePart}${takenNote}`]));
+        i = j + 1;
+        continue;
+      }
+    }
+
     const blockNote = blockNoteForSlot(blockReason, blockedHere);
     const suffix = takenHere
       ? t("slot.taken", "（已佔用）")

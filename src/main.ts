@@ -32,6 +32,7 @@ import { createAdminDashboard } from "./adminDashboard";
 import { canCurrentUserAccessAdmin } from "./adminAccess";
 import { adminSessionCallName, shortUidForDisplay } from "./adminSessionUtil";
 import { resolveBookingCapsClient } from "./bookingCaps";
+import { resolveCapOverflowSettingsClient } from "./capOverflow";
 import { bookingModeLabel } from "./bookingDisplay";
 import type { BookingMode } from "./bookingTypes";
 import { refillSlots } from "./bookingSlotSelect";
@@ -52,6 +53,7 @@ import {
   weekdayZhFromDateKeyTaipei,
 } from "./taipeiDates";
 import { showAlertModal, showConfirmModal } from "./modals";
+import { createTherapistCredentialStrip } from "./therapistCredential";
 import { wrapPasswordField } from "./passwordField";
 import { paintMemberWalletSummary, type MemberWalletSummaryOpts } from "./walletSummaryUi";
 import {
@@ -100,9 +102,14 @@ function render() {
 
   const titleHeading = el("h1", {}, [t("home.title", "辦公室按摩預約")]);
   const titleDesc = el("p");
+  const therapistCredential = createTherapistCredentialStrip();
   const visitorStats = createVisitorStatsLine(tabFromPath() !== "admin");
   const visitorStatsLine = visitorStats.element;
-  const titleTextCol = el("div", { class: "page-head-text" }, [titleDesc, visitorStatsLine]);
+  const titleTextCol = el("div", { class: "page-head-text" }, [
+    titleDesc,
+    therapistCredential.element,
+    visitorStatsLine,
+  ]);
 
   const memberLoginBtn = el("button", { class: "ghost member-entry member-login", type: "button" }, [
     t("member.entryLogin", "會員登入"),
@@ -695,7 +702,33 @@ function render() {
   const bookingModeSelect = el("select", { id: "booking-mode-select" }, []);
   /** 未驗證會員時覆蓋於 select 上，避免部分瀏覽器仍會開啟原生下拉 */
   const bookingPaymentWrap = el("div", { class: "booking-payment-wrap" }, [bookingModeSelect]);
+  const PAYMENT_QR_SRC = `${import.meta.env.BASE_URL}media/payment-qr-twqr.png`;
+  const bookingQrPanel = el("div", { class: "booking-payment-qr", hidden: true });
+  const bookingQrImg = el("img", {
+    class: "booking-payment-qr__img",
+    src: PAYMENT_QR_SRC,
+    loading: "lazy",
+    decoding: "async",
+  });
+  bookingQrImg.alt = t("booking.qr.alt", "TWQR 收款 QR Code");
+  const bookingQrCaption = el("p", { class: "hint booking-payment-qr__caption" });
+  bookingQrPanel.append(bookingQrImg, bookingQrCaption);
   const bookingModeHint = el("span", { class: "hint" }, []);
+  function syncBookingPaymentQrPanel(): void {
+    const mode = bookingModeSelect.value as BookingMode;
+    const units = selectedBookingUnits();
+    const total = sessionPriceNtdSetting * units;
+    const show = mode === "member_qr" && !bookingCapOverflowOffer;
+    bookingQrPanel.hidden = !show;
+    if (show) {
+      bookingQrCaption.textContent = t(
+        "booking.qr.caption",
+        "請於現場掃描 QR Code 付款 {{total}} 元（{{price}} 元／單位 × {{units}}），完成後再按「送出預約」。",
+        { total, price: sessionPriceNtdSetting, units },
+      );
+    }
+  }
+  bookingModeSelect.addEventListener("change", () => syncBookingPaymentQrPanel());
   const submitBtn = el("button", { class: "primary", type: "button" }, [t("booking.submit", "送出預約")]);
   /** 選日期／載入空檔與名額相關提示，緊接在時段選擇下方，避免訊息落在頁面底部 */
   const scheduleStatus = el("div", {
@@ -711,6 +744,10 @@ function render() {
   let sessionPriceNtdSetting = 130;
   let unitMinutesSetting = 20;
   let maxUnitsPerBookingSetting = 2;
+  let capOverflowEnabledSetting = true;
+  let capOverflowSurchargeNtdSetting = 100;
+  /** 當日或本週名額已滿且後台開放加價預約 */
+  let bookingCapOverflowOffer = false;
   const bookingUnitsHint = el("span", { class: "hint" }, []);
   function syncBookingUnitsHint() {
     bookingUnitsHint.textContent = t(
@@ -748,13 +785,22 @@ function render() {
   const bookFooterNote = el("div", { class: "footer-note" });
   bookFooterNote.textContent = t(
     "booking.rulesFooterDefault",
-    "規則：同一天最多 2 筆、同一工作週最多 4 筆；已取消的不計入名額。",
+    "規則：同一天最多 2 張預約、同一工作週最多 4 張；每張可選 1–2 單位（時長依定價）。已取消不計入名額。",
   );
   function setBookFooterFromCaps(dayCap: number, weekCap: number) {
-    bookFooterNote.textContent = t("booking.rulesFooter", "規則：同一天最多 {{dayCap}} 筆、同一工作週最多 {{weekCap}} 筆；已取消的不計入名額。", {
-      dayCap,
-      weekCap,
-    });
+    if (capOverflowEnabledSetting) {
+      bookFooterNote.textContent = t(
+        "booking.rulesFooterWithOverflow",
+        "規則：同一天最多 {{dayCap}} 張、同一工作週最多 {{weekCap}} 張預約（每張可 1–2 單位）。已取消不計入。當日或本週張數已滿時，可加 {{surcharge}} 元／張以「加價現金」再預約（另加按摩費）。",
+        { dayCap, weekCap, surcharge: capOverflowSurchargeNtdSetting },
+      );
+    } else {
+      bookFooterNote.textContent = t(
+        "booking.rulesFooter",
+        "規則：同一天最多 {{dayCap}} 張、同一工作週最多 {{weekCap}} 張預約；每張可 1–2 單位。已取消不計入名額。",
+        { dayCap, weekCap },
+      );
+    }
   }
   const walletStatus = el("div", { class: "status-line" });
   const wheelStatus = el("div", { class: "status-line" });
@@ -764,7 +810,12 @@ function render() {
   const memberExtrasWrap = el("div", { class: "book-member-extras", hidden: true });
   const finalizeSection = el("div", { class: "book-step book-step--finalize" }, [
     el("div", { class: "grid" }, [
-      el("label", { class: "field" }, [t("field.payment", "付款方式"), bookingPaymentWrap, bookingModeHint]),
+      el("label", { class: "field" }, [
+        t("field.payment", "付款方式"),
+        bookingPaymentWrap,
+        bookingQrPanel,
+        bookingModeHint,
+      ]),
     ]),
     el("div", { class: "grid" }, [
       el("label", { class: "field" }, [
@@ -1339,24 +1390,40 @@ function render() {
     const units = selectedBookingUnits();
     const unitPrice = sessionPriceNtdSetting;
     const totalPrice = unitPrice * units;
+    const overflowTotal = totalPrice + capOverflowSurchargeNtdSetting;
     bookingModeSelect.disabled = false;
     bookingModeSelect.removeAttribute("disabled");
     bookingModeSelect.removeAttribute("aria-disabled");
     bookingPaymentWrap.querySelector(".booking-payment-lock-shield")?.remove();
 
     const walletShort = sessionCreditsCount < units;
-    const modes: { value: BookingMode; label: string; disabled?: boolean }[] = [
-      {
-        value: "member_wallet",
-        label: t("member.mode.walletUnits", "會員次數（扣 {{units}} 單位）", { units }),
-        disabled: walletShort,
-      },
-      {
-        value: "member_cash",
-        label: t("member.mode.cashTotal", "會員現金（{{total}} 元）", { total: totalPrice }),
-      },
-      { value: "member_beverage", label: bookingModeLabel("member_beverage") },
-    ];
+    const modes: { value: BookingMode; label: string; disabled?: boolean }[] = bookingCapOverflowOffer
+      ? [
+          {
+            value: "member_cap_overflow",
+            label: bookingModeLabel("member_cap_overflow", {
+              units,
+              unitPriceNtd: unitPrice,
+              capOverflowSurchargeNtd: capOverflowSurchargeNtdSetting,
+            }),
+          },
+        ]
+      : [
+          {
+            value: "member_wallet",
+            label: t("member.mode.walletUnits", "預約次數扣抵（扣 {{units}} 單位）", { units }),
+            disabled: walletShort,
+          },
+          {
+            value: "member_cash",
+            label: t("member.mode.cashTotal", "會員現金（{{total}} 元）", { total: totalPrice }),
+          },
+          {
+            value: "member_qr",
+            label: t("member.mode.qrTotal", "掃描 QR Code 付款（{{total}} 元）", { total: totalPrice }),
+          },
+          { value: "member_beverage", label: bookingModeLabel("member_beverage") },
+        ];
     for (const mode of modes) {
       const opt = el("option", { value: mode.value, disabled: mode.disabled }, [mode.label]);
       bookingModeSelect.append(opt);
@@ -1365,12 +1432,23 @@ function render() {
     const currentMode = modes.find((m) => m.value === current);
     bookingModeSelect.value =
       currentMode && !currentMode.disabled && values.includes(current) ? current : modes[0].value;
+    syncBookingPaymentQrPanel();
 
-    if (isMember) {
+    if (bookingCapOverflowOffer) {
+      bookingModeHint.textContent = t(
+        "member.modeHint.capOverflow",
+        "當日或本工作週預約張數已滿：本張另收加價 {{surcharge}} 元（每張一次）＋按摩費 {{massage}} 元，現場合計 {{total}} 元。",
+        {
+          massage: totalPrice,
+          surcharge: capOverflowSurchargeNtdSetting,
+          total: overflowTotal,
+        },
+      );
+    } else if (isMember) {
       bookingModeHint.textContent = t(
         "member.modeHint.memberUnits",
-        "可扣 {{units}} 單位、現金 {{total}} 元，或「請師傅一杯飲料」（依現場約定）。",
-        { units, total: totalPrice },
+        "「預約次數」為儲值或輪盤點兌換的按摩次數（非現金）。您目前有 {{have}} 次，本次需 {{units}} 次；亦可現金 {{total}} 元、掃描 QR Code 付款，或「請師傅一杯飲料」（現場約定）。",
+        { have: sessionCreditsCount, units, total: totalPrice },
       );
     } else {
       const loggedInUnverified = Boolean(
@@ -1727,6 +1805,7 @@ function render() {
   async function refreshAvailability() {
     try {
       bookingCapacityBlocksSlots = false;
+      bookingCapOverflowOffer = false;
       bookingAvailabilityLoading = false;
       meta.innerHTML = "";
       bookingPeersHint.replaceChildren();
@@ -1798,17 +1877,29 @@ function render() {
           weekCount: number;
           dayCap: number;
           weekCap: number;
+          dayFull?: boolean;
+          weekFull?: boolean;
+          capOverflowEnabled?: boolean;
+          capOverflowSurchargeNtd?: number;
           dayPeersMasked?: string[];
           daySlotsMasked?: string[];
           weekPeersMasked?: string[];
         };
         const taken = new Set(data.taken);
-        const dayFull = data.dayCount >= data.dayCap;
-        const weekFull = data.weekCount >= data.weekCap;
+        const dayFull = data.dayFull ?? data.dayCount >= data.dayCap;
+        const weekFull = data.weekFull ?? data.weekCount >= data.weekCap;
+        if (typeof data.capOverflowEnabled === "boolean") {
+          capOverflowEnabledSetting = data.capOverflowEnabled;
+        }
+        if (typeof data.capOverflowSurchargeNtd === "number" && Number.isFinite(data.capOverflowSurchargeNtd)) {
+          capOverflowSurchargeNtdSetting = Math.max(0, Math.round(data.capOverflowSurchargeNtd));
+        }
+        const capFull = dayFull || weekFull;
+        bookingCapOverflowOffer = capFull && capOverflowEnabledSetting;
         mergeBookingPickCalDayCount(dk, data.dayCount);
         mergeBookingPickCalDayPeers(dk, daySlotLinesFromAvailability(data));
         paintBookingPickCalendar();
-        const blocked = dayFull || weekFull;
+        const blocked = capFull && !bookingCapOverflowOffer;
         bookingCapacityBlocksSlots = blocked;
         const blockedMap = new Map<string, string>();
         for (const b of data.blockedSlots ?? []) {
@@ -1820,20 +1911,29 @@ function render() {
         setBookFooterFromCaps(data.dayCap, data.weekCap);
         runRefillSlots(taken, blocked, dk, blockedMap);
         const weekdayZh = weekdayZhFromDateKeyTaipei(dk);
+        const dayPillClass = dayFull ? "pill pill--cap-full" : "pill";
+        const weekPillClass = weekFull ? "pill pill--cap-full" : "pill";
         meta.replaceChildren(
-          el("span", { class: "pill" }, [
+          el("span", { class: dayPillClass }, [
             weekdayZh ?
               t("booking.metaDayWithWeekday", "當日（{{weekday}}）已預約 ", { weekday: weekdayZh })
-            : t("booking.metaDay", "當日已預約 "),
+            : t("booking.metaDay", "當日已預約（張） "),
             el("strong", {}, [String(data.dayCount)]),
             ` / ${data.dayCap}`,
+            ...(dayFull && bookingCapOverflowOffer
+              ? [t("booking.metaDayOverflowTag", " · 已滿可加價")]
+              : []),
           ]),
-          el("span", { class: "pill" }, [
-            t("booking.metaWeek", "本工作週已預約 "),
+          el("span", { class: weekPillClass }, [
+            t("booking.metaWeek", "本工作週已預約（張） "),
             el("strong", {}, [String(data.weekCount)]),
             ` / ${data.weekCap}`,
+            ...(weekFull && bookingCapOverflowOffer
+              ? [t("booking.metaWeekOverflowTag", " · 已滿可加價")]
+              : []),
           ]),
         );
+        refillBookingModes(isVerifiedMember());
         const daySlots = daySlotLinesFromAvailability(data);
         const weekPeers = filterFutureWeekPeerLabels(dk, nonEmptyStringLines(data.weekPeersMasked));
         const peerLines: HTMLElement[] = [];
@@ -1859,7 +1959,20 @@ function render() {
           bookingPeersHint.replaceChildren();
           bookingPeersHint.hidden = true;
         }
-        if (dayFull) {
+        if (bookingCapOverflowOffer) {
+          const parts: string[] = [];
+          if (dayFull) parts.push(t("booking.dayFullShort", "當日名額已滿"));
+          if (weekFull) parts.push(t("booking.weekFullShort", "本工作週名額已滿"));
+          scheduleStatus.textContent = t(
+            "booking.capOverflowOffer",
+            "{{caps}}。可選時段後以「加價現金」再預約一張（加價 {{surcharge}} 元／張 ＋ 按摩費，依所選單位數計算）。",
+            {
+              caps: parts.join("；"),
+              surcharge: capOverflowSurchargeNtdSetting,
+            },
+          );
+          scheduleStatus.className = "status-line schedule-status ok";
+        } else if (dayFull) {
           scheduleStatus.textContent = t("booking.dayFull", "這一天已額滿。");
           scheduleStatus.classList.add("error");
         } else if (weekFull) {
@@ -1907,6 +2020,9 @@ function render() {
     doc(db, "siteSettings", "bookingCaps"),
     (snap) => {
       const caps = resolveBookingCapsClient(snap.data());
+      const overflow = resolveCapOverflowSettingsClient(snap.data());
+      capOverflowEnabledSetting = overflow.enabled;
+      capOverflowSurchargeNtdSetting = overflow.surchargeNtd;
       setBookFooterFromCaps(caps.maxPerDay, caps.maxPerWorkWeek);
       void refreshAvailability();
     },
@@ -1954,7 +2070,13 @@ function render() {
       bookStatus.classList.add("error");
       return;
     }
-    const allowedModes: BookingMode[] = ["member_cash", "member_wallet", "member_beverage"];
+    const allowedModes: BookingMode[] = [
+      "member_cash",
+      "member_qr",
+      "member_wallet",
+      "member_beverage",
+      "member_cap_overflow",
+    ];
     const canBookAsMember =
       allowedModes.includes(bookingMode) &&
       Boolean(auth.currentUser?.emailVerified);
@@ -1964,6 +2086,22 @@ function render() {
         buildMembersOnlyReminderBody(),
         t("modal.ok", "我知道了"),
       );
+      return;
+    }
+    if (bookingCapOverflowOffer && bookingMode !== "member_cap_overflow") {
+      bookStatus.textContent = t(
+        "booking.capOverflowPickMode",
+        "名額已滿時請選擇「加價現金」付款方式。",
+      );
+      bookStatus.classList.add("error");
+      return;
+    }
+    if (!bookingCapOverflowOffer && bookingMode === "member_cap_overflow") {
+      bookStatus.textContent = t(
+        "booking.capOverflowOnlyWhenFull",
+        "「加價現金」僅能在當日或本工作週名額已滿時使用。",
+      );
+      bookStatus.classList.add("error");
       return;
     }
     if (bookingMode === "member_wallet" && sessionCreditsCount < selectedBookingUnits()) {
@@ -1981,6 +2119,7 @@ function render() {
         units: bookingUnits,
         unitMinutes: unitMinutesSetting,
         unitPriceNtd: sessionPriceNtdSetting,
+        capOverflowSurchargeNtd: bookingCapOverflowOffer ? capOverflowSurchargeNtdSetting : undefined,
       }),
       t("booking.confirmSubmit", "確認送出"),
     );
@@ -1998,6 +2137,7 @@ function render() {
         startSlot,
         units: bookingUnits,
         bookingMode,
+        ...(bookingCapOverflowOffer ? { capOverflow: true } : {}),
         ...localeApiParam(),
       });
       const submittedLine = t(
@@ -2259,6 +2399,7 @@ function render() {
     const isBook = next === "book";
     shell.classList.toggle("admin-mode", !isBook);
     visitorStats.setVisible(isBook);
+    therapistCredential.setVisible(isBook);
     titleHeading.textContent = isBook ? t("home.title", "辦公室按摩預約") : t("admin.backTitle", "管理後台");
     titleDesc.hidden = !isBook;
     if (isBook) {

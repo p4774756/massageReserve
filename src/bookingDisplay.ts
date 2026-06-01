@@ -9,7 +9,7 @@ function beverageOptionLabel(): string {
 
 export function bookingModeLabel(
   mode: BookingMode,
-  opts?: { units?: number; unitPriceNtd?: number },
+  opts?: { units?: number; unitPriceNtd?: number; capOverflowSurchargeNtd?: number },
 ): string {
   const units = opts?.units ?? 1;
   const unitPrice = opts?.unitPriceNtd ?? 0;
@@ -20,8 +20,19 @@ export function bookingModeLabel(
       unitPrice > 0
         ? t("booking.mode.member_cashTotal", "會員現金（{{total}} 元）", { total: unitPrice * units })
         : t("booking.mode.member_cash", "會員現金"),
-    member_wallet: t("booking.mode.member_walletUnits", "會員次數（扣 {{units}} 單位）", { units }),
+    member_wallet: t("booking.mode.member_walletUnits", "預約次數扣抵（扣 {{units}} 單位）", { units }),
     member_beverage: beverageOptionLabel(),
+    member_qr:
+      unitPrice > 0
+        ? t("booking.mode.member_qrTotal", "掃描 QR Code 付款（{{total}} 元）", { total: unitPrice * units })
+        : t("booking.mode.member_qr", "掃描 QR Code 付款"),
+    member_cap_overflow:
+      unitPrice > 0 && typeof opts?.capOverflowSurchargeNtd === "number"
+        ? t("booking.mode.member_cap_overflowTotal", "加價現金（{{total}} 元，含加價 {{surcharge}} 元）", {
+            total: unitPrice * units + opts.capOverflowSurchargeNtd,
+            surcharge: opts.capOverflowSurchargeNtd,
+          })
+        : t("booking.mode.member_cap_overflow", "加價現金（名額已滿）"),
   };
   return labels[mode];
 }

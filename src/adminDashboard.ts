@@ -29,6 +29,7 @@ import {
   openAdminCustomerProfileModal,
 } from "./adminCustomerProfile";
 import { renderAdminForbidden as paintAdminForbiddenView, renderAdminLoggedOut as paintAdminLoginView } from "./adminLoginViews";
+import { resolveCapOverflowSettingsClient } from "./capOverflow";
 import {
   memberBookingGetsStatusEmail,
   showAdminBookingStatusEmailNoteModal,
@@ -478,6 +479,15 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       step: "1",
       value: "4",
     });
+    const capOverflowEnabledInput = el("input", { type: "checkbox" });
+    capOverflowEnabledInput.checked = true;
+    const capOverflowSurchargeInput = el("input", {
+      type: "number",
+      min: "0",
+      max: "50000",
+      step: "1",
+      value: "100",
+    });
     const saveBookingCapsBtn = el("button", { type: "button", class: "ghost" }, [t("admin.caps.save", "儲存名額上限")]);
     const bookingCapsStatus = el("div", { class: "status-line" });
 
@@ -490,13 +500,21 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     adminBookingCapsUnsub = onSnapshot(
       bookingCapsDocRef,
       (snap) => {
-        const data = snap.data() as { maxPerDay?: unknown; maxPerWorkWeek?: unknown } | undefined;
+        const data = snap.data() as {
+          maxPerDay?: unknown;
+          maxPerWorkWeek?: unknown;
+          capOverflowEnabled?: unknown;
+          capOverflowSurchargeNtd?: unknown;
+        } | undefined;
         const dRaw = data?.maxPerDay;
         const wRaw = data?.maxPerWorkWeek;
         const dNum = typeof dRaw === "number" && Number.isFinite(dRaw) ? dRaw : Number(dRaw);
         const wNum = typeof wRaw === "number" && Number.isFinite(wRaw) ? wRaw : Number(wRaw);
         capMaxPerDayInput.value = String(clampBookingCapInput(dNum, 2));
         capMaxPerWorkWeekInput.value = String(clampBookingCapInput(wNum, 4));
+        const overflow = resolveCapOverflowSettingsClient(data);
+        capOverflowEnabledInput.checked = overflow.enabled;
+        capOverflowSurchargeInput.value = String(overflow.surchargeNtd);
       },
       () => {
         bookingCapsStatus.textContent = t("admin.snapshot.loadFail", "無法讀取名額上限設定。");
@@ -511,12 +529,25 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       const maxPerWorkWeek = clampBookingCapInput(Number(capMaxPerWorkWeekInput.value), 4);
       capMaxPerDayInput.value = String(maxPerDay);
       capMaxPerWorkWeekInput.value = String(maxPerWorkWeek);
+      const capOverflowEnabled = capOverflowEnabledInput.checked;
+      const surchargeRaw = Number(capOverflowSurchargeInput.value);
+      const capOverflowSurchargeNtd =
+        Number.isFinite(surchargeRaw) && surchargeRaw >= 0 ?
+          Math.min(50_000, Math.round(surchargeRaw))
+        : 100;
+      capOverflowSurchargeInput.value = String(capOverflowSurchargeNtd);
       saveBookingCapsBtn.setAttribute("disabled", "true");
       bookingCapsStatus.textContent = t("admin.status.processing", "處理中…");
       try {
         await setDoc(
           bookingCapsDocRef,
-          { maxPerDay, maxPerWorkWeek, updatedAt: serverTimestamp() },
+          {
+            maxPerDay,
+            maxPerWorkWeek,
+            capOverflowEnabled,
+            capOverflowSurchargeNtd,
+            updatedAt: serverTimestamp(),
+          },
           { merge: true },
         );
         bookingCapsStatus.textContent = t("admin.status.updated", "已更新");
@@ -974,9 +1005,31 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
 
     const blockCaps = el("section", { class: "admin-announce__block admin-announce__block--caps" }, [
       el("h4", { class: "admin-announce__block-title" }, [t("admin.announce.blockCapsTitle", "預約名額")]),
+      el("p", { class: "hint admin-announce__block-lead" }, [
+        t(
+          "admin.caps.lead",
+          "「張」＝一張預約單（不論選 1 或 2 單位）；每單位時長依「定價」設定（預設 20 分鐘），與名額張數無關。已取消不計入。",
+        ),
+      ]),
       el("div", { class: "grid grid-2" }, [
-        el("label", { class: "field" }, [t("admin.caps.perDay", "同一天最多幾筆"), capMaxPerDayInput]),
-        el("label", { class: "field" }, [t("admin.caps.perWeek", "同一工作週最多幾筆"), capMaxPerWorkWeekInput]),
+        el("label", { class: "field" }, [t("admin.caps.perDay", "同一天最多幾張"), capMaxPerDayInput]),
+        el("label", { class: "field" }, [t("admin.caps.perWeek", "同一工作週最多幾張"), capMaxPerWorkWeekInput]),
+      ]),
+      el("div", { class: "grid grid-2 admin-caps-overflow-grid" }, [
+        el("label", { class: "field checkbox-field" }, [
+          capOverflowEnabledInput,
+          t("admin.caps.overflowEnable", "名額已滿時允許「加價現金」預約"),
+        ]),
+        el("label", { class: "field" }, [
+          t("admin.caps.overflowSurcharge", "加價金額（元／張預約，不含按摩費）"),
+          capOverflowSurchargeInput,
+        ]),
+      ]),
+      el("p", { class: "hint" }, [
+        t(
+          "admin.caps.overflowHint",
+          "當日或本工作週「張數」已滿時，會員可再以加價現金多預約一張（加價每張收一次；按摩費仍依單位數計）。須仍有可選時段且不重疊。",
+        ),
       ]),
       el("div", { class: "row-actions" }, [saveBookingCapsBtn]),
       bookingCapsStatus,
@@ -1609,12 +1662,13 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
           verified ? t("admin.memberList.verifiedYes", "已驗證") : t("admin.memberList.verifiedNo", "未驗證"),
         ]);
         const emailStr = (m.email ?? "").trim();
-        const emailTd = el("td", {
-          class: "admin-member-email-cell",
+        const emailCell = el("td", {
+          class: "admin-member-email-cell-wrap",
           title: emailStr,
         });
-        const emailInner = el("span", { class: "admin-member-email-cell__text" }, [emailStr]);
-        emailTd.append(emailInner);
+        const emailInner = el("span", { class: "admin-member-email-cell__text admin-member-email-cell" }, [
+          emailStr,
+        ]);
         if ((m.adminBrief ?? "").trim().length > 0) {
           emailInner.append(
             el("span", {
@@ -1631,9 +1685,10 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
           ev.stopPropagation();
           openAdminMemberProfileModal(m);
         });
+        emailCell.append(emailInner, profileBtn);
         memberListTable.append(
           el("tr", {}, [
-            el("td", { class: "admin-member-email-cell-wrap" }, [emailTd, profileBtn]),
+            emailCell,
             verifyCell,
             el("td", { class: "admin-member-nick-cell" }, [nickOpen]),
             el("td", { class: "mono" }, [String(m.sessionCredits)]),

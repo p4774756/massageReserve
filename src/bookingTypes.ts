@@ -3,7 +3,11 @@ export type BookingMode =
   | "guest_beverage"
   | "member_cash"
   | "member_wallet"
-  | "member_beverage";
+  | "member_beverage"
+  /** 現場掃描 TWQR／QR Code 轉帳（金額同現金） */
+  | "member_qr"
+  /** 當日或本工作週名額已滿時：現場現金（按摩費 + 加價） */
+  | "member_cap_overflow";
 
 export type Booking = {
   id: string;
@@ -31,4 +35,7 @@ export type Booking = {
   /** 建立時每單位分鐘數快照 */
   unitMinutesSnapshot?: number;
   price?: number;
+  /** 名額已滿時加價預約 */
+  capOverflow?: boolean;
+  capOverflowSurchargeNtd?: number;
 };

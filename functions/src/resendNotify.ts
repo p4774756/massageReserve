@@ -43,6 +43,8 @@ const BOOKING_MODE_LABEL: Record<string, string> = {
   member_cash: "會員｜現場現金",
   member_wallet: "會員｜次數扣 1 次",
   member_beverage: "會員｜飲料折抵",
+  member_qr: "會員｜掃描 QR Code 付款",
+  member_cap_overflow: "會員｜加價現金（名額已滿）",
 };
 
 const EMAIL_FONT =
@@ -425,6 +427,138 @@ export async function sendMemberBookingStatusChangedEmail(opts: {
   const subject = testMode
     ? `[測試] 預約狀態通知信測試｜${dateLabel} ${payload.startSlot}`
     : `預約狀態更新：${next}｜${dateLabel} ${payload.startSlot}`;
+  const { error } = await resend.emails.send({
+    from,
+    to: [payload.to],
+    subject,
+    text,
+    html,
+  });
+  if (error) {
+    throwResendEmailError(error);
+  }
+}
+
+export type MemberWalletSnapshot = {
+  walletBalance: number;
+  sessionCredits: number;
+  drawChances: number;
+  wheelPoints: number;
+};
+
+export type MemberWalletChangeKind = "topup" | "admin_session_adjust" | "admin_grant_draw";
+
+const WALLET_CHANGE_KIND_LABEL: Record<MemberWalletChangeKind, string> = {
+  topup: "後台儲值",
+  admin_session_adjust: "調整可預約次數",
+  admin_grant_draw: "贈送輪盤抽獎次數",
+};
+
+export type MemberWalletChangedEmailPayload = {
+  to: string;
+  displayName: string;
+  kind: MemberWalletChangeKind;
+  before: MemberWalletSnapshot;
+  after: MemberWalletSnapshot;
+  /** 儲值金額（元），僅 topup */
+  topupAmount?: number;
+  sessionsDelta?: number;
+  drawChancesDelta?: number;
+  sessionPriceSnapshot?: number;
+  note?: string;
+};
+
+function formatWalletFieldDelta(before: number, after: number): string {
+  if (before === after) return String(after);
+  const diff = after - before;
+  const sign = diff > 0 ? "+" : "";
+  return `${before} → ${after}（${sign}${diff}）`;
+}
+
+/** 後台儲值／調整次數／贈送拉霸次數 — 寄給已驗證 Email 的會員 */
+export async function sendMemberWalletChangedEmail(opts: {
+  apiKey: string;
+  from: string;
+  payload: MemberWalletChangedEmailPayload;
+}): Promise<void> {
+  const { apiKey, from, payload } = opts;
+  const kindLabel = WALLET_CHANGE_KIND_LABEL[payload.kind];
+  const { before, after } = payload;
+
+  const walletFieldDefs: { key: keyof MemberWalletSnapshot; label: string }[] = [
+    { key: "sessionCredits", label: "可預約次數" },
+    { key: "walletBalance", label: "未折次數餘額（元）" },
+    { key: "drawChances", label: "可拉霸開獎次數" },
+    { key: "wheelPoints", label: "輪盤點數" },
+  ];
+
+  const rows: EmailDetailRow[] = [{ label: "操作類型", value: kindLabel, emphasize: true }];
+
+  if (typeof payload.topupAmount === "number" && payload.topupAmount > 0) {
+    rows.push({ label: "儲值金額（元）", value: String(payload.topupAmount) });
+  }
+  if (typeof payload.sessionsDelta === "number" && payload.sessionsDelta !== 0) {
+    const sign = payload.sessionsDelta > 0 ? "+" : "";
+    rows.push({ label: "本次預約次數變更", value: `${sign}${payload.sessionsDelta} 次` });
+  }
+  if (typeof payload.drawChancesDelta === "number" && payload.drawChancesDelta > 0) {
+    rows.push({ label: "本次贈送拉霸次數", value: `+${payload.drawChancesDelta} 次` });
+  }
+  if (typeof payload.sessionPriceSnapshot === "number" && payload.sessionPriceSnapshot > 0) {
+    rows.push({
+      label: "折次單價（快照）",
+      value: `${payload.sessionPriceSnapshot} 元／次`,
+    });
+  }
+  if (payload.note?.trim()) {
+    rows.push({ label: "備註", value: payload.note.trim() });
+  }
+
+  for (const { key, label } of walletFieldDefs) {
+    if (before[key] !== after[key]) {
+      rows.push({
+        label,
+        value: formatWalletFieldDelta(before[key], after[key]),
+        emphasize:
+          (payload.kind === "admin_grant_draw" && key === "drawChances") ||
+          (payload.kind !== "admin_grant_draw" && key === "sessionCredits") ||
+          key === "walletBalance",
+      });
+    }
+  }
+
+  rows.push({
+    label: "帳戶目前狀態",
+    value: walletFieldDefs.map(({ key, label }) => `${label}：${after[key]}`).join("\n"),
+  });
+
+  const emphasizeSubject =
+    payload.kind === "admin_grant_draw" && typeof payload.drawChancesDelta === "number"
+      ? `+${payload.drawChancesDelta} 次拉霸`
+      : typeof payload.sessionsDelta === "number" && payload.sessionsDelta !== 0
+        ? `${payload.sessionsDelta > 0 ? "+" : ""}${payload.sessionsDelta} 次預約`
+        : kindLabel;
+
+  const text = buildNotifyEmailPlainText({
+    title: "會員帳戶異動通知",
+    greeting: `${payload.displayName} 您好，`,
+    introLines: ["店家已為您的會員帳戶更新餘額，摘要如下。"],
+    rows,
+    outroLines: ["登入預約站「會員中心」可查看最新餘額。如有疑問請與店家聯繫。"],
+    footer: "— 按摩預約系統（自動通知，請勿直接回覆此信）",
+  });
+
+  const html = buildNotifyEmailHtml({
+    title: "會員帳戶異動通知",
+    greeting: `${payload.displayName} 您好，`,
+    introLines: ["店家已為您的會員帳戶更新餘額，摘要如下。"],
+    rows,
+    outroLines: ["登入預約站「會員中心」可查看最新餘額。如有疑問請與店家聯繫。"],
+    footer: "— 按摩預約系統（自動通知，請勿直接回覆此信）",
+  });
+
+  const resend = new Resend(apiKey);
+  const subject = `會員帳戶異動：${kindLabel}｜${emphasizeSubject}`;
   const { error } = await resend.emails.send({
     from,
     to: [payload.to],

@@ -1,6 +1,12 @@
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
-import { FieldValue, getFirestore, Timestamp, type QueryDocumentSnapshot } from "firebase-admin/firestore";
+import {
+  FieldValue,
+  getFirestore,
+  Timestamp,
+  type DocumentData,
+  type QueryDocumentSnapshot,
+} from "firebase-admin/firestore";
 import { defineSecret, defineString } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
@@ -10,7 +16,10 @@ import {
   isResendOnboardingFromAddress,
   sendBroadcastHtmlEmail,
   sendMemberBookingStatusChangedEmail,
+  sendMemberWalletChangedEmail,
   sendNewBookingEmailToOwner,
+  type MemberWalletChangeKind,
+  type MemberWalletSnapshot,
 } from "./resendNotify";
 import {
   ACTIVE_STATUSES,
@@ -42,6 +51,7 @@ import {
 } from "./pricing";
 import { parseLocale, st, type ServerLocale } from "./serverI18n";
 import { maskDisplayNameForPublic } from "./maskDisplayName";
+import { resolveCapOverflowSettings } from "./capOverflow";
 
 initializeApp();
 const db = getFirestore();
@@ -55,6 +65,8 @@ const ownerNotifyEmail = defineSecret("OWNER_NOTIFY_EMAIL");
 const resendFrom = defineString("RESEND_FROM", {
   default: "Massage預約 <onboarding@resend.dev>",
 });
+/** 後台錢包異動（儲值／調次數／贈拉霸）— 成功後可寄會員通知信 */
+const walletAdminCall = { ...publicCall, secrets: [resendApiKey] };
 
 type CreateBookingInput = {
   displayName?: unknown;
@@ -66,6 +78,8 @@ type CreateBookingInput = {
   holidayOutcall?: unknown;
   /** 預約單位數（1 單位 = unitMinutes 分鐘） */
   units?: unknown;
+  /** 當日或本工作週名額已滿時加價預約（須搭配 member_cap_overflow） */
+  capOverflow?: unknown;
 };
 
 type BookingStatus = "pending" | "confirmed" | "done" | "cancelled" | "deleted";
@@ -94,6 +108,80 @@ async function assertMemberEmailVerified(uid: string, locale: ServerLocale): Pro
 }
 
 /** 後台儲值：可填 UID，或填會員 Email（含 @ 時改查 Auth） */
+function readCustomerWalletSnapshot(data: DocumentData | undefined): MemberWalletSnapshot {
+  return {
+    walletBalance: typeof data?.walletBalance === "number" ? data.walletBalance : 0,
+    sessionCredits: typeof data?.sessionCredits === "number" ? data.sessionCredits : 0,
+    drawChances: typeof data?.drawChances === "number" ? data.drawChances : 0,
+    wheelPoints: typeof data?.wheelPoints === "number" ? data.wheelPoints : 0,
+  };
+}
+
+/** 錢包異動成功後通知會員（失敗不影響後台操作結果） */
+async function notifyMemberWalletChangedEmail(
+  customerId: string,
+  opts: {
+    kind: MemberWalletChangeKind;
+    before: MemberWalletSnapshot;
+    after: MemberWalletSnapshot;
+    topupAmount?: number;
+    sessionsDelta?: number;
+    drawChancesDelta?: number;
+    sessionPriceSnapshot?: number;
+    note?: string;
+  },
+): Promise<void> {
+  const apiKey = resendApiKey.value().trim();
+  if (!apiKey) {
+    console.warn("notifyMemberWalletChangedEmail: RESEND_API_KEY empty");
+    return;
+  }
+  const from = resendFrom.value().trim() || "Massage預約 <onboarding@resend.dev>";
+
+  let to = "";
+  let displayName = "會員";
+  try {
+    const user = await getAuth().getUser(customerId);
+    if (user.emailVerified !== true) {
+      console.warn("notifyMemberWalletChangedEmail: email not verified", customerId);
+      return;
+    }
+    to = (user.email ?? "").trim();
+    if (!to) {
+      console.warn("notifyMemberWalletChangedEmail: no email", customerId);
+      return;
+    }
+    displayName =
+      typeof user.displayName === "string" && user.displayName.trim()
+        ? user.displayName.trim()
+        : to;
+  } catch (e) {
+    console.warn("notifyMemberWalletChangedEmail: getUser failed", customerId, e);
+    return;
+  }
+
+  try {
+    await sendMemberWalletChangedEmail({
+      apiKey,
+      from,
+      payload: {
+        to,
+        displayName,
+        kind: opts.kind,
+        before: opts.before,
+        after: opts.after,
+        topupAmount: opts.topupAmount,
+        sessionsDelta: opts.sessionsDelta,
+        drawChancesDelta: opts.drawChancesDelta,
+        sessionPriceSnapshot: opts.sessionPriceSnapshot,
+        note: opts.note,
+      },
+    });
+  } catch (e) {
+    console.error("notifyMemberWalletChangedEmail: send failed", customerId, e);
+  }
+}
+
 async function resolveCustomerUidForTopup(raw: string, locale: ServerLocale): Promise<string> {
   const trimmed = raw.trim();
   if (!trimmed) {
@@ -281,6 +369,7 @@ export const getAvailability = onCall(publicCall, async (request) => {
   ]);
 
   const caps = resolveBookingCaps(capsSnap.data());
+  const capOverflow = resolveCapOverflowSettings(capsSnap.data());
   const pricingSnap = await db.collection("siteSettings").doc("pricing").get();
   const unitMinutes = resolveUnitMinutes(pricingSnap.data());
   const maxUnits = resolveMaxUnitsPerBooking(pricingSnap.data());
@@ -316,6 +405,10 @@ export const getAvailability = onCall(publicCall, async (request) => {
     weekCount: weekSnap.size,
     dayCap: caps.maxPerDay,
     weekCap: caps.maxPerWorkWeek,
+    dayFull: daySnap.size >= caps.maxPerDay,
+    weekFull: weekSnap.size >= caps.maxPerWorkWeek,
+    capOverflowEnabled: capOverflow.enabled,
+    capOverflowSurchargeNtd: capOverflow.surchargeNtd,
     dayPeersMasked,
     daySlotsMasked,
     weekPeersMasked,
@@ -436,10 +529,13 @@ export const createBooking = onCall(
   const startSlot = typeof data.startSlot === "string" ? data.startSlot : "";
   const holidayOutcall = data.holidayOutcall === true;
   const bookingModeRaw = typeof data.bookingMode === "string" ? data.bookingMode.trim() : "";
+  const capOverflowRequested = data.capOverflow === true;
   const bookingMode =
     bookingModeRaw === "member_cash" ||
     bookingModeRaw === "member_wallet" ||
-    bookingModeRaw === "member_beverage"
+    bookingModeRaw === "member_beverage" ||
+    bookingModeRaw === "member_qr" ||
+    bookingModeRaw === "member_cap_overflow"
       ? bookingModeRaw
       : "";
   const uid = request.auth?.uid;
@@ -542,18 +638,58 @@ export const createBooking = onCall(
 
       const [daySnap, weekSnap, capsSnap] = await Promise.all([tx.get(dayQ), tx.get(weekQ), tx.get(capsRef)]);
       const { maxPerDay, maxPerWorkWeek } = resolveBookingCaps(capsSnap.data());
+      const capOverflowSettings = resolveCapOverflowSettings(capsSnap.data());
+      const dayFull = daySnap.size >= maxPerDay;
+      const weekFull = weekSnap.size >= maxPerWorkWeek;
 
-      if (daySnap.size >= maxPerDay) {
-        throw new HttpsError(
-          "resource-exhausted",
-          st(locale, "booking.dayFull", "這一天已額滿（最多 {{max}} 筆）", { max: maxPerDay }),
-        );
-      }
-      if (weekSnap.size >= maxPerWorkWeek) {
-        throw new HttpsError(
-          "resource-exhausted",
-          st(locale, "booking.weekFull", "本工作週已達上限（最多 {{max}} 筆）", { max: maxPerWorkWeek }),
-        );
+      if (capOverflowRequested) {
+        if (!capOverflowSettings.enabled) {
+          throw new HttpsError(
+            "failed-precondition",
+            st(locale, "booking.capOverflowDisabled", "目前未開放名額已滿時的加價預約。"),
+          );
+        }
+        if (!dayFull && !weekFull) {
+          throw new HttpsError(
+            "failed-precondition",
+            st(locale, "booking.capOverflowNotNeeded", "當日與本工作週仍有名額，請使用一般付款方式預約。"),
+          );
+        }
+        if (bookingMode !== "member_cap_overflow") {
+          throw new HttpsError(
+            "invalid-argument",
+            st(locale, "booking.capOverflowModeRequired", "名額已滿時的加價預約須選擇「加價現金」付款。"),
+          );
+        }
+      } else {
+        if (dayFull) {
+          throw new HttpsError(
+            "resource-exhausted",
+            st(
+              locale,
+              "booking.dayFullOverflowHint",
+              "這一天預約張數已滿（最多 {{max}} 張）。若店家有開放，可改選「加價現金」再預約一張。",
+              { max: maxPerDay },
+            ),
+          );
+        }
+        if (weekFull) {
+          throw new HttpsError(
+            "resource-exhausted",
+            st(
+              locale,
+              "booking.weekFullOverflowHint",
+              "本工作週預約張數已滿（最多 {{max}} 張）。若店家有開放，可改選「加價現金」再預約一張。",
+              { max: maxPerWorkWeek },
+            ),
+          );
+        }
+        if (bookingMode === "member_cap_overflow") {
+          throw new HttpsError(
+            "invalid-argument",
+            st(locale, "booking.capOverflowOnlyWhenFull", "「加價現金」僅能在當日或本工作週名額已滿時使用。"),
+          );
+        }
       }
 
       const newInterval = bookingIntervalFromStartSlot(startSlot, durationMinutes);
@@ -584,7 +720,12 @@ export const createBooking = onCall(
       let walletDeducted = 0;
       let paidCash = 0;
       let sessionCreditsDeducted = 0;
-      if (bookingMode === "member_cash") {
+      let capOverflowSurchargeNtd = 0;
+      if (bookingMode === "member_cap_overflow") {
+        customerId = uid!;
+        capOverflowSurchargeNtd = capOverflowSettings.surchargeNtd;
+        paidCash = totalPrice + capOverflowSurchargeNtd;
+      } else if (bookingMode === "member_cash" || bookingMode === "member_qr") {
         customerId = uid!;
         paidCash = totalPrice;
       } else if (bookingMode === "member_beverage") {
@@ -653,13 +794,16 @@ export const createBooking = onCall(
         startAt,
         bookingMode,
         customerId,
-        price: totalPrice,
+        price: capOverflowRequested ? totalPrice + capOverflowSurchargeNtd : totalPrice,
         walletDeducted,
         paidCash,
         sessionCreditsDeducted,
         drawGranted: false,
         status: "pending",
         notificationLocale: "zh-Hant",
+        ...(capOverflowRequested
+          ? { capOverflow: true, capOverflowSurchargeNtd }
+          : {}),
         ...(holidayOutcall ? { holidayOutcall: true } : {}),
         createdAt: FieldValueOrServerTimestamp(),
         updatedAt: FieldValueOrServerTimestamp(),
@@ -887,7 +1031,7 @@ export const migrateLegacyWalletsAdmin = onCall(publicCall, async (request) => {
   };
 });
 
-export const topupWallet = onCall(publicCall, async (request) => {
+export const topupWallet = onCall(walletAdminCall, async (request) => {
   const locale = parseLocale(request.data);
   const uid = request.auth?.uid;
   if (!uid) {
@@ -910,22 +1054,30 @@ export const topupWallet = onCall(publicCall, async (request) => {
 
   const customerRef = db.collection("customers").doc(customerId);
   const walletTxRef = db.collection("walletTransactions").doc();
+  let beforeSnap: MemberWalletSnapshot = {
+    walletBalance: 0,
+    sessionCredits: 0,
+    drawChances: 0,
+    wheelPoints: 0,
+  };
+  let afterSnap: MemberWalletSnapshot = beforeSnap;
+  const noteFinal = note || `後台儲值：${sessions} 次（金額 ${amount} 元）`;
+
   await db.runTransaction(async (tx) => {
     const customerSnap = await tx.get(customerRef);
-    const walletBalanceRaw = customerSnap.exists ? customerSnap.get("walletBalance") : 0;
-    const drawChancesRaw = customerSnap.exists ? customerSnap.get("drawChances") : 0;
-    const sessionCreditsRaw = customerSnap.exists ? customerSnap.get("sessionCredits") : 0;
-    const wheelPointsRaw = customerSnap.exists ? customerSnap.get("wheelPoints") : 0;
-    const nextSessions = (typeof sessionCreditsRaw === "number" ? sessionCreditsRaw : 0) + sessions;
-    const drawChances = typeof drawChancesRaw === "number" ? drawChancesRaw : 0;
-    const wheelPoints = typeof wheelPointsRaw === "number" ? wheelPointsRaw : 0;
+    beforeSnap = readCustomerWalletSnapshot(customerSnap.data());
+    const nextSessions = beforeSnap.sessionCredits + sessions;
+    afterSnap = {
+      ...beforeSnap,
+      sessionCredits: nextSessions,
+    };
     tx.set(
       customerRef,
       {
-        walletBalance: typeof walletBalanceRaw === "number" ? walletBalanceRaw : 0,
-        sessionCredits: nextSessions,
-        drawChances,
-        wheelPoints,
+        walletBalance: afterSnap.walletBalance,
+        sessionCredits: afterSnap.sessionCredits,
+        drawChances: afterSnap.drawChances,
+        wheelPoints: afterSnap.wheelPoints,
         updatedAt: FieldValueOrServerTimestamp(),
       },
       { merge: true },
@@ -935,10 +1087,19 @@ export const topupWallet = onCall(publicCall, async (request) => {
       type: "topup",
       amount,
       sessionsDelta: sessions,
-      note: note || `後台儲值：${sessions} 次（金額 ${amount} 元）`,
+      note: noteFinal,
       operatorId: uid,
       createdAt: FieldValueOrServerTimestamp(),
     });
+  });
+
+  await notifyMemberWalletChangedEmail(customerId, {
+    kind: "topup",
+    before: beforeSnap,
+    after: afterSnap,
+    topupAmount: amount,
+    sessionsDelta: sessions,
+    note: noteFinal,
   });
 
   return { ok: true };
@@ -952,7 +1113,7 @@ const ADMIN_SESSION_NOTE_MAX = 500;
  * 管理員：調整會員「可預約次數」（可增可減）。先依定價折疊 walletBalance→sessionCredits，再套用增減；
  * 寫入 walletTransactions（type: admin_session_adjust）供稽核。
  */
-export const adjustSessionCreditsAdmin = onCall(publicCall, async (request) => {
+export const adjustSessionCreditsAdmin = onCall(walletAdminCall, async (request) => {
   const locale = parseLocale(request.data);
   const operatorUid = request.auth?.uid;
   if (!operatorUid) {
@@ -998,25 +1159,28 @@ export const adjustSessionCreditsAdmin = onCall(publicCall, async (request) => {
   const pricingRef = db.collection("siteSettings").doc("pricing");
 
   let nextSessionCredits = 0;
+  let beforeSnap: MemberWalletSnapshot = {
+    walletBalance: 0,
+    sessionCredits: 0,
+    drawChances: 0,
+    wheelPoints: 0,
+  };
+  let afterSnap: MemberWalletSnapshot = beforeSnap;
+  let sessionPriceNtd = 0;
+
   await db.runTransaction(async (tx) => {
     const [pricingSnap, customerSnap] = await Promise.all([tx.get(pricingRef), tx.get(customerRef)]);
-    const sessionPriceNtd = resolveSessionPriceNtd(pricingSnap.data());
+    sessionPriceNtd = resolveSessionPriceNtd(pricingSnap.data());
 
-    const walletBalanceRaw = customerSnap.exists ? customerSnap.get("walletBalance") : 0;
-    const sessionCreditsRaw = customerSnap.exists ? customerSnap.get("sessionCredits") : 0;
-    const drawChancesRaw = customerSnap.exists ? customerSnap.get("drawChances") : 0;
-    const wheelPointsRaw = customerSnap.exists ? customerSnap.get("wheelPoints") : 0;
+    const rawBefore = readCustomerWalletSnapshot(customerSnap.data());
+    beforeSnap = rawBefore;
+    const folded = foldWalletBalanceIntoSessions(
+      rawBefore.walletBalance,
+      rawBefore.sessionCredits,
+      sessionPriceNtd,
+    );
 
-    let walletBalance = typeof walletBalanceRaw === "number" ? walletBalanceRaw : 0;
-    let sessionCredits = typeof sessionCreditsRaw === "number" ? sessionCreditsRaw : 0;
-    const drawChances = typeof drawChancesRaw === "number" ? drawChancesRaw : 0;
-    const wheelPoints = typeof wheelPointsRaw === "number" ? wheelPointsRaw : 0;
-
-    const folded = foldWalletBalanceIntoSessions(walletBalance, sessionCredits, sessionPriceNtd);
-    walletBalance = folded.walletBalance;
-    sessionCredits = folded.sessionCredits;
-
-    const proposed = sessionCredits + sessionsDelta;
+    const proposed = folded.sessionCredits + sessionsDelta;
     if (proposed < 0) {
       throw new HttpsError(
         "failed-precondition",
@@ -1024,19 +1188,25 @@ export const adjustSessionCreditsAdmin = onCall(publicCall, async (request) => {
           locale,
           "adjustSessions.insufficient",
           "調整後可預約次數不可為負。目前可扣次數為 {{have}}，本次變更為 {{delta}}。",
-          { have: sessionCredits, delta: sessionsDelta },
+          { have: folded.sessionCredits, delta: sessionsDelta },
         ),
       );
     }
     nextSessionCredits = proposed;
+    afterSnap = {
+      walletBalance: folded.walletBalance,
+      sessionCredits: nextSessionCredits,
+      drawChances: rawBefore.drawChances,
+      wheelPoints: rawBefore.wheelPoints,
+    };
 
     tx.set(
       customerRef,
       {
-        walletBalance,
-        sessionCredits: nextSessionCredits,
-        drawChances,
-        wheelPoints,
+        walletBalance: afterSnap.walletBalance,
+        sessionCredits: afterSnap.sessionCredits,
+        drawChances: afterSnap.drawChances,
+        wheelPoints: afterSnap.wheelPoints,
         updatedAt: FieldValueOrServerTimestamp(),
       },
       { merge: true },
@@ -1054,13 +1224,22 @@ export const adjustSessionCreditsAdmin = onCall(publicCall, async (request) => {
     });
   });
 
+  await notifyMemberWalletChangedEmail(customerId, {
+    kind: "admin_session_adjust",
+    before: beforeSnap,
+    after: afterSnap,
+    sessionsDelta,
+    sessionPriceSnapshot: sessionPriceNtd,
+    note: noteRaw,
+  });
+
   return { ok: true as const, sessionCredits: nextSessionCredits };
 });
 
 const MAX_ADMIN_DRAW_GRANT = 50;
 
 /** 管理員：贈送輪盤「可抽次數」（寫入 walletTransactions 稽核） */
-export const grantDrawChancesAdmin = onCall(publicCall, async (request) => {
+export const grantDrawChancesAdmin = onCall(walletAdminCall, async (request) => {
   const locale = parseLocale(request.data);
   const uid = request.auth?.uid;
   if (!uid) {
@@ -1090,22 +1269,31 @@ export const grantDrawChancesAdmin = onCall(publicCall, async (request) => {
   const walletTxRef = db.collection("walletTransactions").doc();
 
   let drawChancesTotal = 0;
+  let beforeSnap: MemberWalletSnapshot = {
+    walletBalance: 0,
+    sessionCredits: 0,
+    drawChances: 0,
+    wheelPoints: 0,
+  };
+  let afterSnap: MemberWalletSnapshot = beforeSnap;
+  const noteFinal = noteRaw || st(locale, "grantDraw.defaultNote", "後台贈送輪盤抽獎次數");
+
   await db.runTransaction(async (tx) => {
     const customerSnap = await tx.get(customerRef);
-    const walletBalanceRaw = customerSnap.exists ? customerSnap.get("walletBalance") : 0;
-    const drawChancesRaw = customerSnap.exists ? customerSnap.get("drawChances") : 0;
-    const sessionCreditsRaw = customerSnap.exists ? customerSnap.get("sessionCredits") : 0;
-    const wheelPointsRaw = customerSnap.exists ? customerSnap.get("wheelPoints") : 0;
-    const prevDraw = asNonNegativeInteger(drawChancesRaw);
-    drawChancesTotal = prevDraw + delta;
+    beforeSnap = readCustomerWalletSnapshot(customerSnap.data());
+    drawChancesTotal = beforeSnap.drawChances + delta;
+    afterSnap = {
+      ...beforeSnap,
+      drawChances: drawChancesTotal,
+    };
 
     tx.set(
       customerRef,
       {
-        walletBalance: typeof walletBalanceRaw === "number" ? walletBalanceRaw : 0,
-        sessionCredits: typeof sessionCreditsRaw === "number" ? sessionCreditsRaw : 0,
-        wheelPoints: typeof wheelPointsRaw === "number" ? wheelPointsRaw : 0,
-        drawChances: drawChancesTotal,
+        walletBalance: afterSnap.walletBalance,
+        sessionCredits: afterSnap.sessionCredits,
+        wheelPoints: afterSnap.wheelPoints,
+        drawChances: afterSnap.drawChances,
         updatedAt: FieldValueOrServerTimestamp(),
       },
       { merge: true },
@@ -1116,10 +1304,18 @@ export const grantDrawChancesAdmin = onCall(publicCall, async (request) => {
       type: "admin_grant_draw",
       amount: 0,
       drawChancesDelta: delta,
-      note: noteRaw || st(locale, "grantDraw.defaultNote", "後台贈送輪盤抽獎次數"),
+      note: noteFinal,
       operatorId: uid,
       createdAt: FieldValueOrServerTimestamp(),
     });
+  });
+
+  await notifyMemberWalletChangedEmail(customerId, {
+    kind: "admin_grant_draw",
+    before: beforeSnap,
+    after: afterSnap,
+    drawChancesDelta: delta,
+    note: noteFinal,
   });
 
   return { ok: true as const, drawChancesAdded: delta, drawChancesTotal };

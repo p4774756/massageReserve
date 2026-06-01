@@ -1,0 +1,9 @@
+運動按摩技術員證（前台「點擊查看證照」）
+
+請將證照掃描圖命名為：
+
+  therapist-cert-rsm.png
+
+並放在此目錄（與本檔同層）。建議橫向、長邊約 1200–1600px，PNG 或 WebP。
+
+前台路徑：/media/therapist-cert-rsm.png
