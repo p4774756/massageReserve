@@ -41,6 +41,7 @@ import {
   adminBookingStatusUpdateError,
   adminSelectableBookingStatus,
   adminWhenCellParts,
+  createAdminBookingPriceCell,
   bookingCountsTowardAvailabilityCap,
   bookingIsCancelledForAdmin,
   bookingIsDoneForAdmin,
@@ -1306,6 +1307,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         el("th", {}, [t("admin.table.name", "姓名")]),
         el("th", { title: memberThTitle }, [t("admin.table.member", "會員")]),
         el("th", {}, [t("admin.table.note", "備註")]),
+        el("th", {}, [t("admin.table.price", "價格")]),
         el("th", {}, [t("admin.customerProfile.thBrief", "客戶摘要（內部）")]),
         el("th", {}, [t("admin.table.status", "狀態")]),
         el("th", {}, [t("admin.table.actions", "操作")]),
@@ -2683,6 +2685,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
           el("td", {}, [b.displayName ?? ""]),
           el("td", {}, [bookingMemberYesNo(b)]),
           el("td", {}, [b.note ?? ""]),
+          createAdminBookingPriceCell(b),
           createAdminBookingBriefCell(cid || null, cid ? adminBriefByCustomerId[cid] : undefined, openMemberCustomerProfile),
           el("td", {}, [
             el("span", { class: "admin-booking-status-readonly" }, [
@@ -2822,6 +2825,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
           el("td", {}, [b.displayName ?? ""]),
           el("td", {}, [bookingMemberYesNo(b)]),
           el("td", {}, [b.note ?? ""]),
+          createAdminBookingPriceCell(b),
           createAdminBookingBriefCell(
             cidHidden || null,
             cidHidden ? adminBriefByCustomerId[cidHidden] : undefined,
@@ -3052,6 +3056,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
               el("td", {}, [b.displayName ?? ""]),
               el("td", {}, [bookingMemberYesNo(b)]),
               el("td", {}, [b.note ?? ""]),
+              createAdminBookingPriceCell(b),
               createAdminBookingBriefCell(cid || null, cid ? adminBriefByCustomerId[cid] : undefined, openMemberCustomerProfile),
               el("td", {}, [statusCell]),
               el("td", {}, [actionCell]),

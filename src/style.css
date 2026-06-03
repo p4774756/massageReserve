@@ -1879,20 +1879,27 @@ button.ghost:disabled {
 
 .admin-bookings-table th:nth-child(5),
 .admin-bookings-table td:nth-child(5) {
+  white-space: nowrap;
+  min-width: 5.5rem;
+  text-align: right;
+}
+
+.admin-bookings-table th:nth-child(6),
+.admin-bookings-table td:nth-child(6) {
   min-width: 9rem;
   max-width: 18rem;
   white-space: normal;
   word-break: break-word;
 }
 
-.admin-bookings-table th:nth-child(6),
-.admin-bookings-table td:nth-child(6) {
+.admin-bookings-table th:nth-child(7),
+.admin-bookings-table td:nth-child(7) {
   white-space: nowrap;
   min-width: 8rem;
 }
 
-.admin-bookings-table th:nth-child(7),
-.admin-bookings-table td:nth-child(7) {
+.admin-bookings-table th:nth-child(8),
+.admin-bookings-table td:nth-child(8) {
   white-space: nowrap;
   min-width: 5.5rem;
 }

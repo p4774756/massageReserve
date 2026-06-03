@@ -161,6 +161,36 @@ export function adminBookingStatusUpdateError(e: unknown): string {
   return e instanceof Error ? e.message : t("admin.status.updateFail", "更新失敗（你是否已加入 admins 集合？）");
 }
 
+/** 後台預約表：建立當下寫入的總價快照（`bookings.price`） */
+export function adminBookingPriceDisplay(
+  b: Pick<Booking, "price" | "capOverflow" | "capOverflowSurchargeNtd">,
+): { text: string; title?: string } {
+  const p = b.price;
+  if (typeof p === "number" && Number.isFinite(p) && p > 0) {
+    let title = t("admin.table.priceSnapshotTitle", "建立預約時寫入的總價");
+    if (b.capOverflow === true && typeof b.capOverflowSurchargeNtd === "number" && b.capOverflowSurchargeNtd > 0) {
+      title = t("admin.table.priceCapOverflowTitle", "建立時總價（含名額加價 {{surcharge}} 元）", {
+        surcharge: String(b.capOverflowSurchargeNtd),
+      });
+    }
+    return {
+      text: t("admin.table.priceNtd", "{{amount}} 元", { amount: String(p) }),
+      title,
+    };
+  }
+  return {
+    text: t("admin.hidden.dash", "—"),
+    title: t("admin.table.priceMissing", "此筆預約未記錄建立當下的價格快照"),
+  };
+}
+
+export function createAdminBookingPriceCell(b: Booking): HTMLTableCellElement {
+  const { text, title } = adminBookingPriceDisplay(b);
+  const attrs: Record<string, string> = { class: "mono admin-booking-price-cell" };
+  if (title) attrs.title = title;
+  return el("td", attrs, [text]);
+}
+
 /** 後台預約表：是否為會員預約（是／否） */
 export function bookingMemberYesNo(b: Pick<Booking, "bookingMode" | "customerId">): string {
   const mode = b.bookingMode;
