@@ -35,8 +35,7 @@ export function buildBookingSummary(
     `${t("booking.summary.name", "姓名")}：${displayName}`,
     `${t("booking.summary.date", "日期")}：${dateKey}`,
     `${t("booking.summary.start", "開始時間")}：${startSlot}`,
-    t("booking.summary.durationLine", "時長：{{units}} 單位（{{minutes}} 分鐘，約 {{start}}–{{end}}）", {
-      units,
+    t("booking.summary.durationLine", "時長：約 {{minutes}} 分鐘（{{start}}–{{end}}）", {
       minutes: durationMinutes,
       start: startSlot,
       end: endSlot,
@@ -44,10 +43,8 @@ export function buildBookingSummary(
     ...(massageTotal > 0 &&
     (bookingMode === "member_cash" || bookingMode === "member_qr" || bookingMode === "member_cap_overflow")
       ? [
-          t("booking.summary.cashTotal", "現金參考：{{total}} 元（{{price}} 元／單位 × {{units}}）", {
+          t("booking.summary.cashTotal", "現金參考：{{total}} 元", {
             total: bookingMode === "member_cap_overflow" ? massageTotal : totalPrice,
-            price: unitPrice,
-            units,
           }),
         ]
       : []),

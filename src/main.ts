@@ -57,9 +57,9 @@ import { createTherapistCredentialStrip } from "./therapistCredential";
 import { wrapPasswordField } from "./passwordField";
 import { paintMemberWalletSummary, type MemberWalletSummaryOpts } from "./walletSummaryUi";
 import {
-  resolveMaxUnitsPerBookingClient,
   resolvePointsPerMassageClient,
   resolveSessionPriceNtdClient,
+  roundSessionPriceNtdForCash,
   resolveUnitMinutesClient,
 } from "./sitePricingResolve";
 
@@ -667,29 +667,8 @@ function render() {
   });
 
   const slotSelect = el("select", {}, []);
-  const unitsSelect = el("select", {}, [
-    el("option", { value: "1" }, [t("booking.unitsOption1", "1 單位（20 分鐘）")]),
-    el("option", { value: "2" }, [t("booking.unitsOption2", "2 單位（40 分鐘）")]),
-  ]);
-  function selectedBookingUnits(): number {
-    const n = Number(unitsSelect.value);
-    return Number.isInteger(n) && n >= 1 ? n : 1;
-  }
-  function syncUnitsSelectOptions() {
-    const prev = unitsSelect.value;
-    unitsSelect.innerHTML = "";
-    const max = Math.max(1, maxUnitsPerBookingSetting);
-    for (let u = 1; u <= max; u++) {
-      const mins = u * unitMinutesSetting;
-      unitsSelect.append(
-        el("option", { value: String(u) }, [
-          t("booking.unitsOption", "{{units}} 單位（{{minutes}} 分鐘）", { units: u, minutes: mins }),
-        ]),
-      );
-    }
-    const keep = [...unitsSelect.options].some((o) => o.value === prev);
-    unitsSelect.value = keep ? prev : "1";
-  }
+  /** 預約固定 1 次（不再提供選次數／單位） */
+  const BOOKING_UNITS = 1;
   function runRefillSlots(
     taken: Set<string>,
     disabled: boolean,
@@ -716,15 +695,14 @@ function render() {
   const bookingModeHint = el("span", { class: "hint" }, []);
   function syncBookingPaymentQrPanel(): void {
     const mode = bookingModeSelect.value as BookingMode;
-    const units = selectedBookingUnits();
-    const total = sessionPriceNtdSetting * units;
+    const total = sessionPriceNtdSetting * BOOKING_UNITS;
     const show = mode === "member_qr" && !bookingCapOverflowOffer;
     bookingQrPanel.hidden = !show;
     if (show) {
       bookingQrCaption.textContent = t(
         "booking.qr.caption",
-        "請於現場掃描 QR Code 付款 {{total}} 元（{{price}} 元／單位 × {{units}}），完成後再按「送出預約」。",
-        { total, price: sessionPriceNtdSetting, units },
+        "請於現場掃描 QR Code 付款 {{total}} 元，完成後再按「送出預約」。",
+        { total },
       );
     }
   }
@@ -743,39 +721,16 @@ function render() {
   /** 與後端 `functions/src/pricing.ts` 預設對齊（定價 API 失敗時的首屏 fallback） */
   let sessionPriceNtdSetting = 130;
   let unitMinutesSetting = 20;
-  let maxUnitsPerBookingSetting = 2;
   let capOverflowEnabledSetting = true;
   let capOverflowSurchargeNtdSetting = 100;
   /** 當日或本週名額已滿且後台開放加價預約 */
   let bookingCapOverflowOffer = false;
-  const bookingUnitsHint = el("span", { class: "hint" }, []);
-  function syncBookingUnitsHint() {
-    bookingUnitsHint.textContent = t(
-      "field.bookingUnitsHint",
-      "每 1 單位 {{minutes}} 分鐘、{{price}} 元；最多 {{max}} 單位。",
-      {
-        minutes: unitMinutesSetting,
-        price: sessionPriceNtdSetting,
-        max: maxUnitsPerBookingSetting,
-      },
-    );
-  }
-  syncBookingUnitsHint();
-  const slotFieldWrap = el(
-    "div",
-    { class: "grid" },
-    [
-      el("label", { class: "field" }, [
-        t("field.bookingUnits", "預約時長（單位）"),
-        unitsSelect,
-        bookingUnitsHint,
-      ]),
-      el("label", { class: "field" }, [
-        t("field.startSlot", "開始時間（請選預約時段）"),
-        slotSelect,
-      ]),
-    ],
-  );
+  const slotFieldWrap = el("div", { class: "grid" }, [
+    el("label", { class: "field" }, [
+      t("field.startSlot", "開始時間（請選預約時段）"),
+      slotSelect,
+    ]),
+  ]);
   const slotStepSection = el("div", { class: "book-step book-step--slots" }, [
     slotFieldWrap,
     scheduleStatus,
@@ -785,19 +740,19 @@ function render() {
   const bookFooterNote = el("div", { class: "footer-note" });
   bookFooterNote.textContent = t(
     "booking.rulesFooterDefault",
-    "規則：同一天最多 2 張預約、同一工作週最多 4 張；每張可選 1–2 單位（時長依定價）。已取消不計入名額。",
+    "規則：同一天最多 2 張預約、同一工作週最多 4 張。已取消不計入名額。",
   );
   function setBookFooterFromCaps(dayCap: number, weekCap: number) {
     if (capOverflowEnabledSetting) {
       bookFooterNote.textContent = t(
         "booking.rulesFooterWithOverflow",
-        "規則：同一天最多 {{dayCap}} 張、同一工作週最多 {{weekCap}} 張預約（每張可 1–2 單位）。已取消不計入。當日或本週張數已滿時，可加 {{surcharge}} 元／張以「加價現金」再預約（另加按摩費）。",
-        { dayCap, weekCap, surcharge: capOverflowSurchargeNtdSetting },
+        "規則：同一天最多 {{dayCap}} 張、同一工作週最多 {{weekCap}} 張預約。已取消不計入。當日或本週張數已滿時，可加 {{surcharge}} 元／張以「加價現金」再預約（另加按摩費 {{price}} 元）。",
+        { dayCap, weekCap, surcharge: capOverflowSurchargeNtdSetting, price: sessionPriceNtdSetting },
       );
     } else {
       bookFooterNote.textContent = t(
         "booking.rulesFooter",
-        "規則：同一天最多 {{dayCap}} 張、同一工作週最多 {{weekCap}} 張預約；每張可 1–2 單位。已取消不計入名額。",
+        "規則：同一天最多 {{dayCap}} 張、同一工作週最多 {{weekCap}} 張預約。已取消不計入名額。",
         { dayCap, weekCap },
       );
     }
@@ -1387,22 +1342,21 @@ function render() {
   function refillBookingModes(isMember: boolean) {
     const current = bookingModeSelect.value as BookingMode;
     bookingModeSelect.innerHTML = "";
-    const units = selectedBookingUnits();
     const unitPrice = sessionPriceNtdSetting;
-    const totalPrice = unitPrice * units;
+    const totalPrice = unitPrice * BOOKING_UNITS;
     const overflowTotal = totalPrice + capOverflowSurchargeNtdSetting;
     bookingModeSelect.disabled = false;
     bookingModeSelect.removeAttribute("disabled");
     bookingModeSelect.removeAttribute("aria-disabled");
     bookingPaymentWrap.querySelector(".booking-payment-lock-shield")?.remove();
 
-    const walletShort = sessionCreditsCount < units;
+    const walletShort = sessionCreditsCount < BOOKING_UNITS;
     const modes: { value: BookingMode; label: string; disabled?: boolean }[] = bookingCapOverflowOffer
       ? [
           {
             value: "member_cap_overflow",
             label: bookingModeLabel("member_cap_overflow", {
-              units,
+              units: BOOKING_UNITS,
               unitPriceNtd: unitPrice,
               capOverflowSurchargeNtd: capOverflowSurchargeNtdSetting,
             }),
@@ -1411,7 +1365,7 @@ function render() {
       : [
           {
             value: "member_wallet",
-            label: t("member.mode.walletUnits", "預約次數扣抵（扣 {{units}} 單位）", { units }),
+            label: bookingModeLabel("member_wallet"),
             disabled: walletShort,
           },
           {
@@ -1447,8 +1401,8 @@ function render() {
     } else if (isMember) {
       bookingModeHint.textContent = t(
         "member.modeHint.memberUnits",
-        "「預約次數」為儲值或輪盤點兌換的按摩次數（非現金）。您目前有 {{have}} 次，本次需 {{units}} 次；亦可現金 {{total}} 元、掃描 QR Code 付款，或「請師傅一杯飲料」（現場約定）。",
-        { have: sessionCreditsCount, units, total: totalPrice },
+        "「預約次數扣抵」為儲值或輪盤點兌換的按摩次數（非現金）。您目前有 {{have}} 次；亦可現金 {{total}} 元、掃描 QR Code 付款，或「請師傅一杯飲料」（現場約定）。",
+        { have: sessionCreditsCount, total: totalPrice },
       );
     } else {
       const loggedInUnverified = Boolean(
@@ -1588,7 +1542,6 @@ function render() {
           nickname?: string;
           sessionPriceNtd?: number;
           unitMinutes?: number;
-          maxUnitsPerBooking?: number;
           pointsPerMassage?: number;
         };
         walletBalance = typeof data.walletBalance === "number" ? data.walletBalance : 0;
@@ -1598,7 +1551,6 @@ function render() {
         applyBookingPricingFromApi({
           sessionPriceNtd: data.sessionPriceNtd,
           unitMinutes: data.unitMinutes,
-          maxUnitsPerBooking: data.maxUnitsPerBooking,
           pointsPerMassage: data.pointsPerMassage,
         });
         const nickFromDb =
@@ -1754,37 +1706,25 @@ function render() {
 
   function syncHomePageSubtitle() {
     if (tab !== "book") return;
-    titleDesc.textContent = t(
-      "home.subtitle",
-      "每 {{minutes}} 分鐘 1 單位（{{price}} 元），預約時可選 1–{{max}} 單位。",
-      {
-        minutes: unitMinutesSetting,
-        price: sessionPriceNtdSetting,
-        max: maxUnitsPerBookingSetting,
-      },
-    );
+    titleDesc.textContent = t("home.subtitle", "一次 {{price}}元", {
+      price: sessionPriceNtdSetting,
+    });
   }
 
   function applyBookingPricingFromApi(d: {
     sessionPriceNtd?: number;
     unitMinutes?: number;
-    maxUnitsPerBooking?: number;
     pointsPerMassage?: number;
   }) {
     if (typeof d.sessionPriceNtd === "number" && Number.isFinite(d.sessionPriceNtd)) {
-      sessionPriceNtdSetting = Math.max(1, Math.round(d.sessionPriceNtd));
+      sessionPriceNtdSetting = roundSessionPriceNtdForCash(d.sessionPriceNtd);
     }
     if (typeof d.unitMinutes === "number" && Number.isFinite(d.unitMinutes)) {
       unitMinutesSetting = Math.max(5, Math.round(d.unitMinutes));
     }
-    if (typeof d.maxUnitsPerBooking === "number" && Number.isFinite(d.maxUnitsPerBooking)) {
-      maxUnitsPerBookingSetting = Math.max(1, Math.round(d.maxUnitsPerBooking));
-    }
     if (typeof d.pointsPerMassage === "number" && Number.isFinite(d.pointsPerMassage)) {
       pointsPerMassageSetting = Math.max(2, Math.round(d.pointsPerMassage));
     }
-    syncUnitsSelectOptions();
-    syncBookingUnitsHint();
     syncHomePageSubtitle();
     refillBookingModes(isVerifiedMember());
     syncRedeemPointsUi();
@@ -1867,7 +1807,7 @@ function render() {
         const fn = getAvailabilityCall();
         const res = await fn({
           dateKey: dk,
-          units: selectedBookingUnits(),
+          units: BOOKING_UNITS,
           ...localeApiParam(),
         });
         const data = res.data as {
@@ -1965,10 +1905,11 @@ function render() {
           if (weekFull) parts.push(t("booking.weekFullShort", "本工作週名額已滿"));
           scheduleStatus.textContent = t(
             "booking.capOverflowOffer",
-            "{{caps}}。可選時段後以「加價現金」再預約一張（加價 {{surcharge}} 元／張 ＋ 按摩費，依所選單位數計算）。",
+            "{{caps}}。可選時段後以「加價現金」再預約一張（加價 {{surcharge}} 元／張 ＋ 按摩費 {{price}} 元）。",
             {
               caps: parts.join("；"),
               surcharge: capOverflowSurchargeNtdSetting,
+              price: sessionPriceNtdSetting,
             },
           );
           scheduleStatus.className = "status-line schedule-status ok";
@@ -2011,10 +1952,6 @@ function render() {
   }
 
   slotSelect.addEventListener("change", syncBookingStepVisibility);
-  unitsSelect.addEventListener("change", () => {
-    refillBookingModes(isVerifiedMember());
-    void refreshAvailability();
-  });
 
   onSnapshot(
     doc(db, "siteSettings", "bookingCaps"),
@@ -2104,7 +2041,7 @@ function render() {
       bookStatus.classList.add("error");
       return;
     }
-    if (bookingMode === "member_wallet" && sessionCreditsCount < selectedBookingUnits()) {
+    if (bookingMode === "member_wallet" && sessionCreditsCount < BOOKING_UNITS) {
       bookStatus.textContent = t(
         "booking.sessionShort",
         "預約次數不足，請改用現金、「請師傅一杯飲料」或先儲值次數。",
@@ -2112,11 +2049,10 @@ function render() {
       bookStatus.classList.add("error");
       return;
     }
-    const bookingUnits = selectedBookingUnits();
     const confirmed = await showConfirmModal(
       t("booking.confirmTitle", "確認送出預約"),
       buildBookingSummary(displayName, dateKey, startSlot, note, bookingMode, false, {
-        units: bookingUnits,
+        units: BOOKING_UNITS,
         unitMinutes: unitMinutesSetting,
         unitPriceNtd: sessionPriceNtdSetting,
         capOverflowSurchargeNtd: bookingCapOverflowOffer ? capOverflowSurchargeNtdSetting : undefined,
@@ -2135,7 +2071,7 @@ function render() {
         note,
         dateKey,
         startSlot,
-        units: bookingUnits,
+        units: BOOKING_UNITS,
         bookingMode,
         ...(bookingCapOverflowOffer ? { capOverflow: true } : {}),
         ...localeApiParam(),
@@ -2358,7 +2294,6 @@ function render() {
       applyBookingPricingFromApi({
         sessionPriceNtd: resolveSessionPriceNtdClient(raw),
         unitMinutes: resolveUnitMinutesClient(raw),
-        maxUnitsPerBooking: resolveMaxUnitsPerBookingClient(raw),
         pointsPerMassage: resolvePointsPerMassageClient(raw),
       });
     },

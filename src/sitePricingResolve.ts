@@ -8,6 +8,16 @@ const DEFAULT_UNIT_MINUTES = 20;
 const DEFAULT_MAX_UNITS_PER_BOOKING = 2;
 const DEFAULT_POINTS_PER_MASSAGE = 10;
 
+/** 與 `functions/src/pricing.ts` 相同：現場收現進位至 10 元倍數 */
+export const SESSION_PRICE_CASH_STEP_NTD = 10;
+
+export function roundSessionPriceNtdForCash(ntd: number): number {
+  const n = typeof ntd === "number" && Number.isFinite(ntd) ? Math.round(ntd) : Number(ntd);
+  if (!Number.isInteger(n)) return roundSessionPriceNtdForCash(DEFAULT_SESSION_PRICE_NTD);
+  if (n < SESSION_PRICE_CASH_STEP_NTD) return SESSION_PRICE_CASH_STEP_NTD;
+  return Math.ceil(n / SESSION_PRICE_CASH_STEP_NTD) * SESSION_PRICE_CASH_STEP_NTD;
+}
+
 function asIntInRange(
   raw: Record<string, unknown> | undefined,
   key: string,
@@ -23,11 +33,13 @@ function asIntInRange(
 }
 
 export function resolveSessionPriceNtdClient(raw: Record<string, unknown> | undefined): number {
-  if (!raw || typeof raw !== "object") return DEFAULT_SESSION_PRICE_NTD;
+  if (!raw || typeof raw !== "object") return roundSessionPriceNtdForCash(DEFAULT_SESSION_PRICE_NTD);
   const v = raw.sessionPriceNtd ?? raw.unitPriceNtd;
   const n = typeof v === "number" && Number.isFinite(v) ? Math.round(v) : Number(v);
-  if (!Number.isInteger(n) || n < 1 || n > 500_000) return DEFAULT_SESSION_PRICE_NTD;
-  return n;
+  if (!Number.isInteger(n) || n < 1 || n > 500_000) {
+    return roundSessionPriceNtdForCash(DEFAULT_SESSION_PRICE_NTD);
+  }
+  return roundSessionPriceNtdForCash(n);
 }
 
 export function resolveUnitMinutesClient(raw: Record<string, unknown> | undefined): number {

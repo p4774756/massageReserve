@@ -20,7 +20,7 @@ export function bookingModeLabel(
       unitPrice > 0
         ? t("booking.mode.member_cashTotal", "會員現金（{{total}} 元）", { total: unitPrice * units })
         : t("booking.mode.member_cash", "會員現金"),
-    member_wallet: t("booking.mode.member_walletUnits", "預約次數扣抵（扣 {{units}} 單位）", { units }),
+    member_wallet: t("booking.mode.member_wallet", "預約次數扣抵"),
     member_beverage: beverageOptionLabel(),
     member_qr:
       unitPrice > 0

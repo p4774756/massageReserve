@@ -21,6 +21,7 @@ import {
   sendMemberDirectEmailAdminCall,
   topupWalletCall,
   batchGetCustomerAdminBriefsAdminCall,
+  syncSessionPriceFromTsmcAdminCall,
 } from "./firebase";
 import {
   applyAdminBriefsToBookingTable,
@@ -30,6 +31,7 @@ import {
 } from "./adminCustomerProfile";
 import { renderAdminForbidden as paintAdminForbiddenView, renderAdminLoggedOut as paintAdminLoginView } from "./adminLoginViews";
 import { resolveCapOverflowSettingsClient } from "./capOverflow";
+import { roundSessionPriceNtdForCash } from "./sitePricingResolve";
 import {
   memberBookingGetsStatusEmail,
   showAdminBookingStatusEmailNoteModal,
@@ -245,12 +247,57 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     const grantDrawBtn = el("button", { class: "ghost", type: "button" }, [t("admin.grantDraw.btn", "贈送抽獎次數")]);
     const grantDrawStatus = el("div", { class: "status-line" });
     const pricingDocRef = doc(db, "siteSettings", "pricing");
-    const pricingSessionPriceInput = el("input", { type: "number", min: "1", step: "1", value: "130" });
+    const pricingSessionPriceInput = el("input", { type: "number", min: "10", step: "10", value: "130" });
     const pricingUnitMinutesInput = el("input", { type: "number", min: "5", step: "1", value: "20" });
     const pricingMaxUnitsInput = el("input", { type: "number", min: "1", step: "1", value: "2" });
     const pricingPointsPerInput = el("input", { type: "number", min: "2", step: "1", value: "10" });
+    const tsmcPricingEnabledInput = el("input", { type: "checkbox" });
+    tsmcPricingEnabledInput.checked = true;
+    const tsmcPricingBaseInput = el("input", { type: "number", min: "1", step: "1", value: "130" });
+    const tsmcSyncInfo = el("div", { class: "status-line admin-pricing-tsmc-info" });
+    const syncTsmcPricingBtn = el("button", { type: "button", class: "ghost" }, [
+      t("admin.pricing.tsmcSyncNow", "立即依台積電同步"),
+    ]);
+    const tsmcSyncStatus = el("div", { class: "status-line" });
     const savePricingBtn = el("button", { type: "button", class: "ghost" }, [t("admin.pricing.save", "儲存定價")]);
     const pricingAdminStatus = el("div", { class: "status-line" });
+    let persistedTsmcBaseNtd: number | null = null;
+    const formatTsmcSyncInfo = (d: Record<string, unknown> | undefined): string => {
+      if (!d) return t("admin.pricing.tsmcSyncNever", "尚未同步過台積電行情。");
+      const err = typeof d.tsmcLastSyncError === "string" ? d.tsmcLastSyncError.trim() : "";
+      if (err) {
+        return t("admin.pricing.tsmcSyncError", "上次同步失敗：{{err}}", { err });
+      }
+      const at = d.tsmcLastSyncAt as { toDate?: () => Date } | undefined;
+      const when =
+        at && typeof at.toDate === "function"
+          ? at.toDate().toLocaleString(intlLocaleTag(), { timeZone: "Asia/Taipei" })
+          : "";
+      const pct = d.tsmcLastChangePercent;
+      const pctStr =
+        typeof pct === "number" && Number.isFinite(pct)
+          ? `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`
+          : "—";
+      const dateKey = typeof d.tsmcLastQuoteDateKey === "string" ? d.tsmcLastQuoteDateKey : "";
+      const factorRaw = d.tsmcCumulativeFactor;
+      const factorStr =
+        typeof factorRaw === "number" && Number.isFinite(factorRaw) ? `×${factorRaw.toFixed(4)}` : "×1";
+      const baseRaw = d.tsmcPricingBaseNtd;
+      const baseStr =
+        typeof baseRaw === "number" && Number.isFinite(baseRaw) ? String(Math.round(baseRaw)) : "—";
+      if (!when) return t("admin.pricing.tsmcSyncNever", "尚未同步過台積電行情。");
+      return t(
+        "admin.pricing.tsmcSyncOk",
+        "上次同步：{{when}}，2330 日漲跌 {{pct}}（{{date}}）；店內基準 {{base}} 元，累積係數 {{factor}}",
+        {
+          when,
+          pct: pctStr,
+          date: dateKey || "—",
+          base: baseStr,
+          factor: factorStr,
+        },
+      );
+    };
     adminPricingUnsub = onSnapshot(
       pricingDocRef,
       (snap) => {
@@ -260,6 +307,13 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
               unitMinutes?: unknown;
               maxUnitsPerBooking?: unknown;
               pointsPerMassage?: unknown;
+              tsmcPricingEnabled?: unknown;
+              tsmcPricingBaseNtd?: unknown;
+              tsmcCumulativeFactor?: unknown;
+              tsmcLastSyncAt?: unknown;
+              tsmcLastChangePercent?: unknown;
+              tsmcLastQuoteDateKey?: unknown;
+              tsmcLastSyncError?: unknown;
             }
           | undefined;
         const sp = d?.sessionPriceNtd;
@@ -278,6 +332,14 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         if (typeof pp === "number" && Number.isFinite(pp)) {
           pricingPointsPerInput.value = String(Math.max(2, Math.round(pp)));
         }
+        tsmcPricingEnabledInput.checked = d?.tsmcPricingEnabled !== false;
+        const base = d?.tsmcPricingBaseNtd;
+        if (typeof base === "number" && Number.isFinite(base)) {
+          const rounded = Math.max(1, Math.round(base));
+          tsmcPricingBaseInput.value = String(rounded);
+          persistedTsmcBaseNtd = rounded;
+        }
+        tsmcSyncInfo.textContent = formatTsmcSyncInfo(d as Record<string, unknown> | undefined);
       },
       () => {
         pricingAdminStatus.textContent = t("admin.pricing.loadFail", "無法讀取定價設定。");
@@ -291,8 +353,11 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       const um = Number(pricingUnitMinutesInput.value);
       const mu = Number(pricingMaxUnitsInput.value);
       const pp = Number(pricingPointsPerInput.value);
-      if (!Number.isFinite(sp) || sp < 1 || !Number.isInteger(sp)) {
-        pricingAdminStatus.textContent = t("admin.pricing.badSessionPrice", "每單位金額需為 ≥1 的整數。");
+      if (!Number.isFinite(sp) || sp < 10 || !Number.isInteger(sp)) {
+        pricingAdminStatus.textContent = t(
+          "admin.pricing.badSessionPrice",
+          "每單位金額需為 ≥10 的整數（儲存時會進位至 10 的倍數）。",
+        );
         pricingAdminStatus.classList.add("error");
         return;
       }
@@ -311,19 +376,30 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         pricingAdminStatus.classList.add("error");
         return;
       }
+      const tsmcBase = Number(tsmcPricingBaseInput.value);
+      if (!Number.isFinite(tsmcBase) || tsmcBase < 1 || !Number.isInteger(tsmcBase)) {
+        pricingAdminStatus.textContent = t("admin.pricing.badTsmcBase", "台積電連動基準價需為 ≥1 的整數。");
+        pricingAdminStatus.classList.add("error");
+        return;
+      }
+      const roundedTsmcBase = Math.round(tsmcBase);
+      const baseChanged = persistedTsmcBaseNtd !== null && persistedTsmcBaseNtd !== roundedTsmcBase;
       savePricingBtn.setAttribute("disabled", "true");
       try {
-        await setDoc(
-          pricingDocRef,
-          {
-            sessionPriceNtd: Math.round(sp),
-            unitMinutes: Math.round(um),
-            maxUnitsPerBooking: Math.round(mu),
-            pointsPerMassage: Math.round(pp),
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true },
-        );
+        const pricingPatch: Record<string, unknown> = {
+          sessionPriceNtd: roundSessionPriceNtdForCash(sp),
+          unitMinutes: Math.round(um),
+          maxUnitsPerBooking: Math.round(mu),
+          pointsPerMassage: Math.round(pp),
+          tsmcPricingEnabled: tsmcPricingEnabledInput.checked,
+          tsmcPricingBaseNtd: roundedTsmcBase,
+          updatedAt: serverTimestamp(),
+        };
+        if (baseChanged) {
+          pricingPatch.tsmcCumulativeFactor = 1;
+          pricingPatch.tsmcLastAppliedQuoteDateKey = deleteField();
+        }
+        await setDoc(pricingDocRef, pricingPatch, { merge: true });
         pricingAdminStatus.textContent = t("admin.status.updated", "已更新");
         pricingAdminStatus.classList.add("ok");
       } catch (e) {
@@ -334,6 +410,47 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       }
     });
 
+    syncTsmcPricingBtn.addEventListener("click", async () => {
+      tsmcSyncStatus.textContent = "";
+      tsmcSyncStatus.className = "status-line";
+      syncTsmcPricingBtn.setAttribute("disabled", "true");
+      try {
+        const fn = syncSessionPriceFromTsmcAdminCall();
+        const res = await fn({ ...localeApiParam() });
+        const data = res.data as
+          | { ok?: boolean; skipped?: boolean; reason?: string; error?: string; sessionPriceNtd?: number }
+          | undefined;
+        if (data?.ok === false && data.error) {
+          tsmcSyncStatus.textContent = data.error;
+          tsmcSyncStatus.classList.add("error");
+          return;
+        }
+        if (data?.ok && data.skipped) {
+          const reason =
+            data.reason === "tsmc_pricing_disabled"
+              ? t("admin.pricing.tsmcSkippedDisabled", "已關閉台積電連動，未更新單價。")
+              : t("admin.pricing.tsmcSkipped", "未更新：{{reason}}", { reason: data.reason ?? "" });
+          tsmcSyncStatus.textContent = reason;
+          tsmcSyncStatus.classList.add("ok");
+          return;
+        }
+        if (data?.ok && typeof data.sessionPriceNtd === "number") {
+          tsmcSyncStatus.textContent = t("admin.pricing.tsmcSynced", "已更新每單位金額為 {{price}} 元。", {
+            price: String(data.sessionPriceNtd),
+          });
+          tsmcSyncStatus.classList.add("ok");
+          return;
+        }
+        tsmcSyncStatus.textContent = t("admin.pricing.tsmcSyncUnknown", "同步完成，請重新整理定價區塊確認。");
+        tsmcSyncStatus.classList.add("ok");
+      } catch (e) {
+        tsmcSyncStatus.textContent = e instanceof Error ? e.message : t("admin.memberList.saveFail", "儲存失敗");
+        tsmcSyncStatus.classList.add("error");
+      } finally {
+        syncTsmcPricingBtn.removeAttribute("disabled");
+      }
+    });
+
     const announcePricingFlat = el("section", { class: "admin-announce__block admin-announce__block--pricing" }, [
       el("h4", { class: "admin-announce__block-title" }, [t("admin.pricing.heading", "定價與點數兌換")]),
       el("div", { class: "grid grid-2" }, [
@@ -341,6 +458,30 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         el("label", { class: "field" }, [t("admin.pricing.unitMinutes", "每單位分鐘數"), pricingUnitMinutesInput]),
         el("label", { class: "field" }, [t("admin.pricing.maxUnits", "單筆最多單位數"), pricingMaxUnitsInput]),
         el("label", { class: "field" }, [t("admin.pricing.pointsPer", "輪盤：幾點換 1 單位"), pricingPointsPerInput]),
+      ]),
+      el("section", { class: "admin-pricing-tsmc" }, [
+        el("h5", { class: "admin-announce__block-subtitle" }, [
+          t("admin.pricing.tsmcHeading", "台積電連動定價（2330）"),
+        ]),
+        el("p", { class: "hint admin-pricing-tsmc__hint" }, [
+          t(
+            "admin.pricing.tsmcHint",
+            "2330 日漲跌以「相對昨日收盤」計算；店內基準價（如 110）每日累乘係數（連兩天各 +2% → 110×1.02×1.02）。每單位金額無條件進位至 10 元倍數。平日 15:30 自動同步。改基準價會重設累積係數為 1。",
+          ),
+        ]),
+        el("div", { class: "grid grid-2 admin-pricing-tsmc__grid" }, [
+          el("label", { class: "field checkbox-field" }, [
+            tsmcPricingEnabledInput,
+            t("admin.pricing.tsmcEnabled", "啟用每日收盤後自動更新"),
+          ]),
+          el("label", { class: "field" }, [
+            t("admin.pricing.tsmcBase", "店內基準價（元，累積起點）"),
+            tsmcPricingBaseInput,
+          ]),
+        ]),
+        tsmcSyncInfo,
+        el("div", { class: "row-actions admin-pricing-tsmc__actions" }, [syncTsmcPricingBtn]),
+        tsmcSyncStatus,
       ]),
       el("div", { class: "row-actions" }, [savePricingBtn]),
       pricingAdminStatus,

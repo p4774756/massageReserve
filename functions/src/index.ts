@@ -10,6 +10,7 @@ import {
 import { defineSecret, defineString } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import { DateTime } from "luxon";
 import {
   buildBroadcastEmailHtml,
@@ -52,6 +53,7 @@ import {
 import { parseLocale, st, type ServerLocale } from "./serverI18n";
 import { maskDisplayNameForPublic } from "./maskDisplayName";
 import { resolveCapOverflowSettings } from "./capOverflow";
+import { applyTsmcSessionPricingSync } from "./tsmcPricing";
 
 initializeApp();
 const db = getFirestore();
@@ -908,6 +910,29 @@ export const getBookingPricing = onCall(publicCall, async (request) => {
     maxUnitsPerBooking: resolveMaxUnitsPerBooking(raw),
     pointsPerMassage: resolvePointsPerMassage(raw),
   };
+});
+
+/** 平日收盤後：依台積電（2330）日漲跌幅線性更新 `sessionPriceNtd`（基準見 `tsmcPricingBaseNtd`） */
+export const syncSessionPriceFromTsmcDaily = onSchedule(
+  {
+    schedule: "30 15 * * 1-5",
+    timeZone: TIMEZONE,
+    region,
+  },
+  async () => {
+    await applyTsmcSessionPricingSync(db);
+  },
+);
+
+/** 管理員：手動觸發台積電連動定價同步（規則同排程） */
+export const syncSessionPriceFromTsmcAdmin = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
+  }
+  await assertAdminByUid(uid, locale);
+  return applyTsmcSessionPricingSync(db);
 });
 
 /** 會員：輪盤點數滿門檻時手動兌換為 1 次預約次數 */

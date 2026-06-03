@@ -3,6 +3,9 @@ import type { DocumentData } from "firebase-admin/firestore";
 /**
  * 後台 `siteSettings/pricing`：每單位金額／分鐘、點數兌換門檻、單筆最多單位數
  * `sessionPriceNtd` 語意為「每 1 單位現場金額」（與舊版欄位名相容）。
+ *
+ * 台積電連動（見 `tsmcPricing.ts`）：`tsmcPricingBaseNtd`（店內錨點）、`tsmcCumulativeFactor`（累積係數）、
+ * 平日 15:30 依 2330「相對昨日收盤」日漲跌累乘後寫入 `sessionPriceNtd`。
  */
 
 export const DEFAULT_SESSION_PRICE_NTD = 130;
@@ -12,13 +15,25 @@ export const DEFAULT_POINTS_PER_MASSAGE = 10;
 
 const MAX_UNITS_CAP = 10;
 
+/** 現場收現：未滿 10 元進位為 10，其餘無條件進位至 10 的倍數 */
+export const SESSION_PRICE_CASH_STEP_NTD = 10;
+
+export function roundSessionPriceNtdForCash(ntd: number): number {
+  const n = typeof ntd === "number" && Number.isFinite(ntd) ? Math.round(ntd) : Number(ntd);
+  if (!Number.isInteger(n)) return roundSessionPriceNtdForCash(DEFAULT_SESSION_PRICE_NTD);
+  if (n < SESSION_PRICE_CASH_STEP_NTD) return SESSION_PRICE_CASH_STEP_NTD;
+  return Math.ceil(n / SESSION_PRICE_CASH_STEP_NTD) * SESSION_PRICE_CASH_STEP_NTD;
+}
+
 export function resolveSessionPriceNtd(raw: DocumentData | undefined): number {
-  if (!raw || typeof raw !== "object") return DEFAULT_SESSION_PRICE_NTD;
+  if (!raw || typeof raw !== "object") return roundSessionPriceNtdForCash(DEFAULT_SESSION_PRICE_NTD);
   const o = raw as Record<string, unknown>;
   const v = o.sessionPriceNtd ?? o.unitPriceNtd;
   const n = typeof v === "number" && Number.isFinite(v) ? Math.round(v) : Number(v);
-  if (!Number.isInteger(n) || n < 1 || n > 500_000) return DEFAULT_SESSION_PRICE_NTD;
-  return n;
+  if (!Number.isInteger(n) || n < 1 || n > 500_000) {
+    return roundSessionPriceNtdForCash(DEFAULT_SESSION_PRICE_NTD);
+  }
+  return roundSessionPriceNtdForCash(n);
 }
 
 export function resolveUnitMinutes(raw: DocumentData | undefined): number {
