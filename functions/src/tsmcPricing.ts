@@ -33,14 +33,21 @@ export type TsmcDailyQuote = {
   source: "yahoo_chart";
 };
 
-const MIN_CUMULATIVE_FACTOR = 0.01;
-const MAX_CUMULATIVE_FACTOR = 1000;
+/** 相對店內基準價，累積漲跌係數上下限 ±25% */
+export const TSMC_CUMULATIVE_FACTOR_MIN = 0.75;
+export const TSMC_CUMULATIVE_FACTOR_MAX = 1.25;
+
+export function clampTsmcCumulativeFactor(factor: number): number {
+  const n = Number.isFinite(factor) ? factor : 1;
+  return Math.max(TSMC_CUMULATIVE_FACTOR_MIN, Math.min(TSMC_CUMULATIVE_FACTOR_MAX, n));
+}
 
 /** 店內基準價 × 累積係數，再進位至 10 元倍數（方便收現） */
 export function sessionPriceFromTsmcCompound(baseNtd: number, cumulativeFactor: number): number {
   const base = Number.isFinite(baseNtd) ? baseNtd : DEFAULT_SESSION_PRICE_NTD;
-  const factor =
-    Number.isFinite(cumulativeFactor) && cumulativeFactor > 0 ? cumulativeFactor : 1;
+  const factor = clampTsmcCumulativeFactor(
+    Number.isFinite(cumulativeFactor) && cumulativeFactor > 0 ? cumulativeFactor : 1,
+  );
   const raw = base * factor;
   const clamped = Math.max(MIN_SESSION_PRICE, Math.min(MAX_SESSION_PRICE, Math.round(raw)));
   return roundSessionPriceNtdForCash(clamped);
@@ -48,19 +55,18 @@ export function sessionPriceFromTsmcCompound(baseNtd: number, cumulativeFactor: 
 
 /** 2330「相對昨日收盤」日漲跌累乘到係數（例：連兩天 +2% → 1.02×1.02） */
 export function nextTsmcCumulativeFactor(current: number, dailyChangePercent: number): number {
-  const c =
-    Number.isFinite(current) && current >= MIN_CUMULATIVE_FACTOR ? current : 1;
+  const c = clampTsmcCumulativeFactor(Number.isFinite(current) && current > 0 ? current : 1);
   const pct = Number.isFinite(dailyChangePercent) ? dailyChangePercent : 0;
   const next = c * (1 + pct / 100);
-  return Math.max(MIN_CUMULATIVE_FACTOR, Math.min(MAX_CUMULATIVE_FACTOR, next));
+  return clampTsmcCumulativeFactor(next);
 }
 
 export function resolveTsmcCumulativeFactor(raw: Record<string, unknown> | undefined): number {
   if (!raw || typeof raw !== "object") return 1;
   const v = raw.tsmcCumulativeFactor;
   const n = typeof v === "number" && Number.isFinite(v) ? v : Number(v);
-  if (!Number.isFinite(n) || n < MIN_CUMULATIVE_FACTOR || n > MAX_CUMULATIVE_FACTOR) return 1;
-  return n;
+  if (!Number.isFinite(n)) return 1;
+  return clampTsmcCumulativeFactor(n);
 }
 
 export function resolveTsmcPricingEnabled(raw: Record<string, unknown> | undefined): boolean {

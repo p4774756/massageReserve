@@ -466,7 +466,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         el("p", { class: "hint admin-pricing-tsmc__hint" }, [
           t(
             "admin.pricing.tsmcHint",
-            "2330 日漲跌以「相對昨日收盤」計算；店內基準價（如 110）每日累乘係數（連兩天各 +2% → 110×1.02×1.02）。每單位金額無條件進位至 10 元倍數。平日 15:30 自動同步。改基準價會重設累積係數為 1。",
+            "2330 日漲跌以「相對昨日收盤」累乘係數（相對店內基準價最多漲 25%、最多跌 25%）；每單位金額進位至 10 元倍數。平日 15:30 自動同步。改基準價會重設係數為 1。",
           ),
         ]),
         el("div", { class: "grid grid-2 admin-pricing-tsmc__grid" }, [
