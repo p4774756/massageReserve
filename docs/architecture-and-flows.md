@@ -85,7 +85,7 @@ flowchart LR
 
 | 方式 | 誰看得到 | 備註 |
 |------|----------|------|
-| 預約頁副標 `home.subtitle` | 所有人 | 價格文案；定價數字來自 `getBookingPricing`／`siteSettings/pricing` |
+| 預約頁副標 `home.subtitle` | 所有人 | 價格與計費分鐘文案；數字來自 `getBookingPricing`／`siteSettings/pricing` |
 | 後台群發／單封郵件 | 已驗證 Email 的會員 | `sendMembersBroadcastAdmin`、`sendMemberDirectEmailAdmin` |
 | 預約狀態信 | 該筆預約的會員 | `notifyMemberBookingStatusChange`；後台更新狀態時可帶 `statusEmailMessage` |
 | 前台小公告 | 所有人（預約頁） | `siteSettings/publicNotice`；可關閉至後台更新為止 |

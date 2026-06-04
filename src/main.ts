@@ -1706,9 +1706,11 @@ function render() {
 
   function syncHomePageSubtitle() {
     if (tab !== "book") return;
-    titleDesc.textContent = t("home.subtitle", "一次 {{price}}元", {
-      price: sessionPriceNtdSetting,
-    });
+    titleDesc.textContent = t(
+      "home.subtitle",
+      "一次 {{price}}元，時間 {{minutes}}分鐘起跳，具體看情況",
+      { price: sessionPriceNtdSetting, minutes: unitMinutesSetting },
+    );
   }
 
   function applyBookingPricingFromApi(d: {
