@@ -2678,14 +2678,7 @@ tbody tr:hover td {
   padding: 14px 16px;
   border-radius: var(--radius);
   border: 1px solid var(--border);
-  border-left-width: 4px;
-  border-left-style: solid;
   background: var(--surface);
-}
-
-.admin-announce__wallet-segment--member-ops {
-  border-left-color: #4a7ab5;
-  background: linear-gradient(135deg, rgb(74 122 181 / 0.06) 0%, var(--surface) 46%);
 }
 
 .admin-wallet-accordion-stack {
@@ -5945,11 +5938,6 @@ html.kuso-retro .shell.admin-mode .admin-announce__block {
 html.kuso-retro .shell.admin-mode .admin-announce--settings .admin-announce__block {
   border-color: #d4d4d4;
   background: #f5f5f5;
-}
-
-html.kuso-retro .shell.admin-mode .admin-announce__wallet-segment--member-ops {
-  border-left-color: #6001d2;
-  background: #ffffff;
 }
 
 html.kuso-retro .shell.admin-mode .admin-login {
