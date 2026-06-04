@@ -959,8 +959,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         el("span", { class: "bb-time-sep", ariaHidden: "true" }, ["～"]),
         el("label", { class: "field bb-field-t" }, [t("admin.blocks.end", "迄（不含）"), endIn]),
       ]);
-      row.append(
-        el("div", { class: "admin-booking-block-row__head" }, [removeBtn]),
+      const rowBody = el("div", { class: "admin-booking-block-row__body" }, [
         el("div", { class: "bb-group bb-group--when" }, [
           el("span", { class: "bb-group-title" }, [t("admin.blocks.groupWhen", "套用日期")]),
           whenFields,
@@ -969,6 +968,10 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
           el("span", { class: "bb-group-title" }, [t("admin.blocks.groupSlot", "不開放區間（當日）")]),
           timeFields,
         ]),
+      ]);
+      row.append(
+        el("div", { class: "admin-booking-block-row__head" }, [removeBtn]),
+        rowBody,
         el("div", { class: "bb-group bb-group--reason" }, [
           el("span", { class: "bb-group-title" }, [t("admin.blocks.reason", "前台顯示原因")]),
           reasonIn,
