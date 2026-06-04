@@ -1058,6 +1058,9 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       placeholder: t("admin.notice.textPlaceholder", "例：本週五下午臨時休診，請改選其他日期。"),
     });
     const publicNoticeExpiresInput = el("input", { type: "date" });
+    const clearPublicNoticeExpiresBtn = el("button", { type: "button", class: "ghost" }, [
+      t("admin.notice.clearExpires", "清除到期日"),
+    ]);
     const savePublicNoticeBtn = el("button", { type: "button", class: "ghost" }, [
       t("admin.notice.save", "儲存前台公告"),
     ]);
@@ -1098,6 +1101,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       }
       savePublicNoticeBtn.setAttribute("disabled", "true");
       clearPublicNoticeBtn.setAttribute("disabled", "true");
+      clearPublicNoticeExpiresBtn.setAttribute("disabled", "true");
       publicNoticeStatus.textContent = t("admin.status.processing", "處理中…");
       try {
         const payload: Record<string, unknown> = {
@@ -1119,18 +1123,23 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       } finally {
         savePublicNoticeBtn.removeAttribute("disabled");
         clearPublicNoticeBtn.removeAttribute("disabled");
+        clearPublicNoticeExpiresBtn.removeAttribute("disabled");
       }
     }
 
     savePublicNoticeBtn.addEventListener("click", () => void persistPublicNotice(false));
     clearPublicNoticeBtn.addEventListener("click", () => void persistPublicNotice(true));
+    clearPublicNoticeExpiresBtn.addEventListener("click", () => {
+      publicNoticeExpiresInput.value = "";
+      void persistPublicNotice(false);
+    });
 
     const blockPublicNotice = el("section", { class: "admin-announce__block admin-announce__block--public-notice" }, [
       el("h4", { class: "admin-announce__block-title" }, [t("admin.notice.blockTitle", "前台小公告")]),
       el("p", { class: "hint admin-announce__block-lead" }, [
         t(
           "admin.notice.blockLead",
-          "顯示於預約頁訪次統計下方、分頁上方；訪客與會員皆可見。可選到期日（台北）後自動隱藏；訪客可按「關閉」在本機暫時隱藏至您更新公告為止。",
+          "顯示於預約頁訪次統計下方、分頁上方；訪客與會員皆可見。可選到期日（台北）：到期當天仍顯示，隔日起自動隱藏；留空則不自動下架。訪客可按「關閉」在本機暫時隱藏至您更新公告為止。",
         ),
       ]),
       el("label", { class: "field" }, [
@@ -1139,7 +1148,10 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       ]),
       el("label", { class: "field" }, [
         t("admin.notice.expiresLabel", "到期日（選填，台北時區）"),
-        publicNoticeExpiresInput,
+        el("div", { class: "row-actions admin-notice-expires-row" }, [
+          publicNoticeExpiresInput,
+          clearPublicNoticeExpiresBtn,
+        ]),
       ]),
       el("div", { class: "row-actions" }, [savePublicNoticeBtn, clearPublicNoticeBtn]),
       publicNoticeStatus,

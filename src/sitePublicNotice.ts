@@ -36,6 +36,7 @@ export function parsePublicNotice(raw: Record<string, unknown> | undefined): Pub
   const text = typeof raw.text === "string" ? raw.text.trim().slice(0, TEXT_MAX_LEN) : "";
   if (!text) return null;
   const expiresOn = normalizeExpiresOn(raw.expiresOn);
+  /* 到期日當天仍顯示；台北「今日」> expiresOn 時（隔日起）才隱藏 */
   if (expiresOn && taipeiTodayDateKey() > expiresOn) return null;
   return { text, dismissKey: dismissKeyFromDoc(raw), expiresOn };
 }

@@ -101,7 +101,7 @@ function render() {
   let tab: "book" | "admin" = tabFromPath();
 
   const titleHeading = el("h1", {}, [t("home.title", "辦公室按摩預約")]);
-  const titleDesc = el("p");
+  const titleDesc = el("p", { class: "page-head-subtitle" });
   const therapistCredential = createTherapistCredentialStrip();
   const visitorStats = createVisitorStatsLine(tabFromPath() !== "admin");
   const visitorStatsLine = visitorStats.element;
@@ -295,6 +295,26 @@ function render() {
       row.append(list);
     }
     return row;
+  }
+
+  function buildBookingCapPill(
+    label: string,
+    count: number,
+    cap: number,
+    full: boolean,
+    showOverflowTag: boolean,
+  ): HTMLElement {
+    const children: (Node | string)[] = [
+      el("span", { class: "pill__label" }, [label]),
+      el("span", { class: "pill__value" }, [
+        el("strong", {}, [String(count)]),
+        ` / ${cap}`,
+      ]),
+    ];
+    if (full && showOverflowTag) {
+      children.push(el("span", { class: "pill__tag" }, [t("booking.metaOverflowTag", "已滿可加價")]));
+    }
+    return el("span", { class: full ? "pill pill--cap-full" : "pill" }, children);
   }
 
   function fillBookPickCalHoverTip(lines: string[]): void {
@@ -731,13 +751,14 @@ function render() {
       slotSelect,
     ]),
   ]);
-  const slotStepSection = el("div", { class: "book-step book-step--slots" }, [
-    slotFieldWrap,
+  const slotStepSection = el("div", { class: "book-step book-step--slots" }, [slotFieldWrap]);
+  const bookFooterNote = el("div", { class: "footer-note" });
+  const bookFormTopAside = el("div", { class: "book-form-top__aside" }, [
     scheduleStatus,
     meta,
     bookingPeersHint,
+    bookFooterNote,
   ]);
-  const bookFooterNote = el("div", { class: "footer-note" });
   bookFooterNote.textContent = t(
     "booking.rulesFooterDefault",
     "規則：同一天最多 2 張預約、同一工作週最多 4 張。已取消不計入名額。",
@@ -1299,13 +1320,15 @@ function render() {
     }
     const modalWalletHost = el("div", { class: "status-line" });
     memberModalWalletMirror = modalWalletHost;
-    modalBody.push(modalWalletHost);
+    const modalMain = el("div", { class: "member-modal__main" });
+    modalMain.append(modalWalletHost);
     if (user.emailVerified && memberHubGamesRoot) {
       dialog.classList.add("member-modal--hub");
       const gamesShell = el("div", { class: "member-modal__games" });
       gamesShell.append(memberHubGamesRoot);
-      modalBody.push(gamesShell);
+      modalMain.append(gamesShell);
     }
+    modalBody.push(modalMain);
     modalBody.push(el("div", { class: "modal-actions" }, [closeBtn]));
     dialog.append(...modalBody);
     void refreshWalletStatus();
@@ -1688,6 +1711,7 @@ function render() {
       (showSlotFields && !bookingAvailabilityLoading && !pickable);
 
     slotStepSection.hidden = dk === "";
+    bookFormTopAside.hidden = dk === "";
     slotFieldWrap.hidden = hideStartTimeRow;
 
     const slotPicked = Boolean(slotSelect.value);
@@ -1706,10 +1730,19 @@ function render() {
 
   function syncHomePageSubtitle() {
     if (tab !== "book") return;
-    titleDesc.textContent = t(
-      "home.subtitle",
-      "一次 {{price}}元，時間 {{minutes}}分鐘起跳，具體看情況",
-      { price: sessionPriceNtdSetting, minutes: unitMinutesSetting },
+    const price = sessionPriceNtdSetting;
+    const minutes = unitMinutesSetting;
+    titleDesc.replaceChildren(
+      t("home.subtitle.prefix", "一次 "),
+      el("span", { class: "page-head-subtitle__price" }, [
+        el("span", { class: "page-head-subtitle__price-num" }, [String(price)]),
+        el("span", { class: "page-head-subtitle__price-unit" }, [t("home.subtitle.priceUnit", "元")]),
+      ]),
+      t(
+        "home.subtitle.suffix",
+        "（價格浮動、跟台積電漲跌），時間 {{minutes}}分鐘起跳，具體看情況",
+        { minutes },
+      ),
     );
   }
 
@@ -1853,27 +1886,23 @@ function render() {
         setBookFooterFromCaps(data.dayCap, data.weekCap);
         runRefillSlots(taken, blocked, dk, blockedMap);
         const weekdayZh = weekdayZhFromDateKeyTaipei(dk);
-        const dayPillClass = dayFull ? "pill pill--cap-full" : "pill";
-        const weekPillClass = weekFull ? "pill pill--cap-full" : "pill";
         meta.replaceChildren(
-          el("span", { class: dayPillClass }, [
+          buildBookingCapPill(
             weekdayZh ?
-              t("booking.metaDayWithWeekday", "當日（{{weekday}}）已預約 ", { weekday: weekdayZh })
-            : t("booking.metaDay", "當日已預約（張） "),
-            el("strong", {}, [String(data.dayCount)]),
-            ` / ${data.dayCap}`,
-            ...(dayFull && bookingCapOverflowOffer
-              ? [t("booking.metaDayOverflowTag", " · 已滿可加價")]
-              : []),
-          ]),
-          el("span", { class: weekPillClass }, [
-            t("booking.metaWeek", "本工作週已預約（張） "),
-            el("strong", {}, [String(data.weekCount)]),
-            ` / ${data.weekCap}`,
-            ...(weekFull && bookingCapOverflowOffer
-              ? [t("booking.metaWeekOverflowTag", " · 已滿可加價")]
-              : []),
-          ]),
+              t("booking.metaDayWithWeekday", "當日（{{weekday}}）已預約", { weekday: weekdayZh })
+            : t("booking.metaDay", "當日已預約（張）"),
+            data.dayCount,
+            data.dayCap,
+            dayFull,
+            bookingCapOverflowOffer,
+          ),
+          buildBookingCapPill(
+            t("booking.metaWeek", "本工作週已預約（張）"),
+            data.weekCount,
+            data.weekCap,
+            weekFull,
+            bookingCapOverflowOffer,
+          ),
         );
         refillBookingModes(isVerifiedMember());
         const daySlots = daySlotLinesFromAvailability(data);
@@ -2182,20 +2211,20 @@ function render() {
   });
   bookPanelBook.setAttribute("aria-labelledby", "book-tab-book");
   bookPanelBook.append(
-    el("div", { class: "grid grid-2" }, [
-      el("label", { class: "field" }, [t("field.name", "姓名（必填）"), nameInput]),
-      el("label", { class: "field field--booking-date" }, [
+    el("div", { class: "book-form-top" }, [
+      el("label", { class: "field book-form-top__name" }, [t("field.name", "姓名（必填）"), nameInput]),
+      el("label", { class: "field field--booking-date book-form-top__date" }, [
         dateLabelSpan,
         dateCalendarHint,
         bookPickCalendar,
         dateInput,
       ]),
+      bookFormTopAside,
     ]),
     /** 與選時段／付款區分離：未完成信箱驗證時顯示提示（餘額／輪盤／兌換在會員中心） */
     memberExtrasWrap,
     slotStepSection,
     finalizeSection,
-    bookFooterNote,
   );
 
   const memberHubGamesHolder = el("div", {
@@ -2215,10 +2244,29 @@ function render() {
     redeemPointsStatus,
   ]);
   const memberHubWheelCard = el("section", { class: "member-hub-wheel-card" });
+  const wheelAside = el("div", { class: "member-hub-wheel-card__aside" }, [
+    el("img", {
+      class: "member-hub-wheel-card__visual",
+      src: `${import.meta.env.BASE_URL}media/slot-dragon-banner.png`,
+      alt: "",
+      decoding: "async",
+      loading: "lazy",
+    }),
+    el("p", { class: "hint member-hub-wheel-card__aside-hint" }, [
+      t(
+        "member.wheelAsideHint",
+        "完成預約可獲抽獎次數；輪盤點數滿額可兌換預約。拉霸開獎與預覽請用左側按鈕。",
+      ),
+    ]),
+  ]);
+  const wheelCardBody = el("div", { class: "member-hub-wheel-card__body" }, [
+    el("div", { class: "member-hub-wheel-card__controls" }, [wheelRow]),
+    wheelAside,
+  ]);
   memberHubWheelCard.append(
     el("h4", { class: "member-hub-wheel-card__title" }, [t("member.wheelSectionTitle", "拉霸")]),
     wheelRedeemBlock,
-    wheelRow,
+    wheelCardBody,
   );
   memberHubPanelWheel.append(memberHubWheelCard);
 

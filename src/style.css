@@ -272,6 +272,27 @@ header.page-head {
   line-height: 1.62;
 }
 
+.page-head-subtitle__price {
+  display: inline;
+  margin: 0 0.12em;
+  font-family: var(--font-head);
+  font-weight: 800;
+  color: var(--accent-deep);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.page-head-subtitle__price-num {
+  font-size: 1.5rem;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+
+.page-head-subtitle__price-unit {
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
 /* 頁首 · 運動按摩技術員證（點擊開大圖） */
 .therapist-credential[hidden] {
   display: none !important;
@@ -667,6 +688,15 @@ main.panel.panel-book--has-notice {
   font-size: 0.82rem;
 }
 
+.admin-notice-expires-row {
+  margin-top: 6px;
+}
+
+.admin-notice-expires-row input[type="date"] {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
 .site-public-notice-admin__text {
   width: 100%;
   min-height: 4.5rem;
@@ -710,6 +740,98 @@ main.panel[hidden] {
 
 .book-step[hidden] {
   display: none !important;
+}
+
+.book-form-top {
+  display: grid;
+  gap: 22px;
+  min-width: 0;
+}
+
+.book-form-top__aside {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.book-form-top__aside[hidden] {
+  display: none !important;
+}
+
+.book-form-top__aside .footer-note {
+  padding-top: 12px;
+  margin-top: 2px;
+}
+
+@media (min-width: 720px) {
+  .book-form-top {
+    grid-template-columns: minmax(10rem, 14rem) minmax(18rem, 22rem);
+    column-gap: clamp(16px, 3vw, 24px);
+    row-gap: 12px;
+    justify-content: start;
+    align-items: start;
+  }
+
+  .book-form-top__name {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .book-form-top__aside {
+    grid-column: 1;
+    grid-row: 2;
+    align-self: start;
+  }
+
+  .book-form-top__date {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: start;
+  }
+
+  .book-form-top__date .book-pick-calendar {
+    max-width: none;
+    width: 100%;
+  }
+
+  .book-form-top__aside .meta-pills {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .book-form-top__aside .pill {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    line-height: 1.35;
+  }
+
+  .book-form-top__aside .pill__label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--muted);
+    line-height: 1.35;
+  }
+
+  .book-form-top__aside .pill__value {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+  }
+
+  .book-form-top__aside .pill__tag {
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: var(--accent-deep);
+    line-height: 1.3;
+  }
 }
 
 .book-step--slots {
@@ -1368,6 +1490,57 @@ button.ghost:disabled {
   text-align: center;
 }
 
+.member-hub-wheel-card__body {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.member-hub-wheel-card__controls {
+  min-width: 0;
+}
+
+.member-hub-wheel-card__aside {
+  display: none;
+  min-width: 0;
+}
+
+.member-hub-wheel-card__visual {
+  display: block;
+  width: 100%;
+  max-width: 11rem;
+  margin: 0 auto;
+  height: auto;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
+
+.member-hub-wheel-card__aside-hint {
+  margin: 10px 0 0;
+  text-align: center;
+  line-height: 1.5;
+}
+
+@media (min-width: 560px) {
+  .member-modal--hub .member-hub-wheel-card__body {
+    grid-template-columns: minmax(0, 1fr) minmax(9.5rem, 11.5rem);
+    gap: 14px 16px;
+    align-items: start;
+  }
+
+  .member-modal--hub .member-hub-wheel-card__aside {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 10px 8px 8px;
+    border-radius: var(--radius);
+    border: 1px dashed color-mix(in srgb, var(--accent) 22%, var(--border));
+    background: color-mix(in srgb, var(--accent) 5%, var(--surface-muted));
+  }
+}
+
 .member-hub-wheel-card__spin-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1720,14 +1893,21 @@ button.ghost:disabled {
 
 .pill {
   display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 6px;
   padding: 6px 11px;
   border-radius: var(--radius);
   border: 1px solid var(--border-strong);
   background: var(--surface);
   font-size: 0.84rem;
   color: var(--muted);
+}
+
+.pill__label,
+.pill__value,
+.pill__tag {
+  min-width: 0;
 }
 
 .pill[hidden] {
@@ -3061,6 +3241,28 @@ label.field.checkbox-field {
   align-content: start;
 }
 
+.member-modal__main {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+@media (min-width: 640px) {
+  .member-modal--hub .member-modal__main {
+    grid-template-columns: minmax(11rem, 0.9fr) minmax(0, 1.15fr);
+    gap: 18px 22px;
+    align-items: start;
+  }
+
+  .member-modal--hub .member-modal__games {
+    max-height: none;
+    overflow: visible;
+    padding: 0;
+    border: none;
+    background: transparent;
+  }
+}
+
 .member-modal__games {
   min-width: 0;
   max-height: min(70vh, 720px);
@@ -3143,6 +3345,10 @@ label.field.checkbox-field {
     font-size: 0.95rem;
     line-height: 1.5;
     max-width: none;
+  }
+
+  .page-head-subtitle__price-num {
+    font-size: 1.4rem;
   }
 
   .page-head .page-head-guest-hint {
