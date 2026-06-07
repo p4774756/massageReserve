@@ -113,7 +113,7 @@ a:hover {
 
 /* 前台預約：分區上色，避免整頁一片白 */
 .shell:not(.admin-mode) {
-  border-color: color-mix(in srgb, var(--accent) 20%, var(--border));
+  border-color: var(--border);
   box-shadow:
     var(--shadow-lg),
     0 0 0 1px color-mix(in srgb, var(--accent) 8%, transparent);
@@ -126,7 +126,7 @@ a:hover {
     #ffffff 52%,
     color-mix(in srgb, var(--accent-2) 7%, #fff) 100%
   );
-  border-bottom: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  border-bottom: 1px solid var(--border);
   box-shadow: inset 0 3px 0 var(--accent);
 }
 
@@ -134,7 +134,7 @@ a:hover {
   padding: 12px 14px;
   border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--accent-soft) 58%, var(--surface));
-  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border));
+  border: 1px solid var(--border);
 }
 
 .shell:not(.admin-mode) main.panel.panel-book {
@@ -145,7 +145,7 @@ a:hover {
   margin: -6px -22px 0;
   padding: 10px 24px 0;
   background: color-mix(in srgb, var(--surface-muted) 72%, var(--accent-soft));
-  border-bottom: 2px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  border-bottom: 2px solid var(--border);
 }
 
 .shell:not(.admin-mode) .book-tab[aria-selected="true"] {
@@ -158,7 +158,7 @@ a:hover {
 
 .shell:not(.admin-mode) .app-version-footer {
   background: color-mix(in srgb, var(--surface-muted) 80%, var(--accent-soft));
-  border-top-color: color-mix(in srgb, var(--accent) 18%, var(--border));
+  border-top-color: var(--border);
 }
 
 .app-version-footer {
@@ -613,7 +613,7 @@ main.panel.panel-book--has-notice {
   margin: 0 0 2px;
   padding: 10px 12px 11px;
   border-radius: var(--radius);
-  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border: 1px solid var(--border);
   background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface));
   box-shadow: var(--shadow-sm);
 }
@@ -631,7 +631,7 @@ main.panel.panel-book--has-notice {
   color: var(--accent);
   padding: 2px 7px;
   border-radius: var(--radius-sm);
-  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+  border: 1px solid var(--border);
   background: var(--surface);
 }
 
@@ -713,13 +713,13 @@ main.panel[hidden] {
   min-width: 0;
   padding: 16px;
   border-radius: var(--radius-lg);
-  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  border: 1px solid var(--border);
   background: var(--zone-book);
   box-shadow: var(--shadow-sm);
 }
 
 .shell:not(.admin-mode) .book-form-top__aside .pill:not(.pill--cap-full) {
-  border-color: color-mix(in srgb, var(--accent-2) 28%, var(--border));
+  border-color: var(--border);
   background: color-mix(in srgb, var(--accent-2) 7%, var(--surface));
 }
 
@@ -816,7 +816,7 @@ main.panel[hidden] {
   min-width: 0;
   padding: 16px;
   border-radius: var(--radius-lg);
-  border: 1px solid color-mix(in srgb, var(--accent-2) 26%, var(--border));
+  border: 1px solid var(--border);
   background: var(--zone-slots);
   box-shadow: var(--shadow-sm);
 }
@@ -873,7 +873,7 @@ main.panel[hidden] {
   min-width: 0;
   padding: 16px;
   border-radius: var(--radius-lg);
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  border: 1px solid var(--border);
   background: var(--zone-finalize);
   box-shadow: var(--shadow-sm);
 }
@@ -930,7 +930,7 @@ main.panel[hidden] {
   margin-top: 10px;
   padding: 12px 12px 14px;
   border-radius: var(--radius-lg);
-  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border));
+  border: 1px solid var(--border);
   background: color-mix(in srgb, var(--surface-muted) 55%, var(--accent-soft));
   box-shadow: var(--shadow-sm);
   max-width: 22rem;
@@ -1408,7 +1408,7 @@ button.ghost:disabled {
   margin-bottom: 10px;
   padding: 14px 16px;
   border-radius: var(--radius-lg);
-  border: 1px solid color-mix(in srgb, var(--accent-2) 30%, var(--border));
+  border: 1px solid var(--border);
   background: var(--zone-member);
   box-shadow: var(--shadow-sm);
 }
@@ -1445,7 +1445,7 @@ button.ghost:disabled {
   margin: 0;
   padding: 14px 16px 16px;
   border-radius: var(--radius-lg);
-  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border));
+  border: 1px solid var(--border);
   background: linear-gradient(
     155deg,
     color-mix(in srgb, var(--accent-soft) 88%, #fff) 0%,
@@ -1510,6 +1510,7 @@ button.ghost:disabled {
   height: auto;
   object-fit: contain;
   pointer-events: none;
+  -webkit-user-select: none;
   user-select: none;
 }
 
@@ -1533,7 +1534,7 @@ button.ghost:disabled {
     justify-content: flex-start;
     padding: 10px 8px 8px;
     border-radius: var(--radius);
-    border: 1px dashed color-mix(in srgb, var(--accent) 22%, var(--border));
+    border: 1px dashed var(--border);
     background: color-mix(in srgb, var(--accent) 5%, var(--surface-muted));
   }
 }
@@ -1808,7 +1809,7 @@ button.ghost:disabled {
 
 .my-bookings {
   padding: 14px 16px;
-  border: 1px solid color-mix(in srgb, var(--accent-2) 30%, var(--border));
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--zone-my-bookings);
   box-shadow: var(--shadow-sm);
@@ -1914,7 +1915,7 @@ button.ghost:disabled {
 }
 
 .pill--cap-full {
-  border-color: color-mix(in srgb, var(--accent) 35%, var(--border-strong));
+  border-color: var(--border-strong);
   background: color-mix(in srgb, var(--accent) 8%, var(--surface));
   color: var(--ink);
 }
@@ -2118,7 +2119,6 @@ button.ghost:disabled {
   overflow-y: auto;
   align-self: start;
   align-content: start;
-  -webkit-overflow-scrolling: touch;
 }
 
 .admin-customer-profile-brief {
@@ -2498,7 +2498,7 @@ tbody tr:hover td {
 }
 
 .shell.admin-mode button.admin-btn--add {
-  border-color: color-mix(in srgb, var(--accent-2) 42%, var(--border));
+  border-color: var(--border);
   background: color-mix(in srgb, var(--accent-2) 11%, #ffffff);
   color: #0369a1;
 }
@@ -2509,7 +2509,7 @@ tbody tr:hover td {
 }
 
 .shell.admin-mode button.admin-btn--danger {
-  border-color: color-mix(in srgb, var(--danger) 48%, var(--border));
+  border-color: var(--border);
   background: color-mix(in srgb, var(--danger) 9%, #ffffff);
   color: #b91c1c;
 }
@@ -2521,7 +2521,7 @@ tbody tr:hover td {
 }
 
 .shell.admin-mode button.admin-btn--warn {
-  border-color: color-mix(in srgb, #d97706 45%, var(--border));
+  border-color: var(--border);
   background: color-mix(in srgb, #f59e0b 12%, #ffffff);
   color: #b45309;
 }
@@ -3332,7 +3332,7 @@ tbody tr:hover td {
     grid-column: 1;
     grid-row: 2;
     justify-self: start;
-    min-height: auto;
+    min-height: 0;
     width: auto;
     padding: 0;
   }
