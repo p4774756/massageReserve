@@ -9,10 +9,17 @@
   --accent-soft: #FFF4ED;
   --accent-muted-bg: #FFFAF7;
 
-  --bg: #f8f9fa;
+  --bg: #ebe4dc;
+  --bg-warm: #faf5ef;
+  --panel-bg: #fff8f2;
   --surface: #ffffff;
   --surface-elevated: #ffffff;
-  --surface-muted: #f3f4f6;
+  --surface-muted: #f3ece4;
+  --zone-book: color-mix(in srgb, var(--accent-soft) 72%, var(--surface));
+  --zone-slots: color-mix(in srgb, var(--accent-2) 9%, var(--surface));
+  --zone-finalize: color-mix(in srgb, var(--accent-soft) 48%, var(--surface));
+  --zone-member: color-mix(in srgb, var(--accent-2) 11%, var(--surface));
+  --zone-my-bookings: color-mix(in srgb, var(--accent-2) 10%, var(--surface));
   --ink: #1a1a1a;
   --muted: #6b7280;
   --accent-2: #0ea5e9;
@@ -44,7 +51,12 @@ body {
   margin: 0;
   min-height: 100vh;
   background-color: var(--bg);
-  background-image: none;
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent-soft) 35%, var(--bg)) 0%,
+    var(--bg) 38%,
+    color-mix(in srgb, var(--accent-2) 8%, var(--bg)) 100%
+  );
   color: var(--ink);
   line-height: 1.6;
   -webkit-font-smoothing: auto;
@@ -99,6 +111,56 @@ a:hover {
   overflow: hidden;
 }
 
+/* 前台預約：分區上色，避免整頁一片白 */
+.shell:not(.admin-mode) {
+  border-color: color-mix(in srgb, var(--accent) 20%, var(--border));
+  box-shadow:
+    var(--shadow-lg),
+    0 0 0 1px color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.shell:not(.admin-mode) header.page-head {
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--accent-soft) 92%, #fff) 0%,
+    #ffffff 52%,
+    color-mix(in srgb, var(--accent-2) 7%, #fff) 100%
+  );
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  box-shadow: inset 0 3px 0 var(--accent);
+}
+
+.shell:not(.admin-mode) .page-head-text {
+  padding: 12px 14px;
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--accent-soft) 58%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border));
+}
+
+.shell:not(.admin-mode) main.panel.panel-book {
+  background: var(--panel-bg);
+}
+
+.shell:not(.admin-mode) .book-tabs {
+  margin: -6px -22px 0;
+  padding: 10px 24px 0;
+  background: color-mix(in srgb, var(--surface-muted) 72%, var(--accent-soft));
+  border-bottom: 2px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+}
+
+.shell:not(.admin-mode) .book-tab[aria-selected="true"] {
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  padding-left: 10px;
+  padding-right: 10px;
+  margin-bottom: -2px;
+}
+
+.shell:not(.admin-mode) .app-version-footer {
+  background: color-mix(in srgb, var(--surface-muted) 80%, var(--accent-soft));
+  border-top-color: color-mix(in srgb, var(--accent) 18%, var(--border));
+}
+
 .app-version-footer {
   margin: 0;
   padding: 10px 18px 14px;
@@ -118,7 +180,7 @@ header.page-head {
   flex-direction: column;
   align-items: stretch;
   gap: 14px;
-  background: #ffffff;
+  background: var(--surface);
 }
 
 /* 標題與語系／會員同一列；h1 佔左側可伸縮空間，工具列靠右 */
@@ -291,103 +353,6 @@ header.page-head {
 .page-head-subtitle__price-unit {
   font-size: 1.05rem;
   font-weight: 800;
-}
-
-/* 頁首 · 運動按摩技術員證（點擊開大圖） */
-.therapist-credential[hidden] {
-  display: none !important;
-}
-
-.therapist-credential__open {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  max-width: min(100%, 420px);
-  margin: 0;
-  padding: 10px 12px;
-  text-align: left;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
-  cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease;
-}
-
-.therapist-credential__open:hover {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
-  box-shadow: var(--shadow-md);
-}
-
-.therapist-credential__open:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.therapist-credential__thumb {
-  flex: 0 0 auto;
-  width: auto;
-  height: 52px;
-  max-width: 88px;
-  object-fit: contain;
-  border-radius: 4px;
-  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.06);
-}
-
-.therapist-credential__text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.therapist-credential__title {
-  font-weight: 700;
-  font-size: 0.92rem;
-  color: var(--ink);
-  line-height: 1.35;
-}
-
-.therapist-credential__org,
-.therapist-credential__validity,
-.therapist-credential__tap {
-  font-size: 0.8rem;
-  line-height: 1.4;
-}
-
-.therapist-credential__tap {
-  margin-top: 2px;
-  color: var(--accent);
-}
-
-.therapist-credential-modal {
-  width: min(920px, 100%);
-  padding: 18px 20px 20px;
-}
-
-.therapist-credential-modal__figure {
-  margin: 0;
-  display: grid;
-  gap: 10px;
-  justify-items: center;
-}
-
-.therapist-credential-modal__img {
-  display: block;
-  width: 100%;
-  max-height: min(72vh, 640px);
-  object-fit: contain;
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-}
-
-.therapist-credential-modal__caption {
-  margin: 0;
-  text-align: center;
-  max-width: 48ch;
 }
 
 .page-head .page-head-guest-hint {
@@ -746,6 +711,16 @@ main.panel[hidden] {
   display: grid;
   gap: 22px;
   min-width: 0;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  background: var(--zone-book);
+  box-shadow: var(--shadow-sm);
+}
+
+.shell:not(.admin-mode) .book-form-top__aside .pill:not(.pill--cap-full) {
+  border-color: color-mix(in srgb, var(--accent-2) 28%, var(--border));
+  background: color-mix(in srgb, var(--accent-2) 7%, var(--surface));
 }
 
 .book-form-top__aside {
@@ -839,6 +814,11 @@ main.panel[hidden] {
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid color-mix(in srgb, var(--accent-2) 26%, var(--border));
+  background: var(--zone-slots);
+  box-shadow: var(--shadow-sm);
 }
 
 .booking-peers-hint[hidden] {
@@ -891,6 +871,11 @@ main.panel[hidden] {
   flex-direction: column;
   gap: var(--section-gap);
   min-width: 0;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  background: var(--zone-finalize);
+  box-shadow: var(--shadow-sm);
 }
 
 .book-service-kind {
@@ -945,8 +930,8 @@ main.panel[hidden] {
   margin-top: 10px;
   padding: 12px 12px 14px;
   border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
-  background: var(--surface-muted);
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border));
+  background: color-mix(in srgb, var(--surface-muted) 55%, var(--accent-soft));
   box-shadow: var(--shadow-sm);
   max-width: 22rem;
 }
@@ -1421,6 +1406,11 @@ button.ghost:disabled {
   gap: 14px;
   margin-top: 0;
   margin-bottom: 10px;
+  padding: 14px 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid color-mix(in srgb, var(--accent-2) 30%, var(--border));
+  background: var(--zone-member);
+  box-shadow: var(--shadow-sm);
 }
 
 .member-wallet-summary {
@@ -1455,9 +1445,16 @@ button.ghost:disabled {
   margin: 0;
   padding: 14px 16px 16px;
   border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border));
+  background: linear-gradient(
+    155deg,
+    color-mix(in srgb, var(--accent-soft) 88%, #fff) 0%,
+    var(--surface) 46%,
+    color-mix(in srgb, var(--accent-2) 6%, #fff) 100%
+  );
+  box-shadow:
+    var(--shadow-sm),
+    0 2px 10px rgb(var(--accent-rgb) / 0.07);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1591,6 +1588,10 @@ button.ghost:disabled {
   border: 1px solid var(--border);
   background: var(--surface);
   box-shadow: var(--shadow-sm);
+  overflow: visible;
+}
+
+.shell.admin-mode .admin-dashboard__shell:has(.admin-bookings-calendar) {
   overflow: visible;
 }
 
@@ -1747,13 +1748,14 @@ button.ghost:disabled {
 }
 
 .admin-calendar__badge {
-  font-size: 0.65rem;
+  font-size: 0.68rem;
   font-weight: 800;
   line-height: 1.2;
-  padding: 2px 6px;
+  padding: 2px 7px;
   border-radius: 999px;
-  background: rgb(var(--accent-rgb) / 0.18);
+  background: rgb(var(--accent-rgb) / 0.22);
   color: var(--accent-deep);
+  box-shadow: 0 0 0 1px rgb(var(--accent-rgb) / 0.12);
 }
 
 .admin-calendar__badge--weak {
@@ -1806,9 +1808,10 @@ button.ghost:disabled {
 
 .my-bookings {
   padding: 14px 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--accent-2) 30%, var(--border));
+  border-radius: var(--radius-lg);
+  background: var(--zone-my-bookings);
+  box-shadow: var(--shadow-sm);
 }
 
 .my-bookings-heading {
@@ -1816,15 +1819,6 @@ button.ghost:disabled {
   font-size: 0.95rem;
   font-weight: 600;
   color: var(--ink);
-}
-
-.my-bookings-tabs {
-  margin: 4px 0 10px;
-}
-
-.my-bookings-tab-panel {
-  margin-top: 0;
-  gap: 10px;
 }
 
 .my-bookings-list {
@@ -2428,6 +2422,7 @@ tbody tr:hover td {
 }
 
 .shell.admin-mode .admin-announce--settings .admin-announce__block--wheel-preview,
+.shell.admin-mode .admin-announce--settings .admin-announce__block--wheel-redeem,
 .shell.admin-mode .admin-announce--settings .admin-announce__block--caps,
 .shell.admin-mode .admin-announce--settings .admin-announce__block--blocks,
 .shell.admin-mode .admin-announce--settings .admin-announce__block--pricing,
@@ -2481,6 +2476,71 @@ tbody tr:hover td {
 .shell.admin-mode .admin-booking-blocks-save--attention {
   border-color: rgb(201 122 53 / 0.85);
   box-shadow: 0 0 0 2px rgb(201 122 53 / 0.2);
+}
+
+/* 後台按鈕語意色（僅 .shell.admin-mode 內） */
+.shell.admin-mode button.primary {
+  border: none;
+  background: #6001d2;
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgb(96 1 210 / 0.28);
+}
+
+.shell.admin-mode button.primary:hover:not(:disabled) {
+  background: #5000b8;
+  filter: none;
+  color: #ffffff;
+}
+
+.shell.admin-mode button.primary:active:not(:disabled) {
+  background: #410092;
+  filter: none;
+}
+
+.shell.admin-mode button.admin-btn--add {
+  border-color: color-mix(in srgb, var(--accent-2) 42%, var(--border));
+  background: color-mix(in srgb, var(--accent-2) 11%, #ffffff);
+  color: #0369a1;
+}
+
+.shell.admin-mode button.admin-btn--add:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-2) 18%, #ffffff);
+  border-color: var(--accent-2);
+}
+
+.shell.admin-mode button.admin-btn--danger {
+  border-color: color-mix(in srgb, var(--danger) 48%, var(--border));
+  background: color-mix(in srgb, var(--danger) 9%, #ffffff);
+  color: #b91c1c;
+}
+
+.shell.admin-mode button.admin-btn--danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 15%, #ffffff);
+  border-color: var(--danger);
+  color: #991b1b;
+}
+
+.shell.admin-mode button.admin-btn--warn {
+  border-color: color-mix(in srgb, #d97706 45%, var(--border));
+  background: color-mix(in srgb, #f59e0b 12%, #ffffff);
+  color: #b45309;
+}
+
+.shell.admin-mode button.admin-btn--warn:hover:not(:disabled) {
+  background: color-mix(in srgb, #f59e0b 20%, #ffffff);
+  border-color: #d97706;
+}
+
+.shell.admin-mode button.admin-btn--muted {
+  border-color: var(--border);
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.shell.admin-mode button.admin-btn--muted:hover:not(:disabled) {
+  background: var(--border);
+  color: var(--ink);
 }
 
 .admin-booking-blocks-actions {
@@ -2553,6 +2613,38 @@ tbody tr:hover td {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-muted);
+}
+
+.admin-member-list__head {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.admin-member-list__head h3 {
+  margin: 0;
+}
+
+@media (min-width: 560px) {
+  .admin-member-list__head {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px 16px;
+  }
+
+  .admin-member-list__head h3 {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .admin-member-list__reload {
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
 }
 
 /* 載入完成後不顯示摘要時，避免空白 status-line 仍佔 min-height */
@@ -3068,16 +3160,16 @@ tbody tr:hover td {
   container-name: bb-row;
 }
 
-.admin-booking-block-row__head {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  margin: -2px 0 -6px;
+.admin-booking-block-row__remove-wrap {
+  flex: 0 0 auto;
+  align-self: flex-end;
+  margin-left: auto;
 }
 
 .admin-booking-block-row__remove {
   flex-shrink: 0;
   font-size: 0.84rem;
+  white-space: nowrap;
 }
 
 .admin-booking-block-row .bb-group {
@@ -3174,10 +3266,6 @@ tbody tr:hover td {
 }
 
 @media (min-width: 600px) {
-  .admin-booking-block-row__head {
-    margin-bottom: 0;
-  }
-
   .admin-booking-block-row .bb-group--reason {
     padding-top: 4px;
     border-top: 1px dashed var(--border);
@@ -3190,11 +3278,16 @@ tbody tr:hover td {
     align-items: start;
   }
 
-  .admin-booking-block-row .bb-group--when .bb-group-fields {
+  .admin-booking-block-row .bb-group--when .bb-group-fields--when {
     display: grid;
-    grid-template-columns: minmax(5.5rem, 7rem) minmax(0, 1fr);
+    grid-template-columns: minmax(5.5rem, 7rem) minmax(0, 1fr) auto;
     gap: 10px 12px;
     align-items: end;
+  }
+
+  .admin-booking-block-row .bb-group--when .admin-booking-block-row__remove-wrap {
+    margin-left: 0;
+    justify-self: end;
   }
 
   .admin-booking-block-row .bb-group--slot .bb-group-fields--time {
@@ -4280,6 +4373,8 @@ body.wheel-spectacle-lock {
 .slot-spectacle-strip {
   position: relative;
   z-index: 2;
+  display: flex;
+  flex-direction: column;
   will-change: transform;
 }
 
@@ -4400,7 +4495,7 @@ body.wheel-spectacle-lock {
 }
 
 .slot-spectacle-stage .wheel-spectacle-sub {
-  margin-top: 8px;
+  margin-top: 16px;
   font-size: 0.82rem;
   color: rgb(255 230 210 / 0.9);
 }
@@ -5059,11 +5154,13 @@ body.wheel-spectacle-lock {
 }
 
 .slot-spectacle-reel-window::before {
-  z-index: 1;
+  /* 覆寫通用規則 inset:0，色帶左右略內縮不貼金框；z-index 須低於 strip 以免旋轉時蓋住獎項 */
+  inset: 0 24px;
+  z-index: 0;
   background:
-    linear-gradient(180deg, rgb(28 104 48 / 0.68) 0%, rgb(13 78 43 / 0.64) 33.33%, transparent 33.33% 66.66%, rgb(83 18 116 / 0.76) 66.66% 100%),
-    linear-gradient(180deg, transparent 0 33.33%, rgb(255 220 98 / 0.96) 33.33% 66.66%, transparent 66.66% 100%),
-    radial-gradient(ellipse 88% 55% at 50% 50%, rgb(255 243 178 / 0.32), transparent 70%);
+    linear-gradient(180deg, rgb(28 104 48 / 0.52) 0%, rgb(13 78 43 / 0.48) 33.33%, transparent 33.33% 66.66%, rgb(83 18 116 / 0.58) 66.66% 100%),
+    linear-gradient(180deg, transparent 0 33.33%, rgb(255 220 98 / 0.72) 33.33% 66.66%, transparent 66.66% 100%),
+    radial-gradient(ellipse 72% 55% at 50% 50%, rgb(255 243 178 / 0.22), transparent 70%);
 }
 
 .slot-spectacle-cell {
@@ -5103,7 +5200,10 @@ body.wheel-spectacle-lock {
 }
 
 .slot-spectacle-reel-window > .slot-spectacle-strip {
-  contain: paint;
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
 }
 
 .slot-spectacle-cell-txt {
@@ -5124,8 +5224,8 @@ body.wheel-spectacle-lock {
   --slot-lever-socket-top: calc(
     var(--slot-reel-mid-y) - var(--slot-lever-abs-top) - var(--slot-lever-socket-h) / 2
   );
-  /* 負值：推向金框右緣；數值愈負愈靠外，與內側白邊對齊 */
-  right: -98px;
+  /* 負值：推向金框右緣；數值愈負愈靠外 */
+  right: -168px;
   top: var(--slot-lever-abs-top);
   bottom: 2px;
   width: calc(var(--slot-lever-graphic-w) + 48px);
@@ -5237,6 +5337,11 @@ body.wheel-spectacle-lock {
 
 .slot-spectacle-stage.is-slot-idle .wheel-spectacle-actions {
   display: none;
+}
+
+/* display:flex 會蓋過 [hidden] 預設，旋轉中須強制隱藏「收下」 */
+.slot-spectacle-stage .wheel-spectacle-actions[hidden] {
+  display: none !important;
 }
 
 .slot-spectacle-stage .wheel-spectacle-result:not(.is-error) {
@@ -5364,6 +5469,10 @@ body.wheel-spectacle-lock {
     clip-path: inset(10px 0px 18px 0px round 8px);
   }
 
+  .slot-spectacle-reel-window::before {
+    inset: 0 16px;
+  }
+
   .slot-spectacle-cell {
     gap: 10px;
     padding: 10px 5px;
@@ -5386,7 +5495,8 @@ body.wheel-spectacle-lock {
       var(--slot-reel-mid-y) - var(--slot-lever-abs-top) - var(--slot-lever-socket-h) / 2
     );
     top: var(--slot-lever-abs-top);
-    right: -72px;
+    /* 仍靠右，但比 -136px 略往左（較不貼邊、較不易被裁切） */
+    right: -100px;
     z-index: 20;
   }
 
@@ -5433,6 +5543,10 @@ body.wheel-spectacle-lock {
 
   .slot-spectacle-foot-encourage {
     font-size: 0.88rem;
+  }
+
+  .slot-spectacle-stage .wheel-spectacle-primary.slot-spectacle-take-btn {
+    width: min(260px, 64vw);
   }
 }
 
@@ -5657,10 +5771,13 @@ body.wheel-spectacle-lock {
   --slot-take-art: url("/media/slot-take-button-luxe.png");
   -webkit-appearance: none;
   appearance: none;
-  width: min(560px, 96vw);
-  min-width: min(560px, 96vw);
-  min-height: clamp(96px, 20vmin, 140px);
-  padding: 14px 36px;
+  /* 與去背 PNG 寬高比一致，避免搶過拉霸機台 */
+  width: min(300px, 58vw);
+  min-width: 0;
+  aspect-ratio: 1502 / 628;
+  height: auto;
+  min-height: 0;
+  padding: 0;
   border: none;
   border-radius: 0;
   font-size: 0;
@@ -5668,11 +5785,8 @@ body.wheel-spectacle-lock {
   color: transparent;
   text-shadow: none;
   cursor: pointer;
-  background-color: transparent;
-  background-image: var(--slot-take-art);
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: contain;
+  /* 須用 background 簡寫覆蓋 button.primary，否則可能露出白底 */
+  background: transparent var(--slot-take-art) no-repeat center / contain;
   box-shadow: none;
   filter: drop-shadow(0 6px 14px rgb(0 0 0 / 0.45)) drop-shadow(0 0 18px rgb(255 200 90 / 0.22));
   transition:
@@ -5681,22 +5795,14 @@ body.wheel-spectacle-lock {
 }
 
 .slot-spectacle-stage .wheel-spectacle-primary.slot-spectacle-take-btn:hover:not(:disabled) {
-  background-color: transparent;
-  background-image: var(--slot-take-art);
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: contain;
+  background: transparent var(--slot-take-art) no-repeat center / contain;
   color: transparent;
   filter: drop-shadow(0 8px 18px rgb(0 0 0 / 0.5)) drop-shadow(0 0 22px rgb(255 215 120 / 0.35))
     brightness(1.06);
 }
 
 .slot-spectacle-stage .wheel-spectacle-primary.slot-spectacle-take-btn:active:not(:disabled) {
-  background-color: transparent;
-  background-image: var(--slot-take-art);
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: contain;
+  background: transparent var(--slot-take-art) no-repeat center / contain;
   color: transparent;
   transform: translateY(2px);
   filter: drop-shadow(0 4px 10px rgb(0 0 0 / 0.42)) drop-shadow(0 0 14px rgb(255 200 90 / 0.18))
@@ -5704,11 +5810,7 @@ body.wheel-spectacle-lock {
 }
 
 .slot-spectacle-stage .wheel-spectacle-primary.slot-spectacle-take-btn:disabled {
-  background-color: transparent;
-  background-image: var(--slot-take-art);
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: contain;
+  background: transparent var(--slot-take-art) no-repeat center / contain;
   color: transparent;
   opacity: 0.42;
   cursor: not-allowed;
@@ -6099,20 +6201,22 @@ html.kuso-retro .shell.admin-mode a:hover {
 
 html.kuso-retro .shell.admin-mode button.primary {
   border: none;
-  background: var(--accent);
+  background: #6001d2;
   color: #ffffff;
   text-shadow: none;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 1px 3px rgb(96 1 210 / 0.28);
   border-radius: var(--radius);
 }
 
 html.kuso-retro .shell.admin-mode button.primary:hover:not(:disabled) {
-  filter: brightness(1.06);
+  background: #5000b8;
+  filter: none;
   color: #ffffff;
 }
 
 html.kuso-retro .shell.admin-mode button.primary:active:not(:disabled) {
-  filter: brightness(0.95);
+  background: #410092;
+  filter: none;
 }
 
 html.kuso-retro .shell.admin-mode button.primary:disabled {

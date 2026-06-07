@@ -235,6 +235,23 @@ function buildIdleStrip(prizes: WheelPrizeLabel[]): { strip: WheelPrizeLabel[]; 
   return { strip, offsetY };
 }
 
+/** 捲軸金框：開場即掛上，避免「準備中」只剩機台金色橫條 */
+function mountSoloReelFrame(): { reelFrame: HTMLDivElement; stripEl: HTMLDivElement } {
+  const reelFrame = document.createElement("div");
+  reelFrame.className = "slot-spectacle-reel-frame";
+  const reelGilt = document.createElement("div");
+  reelGilt.className = "slot-spectacle-reel-gilt";
+  reelGilt.setAttribute("aria-hidden", "true");
+  reelGilt.style.backgroundImage = `url("${SLOT_INNER_GILT_SRC}")`;
+  const reelWindow = document.createElement("div");
+  reelWindow.className = "slot-spectacle-reel-window slot-spectacle-reel-window--solo";
+  const stripEl = document.createElement("div");
+  stripEl.className = "slot-spectacle-strip";
+  reelWindow.append(stripEl);
+  reelFrame.append(reelGilt, reelWindow);
+  return { reelFrame, stripEl };
+}
+
 /**
  * 開啟演出層；使用者按拉桿／開始後才執行 spinFn，成功時播放捲軸後 resolve。
  */
@@ -334,6 +351,8 @@ export function runSlotSpectacle(
 
     const reelsRow = document.createElement("div");
     reelsRow.className = "slot-spectacle-reels slot-spectacle-reels--solo";
+    const { reelFrame, stripEl } = mountSoloReelFrame();
+    reelsRow.append(reelFrame);
 
     reelStack.append(payline, reelsRow);
     mainInner.append(sideDecor, reelStack);
@@ -551,24 +570,9 @@ export function runSlotSpectacle(
       const idlePrizes = normalizePrizeList(prizeListRaw, null);
       const { strip: idleStrip, offsetY: idleOffsetY } = buildIdleStrip(idlePrizes);
 
-      reelsRow.replaceChildren();
-      const reelFrame = document.createElement("div");
-      reelFrame.className = "slot-spectacle-reel-frame";
-      const reelGilt = document.createElement("div");
-      reelGilt.className = "slot-spectacle-reel-gilt";
-      reelGilt.setAttribute("aria-hidden", "true");
-      reelGilt.style.backgroundImage = `url("${SLOT_INNER_GILT_SRC}")`;
-      const reelWindow = document.createElement("div");
-      reelWindow.className = "slot-spectacle-reel-window slot-spectacle-reel-window--solo";
-      const stripEl = document.createElement("div");
-      stripEl.className = "slot-spectacle-strip";
       fillStripEl(stripEl, idleStrip, idlePrizes);
       stripEl.style.transform = `translate3d(0, ${idleOffsetY}px, 0)`;
       stripEl.style.transition = "none";
-      reelWindow.append(stripEl);
-      /* 金框 PNG（RGBA 鏤空）叠於捲軸之上；素材須為透明中央洞，見 public/media/slot-inner-gilt-frame.png */
-      reelFrame.append(reelGilt, reelWindow);
-      reelsRow.append(reelFrame);
 
       renderHubFlanked(hub, t("slot.hubPull", "由右上往左下拉桿開始開獎"));
       phase = "idle";
@@ -581,6 +585,10 @@ export function runSlotSpectacle(
         if (phase !== "idle") return;
         phase = "busy";
         stage.classList.remove("is-slot-idle");
+        actions.hidden = true;
+        primaryBtn.disabled = true;
+        subLine.hidden = true;
+        subLine.textContent = "";
         resultLine.hidden = true;
         resultLine.classList.remove("is-error");
         resultLine.textContent = "";
@@ -649,6 +657,7 @@ export function runSlotSpectacle(
         const rngExtra = mulberry32(winSeed + 4242);
         const extraScroll = Math.round(1500 + rngExtra() * 520);
         const endY = -(stopIndex - CENTER_ROW) * CELL_PX;
+        /** 自較少位移處滑至停點：strip 往上移，符號視覺為往下滾 */
         const startY = endY + extraScroll;
         const durationMs = reduceMotion ? 0 : SLOT_REEL_SPIN_MS;
 
@@ -722,9 +731,9 @@ export function runSlotSpectacle(
 
         hub.replaceChildren();
         hub.textContent = data.prize.name;
-        resultLine.hidden = false;
+        resultLine.hidden = true;
         resultLine.classList.remove("is-error");
-        resultLine.textContent = t("slot.revealCongrats", "恭喜獲得");
+        resultLine.textContent = "";
         subLine.hidden = false;
         subLine.textContent =
           data.prize.type === "points"

@@ -44,11 +44,11 @@ import {
 import {
   durationMinutesForUnits as pricingDurationMinutesForUnits,
   foldWalletBalanceIntoSessions,
+  BOOKING_UNIT_MINUTES_FIXED,
   parseBookingUnits,
-  resolveMaxUnitsPerBooking,
   resolvePointsPerMassage,
   resolveSessionPriceNtd,
-  resolveUnitMinutes,
+  resolveTsmcPricingEnabledForApi,
 } from "./pricing";
 import { parseLocale, st, type ServerLocale } from "./serverI18n";
 import { maskDisplayNameForPublic } from "./maskDisplayName";
@@ -372,17 +372,14 @@ export const getAvailability = onCall(publicCall, async (request) => {
 
   const caps = resolveBookingCaps(capsSnap.data());
   const capOverflow = resolveCapOverflowSettings(capsSnap.data());
-  const pricingSnap = await db.collection("siteSettings").doc("pricing").get();
-  const unitMinutes = resolveUnitMinutes(pricingSnap.data());
-  const maxUnits = resolveMaxUnitsPerBooking(pricingSnap.data());
-  const units = parseBookingUnits(request.data?.units, maxUnits) ?? 1;
-  const durationMinutes = pricingDurationMinutesForUnits(units, unitMinutes);
+  const units = parseBookingUnits(request.data?.units) ?? 1;
+  const durationMinutes = pricingDurationMinutesForUnits(units, BOOKING_UNIT_MINUTES_FIXED);
   const blockWindows = parseBookingBlockWindows(blocksSnap.data());
   const existingBookings = daySnap.docs.map((d) => ({
     startSlot: String(d.get("startSlot") ?? ""),
     durationMinutes: resolveBookingDurationMinutesFromData(
       d.data() as Record<string, unknown>,
-      unitMinutes,
+      BOOKING_UNIT_MINUTES_FIXED,
     ),
   }));
   const unavailableStarts = listUnavailableStartSlotsForDay({
@@ -401,7 +398,6 @@ export const getAvailability = onCall(publicCall, async (request) => {
     unavailableStarts,
     units,
     durationMinutes,
-    unitMinutes,
     blockedSlots,
     dayCount: daySnap.size,
     weekCount: weekSnap.size,
@@ -568,21 +564,22 @@ export const createBooking = onCall(
     throw new HttpsError("invalid-argument", st(locale, "booking.badDateFormat", "日期格式錯誤"));
   }
 
-  const pricingSnapPre = await db.collection("siteSettings").doc("pricing").get();
-  const unitMinutesPre = resolveUnitMinutes(pricingSnapPre.data());
-  const maxUnitsPre = resolveMaxUnitsPerBooking(pricingSnapPre.data());
-  const units = parseBookingUnits(data.units, maxUnitsPre);
+  const units = parseBookingUnits(data.units);
   if (!units) {
     throw new HttpsError(
       "invalid-argument",
-      st(locale, "booking.badUnits", "請選擇有效的預約單位數（1–{{max}}）。", { max: maxUnitsPre }),
+      st(locale, "booking.badUnits", "預約單位數無效（僅支援 1 單位）。"),
     );
   }
-  const durationMinutesPre = pricingDurationMinutesForUnits(units, unitMinutesPre);
+  const durationMinutesPre = pricingDurationMinutesForUnits(units, BOOKING_UNIT_MINUTES_FIXED);
 
   let startLocal: DateTime;
   try {
-    startLocal = assertSlotAllowed(dateKey, startSlot, { holidayOutcall, units, unitMinutes: unitMinutesPre });
+    startLocal = assertSlotAllowed(dateKey, startSlot, {
+      holidayOutcall,
+      units,
+      unitMinutes: BOOKING_UNIT_MINUTES_FIXED,
+    });
   } catch (e) {
     const code = e instanceof Error ? e.message : "bad_request";
     const map: Record<string, string> = {
@@ -625,8 +622,7 @@ export const createBooking = onCall(
     await db.runTransaction(async (tx) => {
       const pricingSnap = await tx.get(db.collection("siteSettings").doc("pricing"));
       const sessionPriceNtd = resolveSessionPriceNtd(pricingSnap.data());
-      const unitMinutes = resolveUnitMinutes(pricingSnap.data());
-      const durationMinutes = pricingDurationMinutesForUnits(units, unitMinutes);
+      const durationMinutes = pricingDurationMinutesForUnits(units, BOOKING_UNIT_MINUTES_FIXED);
       const totalPrice = sessionPriceNtd * units;
       const capsRef = db.collection("siteSettings").doc("bookingCaps");
       const dayQ = db
@@ -702,7 +698,7 @@ export const createBooking = onCall(
         const existingStart = typeof d.get("startSlot") === "string" ? d.get("startSlot") : "";
         const existingDuration = resolveBookingDurationMinutesFromData(
           d.data() as Record<string, unknown>,
-          unitMinutes,
+          BOOKING_UNIT_MINUTES_FIXED,
         );
         const existingInterval = bookingIntervalFromStartSlot(existingStart, existingDuration);
         if (
@@ -791,7 +787,7 @@ export const createBooking = onCall(
         startSlot,
         units,
         durationMinutes,
-        unitMinutesSnapshot: unitMinutes,
+        unitMinutesSnapshot: BOOKING_UNIT_MINUTES_FIXED,
         weekStart,
         startAt,
         bookingMode,
@@ -891,8 +887,6 @@ export const getMyWallet = onCall(publicCall, async (request) => {
       drawChances,
       nickname,
       sessionPriceNtd,
-      unitMinutes: resolveUnitMinutes(pricingSnap.data()),
-      maxUnitsPerBooking: resolveMaxUnitsPerBooking(pricingSnap.data()),
       pointsPerMassage,
     };
   });
@@ -906,9 +900,8 @@ export const getBookingPricing = onCall(publicCall, async (request) => {
   const raw = snap.data();
   return {
     sessionPriceNtd: resolveSessionPriceNtd(raw),
-    unitMinutes: resolveUnitMinutes(raw),
-    maxUnitsPerBooking: resolveMaxUnitsPerBooking(raw),
     pointsPerMassage: resolvePointsPerMassage(raw),
+    tsmcPricingEnabled: resolveTsmcPricingEnabledForApi(raw),
   };
 });
 

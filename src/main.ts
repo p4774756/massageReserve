@@ -53,14 +53,14 @@ import {
   weekdayZhFromDateKeyTaipei,
 } from "./taipeiDates";
 import { showAlertModal, showConfirmModal } from "./modals";
-import { createTherapistCredentialStrip } from "./therapistCredential";
 import { wrapPasswordField } from "./passwordField";
 import { paintMemberWalletSummary, type MemberWalletSummaryOpts } from "./walletSummaryUi";
 import {
+  BOOKING_UNIT_MINUTES_FIXED,
   resolvePointsPerMassageClient,
   resolveSessionPriceNtdClient,
+  resolveTsmcPricingEnabledClient,
   roundSessionPriceNtdForCash,
-  resolveUnitMinutesClient,
 } from "./sitePricingResolve";
 
 function render() {
@@ -102,12 +102,10 @@ function render() {
 
   const titleHeading = el("h1", {}, [t("home.title", "辦公室按摩預約")]);
   const titleDesc = el("p", { class: "page-head-subtitle" });
-  const therapistCredential = createTherapistCredentialStrip();
   const visitorStats = createVisitorStatsLine(tabFromPath() !== "admin");
   const visitorStatsLine = visitorStats.element;
   const titleTextCol = el("div", { class: "page-head-text" }, [
     titleDesc,
-    therapistCredential.element,
     visitorStatsLine,
   ]);
 
@@ -740,7 +738,7 @@ function render() {
   const bookingPeersHint = el("div", { class: "booking-peers-hint hint", hidden: true });
   /** 與後端 `functions/src/pricing.ts` 預設對齊（定價 API 失敗時的首屏 fallback） */
   let sessionPriceNtdSetting = 130;
-  let unitMinutesSetting = 20;
+  let tsmcPricingEnabledSetting = true;
   let capOverflowEnabledSetting = true;
   let capOverflowSurchargeNtdSetting = 100;
   /** 當日或本週名額已滿且後台開放加價預約 */
@@ -1564,7 +1562,6 @@ function render() {
           drawChances: number;
           nickname?: string;
           sessionPriceNtd?: number;
-          unitMinutes?: number;
           pointsPerMassage?: number;
         };
         walletBalance = typeof data.walletBalance === "number" ? data.walletBalance : 0;
@@ -1573,7 +1570,6 @@ function render() {
         drawChances = typeof data.drawChances === "number" ? data.drawChances : 0;
         applyBookingPricingFromApi({
           sessionPriceNtd: data.sessionPriceNtd,
-          unitMinutes: data.unitMinutes,
           pointsPerMassage: data.pointsPerMassage,
         });
         const nickFromDb =
@@ -1731,7 +1727,6 @@ function render() {
   function syncHomePageSubtitle() {
     if (tab !== "book") return;
     const price = sessionPriceNtdSetting;
-    const minutes = unitMinutesSetting;
     titleDesc.replaceChildren(
       t("home.subtitle.prefix", "一次 "),
       el("span", { class: "page-head-subtitle__price" }, [
@@ -1740,22 +1735,23 @@ function render() {
       ]),
       t(
         "home.subtitle.suffix",
-        "（價格浮動、跟台積電漲跌），時間 {{minutes}}分鐘起跳，具體看情況",
-        { minutes },
+        tsmcPricingEnabledSetting
+          ? "（價格浮動、跟台積電漲跌），時間 15 分鐘"
+          : "，時間 15 分鐘",
       ),
     );
   }
 
   function applyBookingPricingFromApi(d: {
     sessionPriceNtd?: number;
-    unitMinutes?: number;
     pointsPerMassage?: number;
+    tsmcPricingEnabled?: boolean;
   }) {
+    if (typeof d.tsmcPricingEnabled === "boolean") {
+      tsmcPricingEnabledSetting = d.tsmcPricingEnabled;
+    }
     if (typeof d.sessionPriceNtd === "number" && Number.isFinite(d.sessionPriceNtd)) {
       sessionPriceNtdSetting = roundSessionPriceNtdForCash(d.sessionPriceNtd);
-    }
-    if (typeof d.unitMinutes === "number" && Number.isFinite(d.unitMinutes)) {
-      unitMinutesSetting = Math.max(5, Math.round(d.unitMinutes));
     }
     if (typeof d.pointsPerMassage === "number" && Number.isFinite(d.pointsPerMassage)) {
       pointsPerMassageSetting = Math.max(2, Math.round(d.pointsPerMassage));
@@ -2084,7 +2080,7 @@ function render() {
       t("booking.confirmTitle", "確認送出預約"),
       buildBookingSummary(displayName, dateKey, startSlot, note, bookingMode, false, {
         units: BOOKING_UNITS,
-        unitMinutes: unitMinutesSetting,
+        unitMinutes: BOOKING_UNIT_MINUTES_FIXED,
         unitPriceNtd: sessionPriceNtdSetting,
         capOverflowSurchargeNtd: bookingCapOverflowOffer ? capOverflowSurchargeNtdSetting : undefined,
       }),
@@ -2343,8 +2339,8 @@ function render() {
       const raw = snap.data() as Record<string, unknown> | undefined;
       applyBookingPricingFromApi({
         sessionPriceNtd: resolveSessionPriceNtdClient(raw),
-        unitMinutes: resolveUnitMinutesClient(raw),
         pointsPerMassage: resolvePointsPerMassageClient(raw),
+        tsmcPricingEnabled: resolveTsmcPricingEnabledClient(raw),
       });
     },
     () => {
@@ -2384,7 +2380,6 @@ function render() {
     const isBook = next === "book";
     shell.classList.toggle("admin-mode", !isBook);
     visitorStats.setVisible(isBook);
-    therapistCredential.setVisible(isBook);
     titleHeading.textContent = isBook ? t("home.title", "辦公室按摩預約") : t("admin.backTitle", "管理後台");
     titleDesc.hidden = !isBook;
     if (isBook) {

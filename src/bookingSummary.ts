@@ -1,4 +1,5 @@
 import { el } from "./domUtil";
+import { BOOKING_UNIT_MINUTES_FIXED } from "./sitePricingResolve";
 import { t } from "./i18n";
 import type { Booking, BookingMode } from "./bookingTypes";
 import { bookingModeLabel } from "./bookingDisplay";
@@ -20,7 +21,7 @@ export function buildBookingSummary(
 ): string {
   const noteSummary = note || t("booking.summary.noteEmpty", "（未填寫）");
   const units = opts?.units ?? 1;
-  const unitMinutes = opts?.unitMinutes ?? 20;
+  const unitMinutes = opts?.unitMinutes ?? BOOKING_UNIT_MINUTES_FIXED;
   const durationMinutes = units * unitMinutes;
   const endSlot = endSlotFromStartAndDuration(startSlot, durationMinutes);
   const unitPrice = opts?.unitPriceNtd ?? 0;
