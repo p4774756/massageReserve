@@ -1410,12 +1410,25 @@ export const listWalletTransactionsAdmin = onCall(publicCall, async (request) =>
   const customerId = await resolveCustomerUidForTopup(customerIdRaw, locale);
   const fetchLimit = typeFilter ? limit : Math.min(200, limit * 4);
 
-  const snap = await db
-    .collection("walletTransactions")
-    .where("customerId", "==", customerId)
-    .orderBy("createdAt", "desc")
-    .limit(fetchLimit)
-    .get();
+  let snap;
+  try {
+    // 僅依 customerId 篩選，記憶體排序，避免複合索引建立中導致查詢失敗
+    snap = await db.collection("walletTransactions").where("customerId", "==", customerId).limit(fetchLimit).get();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("listWalletTransactionsAdmin query failed", customerId, e);
+    if (/requires an index/i.test(msg)) {
+      throw new HttpsError(
+        "failed-precondition",
+        st(
+          locale,
+          "walletHistory.indexBuilding",
+          "紀錄索引建立中，請數分鐘後再試；若持續失敗請聯絡管理員。",
+        ),
+      );
+    }
+    throw new HttpsError("internal", st(locale, "walletHistory.queryFail", "查詢紀錄失敗，請稍後再試。"));
+  }
 
   let transactions = snap.docs
     .map((docSnap) => {
@@ -1437,7 +1450,9 @@ export const listWalletTransactionsAdmin = onCall(publicCall, async (request) =>
   if (typeFilter) {
     transactions = transactions.filter((row) => row.type === typeFilter);
   }
-  transactions = transactions.slice(0, limit);
+  transactions = transactions
+    .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+    .slice(0, limit);
 
   return { customerId, transactions };
 });

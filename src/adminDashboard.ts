@@ -1493,9 +1493,18 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     );
     wireWalletAccordionsExclusive([accordionTopup, accordionAdjust, accordionGrant]);
 
+    const walletMemberBar = el("section", { class: "admin-announce__wallet-segment admin-announce__wallet-segment--member" }, [
+      el("label", { class: "field" }, [t("admin.wallet.memberLabel", "會員（Email 或 UID）"), topupTypeaheadWrap]),
+      el("p", { class: "hint admin-wallet-member-bar__hint" }, [
+        t(
+          "admin.wallet.memberHint",
+          "以下儲值、調整與紀錄查詢皆套用此會員；輸入至少 2 字元可搜尋 Email，亦可直接貼上 UID。",
+        ),
+      ]),
+    ]);
+
     const walletMemberOpsCard = el("section", { class: "admin-announce__wallet-segment admin-announce__wallet-segment--member-ops" }, [
       el("h3", {}, [t("admin.wallet.opsHeading", "會員儲值與調整")]),
-      el("label", { class: "field" }, [t("admin.wallet.memberLabel", "會員（Email 或 UID）"), topupTypeaheadWrap]),
       el("div", { class: "admin-wallet-accordion-stack" }, [accordionTopup, accordionAdjust, accordionGrant]),
     ]);
 
@@ -1511,71 +1520,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     };
     type WalletHistoryTypeFilter = "" | "topup" | "admin_session_adjust" | "admin_grant_draw";
 
-    const walletHistoryCustomerId = el("input", {
-      type: "text",
-      placeholder: t("admin.placeholder.memberId", "會員 Email（建議）或 UID"),
-      autocomplete: "off",
-    });
-    const walletHistorySuggestions = el("ul", {
-      class: "member-typeahead-list",
-      hidden: true,
-      role: "listbox",
-    });
-    const walletHistoryTypeaheadWrap = el("div", { class: "member-typeahead-wrap" });
-    walletHistoryTypeaheadWrap.append(walletHistoryCustomerId, walletHistorySuggestions);
-
-    let walletHistorySearchTimer: ReturnType<typeof setTimeout> | null = null;
-    async function runWalletHistoryMemberSearch() {
-      const q = walletHistoryCustomerId.value.trim();
-      if (q.length < 2) {
-        walletHistorySuggestions.hidden = true;
-        walletHistorySuggestions.innerHTML = "";
-        return;
-      }
-      try {
-        const fn = searchMemberUsersCall();
-        const res = await fn({ prefix: q, ...localeApiParam() });
-        const users = (res.data as { users?: { uid: string; email: string }[] }).users ?? [];
-        walletHistorySuggestions.innerHTML = "";
-        if (users.length === 0) {
-          walletHistorySuggestions.hidden = true;
-          return;
-        }
-        for (const u of users) {
-          const li = el("li", { class: "member-typeahead-item", role: "option" }, [u.email]);
-          li.addEventListener("mousedown", (ev) => {
-            ev.preventDefault();
-            walletHistoryCustomerId.value = u.email;
-            walletHistorySuggestions.hidden = true;
-            walletHistorySuggestions.innerHTML = "";
-          });
-          walletHistorySuggestions.append(li);
-        }
-        walletHistorySuggestions.hidden = false;
-      } catch {
-        walletHistorySuggestions.hidden = true;
-      }
-    }
-
-    walletHistoryCustomerId.addEventListener("input", () => {
-      const raw = walletHistoryCustomerId.value.trim();
-      if (raw.length < 2) {
-        walletHistorySuggestions.hidden = true;
-        walletHistorySuggestions.innerHTML = "";
-        return;
-      }
-      if (walletHistorySearchTimer) clearTimeout(walletHistorySearchTimer);
-      walletHistorySearchTimer = setTimeout(() => void runWalletHistoryMemberSearch(), 280);
-    });
-    walletHistoryCustomerId.addEventListener("focus", () => {
-      void runWalletHistoryMemberSearch();
-    });
-    walletHistoryCustomerId.addEventListener("blur", () => {
-      setTimeout(() => {
-        walletHistorySuggestions.hidden = true;
-      }, 200);
-    });
-
     const walletHistoryTypeFilter = el("select", { class: "admin-wallet-history__type-filter" });
     const walletHistoryTypeOptions: { value: WalletHistoryTypeFilter; label: string }[] = [
       { value: "", label: t("admin.walletHistory.typeAll", "全部類型") },
@@ -1588,9 +1532,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       walletHistoryTypeFilter.append(o);
     }
 
-    const walletHistoryUseOpsMemberBtn = el("button", { type: "button", class: "ghost" }, [
-      t("admin.walletHistory.useOpsMember", "帶入上方會員"),
-    ]);
     const walletHistoryQueryBtn = el("button", { type: "button", class: "ghost" }, [
       t("admin.walletHistory.queryBtn", "查詢紀錄"),
     ]);
@@ -1599,7 +1540,19 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     const walletHistoryTable = el("table", {}, []);
     walletHistoryTableWrap.append(walletHistoryTable);
 
-    let walletHistoryRows: WalletHistoryRow[] = [];
+    const WALLET_HISTORY_PAGE_SIZE = 10;
+    let walletHistoryPageIndex = 0;
+    let walletHistoryAllRows: WalletHistoryRow[] = [];
+
+    const walletHistoryPager = el("div", { class: "admin-hidden-pager admin-wallet-history-pager", hidden: true });
+    const walletHistoryPagePrev = el("button", { type: "button", class: "ghost" }, [
+      t("admin.pager.prev", "上一頁"),
+    ]);
+    const walletHistoryPageInfo = el("span", { class: "hint admin-hidden-pager-meta" }, [""]);
+    const walletHistoryPageNext = el("button", { type: "button", class: "ghost" }, [
+      t("admin.pager.next", "下一頁"),
+    ]);
+    walletHistoryPager.append(walletHistoryPagePrev, walletHistoryPageNext, walletHistoryPageInfo);
 
     function walletHistoryTypeLabel(type: string): string {
       switch (type) {
@@ -1656,7 +1609,8 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
           el("th", {}, [t("admin.walletHistory.colOperator", "操作者")]),
         ]),
       );
-      if (walletHistoryRows.length === 0) {
+      if (walletHistoryAllRows.length === 0) {
+        walletHistoryPager.hidden = true;
         walletHistoryTable.append(
           el("tr", {}, [
             el("td", { colSpan: 7, class: "admin-wallet-history__empty" }, [
@@ -1666,7 +1620,13 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         );
         return;
       }
-      for (const row of walletHistoryRows) {
+      const total = walletHistoryAllRows.length;
+      const totalPages = Math.max(1, Math.ceil(total / WALLET_HISTORY_PAGE_SIZE));
+      walletHistoryPageIndex = Math.max(0, Math.min(walletHistoryPageIndex, totalPages - 1));
+      const from = walletHistoryPageIndex * WALLET_HISTORY_PAGE_SIZE;
+      const pageRows = walletHistoryAllRows.slice(from, from + WALLET_HISTORY_PAGE_SIZE);
+
+      for (const row of pageRows) {
         walletHistoryTable.append(
           el("tr", {}, [
             el("td", { class: "mono admin-wallet-history__when" }, [formatWalletHistoryWhen(row.createdAt)]),
@@ -1681,12 +1641,39 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
           ]),
         );
       }
+
+      walletHistoryPager.hidden = false;
+      walletHistoryPagePrev.disabled = walletHistoryPageIndex <= 0;
+      walletHistoryPageNext.disabled = walletHistoryPageIndex >= totalPages - 1;
+      walletHistoryPageInfo.textContent = t(
+        "admin.pager.walletHistoryPage",
+        "第 {{cur}} / {{total}} 頁 · 共 {{count}} 筆（每頁 {{size}} 筆）",
+        {
+          cur: walletHistoryPageIndex + 1,
+          total: totalPages,
+          count: total,
+          size: WALLET_HISTORY_PAGE_SIZE,
+        },
+      );
     }
+
+    walletHistoryPagePrev.addEventListener("click", () => {
+      if (walletHistoryPageIndex <= 0) return;
+      walletHistoryPageIndex -= 1;
+      paintWalletHistoryTable();
+    });
+    walletHistoryPageNext.addEventListener("click", () => {
+      if (walletHistoryAllRows.length === 0) return;
+      const totalPages = Math.ceil(walletHistoryAllRows.length / WALLET_HISTORY_PAGE_SIZE);
+      if (walletHistoryPageIndex >= totalPages - 1) return;
+      walletHistoryPageIndex += 1;
+      paintWalletHistoryTable();
+    });
 
     async function loadWalletHistory() {
       walletHistoryStatus.textContent = "";
       walletHistoryStatus.className = "status-line";
-      const customerId = walletHistoryCustomerId.value.trim();
+      const customerId = topupCustomerId.value.trim();
       if (!customerId) {
         walletHistoryStatus.textContent = t("admin.topup.needId", "請輸入會員 Email 或 UID。");
         walletHistoryStatus.classList.add("error");
@@ -1700,19 +1687,21 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         const res = await fn({
           customerId,
           ...(typeFilter ? { typeFilter } : {}),
-          limit: 50,
+          limit: 100,
           ...localeApiParam(),
         });
         const data = res.data as { transactions?: WalletHistoryRow[] };
-        walletHistoryRows = Array.isArray(data.transactions) ? data.transactions : [];
+        walletHistoryAllRows = Array.isArray(data.transactions) ? data.transactions : [];
+        walletHistoryPageIndex = 0;
         paintWalletHistoryTable();
         walletHistoryStatus.textContent =
-          walletHistoryRows.length > 0
-            ? t("admin.walletHistory.found", "共 {{n}} 筆紀錄。", { n: walletHistoryRows.length })
+          walletHistoryAllRows.length > 0
+            ? t("admin.walletHistory.found", "共 {{n}} 筆紀錄。", { n: walletHistoryAllRows.length })
             : t("admin.walletHistory.none", "查無紀錄。");
-        walletHistoryStatus.classList.add(walletHistoryRows.length > 0 ? "ok" : "");
+        walletHistoryStatus.classList.add(walletHistoryAllRows.length > 0 ? "ok" : "");
       } catch (e) {
-        walletHistoryRows = [];
+        walletHistoryAllRows = [];
+        walletHistoryPageIndex = 0;
         paintWalletHistoryTable();
         walletHistoryStatus.textContent = errorMessage(e);
         walletHistoryStatus.classList.add("error");
@@ -1721,16 +1710,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       }
     }
 
-    walletHistoryUseOpsMemberBtn.addEventListener("click", () => {
-      const v = topupCustomerId.value.trim();
-      if (!v) {
-        walletHistoryStatus.textContent = t("admin.walletHistory.noOpsMember", "請先在上方填入會員。");
-        walletHistoryStatus.className = "status-line error";
-        return;
-      }
-      walletHistoryCustomerId.value = v;
-      void loadWalletHistory();
-    });
     walletHistoryQueryBtn.addEventListener("click", () => void loadWalletHistory());
 
     const walletHistoryCard = el("section", {
@@ -1743,24 +1722,20 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
           "查詢後台儲值、調整可預約次數與贈送輪盤抽獎次數之稽核紀錄；資料來自 walletTransactions。",
         ),
       ]),
-      el("label", { class: "field" }, [
-        t("admin.wallet.memberLabel", "會員（Email 或 UID）"),
-        walletHistoryTypeaheadWrap,
-      ]),
-      el("label", { class: "field" }, [
-        t("admin.walletHistory.typeFilterLabel", "類型篩選"),
-        walletHistoryTypeFilter,
-      ]),
-      el("div", { class: "row-actions admin-wallet-history__actions" }, [
-        walletHistoryUseOpsMemberBtn,
+      el("div", { class: "admin-wallet-history__toolbar" }, [
+        el("label", { class: "field admin-wallet-history__filter" }, [
+          t("admin.walletHistory.typeFilterLabel", "類型篩選"),
+          walletHistoryTypeFilter,
+        ]),
         walletHistoryQueryBtn,
       ]),
       walletHistoryStatus,
       walletHistoryTableWrap,
+      walletHistoryPager,
     ]);
     paintWalletHistoryTable();
 
-    walletTopupSection.append(walletMemberOpsCard, walletHistoryCard);
+    walletTopupSection.append(walletMemberBar, walletMemberOpsCard, walletHistoryCard);
     const tableHolder = el("div", { class: "table-wrap admin-bookings-table" });
     const table = el("table", {}, []);
     function adminBookingsHeaderRow(): HTMLTableRowElement {
