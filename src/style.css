@@ -689,6 +689,28 @@ main.panel.panel-book--has-notice {
   resize: vertical;
 }
 
+.admin-service-pause__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+}
+
+.admin-service-pause__footer > button {
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.admin-service-pause__footer > .status-line {
+  flex: 1 1 8rem;
+  min-width: 0;
+  margin: 0;
+}
+
+.admin-service-pause__footer > .status-line:empty {
+  display: none;
+}
+
 .site-public-notice__label {
   flex: 0 0 auto;
   font-size: 0.72rem;

@@ -9,7 +9,7 @@ import {
   signInWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, getDoc, onSnapshot } from "firebase/firestore";
 import {
   createBookingCall,
   getAvailabilityCall,
@@ -2414,26 +2414,43 @@ function render() {
     },
   );
 
+  function applyServicePauseSettings(parsed: ReturnType<typeof parseServicePause>): void {
+    const wasPaused = bookingServicePaused;
+    bookingServicePaused = parsed.paused;
+    bookingServicePauseMessage = parsed.message;
+    bookingServicePauseResumeOn = parsed.resumeOn;
+    syncServicePauseBookingUi();
+    if (bookingServicePaused || wasPaused) {
+      void refreshAvailability();
+    }
+    if (!bookingServicePaused && wasPaused) {
+      void refreshWalletStatus();
+    }
+  }
+
+  async function refreshServicePauseFromServer(): Promise<void> {
+    try {
+      const snap = await getDoc(servicePauseDocRef(db));
+      applyServicePauseSettings(parseServicePause(snap.data()));
+    } catch (e) {
+      console.warn("servicePause getDoc refresh failed", e);
+    }
+  }
+
   onSnapshot(
     servicePauseDocRef(db),
     (snap) => {
-      const parsed = parseServicePause(snap.data());
-      const wasPaused = bookingServicePaused;
-      bookingServicePaused = parsed.paused;
-      bookingServicePauseMessage = parsed.message;
-      bookingServicePauseResumeOn = parsed.resumeOn;
-      syncServicePauseBookingUi();
-      if (bookingServicePaused || wasPaused) {
-        void refreshAvailability();
-      }
-      if (!bookingServicePaused && wasPaused) {
-        void refreshWalletStatus();
-      }
+      applyServicePauseSettings(parseServicePause(snap.data()));
     },
-    () => {
-      /* 讀取失敗時維持上一輪狀態 */
+    (err) => {
+      console.warn("servicePause onSnapshot failed", err);
     },
   );
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible" || tab !== "book") return;
+    void refreshServicePauseFromServer();
+  });
 
   async function syncAdminView() {
     if (tab !== "admin") return;
@@ -2479,6 +2496,8 @@ function render() {
     panelAdmin.hidden = isBook;
     if (isBook) {
       stopAdminListener();
+      syncServicePauseBookingUi();
+      void refreshServicePauseFromServer();
     } else {
       void syncAdminView();
     }

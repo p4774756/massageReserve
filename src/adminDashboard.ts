@@ -1228,13 +1228,13 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       ]),
       el("label", { class: "field" }, [
         t("admin.servicePause.resumeLabel", "預計恢復日（選填，僅供顯示）"),
-        el("div", { class: "row-actions admin-service-pause__resume-row" }, [
-          servicePauseResumeInput,
-          clearServicePauseResumeBtn,
-        ]),
+        servicePauseResumeInput,
       ]),
-      el("div", { class: "row-actions" }, [saveServicePauseMessageBtn]),
-      servicePauseStatus,
+      el("div", { class: "admin-service-pause__footer" }, [
+        clearServicePauseResumeBtn,
+        saveServicePauseMessageBtn,
+        servicePauseStatus,
+      ]),
     ]);
 
     const publicNoticeDocRef = doc(db, "siteSettings", PUBLIC_NOTICE_DOC_ID);
