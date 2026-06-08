@@ -24,53 +24,8 @@ export function createMyBookingsPanel(options: MyBookingsPanelOptions): MyBookin
 
   const myBookingsSection = el("div", { class: "my-bookings" }, []);
   const myBookingsHint = el("div", { class: "status-line" });
-  const myBookingsTabList = el("div", { class: "book-tabs my-bookings-tabs", role: "tablist" }, []);
-  myBookingsTabList.setAttribute("aria-label", t("myBookings.tabsAria", "我的預約分類"));
-  const myBookingsTabUpcoming = el(
-    "button",
-    { type: "button", class: "tab book-tab", role: "tab", id: "my-bookings-tab-upcoming" },
-    [t("myBookings.tab.upcoming", "尚未開始")],
-  );
-  const myBookingsTabEnded = el(
-    "button",
-    { type: "button", class: "tab book-tab", role: "tab", id: "my-bookings-tab-ended" },
-    [t("myBookings.tab.ended", "已結束")],
-  );
-  myBookingsTabUpcoming.setAttribute("aria-controls", "my-bookings-panel-upcoming");
-  myBookingsTabEnded.setAttribute("aria-controls", "my-bookings-panel-ended");
-  myBookingsTabList.append(myBookingsTabUpcoming, myBookingsTabEnded);
-
-  const myBookingsPanelUpcoming = el("div", {
-    class: "book-tab-panel my-bookings-tab-panel",
-    id: "my-bookings-panel-upcoming",
-  });
-  const myBookingsPanelEnded = el("div", {
-    class: "book-tab-panel my-bookings-tab-panel",
-    id: "my-bookings-panel-ended",
-  });
-  myBookingsPanelUpcoming.setAttribute("aria-labelledby", "my-bookings-tab-upcoming");
-  myBookingsPanelEnded.setAttribute("aria-labelledby", "my-bookings-tab-ended");
-
-  const myBookingsListUpcoming = el("div", { class: "my-bookings-list" }, []);
-  const myBookingsListEnded = el("div", { class: "my-bookings-list" }, []);
-  myBookingsPanelUpcoming.append(myBookingsListUpcoming);
-  myBookingsPanelEnded.append(myBookingsListEnded);
-  myBookingsPanelEnded.hidden = true;
-
-  function setMyBookingsSubTab(which: "upcoming" | "ended") {
-    const isUpcoming = which === "upcoming";
-    myBookingsTabUpcoming.setAttribute("aria-selected", String(isUpcoming));
-    myBookingsTabEnded.setAttribute("aria-selected", String(!isUpcoming));
-    myBookingsTabUpcoming.tabIndex = isUpcoming ? 0 : -1;
-    myBookingsTabEnded.tabIndex = isUpcoming ? -1 : 0;
-    myBookingsPanelUpcoming.hidden = !isUpcoming;
-    myBookingsPanelEnded.hidden = isUpcoming;
-  }
-  myBookingsTabUpcoming.addEventListener("click", () => setMyBookingsSubTab("upcoming"));
-  myBookingsTabEnded.addEventListener("click", () => setMyBookingsSubTab("ended"));
-  setMyBookingsSubTab("upcoming");
-
-  myBookingsSection.append(myBookingsTabList, myBookingsHint, myBookingsPanelUpcoming, myBookingsPanelEnded);
+  const myBookingsList = el("div", { class: "my-bookings-list" }, []);
+  myBookingsSection.append(myBookingsHint, myBookingsList);
 
   function appendMyBookingRow(list: HTMLElement, b: Booking) {
     const canCancel = b.status === "pending" || b.status === "confirmed";
@@ -123,8 +78,7 @@ export function createMyBookingsPanel(options: MyBookingsPanelOptions): MyBookin
       myBookingsUnsub = null;
     }
     myBookingsListenerUid = null;
-    myBookingsListUpcoming.innerHTML = "";
-    myBookingsListEnded.innerHTML = "";
+    myBookingsList.innerHTML = "";
     myBookingsHint.textContent = "";
     myBookingsHint.className = "status-line";
   }
@@ -142,35 +96,24 @@ export function createMyBookingsPanel(options: MyBookingsPanelOptions): MyBookin
     myBookingsUnsub = onSnapshot(
       q,
       (snap) => {
-        myBookingsListUpcoming.innerHTML = "";
-        myBookingsListEnded.innerHTML = "";
+        myBookingsList.innerHTML = "";
         myBookingsHint.textContent = "";
         myBookingsHint.className = "status-line";
-        if (snap.empty) {
-          myBookingsListEnded.append(
+        const upcoming = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() } as Booking))
+          .filter(isMyBookingUpcomingTab)
+          .sort((a, b) => bookingStartMs(a) - bookingStartMs(b));
+
+        if (upcoming.length === 0) {
+          myBookingsList.append(
             el("p", { class: "hint my-bookings-empty" }, [
-              t("myBookings.emptyEnded", "尚無已結束的紀錄（已完成、已取消、已刪除或已過開始時間）。"),
+              t("myBookings.emptyUpcoming", "尚無尚未開始的預約。"),
             ]),
           );
           return;
         }
-        const all = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Booking));
-        const upcoming = all.filter(isMyBookingUpcomingTab).sort((a, b) => bookingStartMs(a) - bookingStartMs(b));
-        const ended = all.filter((b) => !isMyBookingUpcomingTab(b)).sort((a, b) => bookingStartMs(b) - bookingStartMs(a));
 
-        if (upcoming.length > 0) {
-          for (const b of upcoming) appendMyBookingRow(myBookingsListUpcoming, b);
-        }
-
-        if (ended.length === 0) {
-          myBookingsListEnded.append(
-            el("p", { class: "hint my-bookings-empty" }, [
-              t("myBookings.emptyEnded", "尚無已結束的紀錄（已完成、已取消、已刪除或已過開始時間）。"),
-            ]),
-          );
-        } else {
-          for (const b of ended) appendMyBookingRow(myBookingsListEnded, b);
-        }
+        for (const b of upcoming) appendMyBookingRow(myBookingsList, b);
       },
       (err) => {
         console.error(err);

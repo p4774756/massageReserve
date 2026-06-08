@@ -1,17 +1,14 @@
 import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
 import { DateTime } from "luxon";
-import { DEFAULT_SESSION_PRICE_NTD, roundSessionPriceNtdForCash } from "./pricing";
+import { resolveSessionPriceBaseNtd, roundSessionPriceNtdForCash } from "./pricing";
 import { TIMEZONE } from "./bookingLogic";
 
 const PRICING_DOC_PATH = { collection: "siteSettings", id: "pricing" } as const;
-const YAHOO_CHART_URL =
-  "https://query1.finance.yahoo.com/v8/finance/chart/2330.TW?interval=1d&range=10d";
 const FETCH_TIMEOUT_MS = 20_000;
 const MIN_SESSION_PRICE = 10;
 const MAX_SESSION_PRICE = 500_000;
-const MIN_BASE_NTD = 1;
-const MAX_BASE_NTD = 500_000;
+const MAX_QUOTE_STALE_DAYS = 7;
 
 export type TsmcPricingSyncResult =
   | { ok: true; skipped: true; reason: string }
@@ -21,21 +18,21 @@ export type TsmcPricingSyncResult =
       sessionPriceNtd: number;
       changePercent: number;
       baseNtd: number;
+      anchorDateKey: string;
       quoteDateKey: string;
       cumulativeFactor: number;
       appliedToday: boolean;
     }
   | { ok: false; error: string };
 
-export type TsmcDailyQuote = {
-  changePercent: number;
-  quoteDateKey: string;
-  source: "yahoo_chart";
+export type TsmcDailyBar = {
+  dateKey: string;
+  close: number;
 };
 
-/** 相對店內基準價，累積漲跌係數上下限 ±25% */
-export const TSMC_CUMULATIVE_FACTOR_MIN = 0.75;
-export const TSMC_CUMULATIVE_FACTOR_MAX = 1.25;
+/** 相對店內基準價，累積漲跌係數上下限 ±40% */
+export const TSMC_CUMULATIVE_FACTOR_MIN = 0.6;
+export const TSMC_CUMULATIVE_FACTOR_MAX = 1.4;
 
 export function clampTsmcCumulativeFactor(factor: number): number {
   const n = Number.isFinite(factor) ? factor : 1;
@@ -44,7 +41,7 @@ export function clampTsmcCumulativeFactor(factor: number): number {
 
 /** 店內基準價 × 累積係數，再進位至 10 元倍數（方便收現） */
 export function sessionPriceFromTsmcCompound(baseNtd: number, cumulativeFactor: number): number {
-  const base = Number.isFinite(baseNtd) ? baseNtd : DEFAULT_SESSION_PRICE_NTD;
+  const base = Number.isFinite(baseNtd) ? baseNtd : resolveSessionPriceBaseNtd(undefined);
   const factor = clampTsmcCumulativeFactor(
     Number.isFinite(cumulativeFactor) && cumulativeFactor > 0 ? cumulativeFactor : 1,
   );
@@ -76,17 +73,17 @@ export function resolveTsmcPricingEnabled(raw: Record<string, unknown> | undefin
 }
 
 export function resolveTsmcPricingBaseNtd(raw: Record<string, unknown> | undefined): number {
-  if (!raw || typeof raw !== "object") return DEFAULT_SESSION_PRICE_NTD;
-  const v = raw.tsmcPricingBaseNtd;
-  const n = typeof v === "number" && Number.isFinite(v) ? Math.round(v) : Number(v);
-  if (!Number.isInteger(n) || n < MIN_BASE_NTD || n > MAX_BASE_NTD) return DEFAULT_SESSION_PRICE_NTD;
-  return n;
+  return resolveSessionPriceBaseNtd(raw);
 }
 
-function isQuoteForTodayTaipei(marketTimeSec: number): boolean {
-  const quoteDay = DateTime.fromSeconds(marketTimeSec, { zone: TIMEZONE }).toISODate();
-  const today = DateTime.now().setZone(TIMEZONE).toISODate();
-  return quoteDay === today;
+export function resolveTsmcAnchorDateKey(raw: Record<string, unknown> | undefined): string {
+  if (raw && typeof raw === "object") {
+    const v = raw.tsmcAnchorDateKey;
+    if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v.trim())) {
+      return v.trim();
+    }
+  }
+  return DateTime.now().setZone(TIMEZONE).toISODate() ?? "2020-01-01";
 }
 
 type YahooChartResult = {
@@ -95,64 +92,80 @@ type YahooChartResult = {
   indicators?: { quote?: Array<{ close?: Array<number | null> }> };
 };
 
-function finiteNum(v: unknown): number | null {
-  const n = typeof v === "number" && Number.isFinite(v) ? v : Number(v);
-  return Number.isFinite(n) ? n : null;
+/** 解析 Yahoo 日 K 收盤價（依台北日期去重，保留同日最後一筆） */
+export function parseYahooDailyBars(result: YahooChartResult): TsmcDailyBar[] {
+  const stamps = result.timestamp ?? [];
+  const closes = result.indicators?.quote?.[0]?.close ?? [];
+  const byDate = new Map<string, number>();
+  for (let i = 0; i < stamps.length; i++) {
+    const ts = stamps[i];
+    const close = closes[i];
+    if (typeof ts !== "number" || !Number.isFinite(ts)) continue;
+    if (typeof close !== "number" || !Number.isFinite(close) || close <= 0) continue;
+    const dateKey = DateTime.fromSeconds(ts, { zone: TIMEZONE }).toISODate();
+    if (!dateKey) continue;
+    byDate.set(dateKey, close);
+  }
+  return [...byDate.entries()]
+    .map(([dateKey, close]) => ({ dateKey, close }))
+    .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
 }
 
-/** 日漲跌幅 %：Yahoo 常省略 regularMarketChangePercent，改從昨收／K 線推算 */
-export function resolveYahooDailyChangePercent(result: YahooChartResult): number | null {
-  const meta = result.meta;
-  if (meta && typeof meta === "object") {
-    const direct = finiteNum(meta.regularMarketChangePercent);
-    if (direct !== null) return direct;
-
-    const price = finiteNum(meta.regularMarketPrice);
-    const prevClose = finiteNum(meta.previousClose);
-    if (price !== null && prevClose !== null && prevClose > 0) {
-      return ((price - prevClose) / prevClose) * 100;
-    }
+/**
+ * 自基準日（含）起算，僅累乘「基準日之後」各交易日的日漲跌；
+ * 基準日當日係數為 1。
+ */
+export function computeTsmcCumulativeFromBars(
+  bars: TsmcDailyBar[],
+  anchorDateKey: string,
+): { factor: number; quoteDateKey: string; lastChangePercent: number } {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(anchorDateKey)) {
+    throw new Error("漲跌基準日格式錯誤");
   }
-
-  const closes = result.indicators?.quote?.[0]?.close;
-  if (Array.isArray(closes)) {
-    const valid = closes.filter((c): c is number => typeof c === "number" && Number.isFinite(c));
-    if (valid.length >= 2) {
-      const last = valid[valid.length - 1]!;
-      const prior = valid[valid.length - 2]!;
-      if (prior > 0) return ((last - prior) / prior) * 100;
-    }
+  if (bars.length === 0) {
+    throw new Error("無法取得台積電行情");
   }
-
-  if (meta && typeof meta === "object") {
-    const price = finiteNum(meta.regularMarketPrice);
-    const chartPrev = finiteNum(meta.chartPreviousClose);
-    if (price !== null && chartPrev !== null && chartPrev > 0 && price !== chartPrev) {
-      return ((price - chartPrev) / chartPrev) * 100;
-    }
+  const anchorIdx = bars.findIndex((b) => b.dateKey >= anchorDateKey);
+  if (anchorIdx < 0) {
+    throw new Error(`基準日 ${anchorDateKey} 尚無行情資料，請改選較近的日期`);
   }
-
-  return null;
+  let factor = 1;
+  let lastChangePercent = 0;
+  const lastBar = bars[bars.length - 1]!;
+  for (let i = anchorIdx + 1; i < bars.length; i++) {
+    const prev = bars[i - 1]!.close;
+    const cur = bars[i]!.close;
+    if (prev <= 0) continue;
+    const pct = ((cur - prev) / prev) * 100;
+    factor = clampTsmcCumulativeFactor(factor * (1 + pct / 100));
+    lastChangePercent = pct;
+  }
+  return { factor, quoteDateKey: lastBar.dateKey, lastChangePercent };
 }
 
-function resolveYahooMarketTimeSec(result: YahooChartResult): number | null {
-  const metaTime = result.meta ? finiteNum(result.meta.regularMarketTime) : null;
-  if (metaTime !== null && metaTime > 0) return metaTime;
-
-  const stamps = result.timestamp;
-  if (Array.isArray(stamps) && stamps.length > 0) {
-    const last = stamps[stamps.length - 1]!;
-    if (Number.isFinite(last) && last > 0) return last;
+function assertQuoteNotTooStale(quoteDateKey: string): void {
+  const today = DateTime.now().setZone(TIMEZONE).startOf("day");
+  const quoteDay = DateTime.fromISO(quoteDateKey, { zone: TIMEZONE }).startOf("day");
+  if (!quoteDay.isValid) return;
+  const days = today.diff(quoteDay, "days").days;
+  if (days > MAX_QUOTE_STALE_DAYS) {
+    throw new Error(`行情過舊（最近交易日 ${quoteDateKey}）`);
   }
-  return null;
 }
 
-/** 自 Yahoo Finance chart API 讀取 2330 當日漲跌幅（%） */
-export async function fetchTsmcDailyChangePercent(): Promise<TsmcDailyQuote> {
+/** 自 Yahoo Finance 讀取基準日至今的 2330 日 K */
+export async function fetchTsmcDailyBarsSince(anchorDateKey: string): Promise<TsmcDailyBar[]> {
+  const anchorStart = DateTime.fromISO(anchorDateKey, { zone: TIMEZONE }).startOf("day");
+  if (!anchorStart.isValid) {
+    throw new Error("漲跌基準日無效");
+  }
+  const period1 = Math.floor(anchorStart.toSeconds());
+  const period2 = Math.floor(DateTime.now().setZone(TIMEZONE).plus({ days: 1 }).startOf("day").toSeconds());
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/2330.TW?interval=1d&period1=${period1}&period2=${period2}`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(YAHOO_CHART_URL, {
+    const res = await fetch(url, {
       signal: controller.signal,
       headers: { "User-Agent": "massage-reserve-tsmc-pricing/1" },
     });
@@ -164,21 +177,11 @@ export async function fetchTsmcDailyChangePercent(): Promise<TsmcDailyQuote> {
     if (!result || typeof result !== "object") {
       throw new Error("Yahoo chart：缺少 result");
     }
-    const changePercent = resolveYahooDailyChangePercent(result);
-    if (changePercent === null) {
-      throw new Error("Yahoo chart：無法解析漲跌幅");
+    const bars = parseYahooDailyBars(result);
+    if (bars.length === 0) {
+      throw new Error("Yahoo chart：無有效收盤價");
     }
-    const marketTimeSec = resolveYahooMarketTimeSec(result);
-    if (marketTimeSec === null) {
-      throw new Error("Yahoo chart：無法解析行情時間");
-    }
-    if (!isQuoteForTodayTaipei(marketTimeSec)) {
-      const quoteDay = DateTime.fromSeconds(marketTimeSec, { zone: TIMEZONE }).toISODate();
-      const today = DateTime.now().setZone(TIMEZONE).toISODate();
-      throw new Error(`非今日收盤行情（行情日 ${quoteDay ?? "?"}，今日 ${today ?? "?"}）`);
-    }
-    const quoteDateKey = DateTime.fromSeconds(marketTimeSec, { zone: TIMEZONE }).toISODate() ?? "";
-    return { changePercent, quoteDateKey, source: "yahoo_chart" };
+    return bars;
   } finally {
     clearTimeout(timer);
   }
@@ -194,13 +197,26 @@ export async function applyTsmcSessionPricingSync(db: Firestore): Promise<TsmcPr
   }
 
   const baseNtd = resolveTsmcPricingBaseNtd(raw);
+  const anchorDateKey = resolveTsmcAnchorDateKey(raw);
+  const todayKey = DateTime.now().setZone(TIMEZONE).toISODate() ?? "";
+  if (anchorDateKey > todayKey) {
+    return { ok: false, error: "漲跌基準日不可晚於今日（台北）" };
+  }
 
-  let quote: TsmcDailyQuote;
+  let bars: TsmcDailyBar[];
+  let factor: number;
+  let quoteDateKey: string;
+  let lastChangePercent: number;
   try {
-    quote = await fetchTsmcDailyChangePercent();
+    bars = await fetchTsmcDailyBarsSince(anchorDateKey);
+    const computed = computeTsmcCumulativeFromBars(bars, anchorDateKey);
+    factor = computed.factor;
+    quoteDateKey = computed.quoteDateKey;
+    lastChangePercent = computed.lastChangePercent;
+    assertQuoteNotTooStale(quoteDateKey);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    logger.warn("TSMC pricing fetch failed", { message });
+    logger.warn("TSMC pricing fetch failed", { message, anchorDateKey });
     await pricingRef.set(
       {
         tsmcLastSyncError: message.slice(0, 500),
@@ -213,23 +229,19 @@ export async function applyTsmcSessionPricingSync(db: Firestore): Promise<TsmcPr
 
   const lastApplied =
     typeof raw.tsmcLastAppliedQuoteDateKey === "string" ? raw.tsmcLastAppliedQuoteDateKey.trim() : "";
-  const alreadyAppliedToday = lastApplied.length > 0 && lastApplied === quote.quoteDateKey;
-  let cumulativeFactor = resolveTsmcCumulativeFactor(raw);
-  if (!alreadyAppliedToday) {
-    cumulativeFactor = nextTsmcCumulativeFactor(cumulativeFactor, quote.changePercent);
-  }
-
-  const sessionPriceNtd = sessionPriceFromTsmcCompound(baseNtd, cumulativeFactor);
+  const appliedToday = lastApplied.length > 0 && lastApplied === quoteDateKey;
+  const sessionPriceNtd = sessionPriceFromTsmcCompound(baseNtd, factor);
 
   await pricingRef.set(
     {
       sessionPriceNtd,
       tsmcPricingBaseNtd: baseNtd,
-      tsmcCumulativeFactor: cumulativeFactor,
-      tsmcLastChangePercent: quote.changePercent,
-      tsmcLastQuoteDateKey: quote.quoteDateKey,
-      tsmcLastAppliedQuoteDateKey: quote.quoteDateKey,
-      tsmcLastSyncSource: quote.source,
+      tsmcAnchorDateKey: anchorDateKey,
+      tsmcCumulativeFactor: factor,
+      tsmcLastChangePercent: lastChangePercent,
+      tsmcLastQuoteDateKey: quoteDateKey,
+      tsmcLastAppliedQuoteDateKey: quoteDateKey,
+      tsmcLastSyncSource: "yahoo_chart",
       tsmcLastSyncError: FieldValue.delete(),
       tsmcLastSyncAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
@@ -239,21 +251,23 @@ export async function applyTsmcSessionPricingSync(db: Firestore): Promise<TsmcPr
 
   logger.info("TSMC pricing synced", {
     baseNtd,
-    changePercent: quote.changePercent,
-    cumulativeFactor,
-    appliedToday: !alreadyAppliedToday,
+    anchorDateKey,
+    changePercent: lastChangePercent,
+    cumulativeFactor: factor,
+    appliedToday,
     sessionPriceNtd,
-    quoteDateKey: quote.quoteDateKey,
+    quoteDateKey,
   });
 
   return {
     ok: true,
     skipped: false,
     sessionPriceNtd,
-    changePercent: quote.changePercent,
+    changePercent: lastChangePercent,
     baseNtd,
-    quoteDateKey: quote.quoteDateKey,
-    cumulativeFactor,
-    appliedToday: !alreadyAppliedToday,
+    anchorDateKey,
+    quoteDateKey,
+    cumulativeFactor: factor,
+    appliedToday,
   };
 }

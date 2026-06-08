@@ -3,10 +3,13 @@
  * 若調整驗證／預設值，請一併修改後端檔案。
  */
 
-const DEFAULT_SESSION_PRICE_NTD = 130;
-const DEFAULT_UNIT_MINUTES = 20;
-const DEFAULT_MAX_UNITS_PER_BOOKING = 2;
+/** 與 `functions/src/pricing.ts` 對齊：固定基本金額 */
+export const FIXED_SESSION_PRICE_NTD = 130;
+const DEFAULT_SESSION_PRICE_NTD = FIXED_SESSION_PRICE_NTD;
 const DEFAULT_POINTS_PER_MASSAGE = 10;
+
+/** 與 `functions/src/pricing.ts` 對齊：單筆預約固定 15 分鐘 */
+export const BOOKING_UNIT_MINUTES_FIXED = 15;
 
 /** 與 `functions/src/pricing.ts` 相同：現場收現進位至 10 元倍數 */
 export const SESSION_PRICE_CASH_STEP_NTD = 10;
@@ -32,28 +35,31 @@ function asIntInRange(
   return n;
 }
 
-export function resolveSessionPriceNtdClient(raw: Record<string, unknown> | undefined): number {
-  if (!raw || typeof raw !== "object") return roundSessionPriceNtdForCash(DEFAULT_SESSION_PRICE_NTD);
-  const v = raw.sessionPriceNtd ?? raw.unitPriceNtd;
-  const n = typeof v === "number" && Number.isFinite(v) ? Math.round(v) : Number(v);
-  if (!Number.isInteger(n) || n < 1 || n > 500_000) {
-    return roundSessionPriceNtdForCash(DEFAULT_SESSION_PRICE_NTD);
-  }
+function isTsmcPricingEnabledClient(raw: Record<string, unknown> | undefined): boolean {
+  if (!raw || typeof raw !== "object") return true;
+  return raw.tsmcPricingEnabled !== false;
+}
+
+export function resolveTsmcPricingEnabledClient(raw: Record<string, unknown> | undefined): boolean {
+  return isTsmcPricingEnabledClient(raw);
+}
+
+export function resolveSessionPriceBaseNtdClient(raw: Record<string, unknown> | undefined): number {
+  const n = asIntInRange(raw, "tsmcPricingBaseNtd", DEFAULT_SESSION_PRICE_NTD, SESSION_PRICE_CASH_STEP_NTD, 500_000);
   return roundSessionPriceNtdForCash(n);
 }
 
-export function resolveUnitMinutesClient(raw: Record<string, unknown> | undefined): number {
-  return asIntInRange(raw, "unitMinutes", DEFAULT_UNIT_MINUTES, 5, 240);
-}
-
-export function resolveMaxUnitsPerBookingClient(raw: Record<string, unknown> | undefined): number {
-  return asIntInRange(raw, "maxUnitsPerBooking", DEFAULT_MAX_UNITS_PER_BOOKING, 1, 10);
+export function resolveSessionPriceNtdClient(raw: Record<string, unknown> | undefined): number {
+  const base = resolveSessionPriceBaseNtdClient(raw);
+  if (!raw || typeof raw !== "object") return base;
+  if (!isTsmcPricingEnabledClient(raw)) return base;
+  const v = raw.sessionPriceNtd ?? raw.unitPriceNtd;
+  const n = typeof v === "number" && Number.isFinite(v) ? Math.round(v) : Number(v);
+  if (!Number.isInteger(n) || n < 1 || n > 500_000) return base;
+  return roundSessionPriceNtdForCash(n);
 }
 
 export function resolvePointsPerMassageClient(raw: Record<string, unknown> | undefined): number {
   return asIntInRange(raw, "pointsPerMassage", DEFAULT_POINTS_PER_MASSAGE, 2, 1000);
 }
 
-export function durationMinutesForUnitsClient(units: number, unitMinutes: number): number {
-  return units * unitMinutes;
-}

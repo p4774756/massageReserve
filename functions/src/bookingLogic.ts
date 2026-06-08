@@ -7,7 +7,7 @@ export const HOLIDAY_OUTCALL_SLOT_STEP_MINUTES = 30;
 /** 舊版預約（無 units 欄位）的固定服務長度 */
 export const LEGACY_BOOKING_DURATION_MINUTES = 15;
 /** 未帶 pricing 時的預設單位長度（分） */
-export const DEFAULT_UNIT_MINUTES = 20;
+export const DEFAULT_UNIT_MINUTES = 15;
 const LUNCH_START_MINUTES = 11 * 60 + 45;
 const LUNCH_END_MINUTES = 13 * 60 + 15;
 /** 單次服務結束不得晚於此時刻（台北當日 17:00） */

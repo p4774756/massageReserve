@@ -18,10 +18,9 @@ import {
   listWalletTransactionsAdminCall,
   listMembersAdminCall,
   searchMemberUsersCall,
-  sendMembersBroadcastAdminCall,
-  sendMemberDirectEmailAdminCall,
   topupWalletCall,
   batchGetCustomerAdminBriefsAdminCall,
+  getBookingDayCountsCall,
   syncSessionPriceFromTsmcAdminCall,
 } from "./firebase";
 import {
@@ -32,7 +31,11 @@ import {
 } from "./adminCustomerProfile";
 import { renderAdminForbidden as paintAdminForbiddenView, renderAdminLoggedOut as paintAdminLoginView } from "./adminLoginViews";
 import { resolveCapOverflowSettingsClient } from "./capOverflow";
-import { roundSessionPriceNtdForCash } from "./sitePricingResolve";
+import {
+  FIXED_SESSION_PRICE_NTD,
+  resolveSessionPriceNtdClient,
+  roundSessionPriceNtdForCash,
+} from "./sitePricingResolve";
 import {
   memberBookingGetsStatusEmail,
   showAdminBookingStatusEmailNoteModal,
@@ -238,7 +241,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       type: "text",
       placeholder: t("admin.topup.notePlaceholder", "備註（選填）"),
     });
-    const topupBtn = el("button", { class: "ghost", type: "button" }, [t("admin.topup.btn", "儲值")]);
+    const topupBtn = el("button", { class: "primary", type: "button" }, [t("admin.topup.btn", "儲值")]);
     const topupStatus = el("div", { class: "status-line" });
     const adjustSessionDelta = el("input", { type: "number", value: "-1", min: "-50", max: "50", step: "1" });
     const adjustSessionNote = el("input", {
@@ -246,7 +249,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       maxLength: 500,
       placeholder: t("admin.adjustSessions.notePlaceholder", "例：現場 walk-in 2 次，無預約紀錄"),
     });
-    const adjustSessionBtn = el("button", { class: "ghost", type: "button" }, [
+    const adjustSessionBtn = el("button", { class: "primary", type: "button" }, [
       t("admin.adjustSessions.btn", "調整可預約次數"),
     ]);
     const adjustSessionStatus = el("div", { class: "status-line" });
@@ -256,162 +259,209 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       maxLength: 200,
       placeholder: t("admin.grantDraw.notePlaceholder", "備註（選填，最多 200 字）"),
     });
-    const grantDrawBtn = el("button", { class: "ghost", type: "button" }, [t("admin.grantDraw.btn", "贈送抽獎次數")]);
+    const grantDrawBtn = el("button", { class: "primary", type: "button" }, [t("admin.grantDraw.btn", "贈送抽獎次數")]);
     const grantDrawStatus = el("div", { class: "status-line" });
     const pricingDocRef = doc(db, "siteSettings", "pricing");
-    const pricingSessionPriceInput = el("input", { type: "number", min: "10", step: "10", value: "130" });
-    const pricingUnitMinutesInput = el("input", { type: "number", min: "5", step: "1", value: "20" });
-    const pricingMaxUnitsInput = el("input", { type: "number", min: "1", step: "1", value: "2" });
-    const pricingPointsPerInput = el("input", { type: "number", min: "2", step: "1", value: "10" });
+    const pricingBaseInput = el("input", { type: "number", min: "10", step: "10", value: "130" });
+    const wheelPointsPerInput = el("input", { type: "number", min: "2", step: "1", value: "10" });
     const tsmcPricingEnabledInput = el("input", { type: "checkbox" });
     tsmcPricingEnabledInput.checked = true;
-    const tsmcPricingBaseInput = el("input", { type: "number", min: "1", step: "1", value: "130" });
-    const tsmcSyncInfo = el("div", { class: "status-line admin-pricing-tsmc-info" });
-    const syncTsmcPricingBtn = el("button", { type: "button", class: "ghost" }, [
-      t("admin.pricing.tsmcSyncNow", "立即依台積電同步"),
+    const tsmcAnchorDateInput = el("input", { type: "date" });
+    tsmcAnchorDateInput.max = taipeiTodayDateKey();
+    tsmcAnchorDateInput.value = taipeiTodayDateKey();
+    const tsmcAnchorWrap = el("label", { class: "field admin-pricing-tsmc-anchor" }, [
+      t("admin.pricing.tsmcAnchor", "漲跌基準日（台北）"),
+      tsmcAnchorDateInput,
     ]);
-    const tsmcSyncStatus = el("div", { class: "status-line" });
-    const savePricingBtn = el("button", { type: "button", class: "ghost" }, [t("admin.pricing.save", "儲存定價")]);
+    const tsmcAnchorHint = el("p", { class: "hint admin-pricing-tsmc-anchor-hint" }, [
+      t(
+        "admin.pricing.tsmcAnchorHint",
+        "自基準日當日收盤起算係數為 1，之後每個交易日依 2330 日漲跌累乘（±40% 封頂）。",
+      ),
+    ]);
+    const pricingCurrentPriceLine = el("p", { class: "hint admin-pricing-current-price" });
+    const tsmcSyncInfo = el("div", { class: "status-line admin-pricing-tsmc-info" });
+    const savePricingBtn = el("button", { type: "button", class: "primary" }, [t("admin.pricing.save", "儲存定價")]);
     const pricingAdminStatus = el("div", { class: "status-line" });
-    let persistedTsmcBaseNtd: number | null = null;
-    const formatTsmcSyncInfo = (d: Record<string, unknown> | undefined): string => {
-      if (!d) return t("admin.pricing.tsmcSyncNever", "尚未同步過台積電行情。");
+    const saveWheelRedeemBtn = el("button", { type: "button", class: "primary" }, [
+      t("admin.wheelRedeem.save", "儲存兌換門檻"),
+    ]);
+    const wheelRedeemAdminStatus = el("div", { class: "status-line" });
+    let lastPricingSnapData: Record<string, unknown> | undefined;
+    function syncTsmcAnchorFieldVisible() {
+      const show = tsmcPricingEnabledInput.checked;
+      tsmcAnchorWrap.hidden = !show;
+      tsmcAnchorHint.hidden = !show;
+    }
+    function pricingPreviewData(): Record<string, unknown> {
+      const base = Number(pricingBaseInput.value);
+      const roundedBase =
+        Number.isFinite(base) && base >= 10 ? roundSessionPriceNtdForCash(Math.round(base)) : FIXED_SESSION_PRICE_NTD;
+      return {
+        ...(lastPricingSnapData ?? {}),
+        tsmcPricingEnabled: tsmcPricingEnabledInput.checked,
+        tsmcPricingBaseNtd: roundedBase,
+        tsmcAnchorDateKey: tsmcAnchorDateInput.value.trim() || taipeiTodayDateKey(),
+      };
+    }
+    const formatTsmcSyncInfo = (d: Record<string, unknown> | undefined, enabled: boolean): string => {
+      if (!enabled) return "";
+      if (!d) return t("admin.pricing.tsmcSyncNever", "尚未同步過台積電行情；平日 15:30 自動更新。");
       const err = typeof d.tsmcLastSyncError === "string" ? d.tsmcLastSyncError.trim() : "";
       if (err) {
-        return t("admin.pricing.tsmcSyncError", "上次同步失敗：{{err}}", { err });
+        return t("admin.pricing.tsmcSyncError", "同步失敗：{{err}}（儲存時會重試）", { err });
       }
-      const at = d.tsmcLastSyncAt as { toDate?: () => Date } | undefined;
-      const when =
-        at && typeof at.toDate === "function"
-          ? at.toDate().toLocaleString(intlLocaleTag(), { timeZone: "Asia/Taipei" })
-          : "";
       const pct = d.tsmcLastChangePercent;
       const pctStr =
         typeof pct === "number" && Number.isFinite(pct)
           ? `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`
           : "—";
       const dateKey = typeof d.tsmcLastQuoteDateKey === "string" ? d.tsmcLastQuoteDateKey : "";
+      if (!dateKey) return t("admin.pricing.tsmcSyncNever", "尚未同步過台積電行情；平日 15:30 自動更新。");
+      const anchorKey =
+        typeof d.tsmcAnchorDateKey === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d.tsmcAnchorDateKey.trim())
+          ? d.tsmcAnchorDateKey.trim()
+          : "—";
       const factorRaw = d.tsmcCumulativeFactor;
+      const factorNum = typeof factorRaw === "number" && Number.isFinite(factorRaw) ? factorRaw : Number(factorRaw);
       const factorStr =
-        typeof factorRaw === "number" && Number.isFinite(factorRaw) ? `×${factorRaw.toFixed(4)}` : "×1";
-      const baseRaw = d.tsmcPricingBaseNtd;
-      const baseStr =
-        typeof baseRaw === "number" && Number.isFinite(baseRaw) ? String(Math.round(baseRaw)) : "—";
-      if (!when) return t("admin.pricing.tsmcSyncNever", "尚未同步過台積電行情。");
+        Number.isFinite(factorNum) && factorNum > 0 ? `${(factorNum * 100).toFixed(1)}%` : "100.0%";
       return t(
-        "admin.pricing.tsmcSyncOk",
-        "上次同步：{{when}}，2330 日漲跌 {{pct}}（{{date}}）；店內基準 {{base}} 元，累積係數 {{factor}}",
+        "admin.pricing.tsmcSyncBrief",
+        "基準日 {{anchor}}；2330 最近行情 {{date}}，日漲跌 {{pct}}，累積係數 {{factor}}；平日 15:30 自動更新。",
         {
-          when,
+          anchor: anchorKey,
+          date: dateKey,
           pct: pctStr,
-          date: dateKey || "—",
-          base: baseStr,
           factor: factorStr,
         },
       );
     };
+    function paintPricingAdminView(d: Record<string, unknown> | undefined) {
+      const enabled = d?.tsmcPricingEnabled !== false;
+      const displayPrice = resolveSessionPriceNtdClient(d);
+      pricingCurrentPriceLine.textContent = enabled
+        ? t("admin.pricing.currentPriceTsmc", "前台目前顯示：{{price}} 元（依 2330 漲跌調整）", {
+            price: displayPrice,
+          })
+        : t("admin.pricing.currentPriceFixed", "前台目前顯示：{{price}} 元（固定基本金額）", {
+            price: displayPrice,
+          });
+      tsmcSyncInfo.textContent = formatTsmcSyncInfo(d, enabled);
+    }
     adminPricingUnsub = onSnapshot(
       pricingDocRef,
       (snap) => {
         const d = snap.data() as
           | {
-              sessionPriceNtd?: unknown;
-              unitMinutes?: unknown;
-              maxUnitsPerBooking?: unknown;
               pointsPerMassage?: unknown;
-              tsmcPricingEnabled?: unknown;
               tsmcPricingBaseNtd?: unknown;
+              tsmcPricingEnabled?: unknown;
+              tsmcAnchorDateKey?: unknown;
               tsmcCumulativeFactor?: unknown;
-              tsmcLastSyncAt?: unknown;
               tsmcLastChangePercent?: unknown;
               tsmcLastQuoteDateKey?: unknown;
               tsmcLastSyncError?: unknown;
             }
           | undefined;
-        const sp = d?.sessionPriceNtd;
-        if (typeof sp === "number" && Number.isFinite(sp)) {
-          pricingSessionPriceInput.value = String(Math.max(1, Math.round(sp)));
-        }
-        const um = d?.unitMinutes;
-        if (typeof um === "number" && Number.isFinite(um)) {
-          pricingUnitMinutesInput.value = String(Math.max(5, Math.round(um)));
-        }
-        const mu = d?.maxUnitsPerBooking;
-        if (typeof mu === "number" && Number.isFinite(mu)) {
-          pricingMaxUnitsInput.value = String(Math.max(1, Math.round(mu)));
+        const base = d?.tsmcPricingBaseNtd;
+        if (typeof base === "number" && Number.isFinite(base)) {
+          const rounded = Math.max(10, Math.round(base));
+          pricingBaseInput.value = String(rounded);
         }
         const pp = d?.pointsPerMassage;
         if (typeof pp === "number" && Number.isFinite(pp)) {
-          pricingPointsPerInput.value = String(Math.max(2, Math.round(pp)));
+          wheelPointsPerInput.value = String(Math.max(2, Math.round(pp)));
         }
+        const anchorRaw = d?.tsmcAnchorDateKey;
+        if (typeof anchorRaw === "string" && /^\d{4}-\d{2}-\d{2}$/.test(anchorRaw.trim())) {
+          const anchorKey = anchorRaw.trim();
+          tsmcAnchorDateInput.value = anchorKey;
+        }
+        lastPricingSnapData = d as Record<string, unknown> | undefined;
         tsmcPricingEnabledInput.checked = d?.tsmcPricingEnabled !== false;
-        const base = d?.tsmcPricingBaseNtd;
-        if (typeof base === "number" && Number.isFinite(base)) {
-          const rounded = Math.max(1, Math.round(base));
-          tsmcPricingBaseInput.value = String(rounded);
-          persistedTsmcBaseNtd = rounded;
-        }
-        tsmcSyncInfo.textContent = formatTsmcSyncInfo(d as Record<string, unknown> | undefined);
+        syncTsmcAnchorFieldVisible();
+        paintPricingAdminView(lastPricingSnapData);
       },
       () => {
         pricingAdminStatus.textContent = t("admin.pricing.loadFail", "無法讀取定價設定。");
         pricingAdminStatus.className = "status-line error";
       },
     );
+    tsmcPricingEnabledInput.addEventListener("change", () => {
+      syncTsmcAnchorFieldVisible();
+      paintPricingAdminView(pricingPreviewData());
+    });
+    pricingBaseInput.addEventListener("input", () => {
+      paintPricingAdminView(pricingPreviewData());
+    });
+
     savePricingBtn.addEventListener("click", async () => {
       pricingAdminStatus.textContent = "";
       pricingAdminStatus.className = "status-line";
-      const sp = Number(pricingSessionPriceInput.value);
-      const um = Number(pricingUnitMinutesInput.value);
-      const mu = Number(pricingMaxUnitsInput.value);
-      const pp = Number(pricingPointsPerInput.value);
-      if (!Number.isFinite(sp) || sp < 10 || !Number.isInteger(sp)) {
+      const baseRaw = Number(pricingBaseInput.value);
+      const tsmcEnabled = tsmcPricingEnabledInput.checked;
+      if (!Number.isFinite(baseRaw) || baseRaw < 10 || !Number.isInteger(baseRaw)) {
         pricingAdminStatus.textContent = t(
           "admin.pricing.badSessionPrice",
-          "每單位金額需為 ≥10 的整數（儲存時會進位至 10 的倍數）。",
+          "基本金額需為 ≥10 的整數（儲存時會進位至 10 的倍數）。",
         );
         pricingAdminStatus.classList.add("error");
         return;
       }
-      if (!Number.isFinite(um) || um < 5 || !Number.isInteger(um)) {
-        pricingAdminStatus.textContent = t("admin.pricing.badUnitMinutes", "每單位分鐘數需為 ≥5 的整數。");
-        pricingAdminStatus.classList.add("error");
-        return;
+      const roundedBase = roundSessionPriceNtdForCash(Math.round(baseRaw));
+      const anchorKey = tsmcAnchorDateInput.value.trim();
+      const todayKey = taipeiTodayDateKey();
+      if (tsmcEnabled) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(anchorKey)) {
+          pricingAdminStatus.textContent = t("admin.pricing.badTsmcAnchor", "請選擇有效的漲跌基準日。");
+          pricingAdminStatus.classList.add("error");
+          return;
+        }
+        if (anchorKey > todayKey) {
+          pricingAdminStatus.textContent = t("admin.pricing.tsmcAnchorFuture", "漲跌基準日不可晚於今日（台北）。");
+          pricingAdminStatus.classList.add("error");
+          return;
+        }
       }
-      if (!Number.isFinite(mu) || mu < 1 || !Number.isInteger(mu)) {
-        pricingAdminStatus.textContent = t("admin.pricing.badMaxUnits", "單筆最多單位數需為 ≥1 的整數。");
-        pricingAdminStatus.classList.add("error");
-        return;
-      }
-      if (!Number.isFinite(pp) || pp < 2 || !Number.isInteger(pp)) {
-        pricingAdminStatus.textContent = t("admin.pricing.badPointsPer", "兌換門檻需為 ≥2 的整數（點）。");
-        pricingAdminStatus.classList.add("error");
-        return;
-      }
-      const tsmcBase = Number(tsmcPricingBaseInput.value);
-      if (!Number.isFinite(tsmcBase) || tsmcBase < 1 || !Number.isInteger(tsmcBase)) {
-        pricingAdminStatus.textContent = t("admin.pricing.badTsmcBase", "台積電連動基準價需為 ≥1 的整數。");
-        pricingAdminStatus.classList.add("error");
-        return;
-      }
-      const roundedTsmcBase = Math.round(tsmcBase);
-      const baseChanged = persistedTsmcBaseNtd !== null && persistedTsmcBaseNtd !== roundedTsmcBase;
       savePricingBtn.setAttribute("disabled", "true");
       try {
         const pricingPatch: Record<string, unknown> = {
-          sessionPriceNtd: roundSessionPriceNtdForCash(sp),
-          unitMinutes: Math.round(um),
-          maxUnitsPerBooking: Math.round(mu),
-          pointsPerMassage: Math.round(pp),
-          tsmcPricingEnabled: tsmcPricingEnabledInput.checked,
-          tsmcPricingBaseNtd: roundedTsmcBase,
+          unitMinutes: deleteField(),
+          maxUnitsPerBooking: deleteField(),
+          tsmcPricingBaseNtd: roundedBase,
+          tsmcPricingEnabled: tsmcEnabled,
           updatedAt: serverTimestamp(),
         };
-        if (baseChanged) {
-          pricingPatch.tsmcCumulativeFactor = 1;
-          pricingPatch.tsmcLastAppliedQuoteDateKey = deleteField();
+        if (tsmcEnabled) {
+          pricingPatch.tsmcAnchorDateKey = anchorKey;
+        }
+        if (!tsmcEnabled) {
+          pricingPatch.sessionPriceNtd = roundedBase;
         }
         await setDoc(pricingDocRef, pricingPatch, { merge: true });
+        if (tsmcEnabled) {
+          pricingAdminStatus.textContent = t("admin.pricing.tsmcSyncing", "已儲存，正在同步台積電行情…");
+          const fn = syncSessionPriceFromTsmcAdminCall();
+          const res = await fn({ ...localeApiParam() });
+          const data = res.data as
+            | { ok?: boolean; skipped?: boolean; reason?: string; error?: string; sessionPriceNtd?: number }
+            | undefined;
+          if (data?.ok === false && data.error) {
+            pricingAdminStatus.textContent = t("admin.pricing.tsmcSyncFail", "已儲存，但同步失敗：{{err}}", {
+              err: data.error,
+            });
+            pricingAdminStatus.classList.add("error");
+            return;
+          }
+          if (data?.ok && typeof data.sessionPriceNtd === "number") {
+            pricingAdminStatus.textContent = t("admin.pricing.savedWithPrice", "已更新；前台金額 {{price}} 元。", {
+              price: data.sessionPriceNtd,
+            });
+            pricingAdminStatus.classList.add("ok");
+            return;
+          }
+        }
         pricingAdminStatus.textContent = t("admin.status.updated", "已更新");
         pricingAdminStatus.classList.add("ok");
       } catch (e) {
@@ -422,81 +472,64 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       }
     });
 
-    syncTsmcPricingBtn.addEventListener("click", async () => {
-      tsmcSyncStatus.textContent = "";
-      tsmcSyncStatus.className = "status-line";
-      syncTsmcPricingBtn.setAttribute("disabled", "true");
+    saveWheelRedeemBtn.addEventListener("click", async () => {
+      wheelRedeemAdminStatus.textContent = "";
+      wheelRedeemAdminStatus.className = "status-line";
+      const pp = Number(wheelPointsPerInput.value);
+      if (!Number.isFinite(pp) || pp < 2 || !Number.isInteger(pp)) {
+        wheelRedeemAdminStatus.textContent = t("admin.pricing.badPointsPer", "兌換門檻需為 ≥2 的整數（點）。");
+        wheelRedeemAdminStatus.classList.add("error");
+        return;
+      }
+      saveWheelRedeemBtn.setAttribute("disabled", "true");
       try {
-        const fn = syncSessionPriceFromTsmcAdminCall();
-        const res = await fn({ ...localeApiParam() });
-        const data = res.data as
-          | { ok?: boolean; skipped?: boolean; reason?: string; error?: string; sessionPriceNtd?: number }
-          | undefined;
-        if (data?.ok === false && data.error) {
-          tsmcSyncStatus.textContent = data.error;
-          tsmcSyncStatus.classList.add("error");
-          return;
-        }
-        if (data?.ok && data.skipped) {
-          const reason =
-            data.reason === "tsmc_pricing_disabled"
-              ? t("admin.pricing.tsmcSkippedDisabled", "已關閉台積電連動，未更新單價。")
-              : t("admin.pricing.tsmcSkipped", "未更新：{{reason}}", { reason: data.reason ?? "" });
-          tsmcSyncStatus.textContent = reason;
-          tsmcSyncStatus.classList.add("ok");
-          return;
-        }
-        if (data?.ok && typeof data.sessionPriceNtd === "number") {
-          tsmcSyncStatus.textContent = t("admin.pricing.tsmcSynced", "已更新每單位金額為 {{price}} 元。", {
-            price: String(data.sessionPriceNtd),
-          });
-          tsmcSyncStatus.classList.add("ok");
-          return;
-        }
-        tsmcSyncStatus.textContent = t("admin.pricing.tsmcSyncUnknown", "同步完成，請重新整理定價區塊確認。");
-        tsmcSyncStatus.classList.add("ok");
+        await setDoc(
+          pricingDocRef,
+          {
+            pointsPerMassage: Math.round(pp),
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+        wheelRedeemAdminStatus.textContent = t("admin.status.updated", "已更新");
+        wheelRedeemAdminStatus.classList.add("ok");
       } catch (e) {
-        tsmcSyncStatus.textContent = e instanceof Error ? e.message : t("admin.memberList.saveFail", "儲存失敗");
-        tsmcSyncStatus.classList.add("error");
+        wheelRedeemAdminStatus.textContent = e instanceof Error ? e.message : t("admin.memberList.saveFail", "儲存失敗");
+        wheelRedeemAdminStatus.classList.add("error");
       } finally {
-        syncTsmcPricingBtn.removeAttribute("disabled");
+        saveWheelRedeemBtn.removeAttribute("disabled");
       }
     });
 
     const announcePricingFlat = el("section", { class: "admin-announce__block admin-announce__block--pricing" }, [
-      el("h4", { class: "admin-announce__block-title" }, [t("admin.pricing.heading", "定價與點數兌換")]),
-      el("div", { class: "grid grid-2" }, [
-        el("label", { class: "field" }, [t("admin.pricing.sessionPrice", "每單位金額（元）"), pricingSessionPriceInput]),
-        el("label", { class: "field" }, [t("admin.pricing.unitMinutes", "每單位分鐘數"), pricingUnitMinutesInput]),
-        el("label", { class: "field" }, [t("admin.pricing.maxUnits", "單筆最多單位數"), pricingMaxUnitsInput]),
-        el("label", { class: "field" }, [t("admin.pricing.pointsPer", "輪盤：幾點換 1 單位"), pricingPointsPerInput]),
+      el("h4", { class: "admin-announce__block-title" }, [t("admin.pricing.heading", "預約定價")]),
+      el("label", { class: "field" }, [t("admin.pricing.basePrice", "基本金額（元）"), pricingBaseInput]),
+      el("p", { class: "hint admin-pricing-base-hint" }, [
+        t(
+          "admin.pricing.baseHint",
+          "未勾選台積電連動時，前台即顯示此金額；有勾選時作為漲跌調整起點（進位至 10 元倍數）。",
+        ),
       ]),
-      el("section", { class: "admin-pricing-tsmc" }, [
-        el("h5", { class: "admin-announce__block-subtitle" }, [
-          t("admin.pricing.tsmcHeading", "台積電連動定價（2330）"),
-        ]),
-        el("p", { class: "hint admin-pricing-tsmc__hint" }, [
-          t(
-            "admin.pricing.tsmcHint",
-            "2330 日漲跌以「相對昨日收盤」累乘係數（相對店內基準價最多漲 25%、最多跌 25%）；每單位金額進位至 10 元倍數。平日 15:30 自動同步。改基準價會重設係數為 1。",
-          ),
-        ]),
-        el("div", { class: "grid grid-2 admin-pricing-tsmc__grid" }, [
-          el("label", { class: "field checkbox-field" }, [
-            tsmcPricingEnabledInput,
-            t("admin.pricing.tsmcEnabled", "啟用每日收盤後自動更新"),
-          ]),
-          el("label", { class: "field" }, [
-            t("admin.pricing.tsmcBase", "店內基準價（元，累積起點）"),
-            tsmcPricingBaseInput,
-          ]),
-        ]),
-        tsmcSyncInfo,
-        el("div", { class: "row-actions admin-pricing-tsmc__actions" }, [syncTsmcPricingBtn]),
-        tsmcSyncStatus,
+      pricingCurrentPriceLine,
+      el("label", { class: "field checkbox-field admin-pricing-tsmc-toggle" }, [
+        tsmcPricingEnabledInput,
+        t("admin.pricing.tsmcEnabled", "依台積電（2330）漲跌更新前台金額"),
       ]),
+      tsmcAnchorWrap,
+      tsmcAnchorHint,
+      tsmcSyncInfo,
       el("div", { class: "row-actions" }, [savePricingBtn]),
       pricingAdminStatus,
+    ]);
+
+    const announceWheelRedeemBlock = el("section", { class: "admin-announce__block admin-announce__block--wheel-redeem" }, [
+      el("h4", { class: "admin-announce__block-title" }, [t("admin.wheelRedeem.heading", "輪盤點數兌換")]),
+      el("p", { class: "hint admin-announce__block-lead" }, [
+        t("admin.wheelRedeem.lead", "會員累積輪盤點數達門檻時，可兌換 1 次預約。"),
+      ]),
+      el("label", { class: "field" }, [t("admin.wheelRedeem.pointsPer", "幾點換 1 次"), wheelPointsPerInput]),
+      el("div", { class: "row-actions" }, [saveWheelRedeemBtn]),
+      wheelRedeemAdminStatus,
     ]);
 
     topupBtn.addEventListener("click", async () => {
@@ -641,7 +674,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       step: "1",
       value: "100",
     });
-    const saveBookingCapsBtn = el("button", { type: "button", class: "ghost" }, [t("admin.caps.save", "儲存名額上限")]);
+    const saveBookingCapsBtn = el("button", { type: "button", class: "primary" }, [t("admin.caps.save", "儲存名額上限")]);
     const bookingCapsStatus = el("div", { class: "status-line" });
 
     function clampBookingCapInput(n: number, fallback: number): number {
@@ -715,8 +748,12 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
 
     const bookingBlocksDocRef = doc(db, "siteSettings", "bookingBlocks");
     const bookingBlocksRows = el("div", { class: "admin-booking-blocks-rows" });
-    const addBookingBlockRowBtn = el("button", { type: "button", class: "ghost" }, [t("admin.blocks.addRow", "新增一筆")]);
-    const saveBookingBlocksBtn = el("button", { type: "button", class: "ghost" }, [t("admin.blocks.save", "儲存不開放時段")]);
+    const addBookingBlockRowBtn = el("button", { type: "button", class: "ghost admin-btn--add" }, [
+      t("admin.blocks.addRow", "新增一筆"),
+    ]);
+    const saveBookingBlocksBtn = el("button", { type: "button", class: "primary" }, [
+      t("admin.blocks.save", "儲存不開放時段"),
+    ]);
     const bookingBlocksStatus = el("div", { class: "status-line" });
 
     type BookingBlockRowModel = {
@@ -954,16 +991,17 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       reasonIn.setAttribute("aria-label", t("admin.blocks.reason", "前台顯示原因"));
       const removeBtn = el(
         "button",
-        { type: "button", class: "ghost admin-booking-block-row__remove" },
+        { type: "button", class: "ghost admin-btn--danger admin-booking-block-row__remove" },
         [t("admin.blocks.rowRemove", "刪除此列")],
       );
       removeBtn.addEventListener("click", () => {
         row.remove();
         syncBookingBlocksDirtyUi();
       });
-      const whenFields = el("div", { class: "bb-group-fields" }, [
+      const whenFields = el("div", { class: "bb-group-fields bb-group-fields--when" }, [
         el("label", { class: "field bb-field-wd" }, [t("admin.blocks.weekday", "星期"), weekdaySel]),
         el("label", { class: "field bb-field-date" }, [t("admin.blocks.specificDate", "特定日期（選填）"), dateIn]),
+        el("div", { class: "admin-booking-block-row__remove-wrap" }, [removeBtn]),
       ]);
       const timeFields = el("div", { class: "bb-group-fields bb-group-fields--time" }, [
         el("label", { class: "field bb-field-t" }, [t("admin.blocks.start", "起（含）"), startIn]),
@@ -981,7 +1019,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         ]),
       ]);
       row.append(
-        el("div", { class: "admin-booking-block-row__head" }, [removeBtn]),
         rowBody,
         el("div", { class: "bb-group bb-group--reason" }, [
           el("span", { class: "bb-group-title" }, [t("admin.blocks.reason", "前台顯示原因")]),
@@ -1208,13 +1245,13 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       placeholder: t("admin.notice.textPlaceholder", "例：本週五下午臨時休診，請改選其他日期。"),
     });
     const publicNoticeExpiresInput = el("input", { type: "date" });
-    const clearPublicNoticeExpiresBtn = el("button", { type: "button", class: "ghost" }, [
+    const clearPublicNoticeExpiresBtn = el("button", { type: "button", class: "ghost admin-btn--muted" }, [
       t("admin.notice.clearExpires", "清除到期日"),
     ]);
-    const savePublicNoticeBtn = el("button", { type: "button", class: "ghost" }, [
+    const savePublicNoticeBtn = el("button", { type: "button", class: "primary" }, [
       t("admin.notice.save", "儲存前台公告"),
     ]);
-    const clearPublicNoticeBtn = el("button", { type: "button", class: "ghost" }, [
+    const clearPublicNoticeBtn = el("button", { type: "button", class: "ghost admin-btn--danger" }, [
       t("admin.notice.clear", "清空公告"),
     ]);
     const publicNoticeStatus = el("div", { class: "status-line" });
@@ -1239,7 +1276,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       publicNoticeStatus.textContent = "";
       publicNoticeStatus.className = "status-line";
       const text = clear ? "" : publicNoticeTextInput.value.trim().slice(0, 400);
-      const expiresRaw = publicNoticeExpiresInput.value.trim();
+      const expiresRaw = clear ? "" : publicNoticeExpiresInput.value.trim();
       const expiresOn = /^\d{4}-\d{2}-\d{2}$/.test(expiresRaw) ? expiresRaw : "";
       if (!clear && expiresOn && expiresOn < taipeiTodayDateKey()) {
         publicNoticeStatus.textContent = t(
@@ -1312,7 +1349,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       el("p", { class: "hint admin-announce__block-lead" }, [
         t(
           "admin.caps.lead",
-          "「張」＝一張預約單（不論選 1 或 2 單位）；每單位時長依「定價」設定（預設 20 分鐘），與名額張數無關。已取消不計入。",
+          "「張」＝一張預約單（每次 15 分鐘）；與名額張數無關。已取消不計入。",
         ),
       ]),
       el("div", { class: "grid grid-2" }, [
@@ -1366,6 +1403,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       blockPublicNotice,
       blockCaps,
       announcePricingFlat,
+      announceWheelRedeemBlock,
     );
 
     function wireWalletAccordionsExclusive(roots: HTMLElement[]) {
@@ -1758,7 +1796,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       if (ids.length === 0) {
         adminBriefByCustomerId = {};
         applyAdminBriefsToBookingTable(table, {});
-        applyAdminBriefsToBookingTable(hiddenTable, {});
         return;
       }
       const gen = ++adminBriefFetchGen;
@@ -1769,7 +1806,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         const data = res.data as { briefs?: Record<string, string> };
         adminBriefByCustomerId = data.briefs && typeof data.briefs === "object" ? data.briefs : {};
         applyAdminBriefsToBookingTable(table, adminBriefByCustomerId);
-        applyAdminBriefsToBookingTable(hiddenTable, adminBriefByCustomerId);
         paintAdminBookingsCalendar();
       } catch (e) {
         console.error("refreshAdminBookingBriefsForBookings", e);
@@ -1779,10 +1815,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     async function refreshAdminBookingBriefsFromTables() {
       const ids = new Set<string>();
       for (const td of table.querySelectorAll<HTMLElement>("[data-admin-brief-for]")) {
-        const cid = td.getAttribute("data-admin-brief-for");
-        if (cid) ids.add(cid);
-      }
-      for (const td of hiddenTable.querySelectorAll<HTMLElement>("[data-admin-brief-for]")) {
         const cid = td.getAttribute("data-admin-brief-for");
         if (cid) ids.add(cid);
       }
@@ -1798,6 +1830,8 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     let adminCalendarYear = 0;
     let adminCalendarMonth = 0;
     let adminCalendarLastVisible: Booking[] = [];
+    let adminCalendarDayCounts: Record<string, number> = {};
+    let adminCalendarCountsReq = 0;
 
     function syncAdminCalendarMonthFromDateInput(): void {
       const dk = adminBookingsCalendarSelectedDateKey;
@@ -1836,6 +1870,31 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       adminCalendarYear = y;
       adminCalendarMonth = mo;
       paintAdminBookingsCalendar();
+      void refreshAdminCalendarDayCounts();
+    }
+
+    async function refreshAdminCalendarDayCounts(): Promise<void> {
+      ensureAdminCalendarCursor();
+      const y = adminCalendarYear;
+      const mo = adminCalendarMonth;
+      if (y === 0 || mo === 0) return;
+      const reqId = ++adminCalendarCountsReq;
+      try {
+        const fn = getBookingDayCountsCall();
+        const res = await fn({ year: y, month: mo, ...localeApiParam() });
+        if (reqId !== adminCalendarCountsReq) return;
+        const raw = (res.data as { counts?: Record<string, number> } | undefined)?.counts;
+        const next: Record<string, number> = {};
+        if (raw && typeof raw === "object") {
+          for (const [dk, n] of Object.entries(raw)) {
+            if (typeof n === "number" && Number.isFinite(n) && n > 0) next[dk] = Math.trunc(n);
+          }
+        }
+        adminCalendarDayCounts = next;
+        paintAdminBookingsCalendar();
+      } catch (e) {
+        console.error("refreshAdminCalendarDayCounts", e);
+      }
     }
 
     function attachAdminCalendarCellTooltip(wrap: HTMLElement, lines: string[]): void {
@@ -1899,7 +1958,12 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         const inWin = dk >= minK && dk <= maxK;
         const bookableCalDay = inWin && (isDateKeyMonFri(dk) || isDateKeySatSun(dk));
         const list = byDay.get(dk) ?? [];
-        const cap = list.filter((bb) => bookingCountsTowardAvailabilityCap(bb.status)).length;
+        const capFromApi = adminCalendarDayCounts[dk];
+        const capLocal = list.filter((bb) => bookingCountsTowardAvailabilityCap(bb.status)).length;
+        const cap =
+          typeof capFromApi === "number" && capFromApi > 0
+            ? capFromApi
+            : capLocal;
         const sorted = list.slice().sort((a, b) => (a.startSlot ?? "").localeCompare(b.startSlot ?? "", "zh-Hant"));
         const tipLines = sorted.map((bb) => {
           const st = bookingStatusNorm(bb.status);
@@ -1970,6 +2034,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       adminCalendarYear = y0;
       adminCalendarMonth = m0;
       paintAdminBookingsCalendar();
+      void refreshAdminCalendarDayCounts();
     });
 
     const adminCalendarToolbar = el("div", { class: "admin-calendar__toolbar" });
@@ -1988,37 +2053,12 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       adminCalendarMonth = mInit;
     }
     paintAdminBookingsCalendar();
-
-    const hiddenBookingsStatus = el("div", { class: "status-line" });
-    const hiddenTableHolder = el("div", { class: "table-wrap admin-bookings-table" });
-    const hiddenTable = el("table", {}, []);
-    hiddenTable.append(adminBookingsHeaderRow());
-    hiddenTableHolder.append(hiddenTable);
-
-    const hiddenPager = el("div", { class: "admin-hidden-pager" });
-    const hiddenPagePrev = el("button", { type: "button", class: "ghost" }, [t("admin.pager.prev", "上一頁")]);
-    const hiddenPageInfo = el("span", { class: "hint admin-hidden-pager-meta" }, [
-      t("admin.pager.none", "—"),
-    ]);
-    const hiddenPageNext = el("button", { type: "button", class: "ghost" }, [t("admin.pager.next", "下一頁")]);
-    hiddenPager.append(hiddenPagePrev, hiddenPageNext, hiddenPageInfo);
+    void refreshAdminCalendarDayCounts();
 
     const memberListSection = el("div", { class: "admin-member-list" }, []);
     const memberListRefreshBtn = el("button", { class: "ghost", type: "button" }, [
       t("admin.memberList.reload", "重新載入會員清單"),
     ]);
-    const memberListEmailBtn = el(
-      "button",
-      {
-        class: "ghost",
-        type: "button",
-        title: t(
-          "admin.memberList.emailMenuTitle",
-          "群發或寄給單一已驗證會員；純文字內文轉 HTML。需 RESEND_API_KEY 與 RESEND_FROM；群發建議先預覽收件人數。",
-        ),
-      },
-      [t("admin.memberList.emailMenuBtn", "會員郵件")],
-    );
     const memberListStatus = el("div", { class: "status-line" });
     const memberListTableWrap = el("div", { class: "table-wrap admin-member-list-table" });
     const memberListTable = el("table", {}, []);
@@ -2027,7 +2067,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     type AdminMemberListRow = {
       uid: string;
       email: string | null;
-      emailVerified: boolean;
       nickname: string;
       adminBrief: string;
       sessionCredits: number;
@@ -2036,7 +2075,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     };
     type MemberListSortKey =
       | "email"
-      | "emailVerified"
       | "nickname"
       | "sessionCredits"
       | "wheelPoints"
@@ -2086,12 +2124,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
             });
           break;
         }
-        case "emailVerified": {
-          const av = a.emailVerified ? 1 : 0;
-          const bv = b.emailVerified ? 1 : 0;
-          cmp = asc ? bv - av : av - bv;
-          return cmp;
-        }
         case "nickname": {
           cmp = a.nickname.localeCompare(b.nickname, "zh-Hant", { numeric: true });
           break;
@@ -2133,7 +2165,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       };
       return el("tr", {}, [
         mk(t("admin.memberList.th.email", "Email"), "email"),
-        mk(t("admin.memberList.th.verified", "信箱驗證"), "emailVerified"),
         mk(t("admin.memberList.th.nickname", "稱呼"), "nickname"),
         mk(t("admin.memberList.th.sessions", "可預約次數"), "sessionCredits"),
         mk(t("admin.memberList.th.points", "輪盤點數"), "wheelPoints"),
@@ -2192,7 +2223,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
           emptyMsg = t("admin.memberList.searchEmpty", "沒有符合關鍵字的會員。請改關鍵字或清空篩選欄。");
         }
         memberListTable.append(
-          el("tr", {}, [el("td", { class: "hint", colSpan: 6 }, [emptyMsg])]),
+          el("tr", {}, [el("td", { class: "hint", colSpan: 5 }, [emptyMsg])]),
         );
         memberListPagePrev.disabled = true;
         memberListPageNext.disabled = true;
@@ -2225,10 +2256,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
           ev.stopPropagation();
           openAdminMemberProfileModal(m);
         });
-        const verified = m.emailVerified === true;
-        const verifyCell = el("td", { class: verified ? "admin-member-verify ok" : "admin-member-verify" }, [
-          verified ? t("admin.memberList.verifiedYes", "已驗證") : t("admin.memberList.verifiedNo", "未驗證"),
-        ]);
         const emailStr = (m.email ?? "").trim();
         const emailCell = el("td", {
           class: "admin-member-email-cell-wrap",
@@ -2257,7 +2284,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         memberListTable.append(
           el("tr", {}, [
             emailCell,
-            verifyCell,
             el("td", { class: "admin-member-nick-cell" }, [nickOpen]),
             el("td", { class: "mono" }, [String(m.sessionCredits)]),
             el("td", { class: "mono" }, [String(m.wheelPoints)]),
@@ -2313,7 +2339,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       memberListStatus.textContent = t("admin.memberList.loading", "載入會員清單中…");
       memberListStatus.className = "status-line";
       memberListRefreshBtn.setAttribute("disabled", "true");
-      memberListEmailBtn.setAttribute("disabled", "true");
       try {
         const fn = listMembersAdminCall();
         const res = await fn({ ...localeApiParam() });
@@ -2322,7 +2347,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         memberListCache = raw.map((m) => ({
           uid: m.uid,
           email: m.email ?? null,
-          emailVerified: m.emailVerified === true,
           nickname: typeof m.nickname === "string" ? m.nickname : "",
           adminBrief: typeof m.adminBrief === "string" ? m.adminBrief.trim() : "",
           sessionCredits: typeof m.sessionCredits === "number" ? m.sessionCredits : 0,
@@ -2342,7 +2366,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         memberListStatus.classList.add("error");
       } finally {
         memberListRefreshBtn.removeAttribute("disabled");
-        memberListEmailBtn.removeAttribute("disabled");
       }
     }
 
@@ -2350,480 +2373,15 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       void loadMemberList();
     });
 
-    function openMemberEmailModal(initialMode: "broadcast" | "direct") {
-      const overlay = el("div", { class: "modal-overlay" });
-      const dialog = el("div", { class: "modal-card admin-member-broadcast-dialog" });
-      dialog.setAttribute("role", "dialog");
-      dialog.setAttribute("aria-modal", "true");
-      const heading = el("h3", { id: "admin-member-email-title" }, [""]);
-      dialog.setAttribute("aria-labelledby", "admin-member-email-title");
-
-      const tabBroadcast = el(
-        "button",
-        {
-          type: "button",
-          class: "admin-tab",
-          role: "tab",
-          id: "admin-member-email-tab-broadcast",
-        },
-        [t("admin.memberList.emailTabBroadcast", "群發")],
-      );
-      const tabDirect = el(
-        "button",
-        {
-          type: "button",
-          class: "admin-tab",
-          role: "tab",
-          id: "admin-member-email-tab-direct",
-        },
-        [t("admin.memberList.emailTabDirect", "單一會員")],
-      );
-      const tabRow = el("div", { class: "admin-tabs", role: "tablist" }, [tabBroadcast, tabDirect]);
-
-      const hintBroadcast = el("p", { class: "hint" }, [
-        t(
-          "admin.memberList.broadcastModalHint",
-          "內文為純文字（可換行），會轉成 HTML 寄出；主旨與內文會經伺服器長度檢查。建議先按「預覽收件人數」確認對象，再勾選確認並寄出。需已設定 RESEND_API_KEY 與適當的 RESEND_FROM。",
-        ),
-      ]);
-      const paneBroadcast = el("div", {
-        class: "admin-member-email-pane",
-        id: "admin-member-email-pane-broadcast",
-        role: "tabpanel",
-      });
-      paneBroadcast.append(hintBroadcast);
-
-      const hintDirect = el("p", { class: "hint" }, [
-        t(
-          "admin.memberList.directEmailModalHint",
-          "僅能寄給 Firebase Auth 中「Email 已驗證」的會員。請填 Email 或 UID；內文為純文字（可換行），與群發相同會轉成 HTML。需 RESEND_API_KEY 與適當的 RESEND_FROM。",
-        ),
-      ]);
-      const memberTargetInput = el("input", {
-        type: "text",
-        class: "admin-member-direct-target",
-        autocomplete: "off",
-        placeholder: t("admin.memberList.directEmailTargetPh", "會員 Email 或 UID"),
-      });
-      const directTargetSuggestions = el("ul", {
-        class: "member-typeahead-list",
-        hidden: true,
-        role: "listbox",
-      });
-      const directTargetTypeaheadWrap = el("div", { class: "member-typeahead-wrap" });
-      directTargetTypeaheadWrap.append(memberTargetInput, directTargetSuggestions);
-
-      let directTargetSearchTimer: ReturnType<typeof setTimeout> | null = null;
-
-      const paneDirect = el("div", {
-        class: "admin-member-email-pane",
-        id: "admin-member-email-pane-direct",
-        role: "tabpanel",
-      });
-      paneDirect.append(
-        hintDirect,
-        el("label", { class: "field" }, [
-          t("admin.memberList.directEmailTargetLabel", "收件會員"),
-          directTargetTypeaheadWrap,
-        ]),
-        el("div", { class: "hint" }, [
-          t("admin.wallet.searchHint", "輸入至少 2 個字元會顯示符合的 Email；亦可直接貼上 UID。"),
-        ]),
-      );
-
-      const subjectInput = el("input", {
-        type: "text",
-        maxLength: 200,
-        class: "admin-member-broadcast-subject",
-        autocomplete: "off",
-        placeholder: t("admin.memberList.broadcastSubjectPh", "主旨，例如：感謝大家支持"),
-      });
-      const bodyTa = el("textarea", {
-        class: "admin-member-broadcast-body",
-        rows: 10,
-        maxLength: 12000,
-        placeholder: t("admin.memberList.broadcastBodyPh", "內文（純文字）…"),
-      });
-
-      const sendConfirmCb = el("input", { type: "checkbox" }) as HTMLInputElement;
-      const sendConfirmText = el("span", {});
-      const sendConfirmLabel = el("label", { class: "admin-member-broadcast-check" });
-      sendConfirmLabel.append(sendConfirmCb, document.createTextNode(" "), sendConfirmText);
-
-      const previewBtn = el("button", { class: "ghost", type: "button" }, [
-        t("admin.memberList.broadcastPreview", "預覽收件人數"),
-      ]);
-      const sendBtn = el("button", { class: "primary", type: "button" }, [
-        t("admin.memberList.broadcastSend", "寄出群發信"),
-      ]);
-      sendBtn.setAttribute("disabled", "true");
-      const closeBtn = el("button", { class: "ghost", type: "button" }, [t("modal.close", "關閉")]);
-      const actions = el("div", { class: "modal-actions" }, [closeBtn, previewBtn, sendBtn]);
-      const modalStatus = el("div", { class: "status-line" });
-
-      let mode: "broadcast" | "direct" = initialMode;
-      let previewOk = false;
-
-      function refreshSendConfirmLabel() {
-        sendConfirmText.textContent = t(
-                "admin.memberList.emailSendConfirmBroadcast",
-                "我確認主旨、內文正確，且已按「預覽收件人數」確認收件範圍無誤，要實際寄出",
-        );
-      }
-
-      function directFieldsReadyForSend(): boolean {
-        const targetOk = memberTargetInput.value.trim().length > 0;
-        const subOk = subjectInput.value.trim().length > 0;
-        const bodyOk = bodyTa.value.trim().length >= 3;
-        return targetOk && subOk && bodyOk;
-      }
-
-      function syncSendEnabled() {
-        if (mode === "broadcast") {
-          if (previewOk && sendConfirmCb.checked) sendBtn.removeAttribute("disabled");
-          else sendBtn.setAttribute("disabled", "true");
-        } else if (directFieldsReadyForSend()) sendBtn.removeAttribute("disabled");
-        else sendBtn.setAttribute("disabled", "true");
-      }
-
-      function refreshHeading() {
-        heading.textContent =
-          mode === "broadcast"
-            ? t("admin.memberList.broadcastModalTitle", "寄信給會員（群發）")
-            : t("admin.memberList.directEmailModalTitle", "寄信給單一會員（已驗證）");
-      }
-
-      function refreshSendBtnLabel() {
-        sendBtn.textContent =
-          mode === "broadcast"
-            ? t("admin.memberList.broadcastSend", "寄出群發信")
-            : t("admin.memberList.directEmailSend", "寄出一封信");
-      }
-
-      function setMode(next: "broadcast" | "direct") {
-        mode = next;
-        tabBroadcast.setAttribute("aria-selected", next === "broadcast" ? "true" : "false");
-        tabDirect.setAttribute("aria-selected", next === "direct" ? "true" : "false");
-        tabBroadcast.classList.toggle("is-active", next === "broadcast");
-        tabDirect.classList.toggle("is-active", next === "direct");
-        paneBroadcast.hidden = next !== "broadcast";
-        paneDirect.hidden = next !== "direct";
-        previewBtn.hidden = next !== "broadcast";
-        sendConfirmLabel.hidden = next !== "broadcast";
-        previewOk = false;
-        sendConfirmCb.checked = false;
-        refreshSendConfirmLabel();
-        refreshHeading();
-        refreshSendBtnLabel();
-        modalStatus.textContent = "";
-        modalStatus.className = "status-line";
-        syncSendEnabled();
-      }
-
-      function invalidateBroadcastPreview() {
-        previewOk = false;
-        syncSendEnabled();
-      }
-      async function runDirectTargetMemberSearch() {
-        const q = memberTargetInput.value.trim();
-        if (q.length < 2) {
-          directTargetSuggestions.hidden = true;
-          directTargetSuggestions.innerHTML = "";
-          return;
-        }
-        try {
-          const fn = searchMemberUsersCall();
-          const res = await fn({ prefix: q, ...localeApiParam() });
-          const users = (res.data as { users?: { uid: string; email: string }[] }).users ?? [];
-          directTargetSuggestions.innerHTML = "";
-          if (users.length === 0) {
-            directTargetSuggestions.hidden = true;
-            return;
-          }
-          for (const u of users) {
-            const li = el("li", { class: "member-typeahead-item", role: "option" }, [u.email]);
-            li.addEventListener("mousedown", (ev) => {
-              ev.preventDefault();
-              memberTargetInput.value = u.email;
-              directTargetSuggestions.hidden = true;
-              directTargetSuggestions.innerHTML = "";
-              syncSendEnabled();
-            });
-            directTargetSuggestions.append(li);
-          }
-          directTargetSuggestions.hidden = false;
-        } catch {
-          directTargetSuggestions.hidden = true;
-        }
-      }
-
-      tabBroadcast.addEventListener("click", () => setMode("broadcast"));
-      tabDirect.addEventListener("click", () => setMode("direct"));
-
-      sendConfirmCb.addEventListener("change", syncSendEnabled);
-      subjectInput.addEventListener("input", () => {
-        invalidateBroadcastPreview();
-        syncSendEnabled();
-      });
-      bodyTa.addEventListener("input", () => {
-        invalidateBroadcastPreview();
-        syncSendEnabled();
-      });
-      memberTargetInput.addEventListener("input", () => {
-        syncSendEnabled();
-        const raw = memberTargetInput.value.trim();
-        if (raw.length < 2) {
-          directTargetSuggestions.hidden = true;
-          directTargetSuggestions.innerHTML = "";
-          return;
-        }
-        if (directTargetSearchTimer) clearTimeout(directTargetSearchTimer);
-        directTargetSearchTimer = setTimeout(() => void runDirectTargetMemberSearch(), 280);
-      });
-      memberTargetInput.addEventListener("focus", () => {
-        void runDirectTargetMemberSearch();
-      });
-      memberTargetInput.addEventListener("blur", () => {
-        setTimeout(() => {
-          directTargetSuggestions.hidden = true;
-        }, 200);
-      });
-
-      const dismiss = () => {
-        document.removeEventListener("keydown", onKeyDown);
-        overlay.remove();
-      };
-      const onKeyDown = (ev: KeyboardEvent) => {
-        if (ev.key === "Escape") {
-          ev.preventDefault();
-          dismiss();
-        }
-      };
-      closeBtn.addEventListener("click", dismiss);
-      overlay.addEventListener("click", (ev) => {
-        if (ev.target === overlay) dismiss();
-      });
-      document.addEventListener("keydown", onKeyDown);
-
-      previewBtn.addEventListener("click", async () => {
-        modalStatus.textContent = "";
-        modalStatus.className = "status-line";
-        previewBtn.setAttribute("disabled", "true");
-        previewOk = false;
-        syncSendEnabled();
-        try {
-          const fn = sendMembersBroadcastAdminCall();
-          const res = await fn({
-            subject: subjectInput.value,
-            body: bodyTa.value,
-            dryRun: true,
-            ...localeApiParam(),
-          });
-          const d = res.data as {
-            recipientCount?: number;
-            totalUsers?: number;
-            withoutEmail?: number;
-            disabledSkipped?: number;
-            unverifiedSkipped?: number;
-            duplicateSkipped?: number;
-          };
-          previewOk = true;
-          syncSendEnabled();
-          modalStatus.className = "status-line ok";
-          modalStatus.textContent = t(
-            "admin.memberList.broadcastPreviewOk",
-            "預覽：將寄給 {{recipients}} 人（Auth 使用者共 {{total}}；無信箱 {{noEmail}}、停權 {{disabled}}、未驗證略過 {{unver}}、重複信箱 {{dup}}）。",
-            {
-              recipients: typeof d.recipientCount === "number" ? d.recipientCount : "—",
-              total: typeof d.totalUsers === "number" ? d.totalUsers : "—",
-              noEmail: typeof d.withoutEmail === "number" ? d.withoutEmail : "—",
-              disabled: typeof d.disabledSkipped === "number" ? d.disabledSkipped : "—",
-              unver: typeof d.unverifiedSkipped === "number" ? d.unverifiedSkipped : "—",
-              dup: typeof d.duplicateSkipped === "number" ? d.duplicateSkipped : "—",
-            },
-          );
-        } catch (e) {
-          modalStatus.className = "status-line error";
-          modalStatus.textContent = errorMessage(e);
-        } finally {
-          previewBtn.removeAttribute("disabled");
-        }
-      });
-
-      sendBtn.addEventListener("click", async () => {
-        if (mode === "broadcast") {
-          if (!previewOk || !sendConfirmCb.checked) return;
-          const nLine = modalStatus.textContent || "";
-          const ok = await showConfirmModal(
-            t("admin.memberList.broadcastSendConfirmTitle", "確認群發郵件"),
-            t(
-              "admin.memberList.broadcastSendConfirmBody",
-              "將依目前主旨與內文，對預覽統計中的每位收件人各寄一封（無法撤回）。\n\n{{previewLine}}",
-              { previewLine: nLine || "（請先按「預覽收件人數」）" },
-            ),
-            t("admin.memberList.broadcastSendConfirmOk", "確定寄出"),
-          );
-          if (!ok) return;
-
-          modalStatus.textContent = t("admin.memberList.broadcastSending", "寄送中，請稍候…");
-          modalStatus.className = "status-line";
-          sendBtn.setAttribute("disabled", "true");
-          previewBtn.setAttribute("disabled", "true");
-          closeBtn.setAttribute("disabled", "true");
-          subjectInput.setAttribute("disabled", "true");
-          bodyTa.setAttribute("disabled", "true");
-          sendConfirmCb.setAttribute("disabled", "true");
-          tabBroadcast.setAttribute("disabled", "true");
-          tabDirect.setAttribute("disabled", "true");
-          memberTargetInput.setAttribute("disabled", "true");
-          try {
-            const fn = sendMembersBroadcastAdminCall();
-            const res = await fn({
-              subject: subjectInput.value,
-              body: bodyTa.value,
-              confirmSend: true,
-              dryRun: false,
-              ...localeApiParam(),
-            });
-            const d = res.data as {
-              sent?: number;
-              recipientCount?: number;
-              failed?: { email: string; error: string }[];
-              deliverabilityWarning?: string;
-            };
-            const sent = typeof d.sent === "number" ? d.sent : 0;
-            const total = typeof d.recipientCount === "number" ? d.recipientCount : sent;
-            const failed = Array.isArray(d.failed) ? d.failed : [];
-            const lines = [
-              t("admin.memberList.broadcastDoneHead", "寄送完成：成功 {{sent}} / {{total}} 封。", {
-                sent,
-                total,
-              }),
-            ];
-            if (failed.length > 0) {
-              lines.push(
-                t("admin.memberList.broadcastFailedHead", "失敗 {{n}} 筆（節錄）：", { n: failed.length }),
-                ...failed.slice(0, 12).map((f) => `${f.email}: ${f.error}`),
-              );
-              if (failed.length > 12) lines.push("…");
-            }
-            if (typeof d.deliverabilityWarning === "string" && d.deliverabilityWarning.trim()) {
-              lines.push("", d.deliverabilityWarning.trim());
-            }
-            dismiss();
-            memberListStatus.className = "status-line ok admin-member-broadcast-summary";
-            memberListStatus.textContent = lines.join("\n");
-          } catch (e) {
-            modalStatus.className = "status-line error";
-            modalStatus.textContent = errorMessage(e);
-          } finally {
-            sendBtn.removeAttribute("disabled");
-            previewBtn.removeAttribute("disabled");
-            closeBtn.removeAttribute("disabled");
-            subjectInput.removeAttribute("disabled");
-            bodyTa.removeAttribute("disabled");
-            sendConfirmCb.removeAttribute("disabled");
-            tabBroadcast.removeAttribute("disabled");
-            tabDirect.removeAttribute("disabled");
-            memberTargetInput.removeAttribute("disabled");
-            syncSendEnabled();
-          }
-          return;
-        }
-
-        if (!directFieldsReadyForSend()) return;
-        const targetLine = memberTargetInput.value.trim();
-        const subLine = subjectInput.value.trim();
-        const ok = await showConfirmModal(
-          t("admin.memberList.directEmailSendConfirmTitle", "確認寄出單筆郵件"),
-          t(
-            "admin.memberList.directEmailSendConfirmBody",
-            "將寄出一封自訂郵件至已驗證對象（無法撤回）。\n\n收件：{{target}}\n主旨：{{subject}}",
-            { target: targetLine, subject: subLine },
-          ),
-          t("admin.memberList.broadcastSendConfirmOk", "確定寄出"),
-        );
-        if (!ok) return;
-
-        modalStatus.textContent = t("admin.memberList.directEmailSending", "寄送中…");
-        modalStatus.className = "status-line";
-        sendBtn.setAttribute("disabled", "true");
-        previewBtn.setAttribute("disabled", "true");
-        closeBtn.setAttribute("disabled", "true");
-        memberTargetInput.setAttribute("disabled", "true");
-        subjectInput.setAttribute("disabled", "true");
-        bodyTa.setAttribute("disabled", "true");
-        sendConfirmCb.setAttribute("disabled", "true");
-        tabBroadcast.setAttribute("disabled", "true");
-        tabDirect.setAttribute("disabled", "true");
-        try {
-          const fn = sendMemberDirectEmailAdminCall();
-          const res = await fn({
-            memberTarget: memberTargetInput.value,
-            subject: subjectInput.value,
-            body: bodyTa.value,
-            confirmSend: true,
-            dryRun: false,
-            ...localeApiParam(),
-          });
-          const d = res.data as { email?: string; deliverabilityWarning?: string };
-          const lines = [
-            t("admin.memberList.directEmailDone", "已寄出 1 封至 {{email}}。", {
-              email: typeof d.email === "string" ? d.email : "",
-            }),
-          ];
-          if (typeof d.deliverabilityWarning === "string" && d.deliverabilityWarning.trim()) {
-            lines.push("", d.deliverabilityWarning.trim());
-          }
-          dismiss();
-          memberListStatus.className = "status-line ok admin-member-broadcast-summary";
-          memberListStatus.textContent = lines.join("\n");
-        } catch (e) {
-          modalStatus.className = "status-line error";
-          modalStatus.textContent = errorMessage(e);
-        } finally {
-          sendBtn.removeAttribute("disabled");
-          previewBtn.removeAttribute("disabled");
-          closeBtn.removeAttribute("disabled");
-          memberTargetInput.removeAttribute("disabled");
-          subjectInput.removeAttribute("disabled");
-          bodyTa.removeAttribute("disabled");
-          sendConfirmCb.removeAttribute("disabled");
-          tabBroadcast.removeAttribute("disabled");
-          tabDirect.removeAttribute("disabled");
-          syncSendEnabled();
-        }
-      });
-
-      dialog.append(
-        heading,
-        tabRow,
-        paneBroadcast,
-        paneDirect,
-        el("label", { class: "field" }, [t("admin.memberList.broadcastSubjectLabel", "主旨"), subjectInput]),
-        el("label", { class: "field" }, [t("admin.memberList.broadcastBodyLabel", "內文（純文字）"), bodyTa]),
-        sendConfirmLabel,
-        modalStatus,
-        actions,
-      );
-      overlay.append(dialog);
-      document.body.append(overlay);
-      setMode(initialMode);
-      if (initialMode === "direct") memberTargetInput.focus();
-      else subjectInput.focus();
-    }
-
-    memberListEmailBtn.addEventListener("click", () => {
-      openMemberEmailModal("broadcast");
-    });
-
     memberListSection.append(
-      el("h3", {}, [t("admin.memberList.title", "會員清單")]),
-      el("div", { class: "row-actions" }, [memberListRefreshBtn, memberListEmailBtn]),
+      el("div", { class: "admin-member-list__head" }, [
+        el("h3", {}, [t("admin.memberList.title", "會員清單")]),
+        el("div", { class: "row-actions admin-member-list__reload" }, [memberListRefreshBtn]),
+      ]),
       el("label", { class: "field admin-member-list-search" }, [
         t("admin.memberList.searchLabel", "快速篩選"),
         memberListSearchInput,
-        ]),
+      ]),
       memberListStatus,
       memberListTableWrap,
       memberListPager,
@@ -2899,7 +2457,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     selectMembersSubTab(0);
 
     const tabBookingsHub = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
-      t("admin.tab.bookingsHub", "預約與封存"),
+      t("admin.tab.bookingsHub", "預約管理"),
     ]);
     tabBookingsHub.id = "admin-tab-trigger-bookings-hub";
     const tabMembers = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
@@ -2918,75 +2476,12 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     const adminTablist = el("div", { class: "admin-tabs", role: "tablist" });
     adminTablist.append(tabBookingsHub, tabMembers, tabBookingBlocks, tabAnnounce);
 
-    const subBookingsActive = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
-      t("admin.tab.bookings", "預約管理"),
-    ]);
-    subBookingsActive.id = "admin-bookings-subtab-active";
-    const subBookingsArchived = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
-      t("admin.tab.hidden", "封存的預約"),
-    ]);
-    subBookingsArchived.id = "admin-bookings-subtab-archived";
-
-    const panelBookingsActiveSub = el("div", {
-      class: "admin-tab-panel admin-member-subpanel",
-      role: "tabpanel",
-      id: "admin-bookings-subpanel-active",
-    });
-    panelBookingsActiveSub.setAttribute("aria-labelledby", "admin-bookings-subtab-active");
-    const panelBookingsArchivedSub = el("div", {
-      class: "admin-tab-panel admin-member-subpanel",
-      role: "tabpanel",
-      id: "admin-bookings-subpanel-archived",
-      hidden: true,
-    });
-    panelBookingsArchivedSub.setAttribute("aria-labelledby", "admin-bookings-subtab-archived");
-    panelBookingsArchivedSub.append(hiddenBookingsStatus, hiddenTableHolder, hiddenPager);
-
-    subBookingsActive.setAttribute("aria-controls", "admin-bookings-subpanel-active");
-    subBookingsArchived.setAttribute("aria-controls", "admin-bookings-subpanel-archived");
-    const bookingsSubTablist = el("div", { class: "admin-tabs admin-member-subtabs", role: "tablist" });
-    bookingsSubTablist.append(subBookingsActive, subBookingsArchived);
-    const bookingsSubPanelsWrap = el("div", { class: "admin-member-subpanels" });
-    bookingsSubPanelsWrap.append(panelBookingsActiveSub, panelBookingsArchivedSub);
-
-    const bookingsSubTabButtons = [subBookingsActive, subBookingsArchived] as const;
-    const bookingsSubTabPanels = [panelBookingsActiveSub, panelBookingsArchivedSub] as const;
-
-    function selectBookingsSubTab(index: 0 | 1) {
-      bookingsSubTabButtons.forEach((btn, i) => {
-        const on = i === index;
-        btn.setAttribute("aria-selected", String(on));
-        btn.classList.toggle("is-active", on);
-        btn.tabIndex = on ? 0 : -1;
-      });
-      bookingsSubTabPanels.forEach((panel, i) => {
-        panel.hidden = i !== index;
-        panel.classList.toggle("is-active", i === index);
-      });
-    }
-
-    subBookingsActive.addEventListener("click", () => selectBookingsSubTab(0));
-    subBookingsArchived.addEventListener("click", () => selectBookingsSubTab(1));
-    bookingsSubTablist.addEventListener("keydown", (ev) => {
-      if (ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;
-      ev.preventDefault();
-      const cur = bookingsSubTabButtons.findIndex((b) => b.getAttribute("aria-selected") === "true");
-      if (cur < 0) return;
-      const delta = ev.key === "ArrowRight" ? 1 : -1;
-      const n = bookingsSubTabButtons.length;
-      const next = ((cur + delta) % n + n) % n;
-      selectBookingsSubTab(next as 0 | 1);
-      bookingsSubTabButtons[next].focus();
-    });
-    selectBookingsSubTab(0);
-
     const panelBookingsHubEl = el("div", {
       class: "admin-tab-panel",
       role: "tabpanel",
       id: "admin-tab-panel-bookings-hub",
     });
     panelBookingsHubEl.setAttribute("aria-labelledby", "admin-tab-trigger-bookings-hub");
-    panelBookingsHubEl.append(bookingsSubTablist, bookingsSubPanelsWrap);
 
     const panelMembersEl = el("div", {
       class: "admin-tab-panel",
@@ -3016,7 +2511,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     tabBookingBlocks.setAttribute("aria-controls", "admin-tab-panel-booking-blocks");
     tabAnnounce.setAttribute("aria-controls", "admin-tab-panel-announce");
 
-    panelBookingsActiveSub.append(adminBookingsCalendarSection, adminStatus, tableHolder);
+    panelBookingsHubEl.append(adminBookingsCalendarSection, adminStatus, tableHolder);
     panelMembersEl.append(membersSubTablist, membersSubPanelsWrap);
     panelAnnounceEl.append(announcementSection);
 
@@ -3097,235 +2592,14 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
 
     void loadMemberList();
 
-    const HIDDEN_ADMIN_PAGE_SIZE = 5;
-    let hiddenAdminPageIndex = 0;
-    type AdminHiddenQueueItem = { kind: "deleted" | "invisible"; b: Booking };
-    const hiddenAdminQueue: AdminHiddenQueueItem[] = [];
-
-    function appendHiddenDeletedRowAdmin(b: Booking) {
-      const cid = typeof b.customerId === "string" ? b.customerId.trim() : "";
-      hiddenTable.append(
-        el("tr", {}, [
-          el("td", { class: "mono" }, adminWhenCellParts(b)),
-          el("td", {}, [b.displayName ?? ""]),
-          el("td", {}, [bookingMemberYesNo(b)]),
-          el("td", {}, [b.note ?? ""]),
-          createAdminBookingPriceCell(b),
-          createAdminBookingBriefCell(cid || null, cid ? adminBriefByCustomerId[cid] : undefined, openMemberCustomerProfile),
-          el("td", {}, [
-            el("span", { class: "admin-booking-status-readonly" }, [
-              t("admin.hidden.deletedLabel", "已刪除（舊資料）"),
-            ]),
-          ]),
-          el("td", {}, [el("span", { class: "hint" }, [t("admin.hidden.dash", "—")])]),
-        ]),
-      );
-    }
-
-    function appendHiddenInvisibleRowAdmin(b: Booking) {
-      const statusCell: HTMLElement =
-        bookingIsCancelledForAdmin(b.status)
-          ? el("span", { class: "admin-booking-status-readonly" }, [bookingStatusLabel("cancelled")])
-          : bookingIsDoneForAdmin(b)
-            ? el("span", { class: "admin-booking-status-readonly" }, [bookingStatusLabel("done")])
-            : el("select", {}, []);
-      const sel =
-        bookingIsCancelledForAdmin(b.status) || bookingIsDoneForAdmin(b) ? null : (statusCell as HTMLSelectElement);
-      if (sel) {
-        populateAdminBookingStatusSelect(sel, b.status);
-        sel.addEventListener("change", async () => {
-          const nextStatus = sel.value;
-          const prevStatus = b.status;
-          let statusEmailMessage: string | undefined;
-          if (memberBookingGetsStatusEmail(b)) {
-            const summaryCore = [
-              `${t("booking.summary.name", "姓名")}：${b.displayName ?? ""}`,
-              `${t("booking.summary.date", "日期")}：${b.dateKey ?? ""}`,
-              `${t("booking.summary.start", "開始時間")}：${b.startSlot ?? ""}`,
-              `${t("booking.summary.note", "備註")}：${(b.note ?? "").trim() || t("admin.hidden.cancelSummaryNone", "（無）")}`,
-            ].join("\n");
-            const note = await showAdminBookingStatusEmailNoteModal({
-              summaryLines: summaryCore,
-              prevStatusKey: prevStatus,
-              nextStatusKey: nextStatus,
-            });
-            if (note === null) {
-              sel.value = adminSelectableBookingStatus(prevStatus);
-              return;
-            }
-            if (note.length > 0) statusEmailMessage = note;
-          }
-          hiddenBookingsStatus.textContent = t("admin.status.updating", "更新中…");
-          hiddenBookingsStatus.className = "status-line";
-          try {
-            if (nextStatus === "done") {
-              const fn = completeBookingCall();
-              await fn({
-                bookingId: b.id,
-                ...(statusEmailMessage ? { statusEmailMessage } : {}),
-                ...localeApiParam(),
-              });
-            } else {
-              await updateDoc(doc(db, "bookings", b.id), {
-                status: nextStatus,
-                ...(statusEmailMessage ? { statusEmailMessage } : {}),
-                updatedAt: serverTimestamp(),
-              });
-            }
-            hiddenBookingsStatus.textContent = t("admin.status.updated", "已更新");
-            hiddenBookingsStatus.classList.add("ok");
-            if (nextStatus === "done") {
-              await refreshWalletStatus({ keepWalletSummaryDuringFetch: true });
-            }
-          } catch (e) {
-            sel.value = adminSelectableBookingStatus(prevStatus);
-            hiddenBookingsStatus.textContent = adminBookingStatusUpdateError(e);
-            hiddenBookingsStatus.classList.add("error");
-          }
-        });
-      }
-      const cancelBtn = el("button", { class: "ghost", type: "button" }, [t("admin.booking.cancel", "取消")]);
-      const canAdminCancel = !bookingIsDoneForAdmin(b) && !bookingIsCancelledForAdmin(b.status);
-      cancelBtn.disabled = !canAdminCancel;
-      cancelBtn.title = !canAdminCancel
-        ? bookingIsDoneForAdmin(b)
-          ? t("admin.booking.hideTitleDone", "已完成預約不可取消")
-          : t("admin.booking.hideTitleCancelled", "已取消")
-        : "";
-      cancelBtn.addEventListener("click", async () => {
-        if (!canAdminCancel) return;
-        const summary = [
-          t("admin.hidden.cancelSummaryIntro", "即將取消以下預約。取消原因可留空。"),
-          "",
-          `${t("booking.summary.name", "姓名")}：${b.displayName ?? ""}`,
-          `${t("booking.summary.date", "日期")}：${b.dateKey ?? ""}`,
-          `${t("booking.summary.start", "開始時間")}：${b.startSlot ?? ""}`,
-          `${t("booking.summary.note", "備註")}：${(b.note ?? "").trim() || t("admin.hidden.cancelSummaryNone", "（無）")}`,
-        ].join("\n");
-        const reason = await showAdminCancelBookingModal(summary);
-        if (reason === null) return;
-        hiddenBookingsStatus.textContent = t("admin.status.cancelling", "取消中…");
-        hiddenBookingsStatus.className = "status-line";
-        cancelBtn.setAttribute("disabled", "true");
-        try {
-          const fn = cancelBookingCall();
-          const payload: { bookingId: string; cancelReason?: string } = { bookingId: b.id };
-          if (reason.length > 0) {
-            payload.cancelReason = reason;
-          }
-          await fn({ ...payload, ...localeApiParam() });
-          hiddenBookingsStatus.textContent = t("admin.status.cancelled", "已取消");
-          hiddenBookingsStatus.classList.add("ok");
-          await refreshWalletStatus({ keepWalletSummaryDuringFetch: true });
-        } catch (e) {
-          hiddenBookingsStatus.textContent = e instanceof Error ? e.message : t("admin.status.cancelFail", "取消失敗");
-          hiddenBookingsStatus.classList.add("error");
-          cancelBtn.removeAttribute("disabled");
-        }
-      });
-      const unhideBtn = el("button", { class: "ghost", type: "button" }, [t("admin.hidden.unhide", "取消封存")]);
-      unhideBtn.addEventListener("click", async () => {
-        hiddenBookingsStatus.textContent = t("admin.status.processing", "處理中…");
-        hiddenBookingsStatus.className = "status-line";
-        unhideBtn.setAttribute("disabled", "true");
-        try {
-          await updateDoc(doc(db, "bookings", b.id), {
-            invisible: false,
-            updatedAt: serverTimestamp(),
-          });
-          hiddenBookingsStatus.textContent = t("admin.status.unhidden", "已取消封存並回到預約管理主列表");
-          hiddenBookingsStatus.classList.add("ok");
-        } catch (e) {
-          hiddenBookingsStatus.textContent =
-            e instanceof Error ? e.message : t("admin.status.unhideFail", "取消封存失敗（你是否已加入 admins 集合？）");
-          hiddenBookingsStatus.classList.add("error");
-          unhideBtn.removeAttribute("disabled");
-        }
-      });
-      const actionCell = el("div", { class: "admin-booking-actions" }, [cancelBtn, unhideBtn]);
-      const cidHidden = typeof b.customerId === "string" ? b.customerId.trim() : "";
-      hiddenTable.append(
-        el("tr", {}, [
-          el("td", { class: "mono" }, adminWhenCellParts(b)),
-          el("td", {}, [b.displayName ?? ""]),
-          el("td", {}, [bookingMemberYesNo(b)]),
-          el("td", {}, [b.note ?? ""]),
-          createAdminBookingPriceCell(b),
-          createAdminBookingBriefCell(
-            cidHidden || null,
-            cidHidden ? adminBriefByCustomerId[cidHidden] : undefined,
-            openMemberCustomerProfile,
-          ),
-          el("td", {}, [statusCell]),
-          el("td", {}, [actionCell]),
-        ]),
-      );
-    }
-
-    function paintHiddenAdminPage() {
-      while (hiddenTable.rows.length > 1) {
-        hiddenTable.deleteRow(1);
-      }
-      const total = hiddenAdminQueue.length;
-      if (total === 0) {
-        hiddenTable.append(
-          el("tr", {}, [
-            el("td", { class: "hint", colSpan: 7 }, [t("admin.hidden.empty", "目前沒有封存中的預約，也沒有舊版已刪除資料。")]),
-          ]),
-        );
-        hiddenPagePrev.disabled = true;
-        hiddenPageNext.disabled = true;
-        hiddenPageInfo.textContent = t("admin.pager.total0", "共 0 筆");
-        return;
-      }
-      const totalPages = Math.ceil(total / HIDDEN_ADMIN_PAGE_SIZE);
-      hiddenAdminPageIndex = Math.max(0, Math.min(hiddenAdminPageIndex, totalPages - 1));
-      const from = hiddenAdminPageIndex * HIDDEN_ADMIN_PAGE_SIZE;
-      for (const item of hiddenAdminQueue.slice(from, from + HIDDEN_ADMIN_PAGE_SIZE)) {
-        if (item.kind === "deleted") appendHiddenDeletedRowAdmin(item.b);
-        else appendHiddenInvisibleRowAdmin(item.b);
-      }
-      hiddenPagePrev.disabled = hiddenAdminPageIndex <= 0;
-      hiddenPageNext.disabled = hiddenAdminPageIndex >= totalPages - 1;
-      hiddenPageInfo.textContent = t(
-        "admin.pager.hiddenPage",
-        "第 {{cur}} / {{total}} 頁 · 共 {{count}} 筆（每頁 {{size}} 筆）",
-        {
-          cur: hiddenAdminPageIndex + 1,
-          total: totalPages,
-          count: total,
-          size: HIDDEN_ADMIN_PAGE_SIZE,
-        },
-      );
-    }
-
-    hiddenPagePrev.addEventListener("click", () => {
-      if (hiddenAdminPageIndex <= 0) return;
-      hiddenAdminPageIndex -= 1;
-      paintHiddenAdminPage();
-    });
-    hiddenPageNext.addEventListener("click", () => {
-      const total = hiddenAdminQueue.length;
-      if (total === 0) return;
-      const totalPages = Math.ceil(total / HIDDEN_ADMIN_PAGE_SIZE);
-      if (hiddenAdminPageIndex >= totalPages - 1) return;
-      hiddenAdminPageIndex += 1;
-      paintHiddenAdminPage();
-    });
-
     const q = query(collection(db, "bookings"), orderBy("startAt", "desc"));
     adminUnsub = onSnapshot(
       q,
       (snap) => {
         adminStatus.textContent = "";
         adminStatus.className = "status-line";
-        hiddenBookingsStatus.textContent = "";
-        hiddenBookingsStatus.className = "status-line";
         table.innerHTML = "";
         table.append(adminBookingsHeaderRow());
-        hiddenTable.innerHTML = "";
-        hiddenTable.append(adminBookingsHeaderRow());
-        hiddenAdminQueue.length = 0;
         const bookingsForAdminCalendar: Booking[] = [];
         for (const d of snap.docs) {
           const b = { id: d.id, ...d.data() } as Booking;
@@ -3333,9 +2607,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
             bookingsForAdminCalendar.push(b);
           }
           if (b.status === "deleted" || b.invisible === true) {
-            hiddenAdminQueue.push(
-              b.status === "deleted" ? { kind: "deleted", b } : { kind: "invisible", b },
-            );
             continue;
           }
           const statusCell: HTMLElement =
@@ -3399,7 +2670,9 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
               }
             });
           }
-          const cancelBtn = el("button", { class: "ghost", type: "button" }, [t("admin.booking.cancel", "取消")]);
+          const cancelBtn = el("button", { class: "ghost admin-btn--danger", type: "button" }, [
+            t("admin.booking.cancel", "取消"),
+          ]);
           const canAdminCancel = !bookingIsDoneForAdmin(b) && !bookingIsCancelledForAdmin(b.status);
           cancelBtn.disabled = !canAdminCancel;
           cancelBtn.title = !canAdminCancel
@@ -3439,7 +2712,9 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
             }
           });
           const canArchive = bookingIsDoneForAdmin(b) || bookingIsCancelledForAdmin(b.status);
-          const archiveBtn = el("button", { class: "ghost", type: "button" }, [t("admin.booking.hide", "封存")]);
+          const archiveBtn = el("button", { class: "ghost admin-btn--warn", type: "button" }, [
+            t("admin.booking.hide", "封存"),
+          ]);
           archiveBtn.disabled = !canArchive;
           archiveBtn.title = canArchive
             ? ""
@@ -3450,7 +2725,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
               t("admin.booking.hideConfirmTitle", "確認封存此筆預約"),
               t(
                 "admin.booking.hideConfirmBody",
-                "確定將此筆預約從後台主列表封存嗎？\n\n（僅限已取消或已完成之預約。不改變預約狀態；會員端仍顯示原狀態。額度與可預約時段仍依預約狀態計算，與主列表邏輯相同。封存後可至「預約與封存」內「封存的預約」子分頁取消封存。）\n\n姓名：{{name}}\n日期：{{date}}\n開始時間：{{start}}",
+                "確定將此筆預約從後台主列表封存嗎？\n\n（僅限已取消或已完成之預約。不改變預約狀態；會員端仍顯示原狀態。額度與可預約時段仍依預約狀態計算，與主列表邏輯相同。）\n\n姓名：{{name}}\n日期：{{date}}\n開始時間：{{start}}",
                 { name: b.displayName ?? "", date: b.dateKey ?? "", start: b.startSlot ?? "" },
               ),
               t("admin.booking.hideBtn", "封存"),
@@ -3464,7 +2739,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
                 invisible: true,
                 updatedAt: serverTimestamp(),
               });
-              adminStatus.textContent = t("admin.status.hidden", "已封存（可至「預約與封存」→「封存的預約」查看）");
+              adminStatus.textContent = t("admin.status.hidden", "已封存");
               adminStatus.classList.add("ok");
             } catch (e) {
               adminStatus.textContent =
@@ -3489,13 +2764,9 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
           );
         }
         adminCalendarLastVisible = bookingsForAdminCalendar;
-        const allForBriefs = [
-          ...bookingsForAdminCalendar,
-          ...hiddenAdminQueue.filter((item) => item.kind === "deleted").map((item) => item.b),
-        ];
-        void refreshAdminBookingBriefsForBookings(allForBriefs);
+        void refreshAdminBookingBriefsForBookings(bookingsForAdminCalendar);
         paintAdminBookingsCalendar();
-        paintHiddenAdminPage();
+        void refreshAdminCalendarDayCounts();
       },
       (err) => {
         console.error(err);
@@ -3506,8 +2777,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
           );
         adminStatus.textContent = msg;
         adminStatus.classList.add("error");
-        hiddenBookingsStatus.textContent = msg;
-        hiddenBookingsStatus.classList.add("error");
         adminCalendarLastVisible = [];
         paintAdminBookingsCalendar();
       },
