@@ -36,7 +36,6 @@ import { createMyBookingsPanel } from "./myBookingsPanel";
 import { createAdminDashboard } from "./adminDashboard";
 import { canCurrentUserAccessAdmin } from "./adminAccess";
 import { adminSessionCallName, shortUidForDisplay } from "./adminSessionUtil";
-import { resolveBookingCapsClient } from "./bookingCaps";
 import { resolveCapOverflowSettingsClient } from "./capOverflow";
 import { bookingModeLabel } from "./bookingDisplay";
 import type { BookingMode } from "./bookingTypes";
@@ -215,13 +214,6 @@ function render() {
     bookPickCalGrid,
     bookPickCalHoverTip,
   ]);
-  const bookDateStatus = el("div", {
-    class: "book-date-status status-line schedule-status",
-    id: "book-date-status",
-    role: "status",
-    ariaLive: "polite",
-    hidden: true,
-  });
   function syncDateFieldLabelText(): void {
     dateLabelSpan.textContent = t("field.date", "日期（週一至週五）");
     dateCalendarHint.textContent = t(
@@ -612,7 +604,7 @@ function render() {
 
     bookPickCalGrid.replaceChildren();
     const hdrRow = el("div", { class: "book-pick-calendar__row book-pick-calendar__row--head" });
-    for (const lab of [
+    const weekLabels = [
       t("admin.calendar.weekSun", "日"),
       t("admin.calendar.weekMon", "一"),
       t("admin.calendar.weekTue", "二"),
@@ -620,9 +612,14 @@ function render() {
       t("admin.calendar.weekThu", "四"),
       t("admin.calendar.weekFri", "五"),
       t("admin.calendar.weekSat", "六"),
-    ]) {
-      hdrRow.append(el("div", { class: "book-pick-calendar__wd" }, [lab]));
-    }
+    ];
+    weekLabels.forEach((lab, sun0) => {
+      const wdClass =
+        sun0 >= 1 && sun0 <= 5 ?
+          "book-pick-calendar__wd book-pick-calendar__wd--open"
+        : "book-pick-calendar__wd book-pick-calendar__wd--closed";
+      hdrRow.append(el("div", { class: wdClass }, [lab]));
+    });
     bookPickCalGrid.append(hdrRow);
 
     const firstKey = dateKeyFromYmdTaipei(y, mo, 1);
@@ -637,7 +634,13 @@ function render() {
       const canPick = bookablePickCell(dk);
 
       if (!canPick) {
-        const inactive = el("div", { class: "book-pick-calendar__day book-pick-calendar__day--inactive" });
+        const wSun0 = taipeiWeekdaySun0FromDateKey(dk);
+        const weekend = wSun0 === 0 || wSun0 === 6;
+        const inactive = el("div", {
+          class: weekend ?
+            "book-pick-calendar__day book-pick-calendar__day--inactive book-pick-calendar__day--weekend"
+          : "book-pick-calendar__day book-pick-calendar__day--inactive",
+        });
         inactive.dataset.dateKey = dk;
         inactive.append(el("span", { class: "book-pick-calendar__day-num" }, [String(dayNum)]));
         appendBookingPickCalDayBadge(inactive, dk);
@@ -649,7 +652,10 @@ function render() {
         continue;
       }
 
-      const btn = el("button", { type: "button", class: "book-pick-calendar__day" });
+      const btn = el("button", {
+        type: "button",
+        class: "book-pick-calendar__day book-pick-calendar__day--bookable",
+      });
       btn.dataset.dateKey = dk;
       if (dk === selected) btn.classList.add("book-pick-calendar__day--selected");
       if (dk === todayK) btn.classList.add("book-pick-calendar__day--today");
@@ -789,31 +795,7 @@ function render() {
     ]),
   ]);
   const slotStepSection = el("div", { class: "book-step book-step--slots" }, [slotFieldWrap, scheduleStatus]);
-  const bookFooterNote = el("div", { class: "footer-note" });
-  const bookFormTopAside = el("div", { class: "book-form-top__aside" }, [
-    meta,
-    bookingPeersHint,
-    bookFooterNote,
-  ]);
-  bookFooterNote.textContent = t(
-    "booking.rulesFooterDefault",
-    "規則：同一天最多 2 張預約、同一工作週最多 4 張。已取消不計入名額。",
-  );
-  function setBookFooterFromCaps(dayCap: number, weekCap: number) {
-    if (capOverflowEnabledSetting) {
-      bookFooterNote.textContent = t(
-        "booking.rulesFooterWithOverflow",
-        "規則：同一天最多 {{dayCap}} 張、同一工作週最多 {{weekCap}} 張預約。已取消不計入。當日或本週張數已滿時，可加 {{surcharge}} 元／張以「加價現金」再預約（另加按摩費 {{price}} 元）。",
-        { dayCap, weekCap, surcharge: capOverflowSurchargeNtdSetting, price: sessionPriceNtdSetting },
-      );
-    } else {
-      bookFooterNote.textContent = t(
-        "booking.rulesFooter",
-        "規則：同一天最多 {{dayCap}} 張、同一工作週最多 {{weekCap}} 張預約。已取消不計入名額。",
-        { dayCap, weekCap },
-      );
-    }
-  }
+  const bookFormTopAside = el("div", { class: "book-form-top__aside" }, [meta, bookingPeersHint]);
   const walletStatus = el("div", { class: "status-line" });
   const wheelStatus = el("div", { class: "status-line" });
   const wheelResult = el("div", { class: "pill", hidden: true });
@@ -1791,7 +1773,9 @@ function render() {
       bookingCapacityBlocksSlots ||
       (showSlotFields && !bookingAvailabilityLoading && !pickable);
 
-    slotStepSection.hidden = dk === "" || bookingServicePaused || hideStartTimeRow;
+    const scheduleHasMessage = (scheduleStatus.textContent ?? "").trim().length > 0;
+    slotStepSection.hidden =
+      dk === "" || bookingServicePaused || (hideStartTimeRow && !scheduleHasMessage);
     bookFormTopAside.hidden = dk === "" || bookingServicePaused;
     slotFieldWrap.hidden = hideStartTimeRow || bookingServicePaused;
 
@@ -1859,21 +1843,10 @@ function render() {
   }
 
   function setScheduleFeedback(text: string, variant: "" | "error" | "ok" = ""): void {
-    const hasText = text.length > 0;
     scheduleStatus.textContent = text;
     scheduleStatus.className = variant
       ? `status-line schedule-status ${variant}`
       : "status-line schedule-status";
-    scheduleStatus.hidden = hasText;
-    bookDateStatus.textContent = text;
-    bookDateStatus.className = variant
-      ? `book-date-status status-line schedule-status ${variant}`
-      : "book-date-status status-line schedule-status";
-    bookDateStatus.hidden = !hasText;
-    dateInput.setAttribute(
-      "aria-describedby",
-      hasText ? "book-date-calendar-hint book-date-status" : "book-date-calendar-hint",
-    );
   }
 
   function noPickableSlotMessage(
@@ -2003,7 +1976,6 @@ function render() {
           }
         }
 
-        setBookFooterFromCaps(data.dayCap, data.weekCap);
         runRefillSlots(taken, blocked, dk, blockedMap);
         const weekdayZh = weekdayZhFromDateKeyTaipei(dk);
         meta.replaceChildren(
@@ -2051,21 +2023,7 @@ function render() {
           bookingPeersHint.hidden = true;
         }
         if (bookingCapOverflowOffer) {
-          const parts: string[] = [];
-          if (dayFull) parts.push(t("booking.dayFullShort", "當日名額已滿"));
-          if (weekFull) parts.push(t("booking.weekFullShort", "本工作週名額已滿"));
-          setScheduleFeedback(
-            t(
-              "booking.capOverflowOffer",
-              "{{caps}}。可選時段後以「加價現金」再預約一張（加價 {{surcharge}} 元／張 ＋ 按摩費 {{price}} 元）。",
-              {
-                caps: parts.join("；"),
-                surcharge: capOverflowSurchargeNtdSetting,
-                price: sessionPriceNtdSetting,
-              },
-            ),
-            "ok",
-          );
+          setScheduleFeedback("");
         } else if (dayFull) {
           setScheduleFeedback(t("booking.dayFull", "這一天已額滿。"), "error");
         } else if (weekFull) {
@@ -2104,15 +2062,13 @@ function render() {
   onSnapshot(
     doc(db, "siteSettings", "bookingCaps"),
     (snap) => {
-      const caps = resolveBookingCapsClient(snap.data());
       const overflow = resolveCapOverflowSettingsClient(snap.data());
       capOverflowEnabledSetting = overflow.enabled;
       capOverflowSurchargeNtdSetting = overflow.surchargeNtd;
-      setBookFooterFromCaps(caps.maxPerDay, caps.maxPerWorkWeek);
       void refreshAvailability();
     },
     () => {
-      /* 讀取失敗時保留現有頁尾（通常為預設句或最近一次空檔 API） */
+      /* 讀取失敗時保留現有名額設定 */
     },
   );
 
@@ -2332,7 +2288,6 @@ function render() {
       dateLabelSpan,
       dateCalendarHint,
       bookPickCalendar,
-      bookDateStatus,
       dateInput,
     ]),
     bookFormTopAside,

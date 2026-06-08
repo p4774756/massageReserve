@@ -112,7 +112,7 @@ a:hover {
 
 /* 前台預約：分區上色，避免整頁一片白 */
 .shell:not(.admin-mode) {
-  border-color: color-mix(in srgb, var(--border) 88%, var(--accent-soft));
+  border-color: #38322a;
   box-shadow: var(--shadow-lg);
 }
 
@@ -289,6 +289,7 @@ header.page-head {
   background: rgb(8 6 4 / 0.55);
   color: #ffffff;
   font-weight: 600;
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   text-shadow: 0 1px 3px rgb(0 0 0 / 0.5);
 }
@@ -546,7 +547,7 @@ header.page-head {
   margin: 0 1px;
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--accent) 28%, var(--surface-elevated));
-  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  border: 1px solid #7a6551;
   box-shadow: none;
 }
 
@@ -661,8 +662,42 @@ header.page-head {
 }
 
 .shell.admin-mode {
+  color-scheme: light;
   border-color: #c8c8c8;
   box-shadow: 0 1px 4px rgb(0 0 0 / 0.12);
+}
+
+/* 後台表單：覆蓋前台深色 token，避免 hover／原生 time／search 控件異常 */
+.shell.admin-mode input[type="text"],
+.shell.admin-mode input[type="search"],
+.shell.admin-mode input[type="email"],
+.shell.admin-mode input[type="password"],
+.shell.admin-mode input[type="number"],
+.shell.admin-mode input[type="date"],
+.shell.admin-mode input[type="time"],
+.shell.admin-mode select,
+.shell.admin-mode textarea {
+  color: #1a1a1a;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  color-scheme: light;
+}
+
+.shell.admin-mode input:hover,
+.shell.admin-mode select:hover:not(:disabled),
+.shell.admin-mode textarea:hover {
+  color: #1a1a1a;
+  background: #ffffff;
+  border-color: var(--border-strong);
+}
+
+.shell.admin-mode input:focus-visible,
+.shell.admin-mode select:focus-visible:not(:disabled),
+.shell.admin-mode textarea:focus-visible {
+  color: #1a1a1a;
+  background: #ffffff;
+  border-color: var(--accent-deep);
+  box-shadow: 0 0 0 2px rgb(var(--accent-rgb) / 0.22);
 }
 
 .shell.admin-mode header.page-head {
@@ -764,7 +799,7 @@ main.panel.panel-book--has-notice {
   margin: 0 0 14px;
   padding: 12px 14px 13px;
   border-radius: var(--radius);
-  border: 1px solid color-mix(in srgb, #c0392b 45%, var(--border));
+  border: 1px solid #76362c;
   background: color-mix(in srgb, #c0392b 12%, var(--surface));
   box-shadow: var(--shadow-sm);
 }
@@ -782,7 +817,7 @@ main.panel.panel-book--has-notice {
   color: #a93226;
   padding: 2px 7px;
   border-radius: var(--radius-sm);
-  border: 1px solid color-mix(in srgb, #c0392b 40%, var(--border));
+  border: 1px solid #70362c;
   background: color-mix(in srgb, #c0392b 10%, var(--surface));
 }
 
@@ -801,7 +836,7 @@ main.panel.panel-book--has-notice {
 }
 
 .shell.admin-mode .admin-announce__block--service-pause {
-  border-left: 4px solid color-mix(in srgb, #c0392b 55%, var(--border));
+  border-left: 4px solid #84372b;
 }
 
 .admin-service-pause__actions {
@@ -959,11 +994,6 @@ main.panel[hidden] {
 
 .book-form-top__aside[hidden] {
   display: none !important;
-}
-
-.book-form-top__aside .footer-note {
-  padding-top: 12px;
-  margin-top: 2px;
 }
 
 @media (min-width: 720px) {
@@ -1155,21 +1185,6 @@ main.panel[hidden] {
   font-weight: 500;
 }
 
-.book-date-status {
-  margin: 10px 0 0;
-  font-size: 0.9rem;
-  font-weight: 600;
-  line-height: 1.55;
-}
-
-.book-date-status.error {
-  color: var(--danger);
-}
-
-.book-date-status.ok {
-  color: var(--accent-bright);
-}
-
 .book-pick-calendar {
   position: relative;
   margin-top: 10px;
@@ -1279,6 +1294,19 @@ main.panel[hidden] {
   padding: 4px 2px;
 }
 
+.book-pick-calendar__row--head .book-pick-calendar__wd--open {
+  color: var(--accent-bright);
+  font-weight: 800;
+  background: rgb(var(--accent-rgb) / 0.14);
+  border-radius: var(--radius-sm);
+}
+
+.book-pick-calendar__row--head .book-pick-calendar__wd--closed {
+  color: var(--muted);
+  opacity: 0.42;
+  font-weight: 600;
+}
+
 .book-pick-calendar__cell {
   min-width: 0;
   min-height: 2.65rem;
@@ -1350,12 +1378,38 @@ main.panel[hidden] {
   background: var(--accent-soft);
 }
 
+.book-pick-calendar__day--bookable {
+  border-color: var(--border-strong);
+  border-color: rgb(var(--accent-rgb) / 0.42);
+  background: var(--surface-elevated);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface-elevated));
+  box-shadow: 0 1px 0 rgb(var(--accent-rgb) / 0.12);
+}
+
+.book-pick-calendar__day--bookable .book-pick-calendar__day-num {
+  color: var(--accent-bright);
+  font-weight: 800;
+}
+
+.book-pick-calendar__day--bookable:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface-elevated));
+  box-shadow: 0 2px 8px rgb(var(--accent-rgb) / 0.18);
+}
+
 .book-pick-calendar__day--inactive {
   cursor: default;
   pointer-events: none;
   opacity: 0.58;
   color: var(--muted);
   background: rgb(255 255 255 / 0.03);
+}
+
+.book-pick-calendar__day--inactive.book-pick-calendar__day--weekend {
+  opacity: 0.32;
+  color: var(--muted);
+  background: transparent;
+  border-color: rgb(255 255 255 / 0.04);
 }
 
 .book-pick-calendar__day--inactive.book-pick-calendar__day--selected {
@@ -1451,10 +1505,12 @@ button.password-reveal-btn {
 }
 
 input[type="text"],
+input[type="search"],
 input[type="email"],
 input[type="password"],
 input[type="number"],
 input[type="date"],
+input[type="time"],
 select,
 textarea {
   width: 100%;
@@ -3333,7 +3389,6 @@ tbody tr:hover td {
   margin-top: 4px;
   overflow-x: auto;
   overflow-y: visible;
-  -webkit-overflow-scrolling: touch;
 }
 
 .admin-wallet-history-table table {
@@ -3766,16 +3821,6 @@ label.field.checkbox-field {
   width: auto;
   flex-shrink: 0;
   accent-color: var(--accent);
-}
-
-.footer-note {
-  margin-top: 0;
-  padding-top: 22px;
-  border-top: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 0.9rem;
-  font-weight: 500;
-  line-height: 1.65;
 }
 
 .modal-overlay {
@@ -6310,7 +6355,7 @@ html.sol-spa #app::after {
 
 html.sol-spa .shell:not(.admin-mode) {
   font-family: var(--font);
-  border: 1px solid color-mix(in srgb, var(--border) 88%, var(--accent-soft));
+  border: 1px solid #38322a;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   background: var(--surface);
@@ -6437,6 +6482,7 @@ html.sol-spa:not(:has(.shell.admin-mode)) button.ghost:hover:not(:disabled) {
 
 html.sol-spa:not(:has(.shell.admin-mode)) .modal-overlay {
   background: rgb(8 6 4 / 0.62);
+  -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
 }
 
@@ -6461,13 +6507,13 @@ html.sol-spa:not(:has(.shell.admin-mode)) main.panel {
 }
 
 html.sol-spa:not(:has(.shell.admin-mode)) .book-form-top {
-  border-color: color-mix(in srgb, var(--border) 80%, transparent);
+  border-color: rgb(58 52 44 / 0.8);
   background: color-mix(in srgb, var(--accent-soft) 35%, var(--surface));
 }
 
 html.sol-spa:not(:has(.shell.admin-mode)) .site-public-notice {
   background: color-mix(in srgb, var(--accent-soft) 50%, var(--surface));
-  border-color: color-mix(in srgb, var(--border) 75%, var(--accent));
+  border-color: #5e4f41;
 }
 
 html.sol-spa:not(:has(.shell.admin-mode)) input,
@@ -6508,7 +6554,7 @@ html.sol-spa:not(:has(.shell.admin-mode)) .page-head .visitor-stats--wretch .vis
 
 html.sol-spa:not(:has(.shell.admin-mode)) .page-head .visitor-stats--wretch .visitor-stats__num {
   background: color-mix(in srgb, var(--accent) 28%, var(--surface-elevated));
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-color: #7a6551;
   color: #f5d9b0;
 }
 
@@ -6542,6 +6588,7 @@ html.sol-spa:has(.shell.admin-mode) #app::after {
 }
 
 html.sol-spa .shell.admin-mode {
+  color-scheme: light;
   --ink: #1a1a1a;
   --muted: #666666;
   --border: #d4d4d4;
@@ -6797,11 +6844,23 @@ html.sol-spa .shell.admin-mode select,
 html.sol-spa .shell.admin-mode textarea {
   border-radius: var(--radius-sm);
   border-color: var(--border);
+  color: #1a1a1a;
+  background: #ffffff;
+  color-scheme: light;
+}
+
+html.sol-spa .shell.admin-mode input:hover,
+html.sol-spa .shell.admin-mode select:hover:not(:disabled),
+html.sol-spa .shell.admin-mode textarea:hover {
+  color: #1a1a1a;
+  background: #ffffff;
 }
 
 html.sol-spa .shell.admin-mode input:focus-visible,
 html.sol-spa .shell.admin-mode select:focus-visible,
 html.sol-spa .shell.admin-mode textarea:focus-visible {
+  color: #1a1a1a;
+  background: #ffffff;
   border-color: var(--accent-deep);
   box-shadow: 0 0 0 2px rgb(var(--accent-rgb) / 0.22);
 }
