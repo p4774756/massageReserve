@@ -2706,31 +2706,27 @@ tbody tr:hover td {
 
 .admin-member-list-table th:nth-child(2),
 .admin-member-list-table td:nth-child(2) {
-  min-width: 7.5rem;
-  text-align: center;
-  white-space: nowrap;
-}
-
-.admin-member-list-table th:nth-child(4),
-.admin-member-list-table td:nth-child(4),
-.admin-member-list-table th:nth-child(5),
-.admin-member-list-table td:nth-child(5),
-.admin-member-list-table th:nth-child(6),
-.admin-member-list-table td:nth-child(6) {
-  text-align: right;
-  white-space: nowrap;
-}
-
-.admin-member-list-table th:nth-child(3),
-.admin-member-list-table td:nth-child(3) {
   min-width: 6.5rem;
 }
 
+/* 可預約次數／輪盤點數／可抽次數：表頭與數字皆右對齊 */
+.admin-member-list-table th:nth-child(3),
+.admin-member-list-table td:nth-child(3),
+.admin-member-list-table th:nth-child(4),
+.admin-member-list-table td:nth-child(4),
+.admin-member-list-table th:nth-child(5),
+.admin-member-list-table td:nth-child(5) {
+  text-align: right;
+  white-space: nowrap;
+  min-width: 5.5rem;
+}
+
+.admin-member-list-table th:nth-child(3) .admin-member-sort-btn,
 .admin-member-list-table th:nth-child(4) .admin-member-sort-btn,
-.admin-member-list-table th:nth-child(5) .admin-member-sort-btn,
-.admin-member-list-table th:nth-child(6) .admin-member-sort-btn {
+.admin-member-list-table th:nth-child(5) .admin-member-sort-btn {
   justify-content: flex-end;
   text-align: right;
+  width: 100%;
 }
 
 .admin-member-nick-cell {
@@ -2886,16 +2882,6 @@ tbody tr:hover td {
 .admin-member-nick-modal .admin-member-nick-input {
   width: 100%;
   max-width: none;
-}
-
-.admin-member-verify {
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--muted);
-}
-
-.admin-member-verify.ok {
-  color: var(--ink);
 }
 
 .admin-member-nick-input {

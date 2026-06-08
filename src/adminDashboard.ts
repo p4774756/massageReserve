@@ -1657,7 +1657,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     type AdminMemberListRow = {
       uid: string;
       email: string | null;
-      emailVerified: boolean;
       nickname: string;
       adminBrief: string;
       sessionCredits: number;
@@ -1666,7 +1665,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     };
     type MemberListSortKey =
       | "email"
-      | "emailVerified"
       | "nickname"
       | "sessionCredits"
       | "wheelPoints"
@@ -1716,12 +1714,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
             });
           break;
         }
-        case "emailVerified": {
-          const av = a.emailVerified ? 1 : 0;
-          const bv = b.emailVerified ? 1 : 0;
-          cmp = asc ? bv - av : av - bv;
-          return cmp;
-        }
         case "nickname": {
           cmp = a.nickname.localeCompare(b.nickname, "zh-Hant", { numeric: true });
           break;
@@ -1763,7 +1755,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       };
       return el("tr", {}, [
         mk(t("admin.memberList.th.email", "Email"), "email"),
-        mk(t("admin.memberList.th.verified", "信箱驗證"), "emailVerified"),
         mk(t("admin.memberList.th.nickname", "稱呼"), "nickname"),
         mk(t("admin.memberList.th.sessions", "可預約次數"), "sessionCredits"),
         mk(t("admin.memberList.th.points", "輪盤點數"), "wheelPoints"),
@@ -1822,7 +1813,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
           emptyMsg = t("admin.memberList.searchEmpty", "沒有符合關鍵字的會員。請改關鍵字或清空篩選欄。");
         }
         memberListTable.append(
-          el("tr", {}, [el("td", { class: "hint", colSpan: 6 }, [emptyMsg])]),
+          el("tr", {}, [el("td", { class: "hint", colSpan: 5 }, [emptyMsg])]),
         );
         memberListPagePrev.disabled = true;
         memberListPageNext.disabled = true;
@@ -1855,10 +1846,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
           ev.stopPropagation();
           openAdminMemberProfileModal(m);
         });
-        const verified = m.emailVerified === true;
-        const verifyCell = el("td", { class: verified ? "admin-member-verify ok" : "admin-member-verify" }, [
-          verified ? t("admin.memberList.verifiedYes", "已驗證") : t("admin.memberList.verifiedNo", "未驗證"),
-        ]);
         const emailStr = (m.email ?? "").trim();
         const emailCell = el("td", {
           class: "admin-member-email-cell-wrap",
@@ -1887,7 +1874,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         memberListTable.append(
           el("tr", {}, [
             emailCell,
-            verifyCell,
             el("td", { class: "admin-member-nick-cell" }, [nickOpen]),
             el("td", { class: "mono" }, [String(m.sessionCredits)]),
             el("td", { class: "mono" }, [String(m.wheelPoints)]),
@@ -1951,7 +1937,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         memberListCache = raw.map((m) => ({
           uid: m.uid,
           email: m.email ?? null,
-          emailVerified: m.emailVerified === true,
           nickname: typeof m.nickname === "string" ? m.nickname : "",
           adminBrief: typeof m.adminBrief === "string" ? m.adminBrief.trim() : "",
           sessionCredits: typeof m.sessionCredits === "number" ? m.sessionCredits : 0,
