@@ -359,11 +359,8 @@ export const getAvailability = onCall(publicCall, async (request) => {
   const pauseSnap = await db.collection("siteSettings").doc("servicePause").get();
   const pause = parseServicePause(pauseSnap.data());
   if (pause.paused) {
-    const pricingSnap = await db.collection("siteSettings").doc("pricing").get();
-    const unitMinutes = resolveUnitMinutes(pricingSnap.data());
-    const maxUnits = resolveMaxUnitsPerBooking(pricingSnap.data());
-    const units = parseBookingUnits(request.data?.units, maxUnits) ?? 1;
-    const durationMinutes = pricingDurationMinutesForUnits(units, unitMinutes);
+    const units = parseBookingUnits(request.data?.units) ?? 1;
+    const durationMinutes = pricingDurationMinutesForUnits(units, BOOKING_UNIT_MINUTES_FIXED);
     const allSlots = holidayOutcall ? allHolidayOutcallStartSlots() : allStartSlots();
     return {
       servicePaused: true,
@@ -373,7 +370,7 @@ export const getAvailability = onCall(publicCall, async (request) => {
       unavailableStarts: allSlots,
       units,
       durationMinutes,
-      unitMinutes,
+      unitMinutes: BOOKING_UNIT_MINUTES_FIXED,
       blockedSlots: [],
       dayCount: 0,
       weekCount: 0,
