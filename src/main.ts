@@ -24,6 +24,11 @@ import {
   listActiveWheelPrizesCall,
 } from "./firebase";
 import { createSitePublicNoticeBanner } from "./sitePublicNotice";
+import {
+  formatServicePauseResumeLine,
+  parseServicePause,
+  servicePauseDocRef,
+} from "./servicePause";
 import { createVisitorStatsLine } from "./visitorStats";
 import { runSlotSpectacle } from "./slotSpectacle";
 import { initI18n, intlLocaleTag, localeApiParam, t } from "./i18n";
@@ -1691,6 +1696,48 @@ function render() {
   let bookingCapacityBlocksSlots = false;
   /** 查詢空檔中：隱藏整段開始時間 UI，避免長下拉或舊資料閃現 */
   let bookingAvailabilityLoading = false;
+  /** 後台一鍵暫停新預約 */
+  let bookingServicePaused = false;
+  let bookingServicePauseMessage = "";
+  let bookingServicePauseResumeOn: string | undefined;
+
+  const servicePauseBanner = el("div", {
+    class: "book-service-pause",
+    role: "status",
+    hidden: true,
+  });
+  const servicePauseBannerBody = el("p", { class: "book-service-pause__body" });
+  const servicePauseBannerResume = el("p", { class: "book-service-pause__resume hint", hidden: true });
+  servicePauseBanner.append(
+    el("span", { class: "book-service-pause__label" }, [t("servicePause.label", "暫停接客")]),
+    servicePauseBannerBody,
+    servicePauseBannerResume,
+  );
+
+  function syncServicePauseBookingUi(): void {
+    bookPanelBook.classList.toggle("book-tab-panel--paused", bookingServicePaused);
+    servicePauseBanner.hidden = !bookingServicePaused;
+    bookFormTop.hidden = bookingServicePaused;
+    if (bookingServicePaused) {
+      memberExtrasWrap.hidden = true;
+    }
+    if (bookingServicePaused) {
+      servicePauseBannerBody.textContent = bookingServicePauseMessage;
+      const resumeLine = formatServicePauseResumeLine(bookingServicePauseResumeOn);
+      servicePauseBannerResume.hidden = !resumeLine;
+      servicePauseBannerResume.textContent = resumeLine;
+    }
+    if (bookingServicePaused) {
+      nameInput.setAttribute("disabled", "true");
+      noteInput.setAttribute("disabled", "true");
+      submitBtn.setAttribute("disabled", "true");
+    } else {
+      nameInput.removeAttribute("disabled");
+      noteInput.removeAttribute("disabled");
+      submitBtn.removeAttribute("disabled");
+    }
+    syncBookingStepVisibility();
+  }
 
   /** 依日期／時段顯示「時段＋名額」區與「付款＋備註＋送出」區，減少一進頁的視覺負擔 */
   function syncBookingStepVisibility() {
@@ -1710,13 +1757,13 @@ function render() {
       bookingAvailabilityLoading ||
       (showSlotFields && !bookingAvailabilityLoading && !pickable);
 
-    slotStepSection.hidden = dk === "";
-    bookFormTopAside.hidden = dk === "";
-    slotFieldWrap.hidden = hideStartTimeRow;
+    slotStepSection.hidden = dk === "" || bookingServicePaused;
+    bookFormTopAside.hidden = dk === "" || bookingServicePaused;
+    slotFieldWrap.hidden = hideStartTimeRow || bookingServicePaused;
 
     const slotPicked = Boolean(slotSelect.value);
     /** 與時段列一致：無可選時段／載入中／額滿時一併隱藏付款與送出 */
-    finalizeSection.hidden = !slotPicked || !showSlotFields || hideStartTimeRow;
+    finalizeSection.hidden = bookingServicePaused || !slotPicked || !showSlotFields || hideStartTimeRow;
   }
 
   syncDateFieldLabelText();
@@ -1785,6 +1832,17 @@ function render() {
       meta.innerHTML = "";
       bookingPeersHint.replaceChildren();
       bookingPeersHint.hidden = true;
+
+      if (bookingServicePaused) {
+        bookingCapacityBlocksSlots = true;
+        const dk = dateInput.value;
+        runRefillSlots(new Set(), true, dk, new Map());
+        scheduleStatus.textContent = bookingServicePauseMessage;
+        scheduleStatus.className = "status-line schedule-status error";
+        syncBookingStepVisibility();
+        paintBookingPickCalendar();
+        return;
+      }
 
       const minKey = taipeiTodayDateKey();
       const maxKey = taipeiLatestBookableDateKey();
@@ -2002,6 +2060,11 @@ function render() {
   submitBtn.addEventListener("click", async () => {
     bookStatus.textContent = "";
     bookStatus.className = "status-line";
+    if (bookingServicePaused) {
+      bookStatus.textContent = bookingServicePauseMessage;
+      bookStatus.classList.add("error");
+      return;
+    }
     const displayName = nameInput.value.trim();
     const dateKey = dateInput.value;
     const startSlot = slotSelect.value;
@@ -2204,6 +2267,17 @@ function render() {
   tabMyBookings.hidden = true;
   bookTabList.append(tabBook, tabMyBookings);
 
+  const bookFormTop = el("div", { class: "book-form-top" }, [
+    el("label", { class: "field book-form-top__name" }, [t("field.name", "姓名（必填）"), nameInput]),
+    el("label", { class: "field field--booking-date book-form-top__date" }, [
+      dateLabelSpan,
+      dateCalendarHint,
+      bookPickCalendar,
+      dateInput,
+    ]),
+    bookFormTopAside,
+  ]);
+
   const bookPanelBook = el("div", {
     class: "book-tab-panel",
     id: "book-tab-panel-book",
@@ -2211,16 +2285,8 @@ function render() {
   });
   bookPanelBook.setAttribute("aria-labelledby", "book-tab-book");
   bookPanelBook.append(
-    el("div", { class: "book-form-top" }, [
-      el("label", { class: "field book-form-top__name" }, [t("field.name", "姓名（必填）"), nameInput]),
-      el("label", { class: "field field--booking-date book-form-top__date" }, [
-        dateLabelSpan,
-        dateCalendarHint,
-        bookPickCalendar,
-        dateInput,
-      ]),
-      bookFormTopAside,
-    ]),
+    servicePauseBanner,
+    bookFormTop,
     /** 與選時段／付款區分離：未完成信箱驗證時顯示提示（餘額／輪盤／兌換在會員中心） */
     memberExtrasWrap,
     slotStepSection,
@@ -2349,6 +2415,27 @@ function render() {
     },
     () => {
       /* 讀取失敗時保留上一輪數值與 Callable 結果 */
+    },
+  );
+
+  onSnapshot(
+    servicePauseDocRef(db),
+    (snap) => {
+      const parsed = parseServicePause(snap.data());
+      const wasPaused = bookingServicePaused;
+      bookingServicePaused = parsed.paused;
+      bookingServicePauseMessage = parsed.message;
+      bookingServicePauseResumeOn = parsed.resumeOn;
+      syncServicePauseBookingUi();
+      if (bookingServicePaused || wasPaused) {
+        void refreshAvailability();
+      }
+      if (!bookingServicePaused && wasPaused) {
+        void refreshWalletStatus();
+      }
+    },
+    () => {
+      /* 讀取失敗時維持上一輪狀態 */
     },
   );
 

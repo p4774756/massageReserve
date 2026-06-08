@@ -24,6 +24,8 @@ import {
 } from "./resendNotify";
 import {
   ACTIVE_STATUSES,
+  allHolidayOutcallStartSlots,
+  allStartSlots,
   assertSlotAllowed,
   blockedReasonForSlot,
   bookingIntervalFromStartSlot,
@@ -41,6 +43,7 @@ import {
   TIMEZONE,
   weekdayZhFromDateKey,
 } from "./bookingLogic";
+import { isServicePaused, parseServicePause } from "./servicePause";
 import {
   durationMinutesForUnits as pricingDurationMinutesForUnits,
   foldWalletBalanceIntoSessions,
@@ -353,6 +356,39 @@ export const getAvailability = onCall(publicCall, async (request) => {
     throw new HttpsError("invalid-argument", st(locale, "avail.weekdaysOnly", "僅能查詢週一到週五"));
   }
 
+  const pauseSnap = await db.collection("siteSettings").doc("servicePause").get();
+  const pause = parseServicePause(pauseSnap.data());
+  if (pause.paused) {
+    const pricingSnap = await db.collection("siteSettings").doc("pricing").get();
+    const unitMinutes = resolveUnitMinutes(pricingSnap.data());
+    const maxUnits = resolveMaxUnitsPerBooking(pricingSnap.data());
+    const units = parseBookingUnits(request.data?.units, maxUnits) ?? 1;
+    const durationMinutes = pricingDurationMinutesForUnits(units, unitMinutes);
+    const allSlots = holidayOutcall ? allHolidayOutcallStartSlots() : allStartSlots();
+    return {
+      servicePaused: true,
+      pauseMessage: pause.message,
+      pauseResumeOn: pause.resumeOn ?? null,
+      taken: allSlots,
+      unavailableStarts: allSlots,
+      units,
+      durationMinutes,
+      unitMinutes,
+      blockedSlots: [],
+      dayCount: 0,
+      weekCount: 0,
+      dayCap: 0,
+      weekCap: 0,
+      dayFull: true,
+      weekFull: true,
+      capOverflowEnabled: false,
+      capOverflowSurchargeNtd: 0,
+      dayPeersMasked: [],
+      daySlotsMasked: [],
+      weekPeersMasked: [],
+    };
+  }
+
   const weekStart = mondayOfWeek(day).toISODate()!;
 
   const [daySnap, weekSnap, blocksSnap, capsSnap] = await Promise.all([
@@ -525,6 +561,13 @@ export const createBooking = onCall(
   async (request) => {
   const data = request.data as CreateBookingInput;
   const locale = parseLocale(data);
+
+  const pauseSnap = await db.collection("siteSettings").doc("servicePause").get();
+  const pause = parseServicePause(pauseSnap.data());
+  if (isServicePaused(pauseSnap.data())) {
+    throw new HttpsError("failed-precondition", pause.message);
+  }
+
   const displayName = typeof data.displayName === "string" ? data.displayName.trim() : "";
   const note = typeof data.note === "string" ? data.note.trim() : "";
   const dateKey = typeof data.dateKey === "string" ? data.dateKey : "";
@@ -1344,6 +1387,69 @@ export const grantDrawChancesAdmin = onCall(walletAdminCall, async (request) => 
   });
 
   return { ok: true as const, drawChancesAdded: delta, drawChancesTotal };
+});
+
+const ADMIN_WALLET_TX_TYPES = ["topup", "admin_session_adjust", "admin_grant_draw"] as const;
+type AdminWalletTxType = (typeof ADMIN_WALLET_TX_TYPES)[number];
+
+/** 後台：查詢會員儲值／調整次數／贈送抽獎之 walletTransactions 稽核紀錄 */
+export const listWalletTransactionsAdmin = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
+  }
+  await assertAdminByUid(uid, locale);
+
+  const customerIdRaw = typeof request.data?.customerId === "string" ? request.data.customerId.trim() : "";
+  if (!customerIdRaw) {
+    throw new HttpsError("invalid-argument", st(locale, "topup.needId", "請填入會員識別（Email 或 UID）"));
+  }
+
+  const typeFilterRaw = typeof request.data?.typeFilter === "string" ? request.data.typeFilter.trim() : "";
+  const typeFilter = ADMIN_WALLET_TX_TYPES.includes(typeFilterRaw as AdminWalletTxType)
+    ? (typeFilterRaw as AdminWalletTxType)
+    : null;
+
+  const limitRaw = request.data?.limit;
+  let limit = 50;
+  if (typeof limitRaw === "number" && Number.isFinite(limitRaw)) {
+    limit = Math.min(100, Math.max(1, Math.floor(limitRaw)));
+  }
+
+  const customerId = await resolveCustomerUidForTopup(customerIdRaw, locale);
+  const fetchLimit = typeFilter ? limit : Math.min(200, limit * 4);
+
+  const snap = await db
+    .collection("walletTransactions")
+    .where("customerId", "==", customerId)
+    .orderBy("createdAt", "desc")
+    .limit(fetchLimit)
+    .get();
+
+  let transactions = snap.docs
+    .map((docSnap) => {
+      const d = docSnap.data();
+      const type = typeof d.type === "string" ? d.type : "";
+      return {
+        id: docSnap.id,
+        type,
+        amount: typeof d.amount === "number" ? d.amount : 0,
+        sessionsDelta: typeof d.sessionsDelta === "number" ? d.sessionsDelta : null,
+        drawChancesDelta: typeof d.drawChancesDelta === "number" ? d.drawChancesDelta : null,
+        note: typeof d.note === "string" ? d.note : "",
+        operatorId: typeof d.operatorId === "string" ? d.operatorId : "",
+        createdAt: firestoreTimestampToSeconds(d.createdAt),
+      };
+    })
+    .filter((row) => ADMIN_WALLET_TX_TYPES.includes(row.type as AdminWalletTxType));
+
+  if (typeFilter) {
+    transactions = transactions.filter((row) => row.type === typeFilter);
+  }
+  transactions = transactions.slice(0, limit);
+
+  return { customerId, transactions };
 });
 
 export const getAdminStatus = onCall(publicCall, async (request) => {

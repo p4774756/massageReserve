@@ -15,6 +15,7 @@ import {
   completeBookingCall,
   adjustSessionCreditsAdminCall,
   grantDrawChancesAdminCall,
+  listWalletTransactionsAdminCall,
   listMembersAdminCall,
   searchMemberUsersCall,
   sendMembersBroadcastAdminCall,
@@ -65,6 +66,11 @@ import {
   taipeiWeekdaySun0FromDateKey,
 } from "./taipeiDates";
 import { PUBLIC_NOTICE_DOC_ID } from "./sitePublicNotice";
+import {
+  DEFAULT_SERVICE_PAUSE_MESSAGE,
+  SERVICE_PAUSE_DOC_ID,
+  parseServicePause,
+} from "./servicePause";
 import { intlLocaleTag, localeApiParam, t } from "./i18n";
 import type { Firestore } from "firebase/firestore";
 import { showConfirmModal } from "./modals";
@@ -97,6 +103,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
   let adminBookingCapsUnsub: (() => void) | null = null;
   let adminBookingBlocksUnsub: (() => void) | null = null;
   let adminPublicNoticeUnsub: (() => void) | null = null;
+  let adminServicePauseUnsub: (() => void) | null = null;
   let bookingBlocksBeforeUnloadHandler: ((ev: BeforeUnloadEvent) => void) | null = null;
   let bookingBlocksHasUnsavedSnapshot: () => boolean = () => false;
   let bookingBlocksConfirmLeave: () => Promise<boolean> = async () => true;
@@ -127,6 +134,10 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     if (adminPublicNoticeUnsub) {
       adminPublicNoticeUnsub();
       adminPublicNoticeUnsub = null;
+    }
+    if (adminServicePauseUnsub) {
+      adminServicePauseUnsub();
+      adminServicePauseUnsub = null;
     }
   }
 
@@ -1053,6 +1064,142 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     };
     window.addEventListener("beforeunload", bookingBlocksBeforeUnloadHandler);
 
+    const servicePauseDocRef = doc(db, "siteSettings", SERVICE_PAUSE_DOC_ID);
+    let servicePausePaused = false;
+    const servicePauseMessageInput = el("textarea", {
+      class: "admin-service-pause__message",
+      rows: 2,
+      maxLength: 400,
+      placeholder: DEFAULT_SERVICE_PAUSE_MESSAGE,
+    });
+    const servicePauseResumeInput = el("input", { type: "date" });
+    const clearServicePauseResumeBtn = el("button", { type: "button", class: "ghost" }, [
+      t("admin.servicePause.clearResume", "清除恢復日"),
+    ]);
+    const servicePauseToggleBtn = el("button", {
+      type: "button",
+      class: "primary admin-service-pause__toggle",
+    });
+    const saveServicePauseMessageBtn = el("button", { type: "button", class: "ghost" }, [
+      t("admin.servicePause.saveMessage", "儲存說明"),
+    ]);
+    const servicePauseStatus = el("div", { class: "status-line" });
+
+    function syncServicePauseAdminUi(raw: Record<string, unknown> | undefined): void {
+      const parsed = parseServicePause(raw);
+      servicePausePaused = parsed.paused;
+      servicePauseMessageInput.value = parsed.message;
+      servicePauseResumeInput.value = parsed.resumeOn ?? "";
+      servicePauseToggleBtn.textContent = parsed.paused
+        ? t("admin.servicePause.resume", "恢復接受新預約")
+        : t("admin.servicePause.pause", "暫停接受新預約");
+      servicePauseToggleBtn.classList.toggle("admin-service-pause__toggle--paused", parsed.paused);
+    }
+
+    adminServicePauseUnsub = onSnapshot(
+      servicePauseDocRef,
+      (snap) => syncServicePauseAdminUi(snap.data() as Record<string, unknown> | undefined),
+      () => {
+        servicePauseStatus.textContent = t("admin.servicePause.loadFail", "無法讀取暫停設定。");
+        servicePauseStatus.className = "status-line error";
+      },
+    );
+
+    async function persistServicePause(nextPaused: boolean, opts?: { messageOnly?: boolean }) {
+      servicePauseStatus.textContent = "";
+      servicePauseStatus.className = "status-line";
+      const message = servicePauseMessageInput.value.trim().slice(0, 400) || DEFAULT_SERVICE_PAUSE_MESSAGE;
+      const expiresRaw = servicePauseResumeInput.value.trim();
+      const resumeOn = /^\d{4}-\d{2}-\d{2}$/.test(expiresRaw) ? expiresRaw : "";
+      if (resumeOn && resumeOn < taipeiTodayDateKey()) {
+        servicePauseStatus.textContent = t(
+          "admin.servicePause.resumePast",
+          "恢復日不可早於今日（台北）；請改選今日或未來日期，或留空。",
+        );
+        servicePauseStatus.classList.add("error");
+        return;
+      }
+      servicePauseToggleBtn.setAttribute("disabled", "true");
+      saveServicePauseMessageBtn.setAttribute("disabled", "true");
+      clearServicePauseResumeBtn.setAttribute("disabled", "true");
+      servicePauseStatus.textContent = t("admin.status.processing", "處理中…");
+      try {
+        const payload: Record<string, unknown> = {
+          paused: opts?.messageOnly ? servicePausePaused : nextPaused,
+          message,
+          updatedAt: serverTimestamp(),
+        };
+        if (resumeOn) payload.resumeOn = resumeOn;
+        else payload.resumeOn = deleteField();
+        await setDoc(servicePauseDocRef, payload, { merge: true });
+        servicePauseStatus.textContent = t("admin.status.updated", "已更新");
+        servicePauseStatus.classList.add("ok");
+      } catch (e) {
+        servicePauseStatus.textContent = e instanceof Error ? e.message : t("admin.memberList.saveFail", "儲存失敗");
+        servicePauseStatus.classList.add("error");
+      } finally {
+        servicePauseToggleBtn.removeAttribute("disabled");
+        saveServicePauseMessageBtn.removeAttribute("disabled");
+        clearServicePauseResumeBtn.removeAttribute("disabled");
+      }
+    }
+
+    servicePauseToggleBtn.addEventListener("click", async () => {
+      const nextPaused = !servicePausePaused;
+      const ok = await showConfirmModal(
+        nextPaused
+          ? t("admin.servicePause.confirmPauseTitle", "暫停接受新預約")
+          : t("admin.servicePause.confirmResumeTitle", "恢復接受新預約"),
+        nextPaused
+          ? t(
+              "admin.servicePause.confirmPauseBody",
+              "確定暫停？前台將無法送出新的預約單（含假日外約）；既有預約不受影響，請自行處理或通知客人。",
+            )
+          : t(
+              "admin.servicePause.confirmResumeBody",
+              "確定恢復？前台預約表單將重新開放。",
+            ),
+        nextPaused
+          ? t("admin.servicePause.pause", "暫停接受新預約")
+          : t("admin.servicePause.resume", "恢復接受新預約"),
+      );
+      if (!ok) return;
+      await persistServicePause(nextPaused);
+    });
+    saveServicePauseMessageBtn.addEventListener("click", () => void persistServicePause(servicePausePaused, { messageOnly: true }));
+    clearServicePauseResumeBtn.addEventListener("click", () => {
+      servicePauseResumeInput.value = "";
+      void persistServicePause(servicePausePaused, { messageOnly: true });
+    });
+
+    const blockServicePause = el("section", {
+      class: "admin-announce__block admin-announce__block--service-pause",
+    }, [
+      el("h4", { class: "admin-announce__block-title" }, [
+        t("admin.servicePause.blockTitle", "暫停新預約（一鍵關站）"),
+      ]),
+      el("p", { class: "hint admin-announce__block-lead" }, [
+        t(
+          "admin.servicePause.blockLead",
+          "生病或臨時無法接客時，一鍵暫停所有新預約（平日與假日外約皆擋）。既有預約不會自動取消；恢復時再按「恢復接受新預約」。",
+        ),
+      ]),
+      el("div", { class: "row-actions admin-service-pause__actions" }, [servicePauseToggleBtn]),
+      el("label", { class: "field" }, [
+        t("admin.servicePause.messageLabel", "前台顯示說明"),
+        servicePauseMessageInput,
+      ]),
+      el("label", { class: "field" }, [
+        t("admin.servicePause.resumeLabel", "預計恢復日（選填，僅供顯示）"),
+        el("div", { class: "row-actions admin-service-pause__resume-row" }, [
+          servicePauseResumeInput,
+          clearServicePauseResumeBtn,
+        ]),
+      ]),
+      el("div", { class: "row-actions" }, [saveServicePauseMessageBtn]),
+      servicePauseStatus,
+    ]);
+
     const publicNoticeDocRef = doc(db, "siteSettings", PUBLIC_NOTICE_DOC_ID);
     const publicNoticeTextInput = el("textarea", {
       class: "site-public-notice-admin__text",
@@ -1215,6 +1362,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
 
     announcementSection.append(
       el("h3", { class: "admin-announce__page-title" }, [t("admin.announce.heading", "前台與預約規則")]),
+      blockServicePause,
       blockPublicNotice,
       blockCaps,
       announcePricingFlat,
@@ -1312,7 +1460,269 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       el("label", { class: "field" }, [t("admin.wallet.memberLabel", "會員（Email 或 UID）"), topupTypeaheadWrap]),
       el("div", { class: "admin-wallet-accordion-stack" }, [accordionTopup, accordionAdjust, accordionGrant]),
     ]);
-    walletTopupSection.append(walletMemberOpsCard);
+
+    type WalletHistoryRow = {
+      id: string;
+      type: string;
+      amount: number;
+      sessionsDelta: number | null;
+      drawChancesDelta: number | null;
+      note: string;
+      operatorId: string;
+      createdAt: number | null;
+    };
+    type WalletHistoryTypeFilter = "" | "topup" | "admin_session_adjust" | "admin_grant_draw";
+
+    const walletHistoryCustomerId = el("input", {
+      type: "text",
+      placeholder: t("admin.placeholder.memberId", "會員 Email（建議）或 UID"),
+      autocomplete: "off",
+    });
+    const walletHistorySuggestions = el("ul", {
+      class: "member-typeahead-list",
+      hidden: true,
+      role: "listbox",
+    });
+    const walletHistoryTypeaheadWrap = el("div", { class: "member-typeahead-wrap" });
+    walletHistoryTypeaheadWrap.append(walletHistoryCustomerId, walletHistorySuggestions);
+
+    let walletHistorySearchTimer: ReturnType<typeof setTimeout> | null = null;
+    async function runWalletHistoryMemberSearch() {
+      const q = walletHistoryCustomerId.value.trim();
+      if (q.length < 2) {
+        walletHistorySuggestions.hidden = true;
+        walletHistorySuggestions.innerHTML = "";
+        return;
+      }
+      try {
+        const fn = searchMemberUsersCall();
+        const res = await fn({ prefix: q, ...localeApiParam() });
+        const users = (res.data as { users?: { uid: string; email: string }[] }).users ?? [];
+        walletHistorySuggestions.innerHTML = "";
+        if (users.length === 0) {
+          walletHistorySuggestions.hidden = true;
+          return;
+        }
+        for (const u of users) {
+          const li = el("li", { class: "member-typeahead-item", role: "option" }, [u.email]);
+          li.addEventListener("mousedown", (ev) => {
+            ev.preventDefault();
+            walletHistoryCustomerId.value = u.email;
+            walletHistorySuggestions.hidden = true;
+            walletHistorySuggestions.innerHTML = "";
+          });
+          walletHistorySuggestions.append(li);
+        }
+        walletHistorySuggestions.hidden = false;
+      } catch {
+        walletHistorySuggestions.hidden = true;
+      }
+    }
+
+    walletHistoryCustomerId.addEventListener("input", () => {
+      const raw = walletHistoryCustomerId.value.trim();
+      if (raw.length < 2) {
+        walletHistorySuggestions.hidden = true;
+        walletHistorySuggestions.innerHTML = "";
+        return;
+      }
+      if (walletHistorySearchTimer) clearTimeout(walletHistorySearchTimer);
+      walletHistorySearchTimer = setTimeout(() => void runWalletHistoryMemberSearch(), 280);
+    });
+    walletHistoryCustomerId.addEventListener("focus", () => {
+      void runWalletHistoryMemberSearch();
+    });
+    walletHistoryCustomerId.addEventListener("blur", () => {
+      setTimeout(() => {
+        walletHistorySuggestions.hidden = true;
+      }, 200);
+    });
+
+    const walletHistoryTypeFilter = el("select", { class: "admin-wallet-history__type-filter" });
+    const walletHistoryTypeOptions: { value: WalletHistoryTypeFilter; label: string }[] = [
+      { value: "", label: t("admin.walletHistory.typeAll", "全部類型") },
+      { value: "topup", label: t("admin.walletHistory.typeTopup", "儲值") },
+      { value: "admin_session_adjust", label: t("admin.walletHistory.typeAdjust", "調整可預約次數") },
+      { value: "admin_grant_draw", label: t("admin.walletHistory.typeGrant", "贈送輪盤抽獎次數") },
+    ];
+    for (const opt of walletHistoryTypeOptions) {
+      const o = el("option", { value: opt.value }, [opt.label]);
+      walletHistoryTypeFilter.append(o);
+    }
+
+    const walletHistoryUseOpsMemberBtn = el("button", { type: "button", class: "ghost" }, [
+      t("admin.walletHistory.useOpsMember", "帶入上方會員"),
+    ]);
+    const walletHistoryQueryBtn = el("button", { type: "button", class: "ghost" }, [
+      t("admin.walletHistory.queryBtn", "查詢紀錄"),
+    ]);
+    const walletHistoryStatus = el("div", { class: "status-line" });
+    const walletHistoryTableWrap = el("div", { class: "table-wrap admin-wallet-history-table" });
+    const walletHistoryTable = el("table", {}, []);
+    walletHistoryTableWrap.append(walletHistoryTable);
+
+    let walletHistoryRows: WalletHistoryRow[] = [];
+
+    function walletHistoryTypeLabel(type: string): string {
+      switch (type) {
+        case "topup":
+          return t("admin.walletHistory.typeTopup", "儲值");
+        case "admin_session_adjust":
+          return t("admin.walletHistory.typeAdjust", "調整可預約次數");
+        case "admin_grant_draw":
+          return t("admin.walletHistory.typeGrant", "贈送輪盤抽獎次數");
+        default:
+          return type || "—";
+      }
+    }
+
+    function formatWalletHistoryWhen(seconds: number | null): string {
+      if (seconds == null) return "—";
+      try {
+        return new Intl.DateTimeFormat(intlLocaleTag(), {
+          timeZone: "Asia/Taipei",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        }).format(new Date(seconds * 1000));
+      } catch {
+        return "—";
+      }
+    }
+
+    function formatWalletHistoryDelta(n: number | null): string {
+      if (n == null) return "—";
+      const sign = n > 0 ? "+" : "";
+      return `${sign}${n}`;
+    }
+
+    function formatWalletHistoryOperator(operatorId: string): string {
+      const id = operatorId.trim();
+      if (!id) return "—";
+      if (id.length <= 12) return id;
+      return `${id.slice(0, 8)}…`;
+    }
+
+    function paintWalletHistoryTable() {
+      walletHistoryTable.replaceChildren();
+      walletHistoryTable.append(
+        el("tr", {}, [
+          el("th", {}, [t("admin.walletHistory.colWhen", "時間")]),
+          el("th", {}, [t("admin.walletHistory.colType", "類型")]),
+          el("th", {}, [t("admin.walletHistory.colAmount", "金額（元）")]),
+          el("th", {}, [t("admin.walletHistory.colSessions", "次數變更")]),
+          el("th", {}, [t("admin.walletHistory.colDraw", "抽獎變更")]),
+          el("th", {}, [t("admin.walletHistory.colNote", "備註")]),
+          el("th", {}, [t("admin.walletHistory.colOperator", "操作者")]),
+        ]),
+      );
+      if (walletHistoryRows.length === 0) {
+        walletHistoryTable.append(
+          el("tr", {}, [
+            el("td", { colSpan: 7, class: "admin-wallet-history__empty" }, [
+              t("admin.walletHistory.empty", "尚無符合條件的紀錄。"),
+            ]),
+          ]),
+        );
+        return;
+      }
+      for (const row of walletHistoryRows) {
+        walletHistoryTable.append(
+          el("tr", {}, [
+            el("td", { class: "mono admin-wallet-history__when" }, [formatWalletHistoryWhen(row.createdAt)]),
+            el("td", {}, [walletHistoryTypeLabel(row.type)]),
+            el("td", { class: "mono" }, [row.type === "topup" && row.amount > 0 ? String(row.amount) : "—"]),
+            el("td", { class: "mono" }, [formatWalletHistoryDelta(row.sessionsDelta)]),
+            el("td", { class: "mono" }, [formatWalletHistoryDelta(row.drawChancesDelta)]),
+            el("td", { class: "admin-wallet-history__note" }, [row.note || "—"]),
+            el("td", { class: "mono", title: row.operatorId || undefined }, [
+              formatWalletHistoryOperator(row.operatorId),
+            ]),
+          ]),
+        );
+      }
+    }
+
+    async function loadWalletHistory() {
+      walletHistoryStatus.textContent = "";
+      walletHistoryStatus.className = "status-line";
+      const customerId = walletHistoryCustomerId.value.trim();
+      if (!customerId) {
+        walletHistoryStatus.textContent = t("admin.topup.needId", "請輸入會員 Email 或 UID。");
+        walletHistoryStatus.classList.add("error");
+        return;
+      }
+      const typeFilter = walletHistoryTypeFilter.value as WalletHistoryTypeFilter;
+      walletHistoryQueryBtn.setAttribute("disabled", "true");
+      walletHistoryStatus.textContent = t("admin.walletHistory.loading", "查詢中…");
+      try {
+        const fn = listWalletTransactionsAdminCall();
+        const res = await fn({
+          customerId,
+          ...(typeFilter ? { typeFilter } : {}),
+          limit: 50,
+          ...localeApiParam(),
+        });
+        const data = res.data as { transactions?: WalletHistoryRow[] };
+        walletHistoryRows = Array.isArray(data.transactions) ? data.transactions : [];
+        paintWalletHistoryTable();
+        walletHistoryStatus.textContent =
+          walletHistoryRows.length > 0
+            ? t("admin.walletHistory.found", "共 {{n}} 筆紀錄。", { n: walletHistoryRows.length })
+            : t("admin.walletHistory.none", "查無紀錄。");
+        walletHistoryStatus.classList.add(walletHistoryRows.length > 0 ? "ok" : "");
+      } catch (e) {
+        walletHistoryRows = [];
+        paintWalletHistoryTable();
+        walletHistoryStatus.textContent = errorMessage(e);
+        walletHistoryStatus.classList.add("error");
+      } finally {
+        walletHistoryQueryBtn.removeAttribute("disabled");
+      }
+    }
+
+    walletHistoryUseOpsMemberBtn.addEventListener("click", () => {
+      const v = topupCustomerId.value.trim();
+      if (!v) {
+        walletHistoryStatus.textContent = t("admin.walletHistory.noOpsMember", "請先在上方填入會員。");
+        walletHistoryStatus.className = "status-line error";
+        return;
+      }
+      walletHistoryCustomerId.value = v;
+      void loadWalletHistory();
+    });
+    walletHistoryQueryBtn.addEventListener("click", () => void loadWalletHistory());
+
+    const walletHistoryCard = el("section", {
+      class: "admin-announce__wallet-segment admin-announce__wallet-segment--history",
+    }, [
+      el("h3", {}, [t("admin.walletHistory.heading", "會員儲值與調整紀錄")]),
+      el("p", { class: "hint" }, [
+        t(
+          "admin.walletHistory.lead",
+          "查詢後台儲值、調整可預約次數與贈送輪盤抽獎次數之稽核紀錄；資料來自 walletTransactions。",
+        ),
+      ]),
+      el("label", { class: "field" }, [
+        t("admin.wallet.memberLabel", "會員（Email 或 UID）"),
+        walletHistoryTypeaheadWrap,
+      ]),
+      el("label", { class: "field" }, [
+        t("admin.walletHistory.typeFilterLabel", "類型篩選"),
+        walletHistoryTypeFilter,
+      ]),
+      el("div", { class: "row-actions admin-wallet-history__actions" }, [
+        walletHistoryUseOpsMemberBtn,
+        walletHistoryQueryBtn,
+      ]),
+      walletHistoryStatus,
+      walletHistoryTableWrap,
+    ]);
+    paintWalletHistoryTable();
+
+    walletTopupSection.append(walletMemberOpsCard, walletHistoryCard);
     const tableHolder = el("div", { class: "table-wrap admin-bookings-table" });
     const table = el("table", {}, []);
     function adminBookingsHeaderRow(): HTMLTableRowElement {

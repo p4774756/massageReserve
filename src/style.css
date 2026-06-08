@@ -657,6 +657,73 @@ main.panel.panel-book--has-notice {
   display: none !important;
 }
 
+.book-service-pause {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 12px;
+  margin: 0 0 14px;
+  padding: 12px 14px 13px;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, #c0392b 45%, var(--border));
+  background: color-mix(in srgb, #c0392b 12%, var(--surface));
+  box-shadow: var(--shadow-sm);
+}
+
+.book-service-pause[hidden] {
+  display: none !important;
+}
+
+.book-service-pause__label {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #a93226;
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, #c0392b 40%, var(--border));
+  background: color-mix(in srgb, #c0392b 10%, var(--surface));
+}
+
+.book-service-pause__body {
+  flex: 1 1 12rem;
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.book-service-pause__resume {
+  flex: 1 0 100%;
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.shell.admin-mode .admin-announce__block--service-pause {
+  border-left: 4px solid color-mix(in srgb, #c0392b 55%, var(--border));
+}
+
+.admin-service-pause__actions {
+  margin-bottom: 4px;
+}
+
+.admin-service-pause__toggle--paused {
+  background: #27ae60;
+  border-color: #1e8449;
+}
+
+.admin-service-pause__toggle--paused:hover {
+  background: #229954;
+}
+
+.admin-service-pause__message {
+  width: 100%;
+  min-height: 3.2rem;
+  resize: vertical;
+}
+
 .site-public-notice__label {
   flex: 0 0 auto;
   font-size: 0.72rem;
@@ -746,6 +813,10 @@ main.panel[hidden] {
   display: grid;
   gap: 22px;
   min-width: 0;
+}
+
+.book-form-top[hidden] {
+  display: none !important;
 }
 
 .book-form-top__aside {
@@ -2431,7 +2502,8 @@ tbody tr:hover td {
 .shell.admin-mode .admin-announce--settings .admin-announce__block--caps,
 .shell.admin-mode .admin-announce--settings .admin-announce__block--blocks,
 .shell.admin-mode .admin-announce--settings .admin-announce__block--pricing,
-.shell.admin-mode .admin-announce--settings .admin-announce__block--rules {
+.shell.admin-mode .admin-announce--settings .admin-announce__block--rules,
+.shell.admin-mode .admin-announce--settings .admin-announce__block--service-pause {
   border-left-color: var(--border);
   background: var(--surface-muted);
 }
@@ -2952,6 +3024,61 @@ tbody tr:hover td {
 
 .admin-announce--wallet .admin-announce__wallet-segment > h4.admin-subhead:first-child {
   margin-top: 0;
+}
+
+.admin-announce__wallet-segment--history {
+  border-left: 4px solid #5a7fa8;
+}
+
+.admin-wallet-history__actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-wallet-history__type-filter {
+  width: 100%;
+  max-width: 100%;
+}
+
+.admin-wallet-history-table {
+  margin-top: 4px;
+}
+
+.admin-wallet-history-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.admin-wallet-history-table th,
+.admin-wallet-history-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.admin-wallet-history-table thead th {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--ink-muted, var(--ink));
+  background: rgb(255 255 255 / 0.45);
+}
+
+.admin-wallet-history__when {
+  white-space: nowrap;
+}
+
+.admin-wallet-history__note {
+  max-width: 220px;
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+.admin-wallet-history__empty {
+  text-align: center;
+  color: var(--ink-muted, var(--ink));
+  padding: 18px 10px !important;
 }
 
 /* 跑馬燈分頁：多區設定，改為分組卡片＋淡色條，避免長篇素底難掃視 */
