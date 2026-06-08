@@ -41,6 +41,7 @@ import { resolveCapOverflowSettingsClient } from "./capOverflow";
 import { bookingModeLabel } from "./bookingDisplay";
 import type { BookingMode } from "./bookingTypes";
 import { refillSlots } from "./bookingSlotSelect";
+import { allStartSlots } from "./slots";
 import { buildBookingSummary } from "./bookingSummary";
 import { el, truncateOneLine } from "./domUtil";
 import { errorMessage } from "./errorUtil";
@@ -109,10 +110,10 @@ function render() {
   const titleDesc = el("p", { class: "page-head-subtitle" });
   const visitorStats = createVisitorStatsLine(tabFromPath() !== "admin");
   const visitorStatsLine = visitorStats.element;
-  const titleTextCol = el("div", { class: "page-head-text" }, [
-    titleDesc,
-    visitorStatsLine,
-  ]);
+  const pageHeroBg = el("div", { class: "page-hero__bg" });
+  pageHeroBg.setAttribute("aria-hidden", "true");
+  const pageHeroScrim = el("div", { class: "page-hero__scrim" });
+  pageHeroScrim.setAttribute("aria-hidden", "true");
 
   const memberLoginBtn = el("button", { class: "ghost member-entry member-login", type: "button" }, [
     t("member.entryLogin", "會員登入"),
@@ -145,7 +146,10 @@ function render() {
   const headToolbarAside = el("div", { class: "head-toolbar-aside" }, [headSession]);
   /** 標題與會員同一列；極窄寬時工具列可換行 */
   const pageHeadTopRow = el("div", { class: "page-head-top-row" }, [titleHeading, headToolbarAside]);
-  const pageHeadBody = el("div", { class: "page-head-body" }, [pageHeadTopRow, titleTextCol]);
+  const pageHeroInner = el("div", { class: "page-hero__inner" }, [pageHeadTopRow, titleDesc]);
+  const pageHero = el("div", { class: "page-hero" }, [pageHeroBg, pageHeroScrim, pageHeroInner]);
+  const titleTextCol = el("div", { class: "page-head-text" }, [visitorStatsLine]);
+  const pageHeadBody = el("div", { class: "page-head-body" }, [pageHero, titleTextCol]);
 
   const panelBook = el("main", { class: "panel panel-book" });
   const panelAdmin = el("main", { class: "panel", hidden: true });
@@ -211,6 +215,13 @@ function render() {
     bookPickCalGrid,
     bookPickCalHoverTip,
   ]);
+  const bookDateStatus = el("div", {
+    class: "book-date-status status-line schedule-status",
+    id: "book-date-status",
+    role: "status",
+    ariaLive: "polite",
+    hidden: true,
+  });
   function syncDateFieldLabelText(): void {
     dateLabelSpan.textContent = t("field.date", "日期（週一至週五）");
     dateCalendarHint.textContent = t(
@@ -448,6 +459,20 @@ function render() {
     parent.append(badge);
   }
 
+  function syncBookingPickCalendarSelection(selected: string): void {
+    for (const node of bookPickCalGrid.querySelectorAll<HTMLElement>("[data-date-key]")) {
+      const dk = node.dataset.dateKey ?? "";
+      node.classList.toggle("book-pick-calendar__day--selected", dk === selected);
+    }
+  }
+
+  function refreshBookingPickCalDayBadge(dk: string): void {
+    const dayEl = bookPickCalGrid.querySelector<HTMLElement>(`[data-date-key="${dk}"]`);
+    if (!dayEl) return;
+    dayEl.querySelector(".book-pick-calendar__badge")?.remove();
+    appendBookingPickCalDayBadge(dayEl, dk);
+  }
+
   function mergeBookingPickCalDayCount(dk: string, count: number): void {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dk)) return;
     const n = Math.trunc(count);
@@ -613,6 +638,7 @@ function render() {
 
       if (!canPick) {
         const inactive = el("div", { class: "book-pick-calendar__day book-pick-calendar__day--inactive" });
+        inactive.dataset.dateKey = dk;
         inactive.append(el("span", { class: "book-pick-calendar__day-num" }, [String(dayNum)]));
         appendBookingPickCalDayBadge(inactive, dk);
         if (dk === todayK) inactive.classList.add("book-pick-calendar__day--today");
@@ -624,6 +650,7 @@ function render() {
       }
 
       const btn = el("button", { type: "button", class: "book-pick-calendar__day" });
+      btn.dataset.dateKey = dk;
       if (dk === selected) btn.classList.add("book-pick-calendar__day--selected");
       if (dk === todayK) btn.classList.add("book-pick-calendar__day--today");
       btn.append(el("span", { class: "book-pick-calendar__day-num" }, [String(dayNum)]));
@@ -638,7 +665,7 @@ function render() {
         hideBookPickCalHoverTip();
         bumpBookPickCalHoverCooldown();
         dateInput.value = dk;
-        paintBookingPickCalendar();
+        syncBookingPickCalendarSelection(dk);
         void refreshAvailability();
         if (showTipOnSelect) {
           requestAnimationFrame(() => {
@@ -700,6 +727,13 @@ function render() {
   ) {
     refillSlots({ slotSelect }, taken, disabled, selectedDateKey, blockedReasonBySlot);
   }
+
+  function showSlotSelectLoading(): void {
+    slotSelect.replaceChildren(
+      el("option", { value: "" }, [t("booking.slotsLoading", "正在載入可預約時段…")]),
+    );
+    slotSelect.disabled = true;
+  }
   const noteInput = el("textarea", { maxLength: 500 });
   const bookingModeSelect = el("select", { id: "booking-mode-select" }, []);
   /** 未驗證會員時覆蓋於 select 上，避免部分瀏覽器仍會開啟原生下拉 */
@@ -731,7 +765,7 @@ function render() {
   }
   bookingModeSelect.addEventListener("change", () => syncBookingPaymentQrPanel());
   const submitBtn = el("button", { class: "primary", type: "button" }, [t("booking.submit", "送出預約")]);
-  /** 選日期／載入空檔與名額相關提示，緊接在時段選擇下方，避免訊息落在頁面底部 */
+  /** 空檔／名額相關提示，緊接在時段下拉下方（不在名額 pills 上方，避免選日期時版面跳動） */
   const scheduleStatus = el("div", {
     class: "status-line schedule-status",
     role: "status",
@@ -754,10 +788,9 @@ function render() {
       slotSelect,
     ]),
   ]);
-  const slotStepSection = el("div", { class: "book-step book-step--slots" }, [slotFieldWrap]);
+  const slotStepSection = el("div", { class: "book-step book-step--slots" }, [slotFieldWrap, scheduleStatus]);
   const bookFooterNote = el("div", { class: "footer-note" });
   const bookFormTopAside = el("div", { class: "book-form-top__aside" }, [
-    scheduleStatus,
     meta,
     bookingPeersHint,
     bookFooterNote,
@@ -1232,7 +1265,9 @@ function render() {
     const dialog = el("div", { class: "modal-card member-modal" });
     dialog.setAttribute("role", "dialog");
     dialog.setAttribute("aria-modal", "true");
-    const closeBtn = el("button", { class: "ghost", type: "button" }, [t("modal.close", "關閉")]);
+    const closeBtn = el("button", { class: "ghost member-modal__close", type: "button" }, [
+      t("modal.close", "關閉"),
+    ]);
     const dismissOverlay = () => {
       parkMemberHubGames();
       memberModalWalletMirror = null;
@@ -1241,7 +1276,10 @@ function render() {
     closeBtn.addEventListener("click", dismissOverlay);
     if (user.isAnonymous) {
       dialog.append(
-        el("h3", {}, [t("member.center", "會員中心")]),
+        el("div", { class: "member-modal__head" }, [
+          el("h3", {}, [t("member.center", "會員中心")]),
+          closeBtn,
+        ]),
         el("div", { class: "hint" }, [
           t(
             "member.anonymousIntro",
@@ -1249,7 +1287,6 @@ function render() {
           ),
         ]),
         el("div", { class: "hint mono" }, [`${t("member.anonymousUid", "匿名身分 UID：")}${shortUidForDisplay(user.uid)}`]),
-        el("div", { class: "modal-actions" }, [closeBtn]),
       );
       overlay.addEventListener("click", (ev) => {
         if (ev.target === overlay) dismissOverlay();
@@ -1259,7 +1296,10 @@ function render() {
       return;
     }
     const modalBody: HTMLElement[] = [
-      el("h3", {}, [t("member.center", "會員中心")]),
+      el("div", { class: "member-modal__head" }, [
+        el("h3", {}, [t("member.center", "會員中心")]),
+        closeBtn,
+      ]),
       el("div", { class: "hint" }, [
         t("member.signedInAs", "目前登入：{{email}}（UID：{{uid}}）", {
           email: user.email ?? t("member.noEmail", "（無 Email）"),
@@ -1332,7 +1372,6 @@ function render() {
       modalMain.append(gamesShell);
     }
     modalBody.push(modalMain);
-    modalBody.push(el("div", { class: "modal-actions" }, [closeBtn]));
     dialog.append(...modalBody);
     void refreshWalletStatus();
 
@@ -1690,7 +1729,7 @@ function render() {
 
   /** 當日／本工作週名額已滿時後端會停用所有時段；隱藏時段選單以免以為還能選時間 */
   let bookingCapacityBlocksSlots = false;
-  /** 查詢空檔中：隱藏整段開始時間 UI，避免長下拉或舊資料閃現 */
+  /** 查詢空檔中：暫停時段選單操作，版面維持不隱藏以免閃爍 */
   let bookingAvailabilityLoading = false;
   /** 後台一鍵暫停新預約 */
   let bookingServicePaused = false;
@@ -1750,10 +1789,9 @@ function render() {
     const hideStartTimeRow =
       !showSlotFields ||
       bookingCapacityBlocksSlots ||
-      bookingAvailabilityLoading ||
       (showSlotFields && !bookingAvailabilityLoading && !pickable);
 
-    slotStepSection.hidden = dk === "" || bookingServicePaused;
+    slotStepSection.hidden = dk === "" || bookingServicePaused || hideStartTimeRow;
     bookFormTopAside.hidden = dk === "" || bookingServicePaused;
     slotFieldWrap.hidden = hideStartTimeRow || bookingServicePaused;
 
@@ -1820,21 +1858,53 @@ function render() {
     }
   }
 
+  function setScheduleFeedback(text: string, variant: "" | "error" | "ok" = ""): void {
+    const hasText = text.length > 0;
+    scheduleStatus.textContent = text;
+    scheduleStatus.className = variant
+      ? `status-line schedule-status ${variant}`
+      : "status-line schedule-status";
+    scheduleStatus.hidden = hasText;
+    bookDateStatus.textContent = text;
+    bookDateStatus.className = variant
+      ? `book-date-status status-line schedule-status ${variant}`
+      : "book-date-status status-line schedule-status";
+    bookDateStatus.hidden = !hasText;
+    dateInput.setAttribute(
+      "aria-describedby",
+      hasText ? "book-date-calendar-hint book-date-status" : "book-date-calendar-hint",
+    );
+  }
+
+  function noPickableSlotMessage(
+    dk: string,
+    taken: Set<string>,
+    blockedMap: Map<string, string>,
+  ): string {
+    if (dk === taipeiTodayDateKey()) {
+      const allPast = allStartSlots().every(
+        (s) => taken.has(s) || blockedMap.has(s) || isStartSlotInPastForTaipeiToday(dk, s),
+      );
+      if (allPast) {
+        return t(
+          "booking.noPickableSlotTodayPast",
+          "今日可預約時段均已過，請選擇其他日期。",
+        );
+      }
+    }
+    return t("booking.noPickableSlot", "當日已無可選的開始時間。");
+  }
+
   async function refreshAvailability() {
     try {
       bookingCapacityBlocksSlots = false;
       bookingCapOverflowOffer = false;
-      bookingAvailabilityLoading = false;
-      meta.innerHTML = "";
-      bookingPeersHint.replaceChildren();
-      bookingPeersHint.hidden = true;
 
       if (bookingServicePaused) {
         bookingCapacityBlocksSlots = true;
         const dk = dateInput.value;
         runRefillSlots(new Set(), true, dk, new Map());
-        scheduleStatus.textContent = bookingServicePauseMessage;
-        scheduleStatus.className = "status-line schedule-status error";
+        setScheduleFeedback(bookingServicePauseMessage, "error");
         syncBookingStepVisibility();
         paintBookingPickCalendar();
         return;
@@ -1847,11 +1917,10 @@ function render() {
       if (dk && !dateAllowedForCurrentBookingMode(dk)) {
         dateInput.value = "";
         dk = "";
-        scheduleStatus.textContent = t(
-          "booking.dateClearedWrongWeekday",
-          "此日期非週一至週五，已清除。",
+        setScheduleFeedback(
+          t("booking.dateClearedWrongWeekday", "此日期非週一至週五，已清除。"),
+          "error",
         );
-        scheduleStatus.className = "status-line schedule-status error";
         runRefillSlots(new Set(), true, "", new Map());
         syncBookingStepVisibility();
         syncBookingPickCalendarCursorFromValue();
@@ -1859,8 +1928,7 @@ function render() {
         return;
       }
 
-      scheduleStatus.textContent = "";
-      scheduleStatus.className = "status-line schedule-status";
+      setScheduleFeedback("");
 
       if (!dk) {
         runRefillSlots(new Set(), true, "", new Map());
@@ -1870,8 +1938,7 @@ function render() {
 
       if (dk < minKey) {
         runRefillSlots(new Set(), true, "", new Map());
-        scheduleStatus.textContent = t("booking.datePast", "不可選擇今天以前的日期。");
-        scheduleStatus.classList.add("error");
+        setScheduleFeedback(t("booking.datePast", "不可選擇今天以前的日期。"), "error");
         dateInput.value = "";
         syncBookingPickCalendarCursorFromValue();
         paintBookingPickCalendar();
@@ -1880,8 +1947,7 @@ function render() {
 
       if (dk > maxKey) {
         runRefillSlots(new Set(), true, "", new Map());
-        scheduleStatus.textContent = t("booking.dateBeyond", "僅能預約至下週日為止。");
-        scheduleStatus.classList.add("error");
+        setScheduleFeedback(t("booking.dateBeyond", "僅能預約至下週日為止。"), "error");
         dateInput.value = "";
         syncBookingPickCalendarCursorFromValue();
         paintBookingPickCalendar();
@@ -1890,8 +1956,8 @@ function render() {
 
       try {
         bookingAvailabilityLoading = true;
-        scheduleStatus.textContent = t("booking.slotsLoading", "正在載入可預約時段…");
-        scheduleStatus.className = "status-line schedule-status";
+        setScheduleFeedback("");
+        showSlotSelectLoading();
         syncBookingStepVisibility();
         const fn = getAvailabilityCall();
         const res = await fn({
@@ -1927,7 +1993,7 @@ function render() {
         bookingCapOverflowOffer = capFull && capOverflowEnabledSetting;
         mergeBookingPickCalDayCount(dk, data.dayCount);
         mergeBookingPickCalDayPeers(dk, daySlotLinesFromAvailability(data));
-        paintBookingPickCalendar();
+        refreshBookingPickCalDayBadge(dk);
         const blocked = capFull && !bookingCapOverflowOffer;
         bookingCapacityBlocksSlots = blocked;
         const blockedMap = new Map<string, string>();
@@ -1988,29 +2054,28 @@ function render() {
           const parts: string[] = [];
           if (dayFull) parts.push(t("booking.dayFullShort", "當日名額已滿"));
           if (weekFull) parts.push(t("booking.weekFullShort", "本工作週名額已滿"));
-          scheduleStatus.textContent = t(
-            "booking.capOverflowOffer",
-            "{{caps}}。可選時段後以「加價現金」再預約一張（加價 {{surcharge}} 元／張 ＋ 按摩費 {{price}} 元）。",
-            {
-              caps: parts.join("；"),
-              surcharge: capOverflowSurchargeNtdSetting,
-              price: sessionPriceNtdSetting,
-            },
+          setScheduleFeedback(
+            t(
+              "booking.capOverflowOffer",
+              "{{caps}}。可選時段後以「加價現金」再預約一張（加價 {{surcharge}} 元／張 ＋ 按摩費 {{price}} 元）。",
+              {
+                caps: parts.join("；"),
+                surcharge: capOverflowSurchargeNtdSetting,
+                price: sessionPriceNtdSetting,
+              },
+            ),
+            "ok",
           );
-          scheduleStatus.className = "status-line schedule-status ok";
         } else if (dayFull) {
-          scheduleStatus.textContent = t("booking.dayFull", "這一天已額滿。");
-          scheduleStatus.classList.add("error");
+          setScheduleFeedback(t("booking.dayFull", "這一天已額滿。"), "error");
         } else if (weekFull) {
-          scheduleStatus.textContent = t("booking.weekFull", "本工作週已達上限。");
-          scheduleStatus.classList.add("error");
+          setScheduleFeedback(t("booking.weekFull", "本工作週已達上限。"), "error");
         } else {
-          scheduleStatus.textContent = "";
-          scheduleStatus.className = "status-line schedule-status";
           const hasPickable = Array.from(slotSelect.options).some((o) => o.value !== "" && !o.disabled);
           if (!hasPickable) {
-            scheduleStatus.textContent = t("booking.noPickableSlot", "當日已無可選的開始時間。");
-            scheduleStatus.classList.add("error");
+            setScheduleFeedback(noPickableSlotMessage(dk, taken, blockedMap), "error");
+          } else {
+            setScheduleFeedback("");
           }
         }
       } catch (e) {
@@ -2025,14 +2090,12 @@ function render() {
         if (detail && detail !== genericErr) {
           msg = t("booking.loadSlotsFailWithDetail", "{{base}} 詳情：{{detail}}", { base, detail });
         }
-        scheduleStatus.textContent = msg;
-        scheduleStatus.classList.add("error");
+        setScheduleFeedback(msg, "error");
       } finally {
         bookingAvailabilityLoading = false;
       }
     } finally {
       syncBookingStepVisibility();
-      paintBookingPickCalendar();
     }
   }
 
@@ -2269,6 +2332,7 @@ function render() {
       dateLabelSpan,
       dateCalendarHint,
       bookPickCalendar,
+      bookDateStatus,
       dateInput,
     ]),
     bookFormTopAside,

@@ -1,43 +1,44 @@
 :root {
-  color-scheme: light;
-  /* 痞客邦風：橘白色系、現代無襯線、圓角卡片 */
-  --accent-rgb: 252 91 20;
-  --accent: #FC5B14;
-  --accent-bright: #FF7A3D;
-  --accent-deep: #D94A0E;
-  --accent-hover: #E5520F;
-  --accent-soft: #FFF4ED;
-  --accent-muted-bg: #FFFAF7;
+  color-scheme: dark;
+  /* Sōl Spa 深色：炭黑底、暖金主色、鼠尾草輔色 */
+  --accent-rgb: 201 160 126;
+  --accent: #C9A07E;
+  --accent-bright: #E0C4A0;
+  --accent-deep: #E8D4B8;
+  --accent-hover: #D4B08E;
+  --accent-soft: #2A241E;
+  --accent-muted-bg: #1E1B17;
 
-  --bg: #ebe4dc;
-  --bg-warm: #faf5ef;
-  --panel-bg: #fff8f2;
-  --surface: #ffffff;
-  --surface-elevated: #ffffff;
-  --surface-muted: #f3ece4;
-  --zone-book: color-mix(in srgb, var(--accent-soft) 72%, var(--surface));
-  --zone-slots: color-mix(in srgb, var(--accent-2) 9%, var(--surface));
-  --zone-finalize: color-mix(in srgb, var(--accent-soft) 48%, var(--surface));
-  --zone-member: color-mix(in srgb, var(--accent-2) 11%, var(--surface));
+  --bg: #12100E;
+  --bg-warm: #1A1714;
+  --panel-bg: #1C1916;
+  --surface: #22201C;
+  --surface-elevated: #2A2620;
+  --surface-muted: #181614;
+  --zone-book: color-mix(in srgb, var(--accent-soft) 55%, var(--surface));
+  --zone-slots: color-mix(in srgb, var(--accent-2) 10%, var(--surface));
+  --zone-finalize: color-mix(in srgb, var(--accent-soft) 38%, var(--surface));
+  --zone-member: color-mix(in srgb, var(--accent-2) 12%, var(--surface));
   --zone-my-bookings: color-mix(in srgb, var(--accent-2) 10%, var(--surface));
-  --ink: #1a1a1a;
-  --muted: #6b7280;
-  --accent-2: #0ea5e9;
-  --border: #e5e7eb;
-  --border-strong: #d1d5db;
-  --danger: #dc2626;
-  --radius: 8px;
-  --radius-sm: 4px;
-  --radius-lg: 12px;
-  --shadow: 0 1px 3px rgb(0 0 0 / 0.08);
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
-  --shadow-lg: 0 4px 12px rgb(0 0 0 / 0.1);
+  --ink: #FAF6F0;
+  --muted: #C8C0B6;
+  --accent-2: #8FA68A;
+  --border: #3A342C;
+  --border-strong: #504840;
+  --danger: #FF8A8A;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-lg: 20px;
+  --shadow: 0 4px 16px rgb(0 0 0 / 0.28);
+  --shadow-sm: 0 2px 8px rgb(0 0 0 / 0.22);
+  --shadow-lg: 0 12px 40px rgb(0 0 0 / 0.38);
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
-  --font: "Noto Sans TC", "PingFang TC", -apple-system, "Segoe UI", sans-serif;
-  --font-head: "Noto Sans TC", "PingFang TC", -apple-system, sans-serif;
-  --link: #FC5B14;
-  --link-visited: #D94A0E;
-  --section-gap: 24px;
+  --font: "DM Sans", "Noto Sans TC", "PingFang TC", -apple-system, sans-serif;
+  --font-head: "Cormorant Garamond", "Noto Serif TC", "Songti TC", serif;
+  --link: #C9A07E;
+  --link-visited: #A88468;
+  --section-gap: 28px;
+  --hero-image: url("/media/spa-hero-dark.jpg");
   font-family: var(--font);
 }
 
@@ -51,15 +52,13 @@ body {
   margin: 0;
   min-height: 100vh;
   background-color: var(--bg);
-  background-image: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--accent-soft) 35%, var(--bg)) 0%,
-    var(--bg) 38%,
-    color-mix(in srgb, var(--accent-2) 8%, var(--bg)) 100%
-  );
+  background-image:
+    radial-gradient(ellipse 100% 70% at 50% -10%, rgb(201 160 126 / 0.08), transparent 55%),
+    radial-gradient(ellipse 80% 50% at 100% 100%, rgb(143 166 138 / 0.06), transparent 50%),
+    linear-gradient(180deg, #161412 0%, var(--bg) 100%);
   color: var(--ink);
-  line-height: 1.6;
-  -webkit-font-smoothing: auto;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
 }
 
 ::selection {
@@ -84,10 +83,10 @@ a:hover {
 #app {
   position: relative;
   z-index: 1;
-  max-width: 720px;
+  max-width: 920px;
   margin: 0 auto;
-  padding: 32px 20px 56px;
-  /* 頁首三欄改以容器寬度判斷（#app 最寬 720px），避免僅視窗小於 900px 時永遠顯示窄版 */
+  padding: 32px 20px 64px;
+  /* 頁首三欄改以容器寬度判斷（#app 最寬 920px），避免僅視窗小於 900px 時永遠顯示窄版 */
   container-type: inline-size;
   container-name: app;
 }
@@ -113,28 +112,27 @@ a:hover {
 
 /* 前台預約：分區上色，避免整頁一片白 */
 .shell:not(.admin-mode) {
-  border-color: var(--border);
-  box-shadow:
-    var(--shadow-lg),
-    0 0 0 1px color-mix(in srgb, var(--accent) 8%, transparent);
+  border-color: color-mix(in srgb, var(--border) 88%, var(--accent-soft));
+  box-shadow: var(--shadow-lg);
 }
 
 .shell:not(.admin-mode) header.page-head {
-  background: linear-gradient(
-    165deg,
-    color-mix(in srgb, var(--accent-soft) 92%, #fff) 0%,
-    #ffffff 52%,
-    color-mix(in srgb, var(--accent-2) 7%, #fff) 100%
-  );
+  background: var(--surface-muted);
   border-bottom: 1px solid var(--border);
-  box-shadow: inset 0 3px 0 var(--accent);
+  box-shadow: none;
+  padding: 0;
+}
+
+.shell:not(.admin-mode) .page-head-body {
+  gap: 0;
 }
 
 .shell:not(.admin-mode) .page-head-text {
-  padding: 12px 14px;
-  border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--accent-soft) 58%, var(--surface));
-  border: 1px solid var(--border);
+  padding: 14px 22px 18px;
+  border-radius: 0;
+  background: var(--surface-muted);
+  border: none;
+  border-bottom: 1px solid var(--border);
 }
 
 .shell:not(.admin-mode) main.panel.panel-book {
@@ -143,21 +141,21 @@ a:hover {
 
 .shell:not(.admin-mode) .book-tabs {
   margin: -6px -22px 0;
-  padding: 10px 24px 0;
-  background: color-mix(in srgb, var(--surface-muted) 72%, var(--accent-soft));
-  border-bottom: 2px solid var(--border);
+  padding: 12px 24px 0;
+  background: transparent;
+  border-bottom: 1px solid var(--border);
 }
 
 .shell:not(.admin-mode) .book-tab[aria-selected="true"] {
-  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  padding-left: 10px;
-  padding-right: 10px;
-  margin-bottom: -2px;
+  background: transparent;
+  border-radius: 0;
+  padding-left: 4px;
+  padding-right: 4px;
+  margin-bottom: 0;
 }
 
 .shell:not(.admin-mode) .app-version-footer {
-  background: color-mix(in srgb, var(--surface-muted) 80%, var(--accent-soft));
+  background: color-mix(in srgb, var(--surface-muted) 65%, var(--accent-soft));
   border-top-color: var(--border);
 }
 
@@ -181,6 +179,142 @@ header.page-head {
   align-items: stretch;
   gap: 14px;
   background: var(--surface);
+}
+
+/* 前台大圖 hero */
+.page-hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: clamp(220px, 42vw, 380px);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.page-hero__bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    var(--hero-image) center / cover no-repeat,
+    linear-gradient(135deg, #2a2218 0%, #14100c 100%);
+}
+
+.page-hero__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(180deg, rgb(8 6 4 / 0.5) 0%, rgb(8 6 4 / 0.22) 32%, rgb(8 6 4 / 0.88) 100%),
+    linear-gradient(90deg, rgb(8 6 4 / 0.72) 0%, rgb(8 6 4 / 0.28) 62%, transparent 100%);
+  pointer-events: none;
+}
+
+.page-hero__inner {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px 22px 24px;
+}
+
+.page-hero__inner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(
+    0deg,
+    rgb(10 8 6 / 0.78) 0%,
+    rgb(10 8 6 / 0.42) 52%,
+    rgb(10 8 6 / 0.12) 100%
+  );
+  pointer-events: none;
+}
+
+.shell:not(.admin-mode) .page-hero__inner .page-head-top-row {
+  align-items: flex-start;
+}
+
+.shell:not(.admin-mode) .page-hero .page-head-top-row h1 {
+  font-family: var(--font);
+  font-weight: 700;
+  color: #ffffff;
+  text-shadow:
+    0 1px 2px rgb(0 0 0 / 0.85),
+    0 4px 20px rgb(0 0 0 / 0.55);
+}
+
+.shell:not(.admin-mode) .page-hero .page-head-subtitle {
+  margin: 0;
+  max-width: 42ch;
+  font-family: var(--font);
+  color: #f5f0e8;
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.65;
+  text-shadow:
+    0 1px 2px rgb(0 0 0 / 0.8),
+    0 2px 12px rgb(0 0 0 / 0.45);
+}
+
+.shell:not(.admin-mode) .page-hero .page-head-subtitle__price {
+  font-family: var(--font);
+  color: #f5d9b0;
+  font-weight: 800;
+}
+
+.shell:not(.admin-mode) .page-hero .page-head-subtitle__price-num {
+  font-size: 1.55rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.shell:not(.admin-mode) .page-hero .page-head-session {
+  color: #f0ebe4;
+  font-weight: 500;
+  text-shadow: 0 1px 4px rgb(0 0 0 / 0.65);
+}
+
+.shell:not(.admin-mode) .page-hero .page-head-session--pending {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.shell:not(.admin-mode) .page-hero .member-entry,
+.shell:not(.admin-mode) .page-hero button.ghost {
+  border-color: rgb(255 255 255 / 0.42);
+  background: rgb(8 6 4 / 0.55);
+  color: #ffffff;
+  font-weight: 600;
+  backdrop-filter: blur(8px);
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.5);
+}
+
+.shell:not(.admin-mode) .page-hero .member-entry:hover,
+.shell:not(.admin-mode) .page-hero button.ghost:hover:not(:disabled) {
+  background: rgb(8 6 4 / 0.45);
+  border-color: rgb(201 160 126 / 0.65);
+  color: #fff;
+}
+
+.shell.admin-mode .page-hero {
+  min-height: 0;
+}
+
+.shell.admin-mode .page-hero__bg,
+.shell.admin-mode .page-hero__scrim {
+  display: none;
+}
+
+.shell.admin-mode .page-hero__inner {
+  padding: 0;
+}
+
+.shell.admin-mode header.page-head {
+  padding: 18px 20px 20px;
 }
 
 /* 標題與語系／會員同一列；h1 佔左側可伸縮空間，工具列靠右 */
@@ -318,10 +452,10 @@ header.page-head {
 
 .page-head h1 {
   font-family: var(--font-head);
-  font-size: 1.5rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  line-height: 1.35;
+  font-size: clamp(1.75rem, 4.5vw, 2.15rem);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.25;
   color: var(--ink);
   text-shadow: none;
 }
@@ -407,12 +541,12 @@ header.page-head {
   display: inline-block;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: var(--wretch-accent);
-  padding: 0 4px;
+  color: #f5d9b0;
+  padding: 0 5px;
   margin: 0 1px;
   border-radius: var(--radius-sm);
-  background: var(--accent-soft);
-  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 28%, var(--surface-elevated));
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
   box-shadow: none;
 }
 
@@ -579,12 +713,12 @@ header.page-head {
   cursor: pointer;
   color: var(--muted);
   font: inherit;
-  font-weight: 500;
+  font-weight: 600;
   transition: color 0.12s var(--ease), border-color 0.12s var(--ease);
 }
 
 .tab[aria-selected="true"] {
-  color: var(--accent);
+  color: var(--accent-bright);
   font-weight: 700;
   border-bottom-color: var(--accent);
 }
@@ -880,7 +1014,7 @@ main.panel[hidden] {
   }
 
   .book-form-top__aside .pill__label {
-    font-size: 0.78rem;
+    font-size: 0.8rem;
     font-weight: 600;
     color: var(--muted);
     line-height: 1.35;
@@ -895,9 +1029,9 @@ main.panel[hidden] {
   }
 
   .book-form-top__aside .pill__tag {
-    font-size: 0.76rem;
+    font-size: 0.78rem;
     font-weight: 700;
-    color: var(--accent-deep);
+    color: var(--accent-bright);
     line-height: 1.3;
   }
 }
@@ -907,6 +1041,7 @@ main.panel[hidden] {
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+  min-height: 5.5rem;
   padding: 16px;
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
@@ -1016,6 +1151,23 @@ main.panel[hidden] {
 
 .book-date-calendar-hint {
   margin-top: 8px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.book-date-status {
+  margin: 10px 0 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.55;
+}
+
+.book-date-status.error {
+  color: var(--danger);
+}
+
+.book-date-status.ok {
+  color: var(--accent-bright);
 }
 
 .book-pick-calendar {
@@ -1084,9 +1236,9 @@ main.panel[hidden] {
 .book-pick-calendar__month-label {
   flex: 1 1 8rem;
   text-align: center;
-  font-family: var(--font-head);
+  font-family: var(--font);
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: 1rem;
   color: var(--ink);
   min-width: 0;
 }
@@ -1121,8 +1273,8 @@ main.panel[hidden] {
 
 .book-pick-calendar__row--head .book-pick-calendar__wd {
   text-align: center;
-  font-size: 0.72rem;
-  font-weight: 600;
+  font-size: 0.74rem;
+  font-weight: 700;
   color: var(--muted);
   padding: 4px 2px;
 }
@@ -1201,8 +1353,9 @@ main.panel[hidden] {
 .book-pick-calendar__day--inactive {
   cursor: default;
   pointer-events: none;
-  opacity: 0.42;
-  background: rgb(0 0 0 / 0.04);
+  opacity: 0.58;
+  color: var(--muted);
+  background: rgb(255 255 255 / 0.03);
 }
 
 .book-pick-calendar__day--inactive.book-pick-calendar__day--selected {
@@ -1262,8 +1415,8 @@ label.field {
   display: grid;
   gap: 8px;
   align-content: start;
-  font-weight: 500;
-  font-size: 0.875rem;
+  font-weight: 600;
+  font-size: 0.9rem;
   letter-spacing: 0;
   color: var(--ink);
   min-width: 0;
@@ -1293,7 +1446,7 @@ button.password-reveal-btn {
 .hint {
   font-weight: 500;
   color: var(--muted);
-  font-size: 0.84rem;
+  font-size: 0.86rem;
   line-height: 1.55;
 }
 
@@ -1307,10 +1460,11 @@ textarea {
   width: 100%;
   padding: 11px 12px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-elevated);
   color: var(--ink);
   font: inherit;
+  font-weight: 500;
   transition: border-color 0.12s var(--ease), box-shadow 0.12s var(--ease);
 }
 
@@ -1371,9 +1525,9 @@ input:focus-visible,
 select:focus-visible:not(:disabled),
 textarea:focus-visible {
   outline: none;
-  border-color: var(--ink);
-  box-shadow: 0 0 0 1px var(--ink);
-  background: var(--surface);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgb(var(--accent-rgb) / 0.22);
+  background: var(--surface-elevated);
 }
 
 .row-actions {
@@ -1389,15 +1543,15 @@ button.primary {
   border: none;
   background: var(--accent);
   color: #ffffff;
-  padding: 10px 16px;
+  padding: 11px 20px;
   border-radius: var(--radius);
   font: inherit;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   cursor: pointer;
   box-shadow: var(--shadow-sm);
   text-shadow: none;
-  transition: filter 0.1s var(--ease), background 0.1s var(--ease);
+  transition: filter 0.15s var(--ease), background 0.15s var(--ease), box-shadow 0.15s var(--ease);
 }
 
 button.primary:hover:not(:disabled) {
@@ -1455,13 +1609,15 @@ button.ghost:disabled {
 
 .status-line {
   min-height: 24px;
-  font-size: 0.91rem;
+  font-size: 0.93rem;
+  font-weight: 500;
   color: var(--muted);
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
 .status-line.error {
   color: var(--danger);
+  font-weight: 600;
 }
 
 .status-line.ok {
@@ -1482,12 +1638,24 @@ button.ghost:disabled {
   margin-top: 4px;
 }
 
+.book-step--slots .schedule-status:not(:empty) {
+  margin-top: 6px;
+  padding-left: 2px;
+}
+
 .meta-pills {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 0;
   align-items: baseline;
+  min-height: 2.75rem;
+}
+
+@media (min-width: 720px) {
+  .book-form-top__aside .meta-pills {
+    min-height: 5.75rem;
+  }
 }
 
 .book-member-extras[hidden] {
@@ -1541,9 +1709,9 @@ button.ghost:disabled {
   border: 1px solid var(--border);
   background: linear-gradient(
     155deg,
-    color-mix(in srgb, var(--accent-soft) 88%, #fff) 0%,
+    color-mix(in srgb, var(--accent-soft) 88%, var(--surface)) 0%,
     var(--surface) 46%,
-    color-mix(in srgb, var(--accent-2) 6%, #fff) 100%
+    color-mix(in srgb, var(--accent-2) 6%, var(--surface)) 100%
   );
   box-shadow:
     var(--shadow-sm),
@@ -1987,9 +2155,9 @@ button.ghost:disabled {
   padding: 6px 11px;
   border-radius: var(--radius);
   border: 1px solid var(--border-strong);
-  background: var(--surface);
-  font-size: 0.84rem;
-  color: var(--muted);
+  background: var(--surface-elevated);
+  font-size: 0.86rem;
+  color: var(--ink);
 }
 
 .pill__label,
@@ -3605,8 +3773,9 @@ label.field.checkbox-field {
   padding-top: 22px;
   border-top: 1px solid var(--border);
   color: var(--muted);
-  font-size: 0.87rem;
-  line-height: 1.58;
+  font-size: 0.9rem;
+  font-weight: 500;
+  line-height: 1.65;
 }
 
 .modal-overlay {
@@ -3643,6 +3812,25 @@ label.field.checkbox-field {
 
 .member-modal {
   width: min(420px, 100%);
+}
+
+.member-modal__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.member-modal__head h3 {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-right: 4px;
+}
+
+.member-modal__close {
+  flex: 0 0 auto;
+  margin: -2px -4px 0 0;
+  padding: 8px 12px;
 }
 
 .member-modal--hub {
@@ -6081,31 +6269,34 @@ body.wheel-spectacle-lock {
 }
 
 /* -------------------------------------------------------------------------- */
-/* 前台：無名小站粉系（後台主色見下方 .shell.admin-mode，Yahoo 奇摩紫）       */
+/* 前台：Sōl Spa 靜謐奢華（後台主色見下方 .shell.admin-mode，Yahoo 奇摩紫） */
 /* -------------------------------------------------------------------------- */
 
-html.kuso-retro body {
+html.sol-spa body {
   background-color: var(--bg);
-  background-image: none;
+  background-image:
+    radial-gradient(ellipse 100% 70% at 50% -10%, rgb(201 160 126 / 0.08), transparent 55%),
+    radial-gradient(ellipse 80% 50% at 100% 100%, rgb(143 166 138 / 0.06), transparent 50%),
+    linear-gradient(180deg, #161412 0%, var(--bg) 100%);
   color: var(--ink);
 }
 
-html.kuso-retro body::before {
+html.sol-spa body::before {
   opacity: 0;
   visibility: hidden;
 }
 
-html.kuso-retro #app {
+html.sol-spa #app {
   position: relative;
   border: none;
   border-radius: 0;
-  padding: 32px 20px 56px;
+  padding: 32px 20px 64px;
   background: transparent;
   box-shadow: none;
 }
 
-html.kuso-retro #app::before,
-html.kuso-retro #app::after {
+html.sol-spa #app::before,
+html.sol-spa #app::after {
   content: none !important;
   display: none !important;
 }
@@ -6117,20 +6308,22 @@ html.kuso-retro #app::after {
   width: 100%;
 }
 
-html.kuso-retro .shell:not(.admin-mode) {
+html.sol-spa .shell:not(.admin-mode) {
   font-family: var(--font);
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--border) 88%, var(--accent-soft));
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
-  background: #ffffff;
+  background: var(--surface);
+  overflow: hidden;
 }
 
-html.kuso-retro .shell:not(.admin-mode) header.page-head {
+html.sol-spa .shell:not(.admin-mode) header.page-head {
   border-bottom: 1px solid var(--border);
-  background: #ffffff;
+  background: var(--surface-muted);
+  padding: 0;
 }
 
-html.kuso-retro .banner {
+html.sol-spa .banner {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--accent-soft);
@@ -6139,40 +6332,40 @@ html.kuso-retro .banner {
   box-shadow: var(--shadow-sm);
 }
 
-html.kuso-retro .tabs {
+html.sol-spa .tabs {
   background: var(--surface-muted);
   border-bottom: 1px solid var(--border);
 }
 
-html.kuso-retro .tab {
+html.sol-spa .tab {
   font-weight: 600;
   text-shadow: none;
 }
 
-html.kuso-retro .tab[aria-selected="true"] {
-  color: var(--accent);
+html.sol-spa .tab[aria-selected="true"] {
+  color: var(--accent-bright);
   font-weight: 700;
-  background: #ffffff;
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  border: 1px solid var(--border);
-  border-bottom: none;
-  margin-bottom: -1px;
-  padding-inline: 10px;
-  padding-bottom: 11px;
+  background: transparent;
+  border-radius: 0;
+  border: none;
+  border-bottom: 2px solid var(--accent);
+  margin-bottom: 0;
+  padding-inline: 4px;
+  padding-bottom: 10px;
   box-shadow: none;
 }
 
-html.kuso-retro .book-tabs {
+html.sol-spa .book-tabs {
   background: transparent;
   border-bottom: 1px solid var(--border);
 }
 
-html.kuso-retro .page-head h1 {
+html.sol-spa .page-head h1 {
   font-family: var(--font-head);
-  font-size: 1.52rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  line-height: 1.35;
+  font-size: clamp(1.75rem, 4.5vw, 2.15rem);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.25;
   color: var(--ink);
   background: none;
   background-image: none;
@@ -6182,87 +6375,158 @@ html.kuso-retro .page-head h1 {
   animation: none;
 }
 
-html.kuso-retro .app-version-footer {
+html.sol-spa .shell:not(.admin-mode) .page-hero .page-head-top-row h1 {
+  font-family: var(--font);
+  font-size: clamp(2rem, 5.5vw, 2.85rem);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: #ffffff;
+}
+
+html.sol-spa .app-version-footer {
   background: var(--surface-muted);
   color: var(--muted);
   border-top: 1px solid var(--border);
   font-family: var(--font);
 }
 
-html.kuso-retro .app-version-footer::before {
+html.sol-spa .app-version-footer::before {
   content: none;
   display: none;
 }
 
-html.kuso-retro:not(:has(.shell.admin-mode)) a:hover {
+html.sol-spa:not(:has(.shell.admin-mode)) a:hover {
   background: rgb(var(--accent-rgb) / 0.08);
   color: var(--accent-deep);
 }
 
 /* 排除輪盤／拉霸全螢幕主按鈕（.wheel-spectacle-primary），保留各自版面樣式 */
-html.kuso-retro:not(:has(.shell.admin-mode)) button.primary:not(.wheel-spectacle-primary) {
+html.sol-spa:not(:has(.shell.admin-mode)) button.primary:not(.wheel-spectacle-primary) {
   border: none;
   background: var(--accent);
   color: #ffffff;
   text-shadow: none;
   box-shadow: var(--shadow-sm);
   border-radius: var(--radius);
+  letter-spacing: 0.06em;
 }
 
-html.kuso-retro:not(:has(.shell.admin-mode)) button.primary:not(.wheel-spectacle-primary):hover:not(:disabled) {
-  filter: brightness(1.05);
+html.sol-spa:not(:has(.shell.admin-mode)) button.primary:not(.wheel-spectacle-primary):hover:not(:disabled) {
+  filter: brightness(1.04);
   background: var(--accent-hover);
   color: #ffffff;
+  box-shadow: var(--shadow);
 }
 
-html.kuso-retro:not(:has(.shell.admin-mode)) button.primary:not(.wheel-spectacle-primary):active:not(:disabled) {
-  filter: brightness(0.95);
+html.sol-spa:not(:has(.shell.admin-mode)) button.primary:not(.wheel-spectacle-primary):active:not(:disabled) {
+  filter: brightness(0.96);
 }
 
-html.kuso-retro:not(:has(.shell.admin-mode)) button.ghost {
-  border: 1px solid var(--border);
-  background: #ffffff;
+html.sol-spa:not(:has(.shell.admin-mode)) button.ghost {
+  border: 1px solid var(--border-strong);
+  background: var(--surface-elevated);
   box-shadow: none;
   border-radius: var(--radius);
+  color: var(--ink);
 }
 
-html.kuso-retro:not(:has(.shell.admin-mode)) .modal-overlay {
-  background: rgb(0 0 0 / 0.35);
+html.sol-spa:not(:has(.shell.admin-mode)) button.ghost:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-elevated));
+  border-color: var(--accent);
 }
 
-html.kuso-retro:not(:has(.shell.admin-mode)) .modal-card {
+html.sol-spa:not(:has(.shell.admin-mode)) .modal-overlay {
+  background: rgb(8 6 4 / 0.62);
+  backdrop-filter: blur(6px);
+}
+
+html.sol-spa:not(:has(.shell.admin-mode)) .modal-card {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
-  background: #ffffff;
+  background: var(--surface-elevated);
 }
 
-html.kuso-retro:not(:has(.shell.admin-mode)) .modal-card h3 {
+html.sol-spa:not(:has(.shell.admin-mode)) .modal-card h3 {
   font-family: var(--font-head);
+  font-size: 1.35rem;
+  font-weight: 600;
   color: var(--ink);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
 }
 
-html.kuso-retro:not(:has(.shell.admin-mode)) main.panel {
-  background: #ffffff;
+html.sol-spa:not(:has(.shell.admin-mode)) main.panel {
+  background: var(--panel-bg);
   border-top: none;
+}
+
+html.sol-spa:not(:has(.shell.admin-mode)) .book-form-top {
+  border-color: color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--accent-soft) 35%, var(--surface));
+}
+
+html.sol-spa:not(:has(.shell.admin-mode)) .site-public-notice {
+  background: color-mix(in srgb, var(--accent-soft) 50%, var(--surface));
+  border-color: color-mix(in srgb, var(--border) 75%, var(--accent));
+}
+
+html.sol-spa:not(:has(.shell.admin-mode)) input,
+html.sol-spa:not(:has(.shell.admin-mode)) select,
+html.sol-spa:not(:has(.shell.admin-mode)) textarea {
+  border-radius: var(--radius-sm);
+  border-color: var(--border);
+  background: var(--surface-elevated);
+}
+
+html.sol-spa:not(:has(.shell.admin-mode)) input:focus-visible,
+html.sol-spa:not(:has(.shell.admin-mode)) select:focus-visible,
+html.sol-spa:not(:has(.shell.admin-mode)) textarea:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgb(var(--accent-rgb) / 0.22);
+  outline: none;
+}
+
+html.sol-spa:not(:has(.shell.admin-mode)) .pill {
+  border-color: var(--border);
+  background: var(--surface-elevated);
+}
+
+html.sol-spa:not(:has(.shell.admin-mode)) .page-head .visitor-stats.visitor-stats--wretch {
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+html.sol-spa:not(:has(.shell.admin-mode)) .page-head .visitor-stats--wretch {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+html.sol-spa:not(:has(.shell.admin-mode)) .page-head .visitor-stats--wretch .visitor-stats__rail {
+  color: var(--muted);
+  opacity: 1;
+}
+
+html.sol-spa:not(:has(.shell.admin-mode)) .page-head .visitor-stats--wretch .visitor-stats__num {
+  background: color-mix(in srgb, var(--accent) 28%, var(--surface-elevated));
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  color: #f5d9b0;
 }
 
 /* -------------------------------------------------------------------------- */
 /* 後台                                                                      */
 /* -------------------------------------------------------------------------- */
 
-html.kuso-retro:has(.shell.admin-mode) body {
+html.sol-spa:has(.shell.admin-mode) body {
   background-color: #ececec;
   background-image: none;
 }
 
-html.kuso-retro:has(.shell.admin-mode) body::before {
+html.sol-spa:has(.shell.admin-mode) body::before {
   opacity: 0;
   visibility: hidden;
 }
 
-html.kuso-retro:has(.shell.admin-mode) #app {
+html.sol-spa:has(.shell.admin-mode) #app {
   border: none;
   border-radius: 0;
   background: transparent;
@@ -6271,13 +6535,13 @@ html.kuso-retro:has(.shell.admin-mode) #app {
   padding: 24px 18px 52px;
 }
 
-html.kuso-retro:has(.shell.admin-mode) #app::before,
-html.kuso-retro:has(.shell.admin-mode) #app::after {
+html.sol-spa:has(.shell.admin-mode) #app::before,
+html.sol-spa:has(.shell.admin-mode) #app::after {
   content: none !important;
   display: none !important;
 }
 
-html.kuso-retro .shell.admin-mode {
+html.sol-spa .shell.admin-mode {
   --ink: #1a1a1a;
   --muted: #666666;
   --border: #d4d4d4;
@@ -6307,13 +6571,13 @@ html.kuso-retro .shell.admin-mode {
   box-shadow: 0 1px 4px rgb(0 0 0 / 0.12);
 }
 
-html.kuso-retro .shell.admin-mode header.page-head {
+html.sol-spa .shell.admin-mode header.page-head {
   background: #6001d2;
   border-bottom: 2px solid #410092;
   color: #ffffff;
 }
 
-html.kuso-retro .shell.admin-mode .page-head h1 {
+html.sol-spa .shell.admin-mode .page-head h1 {
   font-family: Arial, Helvetica, "PingFang TC", "Microsoft JhengHei", sans-serif;
   font-size: 1.35rem;
   font-weight: 700;
@@ -6329,24 +6593,24 @@ html.kuso-retro .shell.admin-mode .page-head h1 {
   text-shadow: none;
 }
 
-html.kuso-retro .shell.admin-mode .tabs {
+html.sol-spa .shell.admin-mode .tabs {
   background: rgb(0 0 0 / 0.12);
   border-bottom: none;
   padding: 0 4px;
 }
 
-html.kuso-retro .shell.admin-mode .tab {
+html.sol-spa .shell.admin-mode .tab {
   font-weight: 600;
   text-shadow: none;
   color: rgb(255 255 255 / 0.88);
   border-bottom: 2px solid transparent;
 }
 
-html.kuso-retro .shell.admin-mode .tab:hover {
+html.sol-spa .shell.admin-mode .tab:hover {
   color: #ffffff;
 }
 
-html.kuso-retro .shell.admin-mode .tab[aria-selected="true"] {
+html.sol-spa .shell.admin-mode .tab[aria-selected="true"] {
   color: #6001d2;
   font-weight: 700;
   background: #ffffff;
@@ -6359,50 +6623,50 @@ html.kuso-retro .shell.admin-mode .tab[aria-selected="true"] {
   box-shadow: none;
 }
 
-html.kuso-retro .shell.admin-mode .app-version-footer {
+html.sol-spa .shell.admin-mode .app-version-footer {
   background: #f5f5f5;
   color: #666666;
   border-top: 1px solid #d4d4d4;
   font-family: Arial, Helvetica, "PingFang TC", sans-serif;
 }
 
-html.kuso-retro .shell.admin-mode .app-version-footer::before {
+html.sol-spa .shell.admin-mode .app-version-footer::before {
   content: none;
   display: none;
 }
 
-html.kuso-retro .shell.admin-mode .admin-head-signed-in {
+html.sol-spa .shell.admin-mode .admin-head-signed-in {
   color: rgb(255 255 255 / 0.9);
 }
 
-html.kuso-retro .shell.admin-mode .head-toolbar-aside .member-entry,
-html.kuso-retro .shell.admin-mode .head-toolbar-aside button.ghost {
+html.sol-spa .shell.admin-mode .head-toolbar-aside .member-entry,
+html.sol-spa .shell.admin-mode .head-toolbar-aside button.ghost {
   border-color: rgb(255 255 255 / 0.55);
   color: #ffffff;
   background: rgb(255 255 255 / 0.12);
 }
 
-html.kuso-retro .shell.admin-mode .head-toolbar-aside .member-entry:hover,
-html.kuso-retro .shell.admin-mode .head-toolbar-aside button.ghost:hover:not(:disabled) {
+html.sol-spa .shell.admin-mode .head-toolbar-aside .member-entry:hover,
+html.sol-spa .shell.admin-mode .head-toolbar-aside button.ghost:hover:not(:disabled) {
   background: rgb(255 255 255 / 0.22);
   border-color: #ffffff;
   color: #ffffff;
 }
 
-html.kuso-retro .shell.admin-mode a {
+html.sol-spa .shell.admin-mode a {
   color: #6001d2;
 }
 
-html.kuso-retro .shell.admin-mode a:visited {
+html.sol-spa .shell.admin-mode a:visited {
   color: #410092;
 }
 
-html.kuso-retro .shell.admin-mode a:hover {
+html.sol-spa .shell.admin-mode a:hover {
   background: rgb(96 1 210 / 0.08);
   color: #5000a8;
 }
 
-html.kuso-retro .shell.admin-mode button.primary {
+html.sol-spa .shell.admin-mode button.primary {
   border: none;
   background: #6001d2;
   color: #ffffff;
@@ -6411,18 +6675,18 @@ html.kuso-retro .shell.admin-mode button.primary {
   border-radius: var(--radius);
 }
 
-html.kuso-retro .shell.admin-mode button.primary:hover:not(:disabled) {
+html.sol-spa .shell.admin-mode button.primary:hover:not(:disabled) {
   background: #5000b8;
   filter: none;
   color: #ffffff;
 }
 
-html.kuso-retro .shell.admin-mode button.primary:active:not(:disabled) {
+html.sol-spa .shell.admin-mode button.primary:active:not(:disabled) {
   background: #410092;
   filter: none;
 }
 
-html.kuso-retro .shell.admin-mode button.primary:disabled {
+html.sol-spa .shell.admin-mode button.primary:disabled {
   border: none;
   background: var(--surface-muted);
   color: var(--muted);
@@ -6430,59 +6694,59 @@ html.kuso-retro .shell.admin-mode button.primary:disabled {
   box-shadow: none;
 }
 
-html.kuso-retro .shell.admin-mode button.ghost {
+html.sol-spa .shell.admin-mode button.ghost {
   border: 1px solid var(--border);
   background: #ffffff;
   box-shadow: none;
   border-radius: var(--radius);
 }
 
-html.kuso-retro .shell.admin-mode button.ghost:hover:not(:disabled) {
+html.sol-spa .shell.admin-mode button.ghost:hover:not(:disabled) {
   background: var(--surface-muted);
   border-color: var(--border-strong);
 }
 
-html.kuso-retro .shell.admin-mode button.ghost:active:not(:disabled) {
+html.sol-spa .shell.admin-mode button.ghost:active:not(:disabled) {
   background: var(--border);
 }
 
-html.kuso-retro .shell.admin-mode th {
+html.sol-spa .shell.admin-mode th {
   background: #e8e8e8;
   color: #1a1a1a;
   border-bottom: 1px solid #c8c8c8;
   font-weight: 700;
 }
 
-html.kuso-retro .shell.admin-mode td {
+html.sol-spa .shell.admin-mode td {
   border-bottom: 1px solid #e0e0e0;
 }
 
-html.kuso-retro .shell.admin-mode tbody tr:hover td {
+html.sol-spa .shell.admin-mode tbody tr:hover td {
   background: #f4eefb;
 }
 
-html.kuso-retro .shell.admin-mode .admin-dashboard__shell {
+html.sol-spa .shell.admin-mode .admin-dashboard__shell {
   border-color: #c8c8c8;
   border-radius: 2px;
   background: #ffffff;
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
 }
 
-html.kuso-retro .shell.admin-mode .admin-dashboard .admin-tabs {
+html.sol-spa .shell.admin-mode .admin-dashboard .admin-tabs {
   background: #f5f5f5;
 }
 
-html.kuso-retro .shell.admin-mode .admin-dashboard .admin-tab-panels {
+html.sol-spa .shell.admin-mode .admin-dashboard .admin-tab-panels {
   background: #ffffff;
 }
 
-html.kuso-retro .shell.admin-mode .admin-tabs {
+html.sol-spa .shell.admin-mode .admin-tabs {
   border-bottom: 1px solid #c8c8c8;
   gap: 0;
 }
 
-html.kuso-retro .shell.admin-mode .admin-tab.is-active,
-html.kuso-retro .shell.admin-mode .admin-tab[aria-selected="true"] {
+html.sol-spa .shell.admin-mode .admin-tab.is-active,
+html.sol-spa .shell.admin-mode .admin-tab[aria-selected="true"] {
   color: #6001d2;
   font-weight: 700;
   border-bottom-color: #6001d2;
@@ -6490,18 +6754,18 @@ html.kuso-retro .shell.admin-mode .admin-tab[aria-selected="true"] {
   border-radius: 0;
 }
 
-html.kuso-retro .shell.admin-mode .admin-tab:focus-visible {
+html.sol-spa .shell.admin-mode .admin-tab:focus-visible {
   outline-color: #6001d2;
 }
 
-html.kuso-retro .shell.admin-mode .admin-member-subtabs {
+html.sol-spa .shell.admin-mode .admin-member-subtabs {
   border: 1px solid #d4d4d4;
   background: #f5f5f5;
   box-shadow: none;
   border-radius: 2px;
 }
 
-html.kuso-retro .shell.admin-mode .admin-member-subtabs .admin-tab {
+html.sol-spa .shell.admin-mode .admin-member-subtabs .admin-tab {
   border-radius: 2px;
   font-size: 0.8rem;
   font-weight: 500;
@@ -6513,14 +6777,14 @@ html.kuso-retro .shell.admin-mode .admin-member-subtabs .admin-tab {
   box-shadow: none;
 }
 
-html.kuso-retro .shell.admin-mode .admin-member-subtabs .admin-tab:hover {
+html.sol-spa .shell.admin-mode .admin-member-subtabs .admin-tab:hover {
   color: #1a1a1a;
   background: #ffffff;
   border-color: #c8c8c8;
 }
 
-html.kuso-retro .shell.admin-mode .admin-member-subtabs .admin-tab.is-active,
-html.kuso-retro .shell.admin-mode .admin-member-subtabs .admin-tab[aria-selected="true"] {
+html.sol-spa .shell.admin-mode .admin-member-subtabs .admin-tab.is-active,
+html.sol-spa .shell.admin-mode .admin-member-subtabs .admin-tab[aria-selected="true"] {
   color: #6001d2;
   font-weight: 600;
   background: #ffffff;
@@ -6528,80 +6792,80 @@ html.kuso-retro .shell.admin-mode .admin-member-subtabs .admin-tab[aria-selected
   box-shadow: none;
 }
 
-html.kuso-retro .shell.admin-mode input,
-html.kuso-retro .shell.admin-mode select,
-html.kuso-retro .shell.admin-mode textarea {
+html.sol-spa .shell.admin-mode input,
+html.sol-spa .shell.admin-mode select,
+html.sol-spa .shell.admin-mode textarea {
   border-radius: var(--radius-sm);
   border-color: var(--border);
 }
 
-html.kuso-retro .shell.admin-mode input:focus-visible,
-html.kuso-retro .shell.admin-mode select:focus-visible,
-html.kuso-retro .shell.admin-mode textarea:focus-visible {
+html.sol-spa .shell.admin-mode input:focus-visible,
+html.sol-spa .shell.admin-mode select:focus-visible,
+html.sol-spa .shell.admin-mode textarea:focus-visible {
   border-color: var(--accent-deep);
   box-shadow: 0 0 0 2px rgb(var(--accent-rgb) / 0.22);
 }
 
-html.kuso-retro .shell.admin-mode main.panel {
+html.sol-spa .shell.admin-mode main.panel {
   background: #ffffff;
   border-top: none;
 }
 
-html.kuso-retro .shell.admin-mode main.panel:has(.admin-dashboard) {
+html.sol-spa .shell.admin-mode main.panel:has(.admin-dashboard) {
   background: #ececec;
 }
 
-html.kuso-retro .shell.admin-mode .admin-announce,
-html.kuso-retro .shell.admin-mode .admin-member-list {
+html.sol-spa .shell.admin-mode .admin-announce,
+html.sol-spa .shell.admin-mode .admin-member-list {
   border-color: #d4d4d4;
   border-radius: 2px;
   box-shadow: none;
 }
 
-html.kuso-retro .shell.admin-mode .admin-announce__block {
+html.sol-spa .shell.admin-mode .admin-announce__block {
   border-radius: 2px;
   border-color: #d4d4d4;
 }
 
-html.kuso-retro .shell.admin-mode .admin-announce--settings .admin-announce__block {
+html.sol-spa .shell.admin-mode .admin-announce--settings .admin-announce__block {
   border-color: #d4d4d4;
   background: #f5f5f5;
 }
 
-html.kuso-retro .shell.admin-mode .admin-login {
+html.sol-spa .shell.admin-mode .admin-login {
   border-top-color: #6001d2;
 }
 
-html.kuso-retro .shell.admin-mode .admin-bookings-calendar {
+html.sol-spa .shell.admin-mode .admin-bookings-calendar {
   border-color: #d4d4d4;
   border-radius: 2px;
   box-shadow: none;
 }
 
-html.kuso-retro .shell.admin-mode .admin-calendar__day--selected {
+html.sol-spa .shell.admin-mode .admin-calendar__day--selected {
   outline-color: #6001d2;
   border-color: #6001d2;
   background: #f4eefb;
 }
 
-html.kuso-retro .shell.admin-mode .admin-calendar__day--today:not(.admin-calendar__day--inactive) {
+html.sol-spa .shell.admin-mode .admin-calendar__day--today:not(.admin-calendar__day--inactive) {
   border-color: #6001d2;
   box-shadow: 0 0 0 1px rgb(96 1 210 / 0.25);
 }
 
 /* Modal／浮層掛在 body，用 :has 與後台同套 */
-html.kuso-retro:has(.shell.admin-mode) .modal-overlay {
+html.sol-spa:has(.shell.admin-mode) .modal-overlay {
   background: rgb(15 23 42 / 0.42);
 }
 
-html.kuso-retro:has(.shell.admin-mode) .modal-card {
+html.sol-spa:has(.shell.admin-mode) .modal-card {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: #ffffff;
   box-shadow: var(--shadow-lg);
 }
 
-html.kuso-retro:has(.shell.admin-mode) .modal-card h3 {
+html.sol-spa:has(.shell.admin-mode) .modal-card h3 {
   font-family: var(--font-head);
   color: var(--ink);
   letter-spacing: 0.02em;
