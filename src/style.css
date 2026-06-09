@@ -6912,23 +6912,87 @@ html.sol-spa .shell.admin-mode .admin-calendar__day--today:not(.admin-calendar__
   box-shadow: 0 0 0 1px rgb(96 1 210 / 0.25);
 }
 
-/* Modal／浮層掛在 body，用 :has 與後台同套 */
+/* Modal／浮層掛在 body，用 :has 與後台同套（勿沿用前台 --ink／--surface 等深色 token） */
 html.sol-spa:has(.shell.admin-mode) .modal-overlay {
   background: rgb(15 23 42 / 0.42);
 }
 
 html.sol-spa:has(.shell.admin-mode) .modal-card {
-  border: 1px solid var(--border);
+  border: 1px solid #c8c8c8;
   border-radius: var(--radius-lg);
   background: #ffffff;
   box-shadow: var(--shadow-lg);
+  color: #1a1a1a;
 }
 
 html.sol-spa:has(.shell.admin-mode) .modal-card h3 {
   font-family: var(--font-head);
-  color: var(--ink);
+  color: #1a1a1a;
   letter-spacing: 0.02em;
   -webkit-text-fill-color: unset;
   background: none;
   animation: none;
+}
+
+html.sol-spa:has(.shell.admin-mode) .modal-card .modal-message {
+  color: #4a4a4a;
+  background: #f5f5f5;
+  border-color: #d4d4d4;
+}
+
+html.sol-spa:has(.shell.admin-mode) .modal-card label.field {
+  color: #1a1a1a;
+}
+
+html.sol-spa:has(.shell.admin-mode) .modal-card input,
+html.sol-spa:has(.shell.admin-mode) .modal-card select,
+html.sol-spa:has(.shell.admin-mode) .modal-card textarea {
+  color: #1a1a1a;
+  background: #ffffff;
+  border: 1px solid #c8c8c8;
+  color-scheme: light;
+}
+
+html.sol-spa:has(.shell.admin-mode) .modal-card input:focus-visible,
+html.sol-spa:has(.shell.admin-mode) .modal-card select:focus-visible:not(:disabled),
+html.sol-spa:has(.shell.admin-mode) .modal-card textarea:focus-visible {
+  border-color: #6001d2;
+  box-shadow: 0 0 0 2px rgb(96 1 210 / 0.22);
+}
+
+html.sol-spa:has(.shell.admin-mode) .modal-card button.primary {
+  border: none;
+  background: #6001d2;
+  color: #ffffff;
+  text-shadow: none;
+  box-shadow: 0 1px 3px rgb(96 1 210 / 0.28);
+  border-radius: var(--radius);
+}
+
+html.sol-spa:has(.shell.admin-mode) .modal-card button.primary:hover:not(:disabled) {
+  background: #5000b8;
+  filter: none;
+  color: #ffffff;
+}
+
+html.sol-spa:has(.shell.admin-mode) .modal-card button.primary:active:not(:disabled) {
+  background: #410092;
+  filter: none;
+}
+
+html.sol-spa:has(.shell.admin-mode) .modal-card button.ghost {
+  border: 1px solid #c8c8c8;
+  background: #ffffff;
+  color: #1a1a1a;
+  box-shadow: none;
+  border-radius: var(--radius);
+}
+
+html.sol-spa:has(.shell.admin-mode) .modal-card button.ghost:hover:not(:disabled) {
+  background: #f5f5f5;
+  border-color: #a8a8a8;
+}
+
+html.sol-spa:has(.shell.admin-mode) .modal-card button.ghost:active:not(:disabled) {
+  background: #e8e8e8;
 }
