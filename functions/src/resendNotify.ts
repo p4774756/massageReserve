@@ -347,6 +347,16 @@ export type MemberBookingStatusEmailPayload = {
   cancelReason?: string;
 };
 
+export type MemberBookingRescheduledEmailPayload = {
+  to: string;
+  displayName: string;
+  previousDateKey: string;
+  previousStartSlot: string;
+  dateKey: string;
+  startSlot: string;
+  rescheduleEmailMessage?: string;
+};
+
 /** 會員預約狀態變更通知（訪客不寄） */
 export async function sendMemberBookingStatusChangedEmail(opts: {
   apiKey: string;
@@ -427,6 +437,64 @@ export async function sendMemberBookingStatusChangedEmail(opts: {
   const subject = testMode
     ? `[測試] 預約狀態通知信測試｜${dateLabel} ${payload.startSlot}`
     : `預約狀態更新：${next}｜${dateLabel} ${payload.startSlot}`;
+  const { error } = await resend.emails.send({
+    from,
+    to: [payload.to],
+    subject,
+    text,
+    html,
+  });
+  if (error) {
+    throwResendEmailError(error);
+  }
+}
+
+/** 會員預約改時間通知（訪客不寄） */
+export async function sendMemberBookingRescheduledEmail(opts: {
+  apiKey: string;
+  from: string;
+  payload: MemberBookingRescheduledEmailPayload;
+}): Promise<void> {
+  const { apiKey, from, payload } = opts;
+  const prevDateLabel = formatDateKeyWithWeekdayZh(payload.previousDateKey);
+  const newDateLabel = formatDateKeyWithWeekdayZh(payload.dateKey);
+  const lines: string[] = [
+    `${payload.displayName} 您好，`,
+    "",
+    "您在按摩預約系統中的預約時間已由店家調整。",
+    "",
+    `原時間：${prevDateLabel} ${payload.previousStartSlot}`,
+    `新時間：${newDateLabel} ${payload.startSlot}`,
+  ];
+  if (payload.rescheduleEmailMessage?.trim()) {
+    lines.push("", `店家留言：\n${payload.rescheduleEmailMessage.trim()}`);
+  }
+  lines.push(
+    "",
+    "如有疑問請與店家聯繫。",
+    "",
+    "— 按摩預約系統（自動通知，請勿直接回覆此信）",
+  );
+  const text = lines.join("\n");
+  const rows: EmailDetailRow[] = [
+    { label: "原日期", value: prevDateLabel },
+    { label: "原開始時間", value: payload.previousStartSlot },
+    { label: "新日期", value: newDateLabel, emphasize: true },
+    { label: "新開始時間", value: payload.startSlot, emphasize: true },
+  ];
+  if (payload.rescheduleEmailMessage?.trim()) {
+    rows.push({ label: "店家留言", value: payload.rescheduleEmailMessage.trim() });
+  }
+  const html = buildNotifyEmailHtml({
+    title: "預約時間調整",
+    greeting: `${payload.displayName} 您好，`,
+    introLines: ["您在按摩預約系統中的預約時間已由店家調整。"],
+    rows,
+    outroLines: ["如有疑問請與店家聯繫。"],
+    footer: "— 按摩預約系統（自動通知，請勿直接回覆此信）",
+  });
+  const resend = new Resend(apiKey);
+  const subject = `預約時間調整：${newDateLabel} ${payload.startSlot}`;
   const { error } = await resend.emails.send({
     from,
     to: [payload.to],

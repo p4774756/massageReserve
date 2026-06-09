@@ -17,6 +17,7 @@ import {
   isResendOnboardingFromAddress,
   sendBroadcastHtmlEmail,
   sendMemberBookingStatusChangedEmail,
+  sendMemberBookingRescheduledEmail,
   sendMemberWalletChangedEmail,
   sendNewBookingEmailToOwner,
   type MemberWalletChangeKind,
@@ -345,6 +346,16 @@ export const getAvailability = onCall(publicCall, async (request) => {
     );
   }
   const holidayOutcall = request.data?.holidayOutcall === true;
+  const excludeBookingIdRaw = request.data?.excludeBookingId;
+  const excludeBookingId =
+    typeof excludeBookingIdRaw === "string" ? excludeBookingIdRaw.trim() : "";
+  if (excludeBookingId) {
+    const uid = request.auth?.uid;
+    if (!uid) {
+      throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
+    }
+    await assertAdminByUid(uid, locale);
+  }
   if (holidayOutcall) {
     if (!isHolidayOutcallBookableDay(day)) {
       throw new HttpsError(
@@ -408,13 +419,23 @@ export const getAvailability = onCall(publicCall, async (request) => {
   const units = parseBookingUnits(request.data?.units) ?? 1;
   const durationMinutes = pricingDurationMinutesForUnits(units, BOOKING_UNIT_MINUTES_FIXED);
   const blockWindows = parseBookingBlockWindows(blocksSnap.data());
-  const existingBookings = daySnap.docs.map((d) => ({
-    startSlot: String(d.get("startSlot") ?? ""),
-    durationMinutes: resolveBookingDurationMinutesFromData(
-      d.data() as Record<string, unknown>,
-      BOOKING_UNIT_MINUTES_FIXED,
-    ),
-  }));
+  const existingBookings = daySnap.docs
+    .filter((d) => d.id !== excludeBookingId)
+    .map((d) => ({
+      startSlot: String(d.get("startSlot") ?? ""),
+      durationMinutes: resolveBookingDurationMinutesFromData(
+        d.data() as Record<string, unknown>,
+        BOOKING_UNIT_MINUTES_FIXED,
+      ),
+    }));
+  const dayCount =
+    excludeBookingId && daySnap.docs.some((d) => d.id === excludeBookingId)
+      ? Math.max(0, daySnap.size - 1)
+      : daySnap.size;
+  const weekCount =
+    excludeBookingId && weekSnap.docs.some((d) => d.id === excludeBookingId)
+      ? Math.max(0, weekSnap.size - 1)
+      : weekSnap.size;
   const unavailableStarts = listUnavailableStartSlotsForDay({
     dateKey,
     durationMinutes,
@@ -432,12 +453,12 @@ export const getAvailability = onCall(publicCall, async (request) => {
     units,
     durationMinutes,
     blockedSlots,
-    dayCount: daySnap.size,
-    weekCount: weekSnap.size,
+    dayCount,
+    weekCount,
     dayCap: caps.maxPerDay,
     weekCap: caps.maxPerWorkWeek,
-    dayFull: daySnap.size >= caps.maxPerDay,
-    weekFull: weekSnap.size >= caps.maxPerWorkWeek,
+    dayFull: dayCount >= caps.maxPerDay,
+    weekFull: weekCount >= caps.maxPerWorkWeek,
     capOverflowEnabled: capOverflow.enabled,
     capOverflowSurchargeNtd: capOverflow.surchargeNtd,
     dayPeersMasked,
@@ -1926,6 +1947,261 @@ export const completeBooking = onCall(publicCall, async (request) => {
 
   return { ok: true };
 });
+
+export const rescheduleBookingAdmin = onCall(
+  { ...publicCall, secrets: [resendApiKey] },
+  async (request) => {
+    const locale = parseLocale(request.data);
+    const uid = request.auth?.uid;
+    if (!uid) {
+      throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
+    }
+    await assertAdminByUid(uid, locale);
+
+    const bookingId = typeof request.data?.bookingId === "string" ? request.data.bookingId.trim() : "";
+    const dateKey = typeof request.data?.dateKey === "string" ? request.data.dateKey.trim() : "";
+    const startSlot = typeof request.data?.startSlot === "string" ? request.data.startSlot.trim() : "";
+    const rescheduleEmailMessage = sanitizeStatusEmailMessage(request.data?.rescheduleEmailMessage);
+
+    if (!bookingId) {
+      throw new HttpsError("invalid-argument", st(locale, "booking.idRequired", "bookingId 必填"));
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+      throw new HttpsError("invalid-argument", st(locale, "booking.badDateFormat", "日期格式錯誤"));
+    }
+    if (!startSlot) {
+      throw new HttpsError("invalid-argument", st(locale, "reschedule.startRequired", "請選擇開始時間"));
+    }
+
+    const bookingRef = db.collection("bookings").doc(bookingId);
+    let previousDateKey = "";
+    let previousStartSlot = "";
+    let displayName = "";
+    let customerId: string | null = null;
+    let bookingMode = "";
+    let txError: HttpsError | undefined;
+
+    try {
+      await db.runTransaction(async (tx) => {
+        const bookingSnap = await tx.get(bookingRef);
+        if (!bookingSnap.exists) {
+          txError = new HttpsError("not-found", st(locale, "booking.notFound", "找不到預約"));
+          return;
+        }
+        const data = bookingSnap.data() as Record<string, unknown>;
+        const status = (data.status as BookingStatus | undefined) ?? "pending";
+        if (!["pending", "confirmed"].includes(status)) {
+          txError = new HttpsError(
+            "failed-precondition",
+            st(locale, "reschedule.badState", "僅待確認或已確認的預約可改時間"),
+          );
+          return;
+        }
+
+        previousDateKey = typeof data.dateKey === "string" ? data.dateKey : "";
+        previousStartSlot = typeof data.startSlot === "string" ? data.startSlot : "";
+        displayName = typeof data.displayName === "string" ? data.displayName.trim() : "";
+        customerId = typeof data.customerId === "string" ? data.customerId : null;
+        bookingMode = typeof data.bookingMode === "string" ? data.bookingMode : "";
+
+        if (previousDateKey === dateKey && previousStartSlot === startSlot) {
+          txError = new HttpsError(
+            "failed-precondition",
+            st(locale, "reschedule.unchanged", "新時間與目前相同，無需變更"),
+          );
+          return;
+        }
+
+        const holidayOutcall = data.holidayOutcall === true;
+        const units = parseBookingUnits(data.units) ?? 1;
+        const durationMinutes = resolveBookingDurationMinutesFromData(data, BOOKING_UNIT_MINUTES_FIXED);
+        const capOverflow = data.capOverflow === true;
+        let oldWeekStart = typeof data.weekStart === "string" ? data.weekStart.trim() : "";
+        if (!oldWeekStart) {
+          try {
+            oldWeekStart = mondayOfWeek(parseDateKey(previousDateKey)).toISODate()!;
+          } catch {
+            txError = new HttpsError(
+              "failed-precondition",
+              st(locale, "reschedule.badBookingTime", "此筆預約時間資料異常，無法改時間"),
+            );
+            return;
+          }
+        }
+
+        let startLocal: DateTime;
+        try {
+          startLocal = assertSlotAllowed(dateKey, startSlot, {
+            holidayOutcall,
+            units,
+            unitMinutes: BOOKING_UNIT_MINUTES_FIXED,
+          });
+        } catch (e) {
+          const code = e instanceof Error ? e.message : "bad_request";
+          const map: Record<string, string> = {
+            invalid_dateKey: st(locale, "slot.invalid_dateKey", "日期無效"),
+            past_date: st(locale, "slot.past_date", "無法預約過去的日期"),
+            past_slot: st(locale, "slot.past_slot", "此開始時間已過，請選擇較晚的時段"),
+            beyond_booking_window: st(locale, "slot.beyond_booking_window", "僅能預約至下週日為止。"),
+            not_weekday: st(locale, "slot.not_weekday", "僅能預約週一到週五"),
+            not_weekend: st(locale, "slot.not_weekend_outcall", "假日外約僅能預約週六、週日"),
+            invalid_slot: st(locale, "slot.invalid_slot", "開始時間不在可預約範圍"),
+            ends_after_daily_close: st(
+              locale,
+              "slot.ends_after_daily_close",
+              "此開始時間將超過當日服務結束時間（17:00）",
+            ),
+          };
+          txError = new HttpsError("failed-precondition", map[code] ?? st(locale, "slot.generic", "無法預約"));
+          return;
+        }
+
+        const blocksSnap = await tx.get(db.collection("siteSettings").doc("bookingBlocks"));
+        const blockReason = blockedReasonForSlot(
+          dateKey,
+          startSlot,
+          parseBookingBlockWindows(blocksSnap.data()),
+          durationMinutes,
+        );
+        const closedZh = "此時段不開放預約";
+        if (blockReason) {
+          const prefix = st(locale, "booking.blockedPrefix", "此時段不開放預約：");
+          const generic = st(locale, "booking.blockedGeneric", closedZh);
+          txError = new HttpsError(
+            "failed-precondition",
+            blockReason === closedZh ? generic : `${prefix}${blockReason}`,
+          );
+          return;
+        }
+
+        const newWeekStart = mondayOfWeek(parseDateKey(dateKey)).toISODate()!;
+        const dayQ = db
+          .collection("bookings")
+          .where("dateKey", "==", dateKey)
+          .where("status", "in", [...ACTIVE_STATUSES]);
+        const weekQ = db
+          .collection("bookings")
+          .where("weekStart", "==", newWeekStart)
+          .where("status", "in", [...ACTIVE_STATUSES]);
+        const capsRef = db.collection("siteSettings").doc("bookingCaps");
+
+        const [daySnap, weekSnap, capsSnap] = await Promise.all([tx.get(dayQ), tx.get(weekQ), tx.get(capsRef)]);
+        const { maxPerDay, maxPerWorkWeek } = resolveBookingCaps(capsSnap.data());
+
+        if (!capOverflow) {
+          const dayCountExSelf = daySnap.docs.filter((d) => d.id !== bookingId).length;
+          const weekCountExSelf = weekSnap.docs.filter((d) => d.id !== bookingId).length;
+          if (previousDateKey !== dateKey && dayCountExSelf >= maxPerDay) {
+            txError = new HttpsError(
+              "resource-exhausted",
+              st(
+                locale,
+                "booking.dayFullOverflowHint",
+                "這一天預約張數已滿（最多 {{max}} 張）。若店家有開放，可改選「加價現金」再預約一張。",
+                { max: maxPerDay },
+              ),
+            );
+            return;
+          }
+          if (oldWeekStart !== newWeekStart && weekCountExSelf >= maxPerWorkWeek) {
+            txError = new HttpsError(
+              "resource-exhausted",
+              st(
+                locale,
+                "booking.weekFullOverflowHint",
+                "本工作週預約張數已滿（最多 {{max}} 張）。若店家有開放，可改選「加價現金」再預約一張。",
+                { max: maxPerWorkWeek },
+              ),
+            );
+            return;
+          }
+        }
+
+        const newInterval = bookingIntervalFromStartSlot(startSlot, durationMinutes);
+        if (!newInterval) {
+          txError = new HttpsError("failed-precondition", st(locale, "slot.invalid_slot", "開始時間不在可預約範圍"));
+          return;
+        }
+        for (const d of daySnap.docs) {
+          if (d.id === bookingId) continue;
+          const existingStart = typeof d.get("startSlot") === "string" ? d.get("startSlot") : "";
+          const existingDuration = resolveBookingDurationMinutesFromData(
+            d.data() as Record<string, unknown>,
+            BOOKING_UNIT_MINUTES_FIXED,
+          );
+          const existingInterval = bookingIntervalFromStartSlot(existingStart, existingDuration);
+          if (
+            existingInterval &&
+            bookingRangeOverlaps(
+              newInterval.start,
+              newInterval.end,
+              existingInterval.start,
+              existingInterval.end,
+            )
+          ) {
+            txError = new HttpsError("already-exists", st(locale, "booking.slotTaken", "此時段已被預約"));
+            return;
+          }
+        }
+
+        const startAt = Timestamp.fromDate(startLocal.toJSDate());
+        tx.update(bookingRef, {
+          dateKey,
+          startSlot,
+          startAt,
+          weekStart: newWeekStart,
+          updatedAt: FieldValueOrServerTimestamp(),
+          rescheduledAt: FieldValueOrServerTimestamp(),
+          rescheduledBy: uid,
+        });
+      });
+    } catch (e) {
+      if (e instanceof HttpsError) {
+        throw e;
+      }
+      console.error("rescheduleBookingAdmin transaction failed", e);
+      throw new HttpsError(
+        "internal",
+        st(locale, "reschedule.failed", "改時間失敗，請稍後再試"),
+      );
+    }
+
+    if (txError) {
+      throw txError;
+    }
+
+    const mode = bookingMode;
+    if (mode !== "guest_cash" && mode !== "guest_beverage" && customerId) {
+      const apiKey = resendApiKey.value().trim();
+      if (apiKey) {
+        const from = resendFrom.value().trim() || "Massage預約 <onboarding@resend.dev>";
+        try {
+          const user = await getAuth().getUser(customerId);
+          const to = user.email ?? "";
+          if (to) {
+            await sendMemberBookingRescheduledEmail({
+              apiKey,
+              from,
+              payload: {
+                to,
+                displayName: displayName || "會員",
+                previousDateKey,
+                previousStartSlot,
+                dateKey,
+                startSlot,
+                rescheduleEmailMessage,
+              },
+            });
+          }
+        } catch (e) {
+          console.error("rescheduleBookingAdmin: notify member email failed", e);
+        }
+      }
+    }
+
+    return { ok: true };
+  },
+);
 
 /** 管理員：對指定「會員預約」寄出一封測試用狀態通知信（不變更 Firestore；與正式信相同 Resend 管道） */
 export const testSendMemberBookingStatusEmail = onCall(

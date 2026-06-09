@@ -2549,6 +2549,82 @@ button.ghost:disabled {
   color: var(--muted);
 }
 
+.admin-booking-when-cell {
+  vertical-align: middle;
+  line-height: 1.4;
+}
+
+.admin-booking-when-cell .admin-booking-kind-tag {
+  display: block;
+  margin-top: 4px;
+}
+
+.admin-booking-when-trigger {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-variant-numeric: inherit;
+  line-height: inherit;
+  vertical-align: baseline;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgb(96 1 210 / 0.35);
+  text-underline-offset: 2px;
+}
+
+.admin-booking-when-trigger:hover:not(:disabled) {
+  color: #6001d2;
+  text-decoration-color: #6001d2;
+}
+
+.admin-booking-when-trigger:focus-visible {
+  outline: 2px solid #6001d2;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.admin-booking-when-trigger:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.modal-overlay:has(.admin-reschedule-modal) {
+  align-items: start;
+  justify-items: center;
+  place-items: start center;
+  padding-top: max(16px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+}
+
+.admin-reschedule-modal {
+  width: min(560px, 94vw);
+  max-height: min(88dvh, calc(100dvh - 48px));
+  overflow-x: hidden;
+  overflow-y: auto;
+  align-self: start;
+  align-content: start;
+}
+
+.admin-reschedule-modal input[type="date"] {
+  width: 100%;
+  max-width: none;
+}
+
+.admin-reschedule-modal select {
+  width: 100%;
+  max-width: none;
+}
+
+.admin-reschedule-slot-status.error {
+  color: #b91c1c;
+}
+
 .modal-cancel-reason-field {
   margin: 0;
 }

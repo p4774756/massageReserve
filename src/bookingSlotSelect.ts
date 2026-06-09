@@ -1,4 +1,4 @@
-import { allStartSlots } from "./slots";
+import { allHolidayOutcallStartSlots, allStartSlots } from "./slots";
 import { isStartSlotInPastForTaipeiToday } from "./taipeiDates";
 import { el } from "./domUtil";
 import { t } from "./i18n";
@@ -20,6 +20,7 @@ export function refillSlots(
   disabled: boolean,
   selectedDateKey: string,
   blockedReasonBySlot: Map<string, string> = new Map(),
+  holidayOutcall = false,
 ): void {
   const { slotSelect } = ctx;
   const prev = slotSelect.value;
@@ -27,7 +28,7 @@ export function refillSlots(
   slotSelect.disabled = disabled;
   const opt0 = el("option", { value: "" }, [t("slot.optionPick", "請選擇開始時間")]);
   slotSelect.append(opt0);
-  const slots = allStartSlots();
+  const slots = holidayOutcall ? allHolidayOutcallStartSlots() : allStartSlots();
   for (let i = 0; i < slots.length; ) {
     const s = slots[i]!;
     const takenHere = taken.has(s);

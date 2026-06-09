@@ -22,6 +22,7 @@ import {
   batchGetCustomerAdminBriefsAdminCall,
   getBookingDayCountsCall,
   syncSessionPriceFromTsmcAdminCall,
+  rescheduleBookingAdminCall,
 } from "./firebase";
 import {
   applyAdminBriefsToBookingTable,
@@ -41,10 +42,11 @@ import {
   showAdminBookingStatusEmailNoteModal,
   showAdminCancelBookingModal,
 } from "./adminBookingModals";
+import { adminRescheduleErrorMessage, showAdminRescheduleBookingModal } from "./adminRescheduleModal";
 import {
   adminBookingStatusUpdateError,
   adminSelectableBookingStatus,
-  adminWhenCellParts,
+  formatWhen,
   createAdminBookingPriceCell,
   bookingCountsTowardAvailabilityCap,
   bookingIsCancelledForAdmin,
@@ -2725,9 +2727,61 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
           });
           const actionCell = el("div", { class: "admin-booking-actions" }, [cancelBtn, archiveBtn]);
           const cid = typeof b.customerId === "string" ? b.customerId.trim() : "";
+          const canReschedule =
+            !bookingIsCancelledForAdmin(b.status) && !bookingIsDoneForAdmin(b);
+          const whenCell = el("td", { class: "mono admin-booking-when-cell" });
+          let whenTrigger: HTMLButtonElement | null = null;
+          const runReschedule = async () => {
+            if (whenTrigger?.disabled) return;
+            const picked = await showAdminRescheduleBookingModal(b);
+            if (!picked) return;
+            adminStatus.textContent = t("admin.reschedule.updating", "改時間中…");
+            adminStatus.className = "status-line";
+            if (whenTrigger) whenTrigger.disabled = true;
+            try {
+              const fn = rescheduleBookingAdminCall();
+              await fn({
+                bookingId: b.id,
+                dateKey: picked.dateKey,
+                startSlot: picked.startSlot,
+                ...(picked.emailNote ? { rescheduleEmailMessage: picked.emailNote } : {}),
+                ...localeApiParam(),
+              });
+              adminStatus.textContent = t("admin.reschedule.updated", "已更新預約時間");
+              adminStatus.classList.add("ok");
+            } catch (e) {
+              adminStatus.textContent = adminRescheduleErrorMessage(e);
+              adminStatus.classList.add("error");
+              if (whenTrigger) whenTrigger.disabled = false;
+            }
+          };
+          if (canReschedule) {
+            whenTrigger = el(
+              "button",
+              {
+                class: "admin-booking-when-trigger",
+                type: "button",
+                title: t("admin.reschedule.btn", "改時間"),
+              },
+              [formatWhen(b)],
+            );
+            whenTrigger.addEventListener("click", () => {
+              void runReschedule();
+            });
+            whenCell.append(whenTrigger);
+          } else {
+            whenCell.append(formatWhen(b));
+          }
+          if (b.holidayOutcall === true) {
+            whenCell.append(
+              el("div", { class: "admin-booking-kind-tag" }, [
+                t("booking.kind.holidayOutcallShort", "假日外約"),
+              ]),
+            );
+          }
           table.append(
             el("tr", {}, [
-              el("td", { class: "mono" }, adminWhenCellParts(b)),
+              whenCell,
               el("td", {}, [b.displayName ?? ""]),
               el("td", {}, [bookingMemberYesNo(b)]),
               el("td", {}, [b.note ?? ""]),
