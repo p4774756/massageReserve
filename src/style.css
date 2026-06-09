@@ -171,6 +171,27 @@ a:hover {
   background: var(--surface-muted);
 }
 
+.app-version-footer__meta,
+.app-version-footer__social {
+  margin: 0;
+}
+
+.app-version-footer__social {
+  margin-top: 6px;
+}
+
+.app-version-footer__social-link {
+  color: var(--muted);
+  text-decoration: underline;
+  text-decoration-color: rgb(var(--accent-rgb) / 0.35);
+  text-underline-offset: 2px;
+}
+
+.app-version-footer__social-link:hover {
+  color: var(--accent-bright);
+  text-decoration-color: var(--accent-bright);
+}
+
 header.page-head {
   padding: 18px 20px 20px;
   border-bottom: 1px solid var(--border);
@@ -968,7 +989,9 @@ main.panel[hidden] {
 .book-form-top {
   display: grid;
   gap: 22px;
+  width: 100%;
   min-width: 0;
+  box-sizing: border-box;
   padding: 16px;
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
@@ -998,10 +1021,9 @@ main.panel[hidden] {
 
 @media (min-width: 720px) {
   .book-form-top {
-    grid-template-columns: minmax(10rem, 14rem) minmax(18rem, 22rem);
+    grid-template-columns: minmax(11rem, 34%) minmax(18rem, 1fr);
     column-gap: clamp(16px, 3vw, 24px);
     row-gap: 12px;
-    justify-content: start;
     align-items: start;
   }
 
@@ -1019,7 +1041,9 @@ main.panel[hidden] {
   .book-form-top__date {
     grid-column: 2;
     grid-row: 1 / span 2;
-    align-self: start;
+    align-self: stretch;
+    width: 100%;
+    min-width: 0;
   }
 
   .book-form-top__date .book-pick-calendar {
@@ -1193,6 +1217,7 @@ main.panel[hidden] {
   border: 1px solid var(--border);
   background: color-mix(in srgb, var(--surface-muted) 55%, var(--accent-soft));
   box-shadow: var(--shadow-sm);
+  width: 100%;
   max-width: 22rem;
 }
 

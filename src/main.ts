@@ -163,11 +163,28 @@ function render() {
   shellStage.append(shell);
   root.append(shellStage);
 
-  const appVersionFooter = el("footer", { class: "app-version-footer" }, []);
-  appVersionFooter.textContent = t("footer.version", "版號 {{ver}} · 最後更新 {{date}}（台北）", {
-    ver: __APP_VERSION__,
-    date: __APP_BUILD_DATE__,
-  });
+  const THREADS_PROFILE_URL = "https://www.threads.net/@cxzcxzcx1";
+  const appVersionMeta = el("p", { class: "app-version-footer__meta" }, [
+    t("footer.version", "版號 {{ver}} · 最後更新 {{date}}（台北）", {
+      ver: __APP_VERSION__,
+      date: __APP_BUILD_DATE__,
+    }),
+  ]);
+  const threadsLink = el(
+    "a",
+    {
+      class: "app-version-footer__social-link",
+      href: THREADS_PROFILE_URL,
+      target: "_blank",
+      rel: "noopener noreferrer",
+    },
+    [t("footer.threads", "Threads @cxzcxzcx1")],
+  );
+  const appVersionSocial = el("p", { class: "app-version-footer__social" }, [threadsLink]);
+  const appVersionFooter = el("footer", { class: "app-version-footer" }, [
+    appVersionMeta,
+    appVersionSocial,
+  ]);
   shell.append(appVersionFooter);
 
   /** --- 預約表單 --- */
