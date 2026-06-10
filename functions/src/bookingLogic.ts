@@ -47,6 +47,39 @@ export function resolveBookingCaps(raw: unknown): { maxPerDay: number; maxPerWor
 
 export const ACTIVE_STATUSES = ["pending", "confirmed", "done"] as const;
 
+/** 名額加價預約（`capOverflow: true`）不計入每日／每週名額統計 */
+export function isCapOverflowBooking(data: Record<string, unknown> | undefined | null): boolean {
+  return data?.capOverflow === true;
+}
+
+type CapCountableDoc = {
+  id?: string;
+  get?: (field: string) => unknown;
+  data?: () => Record<string, unknown>;
+};
+
+function capOverflowFromDoc(doc: CapCountableDoc): boolean {
+  if (doc.get) {
+    const v = doc.get("capOverflow");
+    if (v === true) return true;
+  }
+  if (doc.data) {
+    return isCapOverflowBooking(doc.data());
+  }
+  return false;
+}
+
+/** 計入名額上限的有效預約張數（排除 capOverflow；可 exclude 一筆 booking id） */
+export function countBookingsTowardCap(docs: CapCountableDoc[], excludeBookingId?: string): number {
+  let n = 0;
+  for (const d of docs) {
+    if (excludeBookingId && d.id === excludeBookingId) continue;
+    if (capOverflowFromDoc(d)) continue;
+    n += 1;
+  }
+  return n;
+}
+
 function serviceDayEndMinutes(): number {
   return SERVICE_DAY_END_HOUR * 60 + SERVICE_DAY_END_MINUTE;
 }

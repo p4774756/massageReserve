@@ -45,13 +45,16 @@ import { buildBookingSummary } from "./bookingSummary";
 import { el, truncateOneLine } from "./domUtil";
 import { errorMessage } from "./errorUtil";
 import {
+  bookingPickCalCountDateKeys,
   dateKeyFromYmdTaipei,
   daysInMonthFromOneIndexed,
   firstBookableDateKeyInWindow,
   filterFutureWeekPeerLabels,
+  isDateKeyInBookingPickCalCountWindow,
   isDateKeyMonFri,
   isStartSlotInPastForTaipeiToday,
   monthHasBookableDayInBookWindow,
+  monthsSpannedByDateKeys,
   taipeiLatestBookableDateKey,
   taipeiTodayDateKey,
   taipeiWeekdaySun0FromDateKey,
@@ -200,9 +203,9 @@ function render() {
   let bookingPickCalYear = 0;
   let bookingPickCalMonth = 0;
   let bookingPickCalDayCounts: Record<string, number> = {};
-  let bookingPickCalDayPeers: Record<string, string[]> = {};
+  let bookingPickCalDayPeers: Record<string, BookPickCalSlotLine[]> = {};
   let bookingPickCalCountsReq = 0;
-  const bookingPickCalPeersFetch = new Map<string, Promise<string[]>>();
+  const bookingPickCalPeersFetch = new Map<string, Promise<BookPickCalSlotLine[]>>();
   let bookPickCalHoverHideTimer = 0;
   let bookPickCalHoverShowDk = "";
   /** 點選／重繪月曆後短暫不顯示 hover 提示，避免 focusin 或重繪觸發的假 mouseenter */
@@ -298,12 +301,42 @@ function render() {
       : [];
   }
 
+  type BookPickCalSlotLine = { label: string; capOverflow?: boolean };
+
+  function parseBookPickCalSlotEntries(raw: unknown): BookPickCalSlotLine[] {
+    if (!Array.isArray(raw)) return [];
+    const out: BookPickCalSlotLine[] = [];
+    for (const item of raw) {
+      if (typeof item === "string" && item.trim()) {
+        out.push({ label: item.trim() });
+        continue;
+      }
+      if (!item || typeof item !== "object") continue;
+      const o = item as Record<string, unknown>;
+      const label = typeof o.label === "string" ? o.label.trim() : "";
+      if (!label) continue;
+      out.push({ label, capOverflow: o.capOverflow === true ? true : undefined });
+    }
+    return out;
+  }
+
+  function daySlotEntriesFromAvailability(data: {
+    daySlotsDetail?: unknown;
+    daySlotsMasked?: unknown;
+    dayPeersMasked?: unknown;
+  }): BookPickCalSlotLine[] {
+    const detail = parseBookPickCalSlotEntries(data.daySlotsDetail);
+    if (detail.length) return detail;
+    return nonEmptyStringLines(data.daySlotsMasked).map((label) => ({ label }));
+  }
+
   function daySlotLinesFromAvailability(data: {
+    daySlotsDetail?: unknown;
     daySlotsMasked?: unknown;
     dayPeersMasked?: unknown;
   }): string[] {
-    const slots = nonEmptyStringLines(data.daySlotsMasked);
-    if (slots.length) return slots;
+    const entries = daySlotEntriesFromAvailability(data);
+    if (entries.length) return entries.map((e) => e.label);
     return nonEmptyStringLines(data.dayPeersMasked);
   }
 
@@ -340,7 +373,7 @@ function render() {
     return el("span", { class: full ? "pill pill--cap-full" : "pill" }, children);
   }
 
-  function fillBookPickCalHoverTip(lines: string[]): void {
+  function fillBookPickCalHoverTip(entries: BookPickCalSlotLine[]): void {
     bookPickCalHoverTip.replaceChildren();
     bookPickCalHoverTip.append(
       el("span", { class: "book-pick-calendar__hover-tip-label" }, [
@@ -348,8 +381,19 @@ function render() {
       ]),
     );
     const list = el("ul", { class: "book-pick-calendar__hover-tip-list" });
-    for (const line of lines) {
-      list.append(el("li", {}, [line]));
+    for (const entry of entries) {
+      const li = el("li", {
+        class: entry.capOverflow ? "book-pick-calendar__hover-tip-item--cap-overflow" : undefined,
+      });
+      li.append(entry.label);
+      if (entry.capOverflow) {
+        li.append(
+          el("span", { class: "book-pick-calendar__hover-tip-tag" }, [
+            t("booking.calCapOverflowTag", "加價"),
+          ]),
+        );
+      }
+      list.append(li);
     }
     bookPickCalHoverTip.append(list);
   }
@@ -378,7 +422,7 @@ function render() {
     bookPickCalHoverTip.style.top = `${top}px`;
   }
 
-  async function ensureBookingPickCalDayPeers(dk: string): Promise<string[]> {
+  async function ensureBookingPickCalDayPeers(dk: string): Promise<BookPickCalSlotLine[]> {
     const cached = bookingPickCalDayPeers[dk];
     if (cached?.length) return cached;
     const pending = bookingPickCalPeersFetch.get(dk);
@@ -390,8 +434,12 @@ function render() {
           dateKey: dk,
           ...localeApiParam(),
         });
-        const data = res.data as { daySlotsMasked?: string[]; dayPeersMasked?: string[] };
-        const lines = daySlotLinesFromAvailability(data);
+        const data = res.data as {
+          daySlotsDetail?: unknown;
+          daySlotsMasked?: string[];
+          dayPeersMasked?: string[];
+        };
+        const lines = daySlotEntriesFromAvailability(data);
         mergeBookingPickCalDayPeers(dk, lines);
         return lines;
       } finally {
@@ -447,6 +495,7 @@ function render() {
   }
 
   function wireBookPickCalDayHover(node: HTMLElement, dk: string): void {
+    if (!bookingPickCalShouldShowCount(dk)) return;
     if ((bookingPickCalDayCounts[dk] ?? 0) <= 0) return;
     node.addEventListener("mouseenter", () => {
       void showBookPickCalHoverTip(node, dk);
@@ -461,7 +510,12 @@ function render() {
     node.addEventListener("focusout", () => hideBookPickCalHoverTip());
   }
 
+  function bookingPickCalShouldShowCount(dk: string): boolean {
+    return isDateKeyInBookingPickCalCountWindow(dk, true);
+  }
+
   function appendBookingPickCalDayBadge(parent: HTMLElement, dk: string): void {
+    if (!bookingPickCalShouldShowCount(dk)) return;
     const count = bookingPickCalDayCounts[dk] ?? 0;
     if (count <= 0) return;
     const badge = el("span", { class: "book-pick-calendar__badge" }, [String(count)]);
@@ -489,37 +543,67 @@ function render() {
     else delete bookingPickCalDayCounts[dk];
   }
 
-  function mergeBookingPickCalDayPeers(dk: string, peers: string[]): void {
+  function mergeBookingPickCalDayPeers(dk: string, peers: BookPickCalSlotLine[]): void {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dk)) return;
-    const list = peers.filter((x) => x.trim().length > 0);
+    const list = peers.filter((x) => x.label.trim().length > 0);
     if (list.length) bookingPickCalDayPeers[dk] = list;
     else delete bookingPickCalDayPeers[dk];
   }
 
-  function bookableDateKeysInPickMonth(y: number, mo: number): string[] {
-    const dim = daysInMonthFromOneIndexed(y, mo);
-    const keys: string[] = [];
-    for (let dayNum = 1; dayNum <= dim; dayNum++) {
-      const dk = dateKeyFromYmdTaipei(y, mo, dayNum);
-      if (bookablePickCell(dk)) keys.push(dk);
+  function mergeBookingPickCalMonthPayload(
+    displayKeySet: Set<string>,
+    data: {
+      counts?: Record<string, number>;
+      peersByDay?: Record<string, string[]>;
+      slotsByDay?: Record<string, string[]>;
+      slotsDetailByDay?: Record<string, unknown>;
+    },
+    next: Record<string, number>,
+    nextPeers: Record<string, BookPickCalSlotLine[]>,
+  ): void {
+    const raw = data.counts;
+    if (raw && typeof raw === "object") {
+      for (const [dk, n] of Object.entries(raw)) {
+        if (!displayKeySet.has(dk)) continue;
+        if (typeof n === "number" && Number.isFinite(n) && n > 0) next[dk] = Math.trunc(n);
+      }
     }
-    return keys;
-  }
-
-  async function refreshBookingPickCalDayCountsViaAvailability(
-    y: number,
-    mo: number,
-    reqId: number,
-  ): Promise<void> {
-    const keys = bookableDateKeysInPickMonth(y, mo);
-    if (keys.length === 0) {
-      bookingPickCalDayCounts = {};
-      bookingPickCalDayPeers = {};
+    const rawSlotsDetail = data.slotsDetailByDay;
+    if (rawSlotsDetail && typeof rawSlotsDetail === "object") {
+      for (const [dk, list] of Object.entries(rawSlotsDetail)) {
+        if (!displayKeySet.has(dk)) continue;
+        const entries = parseBookPickCalSlotEntries(list);
+        if (entries.length) nextPeers[dk] = entries;
+      }
       return;
     }
+    const rawSlots = data.slotsByDay;
+    if (rawSlots && typeof rawSlots === "object") {
+      for (const [dk, list] of Object.entries(rawSlots)) {
+        if (!displayKeySet.has(dk) || !Array.isArray(list)) continue;
+        const lines = list.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
+        if (lines.length) nextPeers[dk] = lines.map((label) => ({ label }));
+      }
+      return;
+    }
+    const rawPeers = data.peersByDay;
+    if (rawPeers && typeof rawPeers === "object") {
+      for (const [dk, list] of Object.entries(rawPeers)) {
+        if (!displayKeySet.has(dk) || !Array.isArray(list)) continue;
+        const peers = list.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
+        if (peers.length) nextPeers[dk] = peers.map((label) => ({ label }));
+      }
+    }
+  }
+
+  async function fetchBookingPickCalCountsViaAvailability(
+    keys: string[],
+    reqId: number,
+    next: Record<string, number>,
+    nextPeers: Record<string, BookPickCalSlotLine[]>,
+  ): Promise<void> {
+    if (keys.length === 0) return;
     const fn = getAvailabilityCall();
-    const next: Record<string, number> = {};
-    const nextPeers: Record<string, string[]> = {};
     await Promise.all(
       keys.map(async (dateKey) => {
         try {
@@ -527,79 +611,79 @@ function render() {
           if (reqId !== bookingPickCalCountsReq) return;
           const data = res.data as {
             dayCount?: number;
+            daySlotsDetail?: unknown;
             daySlotsMasked?: string[];
             dayPeersMasked?: string[];
           };
           if (typeof data.dayCount === "number" && data.dayCount > 0) {
             next[dateKey] = Math.trunc(data.dayCount);
+          } else {
+            delete next[dateKey];
           }
-          const lines = daySlotLinesFromAvailability(data);
-          if (lines.length) nextPeers[dateKey] = lines;
+          const entries = daySlotEntriesFromAvailability(data);
+          if (entries.length) nextPeers[dateKey] = entries;
+          else delete nextPeers[dateKey];
         } catch {
           /* 單日失敗略過 */
         }
       }),
     );
-    if (reqId !== bookingPickCalCountsReq) return;
-    bookingPickCalDayCounts = next;
-    bookingPickCalDayPeers = nextPeers;
   }
 
   async function refreshBookingPickCalDayCounts(): Promise<void> {
     if (bookingPickCalYear === 0) syncBookingPickCalendarCursorFromValue();
-    const y = bookingPickCalYear;
-    const mo = bookingPickCalMonth;
-    if (y === 0 || mo === 0) return;
+    if (bookingPickCalYear === 0 || bookingPickCalMonth === 0) return;
     const reqId = ++bookingPickCalCountsReq;
+    const displayKeys = bookingPickCalCountDateKeys(true);
+    const displayKeySet = new Set(displayKeys);
+    const next: Record<string, number> = {};
+    const nextPeers: Record<string, BookPickCalSlotLine[]> = {};
+    const todayK = taipeiTodayDateKey();
+    let monthFetchOk = false;
+
     try {
-      const fn = getBookingDayCountsCall();
-      const res = await fn({ year: y, month: mo, ...localeApiParam() });
-      if (reqId !== bookingPickCalCountsReq) return;
-      const data = res.data as {
-        counts?: Record<string, number>;
-        peersByDay?: Record<string, string[]>;
-        slotsByDay?: Record<string, string[]>;
-      };
-      const raw = data.counts;
-      if (raw && typeof raw === "object") {
-        const next: Record<string, number> = {};
-        for (const [dk, n] of Object.entries(raw)) {
-          if (typeof n === "number" && Number.isFinite(n) && n > 0) next[dk] = Math.trunc(n);
-        }
-        bookingPickCalDayCounts = next;
-      } else {
-        bookingPickCalDayCounts = {};
-      }
-      const rawSlots = data.slotsByDay;
-      const rawPeers = data.peersByDay;
-      if (rawSlots && typeof rawSlots === "object") {
-        const nextSlots: Record<string, string[]> = {};
-        for (const [dk, list] of Object.entries(rawSlots)) {
-          if (!Array.isArray(list)) continue;
-          const lines = list.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
-          if (lines.length) nextSlots[dk] = lines;
-        }
-        bookingPickCalDayPeers = nextSlots;
-      } else if (rawPeers && typeof rawPeers === "object") {
-        const nextPeers: Record<string, string[]> = {};
-        for (const [dk, list] of Object.entries(rawPeers)) {
-          if (!Array.isArray(list)) continue;
-          const peers = list.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
-          if (peers.length) nextPeers[dk] = peers;
-        }
-        bookingPickCalDayPeers = nextPeers;
-      } else {
-        bookingPickCalDayPeers = {};
-        const keysWithCounts = Object.keys(bookingPickCalDayCounts);
-        if (keysWithCounts.length > 0) {
-          await refreshBookingPickCalDayPeersForCounts(keysWithCounts, reqId);
-        }
-      }
+      const months = monthsSpannedByDateKeys(displayKeys);
+      await Promise.all(
+        months.map(async ({ y, m }) => {
+          const fn = getBookingDayCountsCall();
+          const res = await fn({ year: y, month: m, ...localeApiParam() });
+          if (reqId !== bookingPickCalCountsReq) return;
+          monthFetchOk = true;
+          mergeBookingPickCalMonthPayload(
+            displayKeySet,
+            res.data as {
+              counts?: Record<string, number>;
+              peersByDay?: Record<string, string[]>;
+              slotsByDay?: Record<string, string[]>;
+              slotsDetailByDay?: Record<string, unknown>;
+            },
+            next,
+            nextPeers,
+          );
+        }),
+      );
     } catch {
-      if (reqId !== bookingPickCalCountsReq) return;
-      await refreshBookingPickCalDayCountsViaAvailability(y, mo, reqId);
+      monthFetchOk = false;
     }
+
+    const keysViaAvailability = monthFetchOk
+      ? displayKeys.filter((dk) => dk < todayK || !(dk in next))
+      : displayKeys;
+    await fetchBookingPickCalCountsViaAvailability(keysViaAvailability, reqId, next, nextPeers);
+
+    const keysNeedingPeers = displayKeys.filter((dk) => (next[dk] ?? 0) > 0 && !(nextPeers[dk]?.length));
+    if (keysNeedingPeers.length > 0) {
+      await refreshBookingPickCalDayPeersForCounts(keysNeedingPeers, reqId);
+      for (const dk of keysNeedingPeers) {
+        if (reqId !== bookingPickCalCountsReq) return;
+        const peers = bookingPickCalDayPeers[dk];
+        if (peers?.length) nextPeers[dk] = peers;
+      }
+    }
+
     if (reqId !== bookingPickCalCountsReq) return;
+    bookingPickCalDayCounts = next;
+    bookingPickCalDayPeers = nextPeers;
     paintBookingPickCalendar();
   }
 
@@ -661,6 +745,10 @@ function render() {
         inactive.dataset.dateKey = dk;
         inactive.append(el("span", { class: "book-pick-calendar__day-num" }, [String(dayNum)]));
         appendBookingPickCalDayBadge(inactive, dk);
+        if (bookingPickCalShouldShowCount(dk) && (bookingPickCalDayCounts[dk] ?? 0) > 0) {
+          inactive.classList.add("book-pick-calendar__day--inactive-count");
+          wrap.classList.add("book-pick-calendar__cell--has-count");
+        }
         if (dk === todayK) inactive.classList.add("book-pick-calendar__day--today");
         if (dk === selected) inactive.classList.add("book-pick-calendar__day--selected");
         wireBookPickCalDayHover(wrap, dk);
@@ -1982,7 +2070,7 @@ function render() {
         const capFull = dayFull || weekFull;
         bookingCapOverflowOffer = capFull && capOverflowEnabledSetting;
         mergeBookingPickCalDayCount(dk, data.dayCount);
-        mergeBookingPickCalDayPeers(dk, daySlotLinesFromAvailability(data));
+        mergeBookingPickCalDayPeers(dk, daySlotEntriesFromAvailability(data));
         refreshBookingPickCalDayBadge(dk);
         const blocked = capFull && !bookingCapOverflowOffer;
         bookingCapacityBlocksSlots = blocked;

@@ -64,6 +64,47 @@ export function taipeiLatestBookableDateKey(): string {
   return addDaysTaipeiDateKey(taipeiMondayOfSameWeek(taipeiTodayDateKey()), 13);
 }
 
+/** 預約視窗起日：本週一（台北） */
+export function taipeiBookingWindowStartDateKey(): string {
+  return taipeiMondayOfSameWeek(taipeiTodayDateKey());
+}
+
+/** 預約月曆應顯示人數的 dateKey：本週一～下週日視窗內的週一～五（含已過日期） */
+export function bookingPickCalCountDateKeys(office: boolean): string[] {
+  const start = taipeiBookingWindowStartDateKey();
+  const end = taipeiLatestBookableDateKey();
+  const keys: string[] = [];
+  for (let dk = start; dk <= end; dk = addDaysTaipeiDateKey(dk, 1)) {
+    if (office ? isDateKeyMonFri(dk) : isDateKeySatSun(dk)) keys.push(dk);
+  }
+  return keys;
+}
+
+export function isDateKeyInBookingPickCalCountWindow(dateKey: string, office: boolean): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return false;
+  const start = taipeiBookingWindowStartDateKey();
+  const end = taipeiLatestBookableDateKey();
+  if (dateKey < start || dateKey > end) return false;
+  return office ? isDateKeyMonFri(dateKey) : isDateKeySatSun(dateKey);
+}
+
+/** 依 dateKey 列出所跨曆月（month 為 1–12） */
+export function monthsSpannedByDateKeys(dateKeys: string[]): { y: number; m: number }[] {
+  const seen = new Set<string>();
+  const out: { y: number; m: number }[] = [];
+  for (const dk of dateKeys) {
+    const m = /^(\d{4})-(\d{2})-\d{2}$/.exec(dk);
+    if (!m) continue;
+    const y = Number(m[1]);
+    const mo = Number(m[2]);
+    const k = `${y}-${mo}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push({ y, m: mo });
+  }
+  return out;
+}
+
 /** 後台預約月曆預設選取日期：從台北今日起往後找第一個仍在可預約視窗內的週一至週五 */
 export function defaultAdminCapacityProbeDateKey(): string {
   const minKey = taipeiTodayDateKey();

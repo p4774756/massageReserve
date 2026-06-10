@@ -37,11 +37,10 @@ export function bookingModeLabel(
   return labels[mode];
 }
 
-/** 後台狀態下拉：不含「已取消」（改由「取消」按鈕呼叫 cancelBooking） */
+/** 後台狀態下拉：待確認 → 已完成；不含「已確認」（與待確認重疊）與「已取消」（改由取消按鈕） */
 export function getAdminStatusSelectOptions(): { value: string; label: string }[] {
   return [
     { value: "pending", label: t("status.pending", "待確認") },
-    { value: "confirmed", label: t("status.confirmed", "已確認") },
     { value: "done", label: t("status.done", "已完成") },
   ];
 }
@@ -128,10 +127,10 @@ export function bookingCountsTowardAvailabilityCap(status: unknown): boolean {
   return n === "pending" || n === "confirmed" || n === "done";
 }
 
-/** 後台狀態下拉：與 option value（pending／confirmed／done）對齊，避免大小寫／空白導致無匹配 option、畫面卡在「待確認」 */
-export function adminSelectableBookingStatus(status: unknown): "pending" | "confirmed" | "done" {
+/** 後台狀態下拉：與 option value（pending／done）對齊；舊資料 confirmed 視同 pending */
+export function adminSelectableBookingStatus(status: unknown): "pending" | "done" {
   const n = bookingStatusNorm(status);
-  if (n === "confirmed" || n === "done") return n;
+  if (n === "done") return "done";
   return "pending";
 }
 

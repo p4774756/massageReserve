@@ -31,6 +31,7 @@ import {
   blockedReasonForSlot,
   bookingIntervalFromStartSlot,
   bookingRangeOverlaps,
+  countBookingsTowardCap,
   isBookingStartInPastTaipei,
   isHolidayOutcallBookableDay,
   isWeekday,
@@ -288,18 +289,27 @@ function listMaskedActiveBookerLabels(docs: QueryDocumentSnapshot[]): string[] {
 }
 
 /** 單日名單：每筆預約附開始時段（08:00 Jxxx），依時段排序 */
-function listMaskedDaySlotLabels(docs: QueryDocumentSnapshot[]): string[] {
-  const rows: { sortKey: string; label: string }[] = [];
+export type MaskedDaySlotEntry = { label: string; capOverflow: boolean };
+
+export function listMaskedDaySlotEntries(docs: QueryDocumentSnapshot[]): MaskedDaySlotEntry[] {
+  const rows: { sortKey: string; entry: MaskedDaySlotEntry }[] = [];
   for (const d of docs) {
     const masked = maskDisplayNameForPublic(d.get("displayName"));
     if (!masked) continue;
     const startSlotRaw = d.get("startSlot");
     const startSlot = typeof startSlotRaw === "string" ? startSlotRaw.trim() : "";
     const label = startSlot ? `${startSlot} ${masked}` : masked;
-    rows.push({ sortKey: `${startSlot}\t${d.id}`, label });
+    rows.push({
+      sortKey: `${startSlot}\t${d.id}`,
+      entry: { label, capOverflow: d.get("capOverflow") === true },
+    });
   }
   rows.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
-  return rows.map((r) => r.label);
+  return rows.map((r) => r.entry);
+}
+
+function listMaskedDaySlotLabels(docs: QueryDocumentSnapshot[]): string[] {
+  return listMaskedDaySlotEntries(docs).map((e) => e.label);
 }
 
 /** 本工作週名單：每筆預約附星期與時段（週一 08:00 Jxxx），依日期與時段排序 */
@@ -393,6 +403,7 @@ export const getAvailability = onCall(publicCall, async (request) => {
       capOverflowSurchargeNtd: 0,
       dayPeersMasked: [],
       daySlotsMasked: [],
+      daySlotsDetail: [],
       weekPeersMasked: [],
     };
   }
@@ -428,14 +439,8 @@ export const getAvailability = onCall(publicCall, async (request) => {
         BOOKING_UNIT_MINUTES_FIXED,
       ),
     }));
-  const dayCount =
-    excludeBookingId && daySnap.docs.some((d) => d.id === excludeBookingId)
-      ? Math.max(0, daySnap.size - 1)
-      : daySnap.size;
-  const weekCount =
-    excludeBookingId && weekSnap.docs.some((d) => d.id === excludeBookingId)
-      ? Math.max(0, weekSnap.size - 1)
-      : weekSnap.size;
+  const dayCount = countBookingsTowardCap(daySnap.docs, excludeBookingId || undefined);
+  const weekCount = countBookingsTowardCap(weekSnap.docs, excludeBookingId || undefined);
   const unavailableStarts = listUnavailableStartSlotsForDay({
     dateKey,
     durationMinutes,
@@ -446,6 +451,7 @@ export const getAvailability = onCall(publicCall, async (request) => {
   const blockedSlots = listBlockedStartSlotsForDate(dateKey, blockWindows, durationMinutes);
   const dayPeersMasked = listMaskedActiveBookerLabels(daySnap.docs);
   const daySlotsMasked = listMaskedDaySlotLabels(daySnap.docs);
+  const daySlotsDetail = listMaskedDaySlotEntries(daySnap.docs);
   const weekPeersMasked = listMaskedWeekBookerLabels(weekSnap.docs);
   return {
     taken: unavailableStarts,
@@ -463,11 +469,12 @@ export const getAvailability = onCall(publicCall, async (request) => {
     capOverflowSurchargeNtd: capOverflow.surchargeNtd,
     dayPeersMasked,
     daySlotsMasked,
+    daySlotsDetail,
     weekPeersMasked,
   };
 });
 
-/** 公開：月曆格顯示每日有效預約筆數（與名額統計相同之 ACTIVE_STATUSES） */
+/** 公開：月曆格顯示每日有效預約筆數（ACTIVE_STATUSES；不含 capOverflow 加價單） */
 export const getBookingDayCounts = onCall(publicCall, async (request) => {
   const locale = parseLocale(request.data);
   const yearRaw = request.data?.year;
@@ -506,14 +513,18 @@ export const getBookingDayCounts = onCall(publicCall, async (request) => {
   const counts: Record<string, number> = {};
   const peersByDay: Record<string, string[]> = {};
   const slotsByDay: Record<string, string[]> = {};
+  const slotsDetailByDay: Record<string, MaskedDaySlotEntry[]> = {};
   for (const [dk, docs] of byDay) {
-    counts[dk] = docs.length;
+    counts[dk] = countBookingsTowardCap(docs);
     const peers = listMaskedActiveBookerLabels(docs);
     if (peers.length) peersByDay[dk] = peers;
-    const slots = listMaskedDaySlotLabels(docs);
-    if (slots.length) slotsByDay[dk] = slots;
+    const slotEntries = listMaskedDaySlotEntries(docs);
+    if (slotEntries.length) {
+      slotsDetailByDay[dk] = slotEntries;
+      slotsByDay[dk] = slotEntries.map((e) => e.label);
+    }
   }
-  return { counts, peersByDay, slotsByDay };
+  return { counts, peersByDay, slotsByDay, slotsDetailByDay };
 });
 
 /**
@@ -698,8 +709,8 @@ export const createBooking = onCall(
       const [daySnap, weekSnap, capsSnap] = await Promise.all([tx.get(dayQ), tx.get(weekQ), tx.get(capsRef)]);
       const { maxPerDay, maxPerWorkWeek } = resolveBookingCaps(capsSnap.data());
       const capOverflowSettings = resolveCapOverflowSettings(capsSnap.data());
-      const dayFull = daySnap.size >= maxPerDay;
-      const weekFull = weekSnap.size >= maxPerWorkWeek;
+      const dayFull = countBookingsTowardCap(daySnap.docs) >= maxPerDay;
+      const weekFull = countBookingsTowardCap(weekSnap.docs) >= maxPerWorkWeek;
 
       if (capOverflowRequested) {
         if (!capOverflowSettings.enabled) {
@@ -2089,8 +2100,8 @@ export const rescheduleBookingAdmin = onCall(
         const { maxPerDay, maxPerWorkWeek } = resolveBookingCaps(capsSnap.data());
 
         if (!capOverflow) {
-          const dayCountExSelf = daySnap.docs.filter((d) => d.id !== bookingId).length;
-          const weekCountExSelf = weekSnap.docs.filter((d) => d.id !== bookingId).length;
+          const dayCountExSelf = countBookingsTowardCap(daySnap.docs, bookingId);
+          const weekCountExSelf = countBookingsTowardCap(weekSnap.docs, bookingId);
           if (previousDateKey !== dateKey && dayCountExSelf >= maxPerDay) {
             txError = new HttpsError(
               "resource-exhausted",
