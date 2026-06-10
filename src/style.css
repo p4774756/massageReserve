@@ -791,27 +791,6 @@ main.panel {
   gap: var(--section-gap);
 }
 
-main.panel.panel-book--has-notice {
-  padding-top: 14px;
-}
-
-.site-public-notice {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 8px 12px;
-  margin: 0 0 2px;
-  padding: 10px 12px 11px;
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface));
-  box-shadow: var(--shadow-sm);
-}
-
-.site-public-notice[hidden] {
-  display: none !important;
-}
-
 .book-service-pause {
   display: flex;
   flex-wrap: wrap;
@@ -899,54 +878,6 @@ main.panel.panel-book--has-notice {
 
 .admin-service-pause__footer > .status-line:empty {
   display: none;
-}
-
-.site-public-notice__label {
-  flex: 0 0 auto;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--accent);
-  padding: 2px 7px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--surface);
-}
-
-.site-public-notice__body {
-  flex: 1 1 12rem;
-  min-width: 0;
-  margin: 0;
-  font-size: 0.9rem;
-  line-height: 1.55;
-  color: var(--ink);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.site-public-notice__dismiss {
-  flex: 0 0 auto;
-  margin-left: auto;
-  padding: 4px 10px;
-  font-size: 0.82rem;
-}
-
-.admin-notice-expires-row {
-  margin-top: 6px;
-}
-
-.admin-notice-expires-row input[type="date"] {
-  flex: 1 1 12rem;
-  min-width: 0;
-}
-
-.site-public-notice-admin__text {
-  width: 100%;
-  min-height: 4.5rem;
-  resize: vertical;
-  font: inherit;
-  line-height: 1.5;
 }
 
 /* 作者樣式若指定 display:flex，會蓋過部分瀏覽器對 [hidden] 的預設，導致兩個 main 同時可見 */
@@ -6730,11 +6661,6 @@ html.sol-spa:not(:has(.shell.admin-mode)) main.panel {
 html.sol-spa:not(:has(.shell.admin-mode)) .book-form-top {
   border-color: rgb(58 52 44 / 0.8);
   background: color-mix(in srgb, var(--accent-soft) 35%, var(--surface));
-}
-
-html.sol-spa:not(:has(.shell.admin-mode)) .site-public-notice {
-  background: color-mix(in srgb, var(--accent-soft) 50%, var(--surface));
-  border-color: #5e4f41;
 }
 
 html.sol-spa:not(:has(.shell.admin-mode)) input,

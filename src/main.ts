@@ -23,7 +23,6 @@ import {
   spinWheelCall,
   listActiveWheelPrizesCall,
 } from "./firebase";
-import { createSitePublicNoticeBanner } from "./sitePublicNotice";
 import {
   formatServicePauseResumeLine,
   parseServicePause,
@@ -2497,12 +2496,7 @@ function render() {
   };
   syncBookMyBookingsTabVisibility();
 
-  const sitePublicNotice = createSitePublicNoticeBanner(db, {
-    onVisibilityChange(visible) {
-      panelBook.classList.toggle("panel-book--has-notice", visible);
-    },
-  });
-  panelBook.append(sitePublicNotice.element, bookTabList, bookPanelBook, bookPanelMyBookings);
+  panelBook.append(bookTabList, bookPanelBook, bookPanelMyBookings);
 
   /** --- 管理後台 --- */
   const adminWrap = el("div", {}, []);

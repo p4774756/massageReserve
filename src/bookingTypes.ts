@@ -35,6 +35,14 @@ export type Booking = {
   /** 建立時每單位分鐘數快照 */
   unitMinutesSnapshot?: number;
   price?: number;
+  walletDeducted?: number;
+  paidCash?: number;
+  /** 改扣次結帳前原現金應收（稽核） */
+  paidCashOriginal?: number;
+  sessionCreditsDeducted?: number;
+  /** 後台將現金預約改為扣次結帳 */
+  settledWithSessions?: boolean;
+  settlementNote?: string;
   /** 名額已滿時加價預約 */
   capOverflow?: boolean;
   capOverflowSurchargeNtd?: number;

@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import {
   cancelBookingCall,
+  settleBookingWithSessionsAdminCall,
   completeBookingCall,
   adjustSessionCreditsAdminCall,
   grantDrawChancesAdminCall,
@@ -42,6 +43,7 @@ import {
   memberBookingGetsStatusEmail,
   showAdminBookingStatusEmailNoteModal,
   showAdminCancelBookingModal,
+  showAdminSettleBookingSessionsModal,
 } from "./adminBookingModals";
 import { adminRescheduleErrorMessage, showAdminRescheduleBookingModal } from "./adminRescheduleModal";
 import {
@@ -52,6 +54,7 @@ import {
   bookingCountsTowardAvailabilityCap,
   bookingIsCancelledForAdmin,
   bookingIsDoneForAdmin,
+  bookingCanSettleWithSessions,
   bookingMemberYesNo,
   bookingModeLabel,
   bookingStatusLabel,
@@ -72,7 +75,6 @@ import {
   taipeiWeekdayNumMon1Sun7,
   taipeiWeekdaySun0FromDateKey,
 } from "./taipeiDates";
-import { PUBLIC_NOTICE_DOC_ID } from "./sitePublicNotice";
 import {
   DEFAULT_SERVICE_PAUSE_MESSAGE,
   SERVICE_PAUSE_DOC_ID,
@@ -109,7 +111,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
   let adminPricingUnsub: (() => void) | null = null;
   let adminBookingCapsUnsub: (() => void) | null = null;
   let adminBookingBlocksUnsub: (() => void) | null = null;
-  let adminPublicNoticeUnsub: (() => void) | null = null;
   let adminServicePauseUnsub: (() => void) | null = null;
   let bookingBlocksBeforeUnloadHandler: ((ev: BeforeUnloadEvent) => void) | null = null;
   let bookingBlocksHasUnsavedSnapshot: () => boolean = () => false;
@@ -137,10 +138,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     if (adminBookingBlocksUnsub) {
       adminBookingBlocksUnsub();
       adminBookingBlocksUnsub = null;
-    }
-    if (adminPublicNoticeUnsub) {
-      adminPublicNoticeUnsub();
-      adminPublicNoticeUnsub = null;
     }
     if (adminServicePauseUnsub) {
       adminServicePauseUnsub();
@@ -1282,113 +1279,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       ]),
     ]);
 
-    const publicNoticeDocRef = doc(db, "siteSettings", PUBLIC_NOTICE_DOC_ID);
-    const publicNoticeTextInput = el("textarea", {
-      class: "site-public-notice-admin__text",
-      rows: 3,
-      maxLength: 400,
-      placeholder: t("admin.notice.textPlaceholder", "例：本週五下午臨時休診，請改選其他日期。"),
-    });
-    const publicNoticeExpiresInput = el("input", { type: "date" });
-    const clearPublicNoticeExpiresBtn = el("button", { type: "button", class: "ghost admin-btn--muted" }, [
-      t("admin.notice.clearExpires", "清除到期日"),
-    ]);
-    const savePublicNoticeBtn = el("button", { type: "button", class: "primary" }, [
-      t("admin.notice.save", "儲存前台公告"),
-    ]);
-    const clearPublicNoticeBtn = el("button", { type: "button", class: "ghost admin-btn--danger" }, [
-      t("admin.notice.clear", "清空公告"),
-    ]);
-    const publicNoticeStatus = el("div", { class: "status-line" });
-
-    adminPublicNoticeUnsub = onSnapshot(
-      publicNoticeDocRef,
-      (snap) => {
-        const data = snap.data() as { text?: unknown; expiresOn?: unknown } | undefined;
-        publicNoticeTextInput.value = typeof data?.text === "string" ? data.text : "";
-        publicNoticeExpiresInput.value =
-          typeof data?.expiresOn === "string" && /^\d{4}-\d{2}-\d{2}$/.test(data.expiresOn.trim())
-            ? data.expiresOn.trim()
-            : "";
-      },
-      () => {
-        publicNoticeStatus.textContent = t("admin.notice.loadFail", "無法讀取前台公告。");
-        publicNoticeStatus.className = "status-line error";
-      },
-    );
-
-    async function persistPublicNotice(clear: boolean) {
-      publicNoticeStatus.textContent = "";
-      publicNoticeStatus.className = "status-line";
-      const text = clear ? "" : publicNoticeTextInput.value.trim().slice(0, 400);
-      const expiresRaw = clear ? "" : publicNoticeExpiresInput.value.trim();
-      const expiresOn = /^\d{4}-\d{2}-\d{2}$/.test(expiresRaw) ? expiresRaw : "";
-      if (!clear && expiresOn && expiresOn < taipeiTodayDateKey()) {
-        publicNoticeStatus.textContent = t(
-          "admin.notice.expiresPast",
-          "到期日不可早於今日（台北）；請改選今日或未來日期，或留空表示不自動下架。",
-        );
-        publicNoticeStatus.classList.add("error");
-        return;
-      }
-      savePublicNoticeBtn.setAttribute("disabled", "true");
-      clearPublicNoticeBtn.setAttribute("disabled", "true");
-      clearPublicNoticeExpiresBtn.setAttribute("disabled", "true");
-      publicNoticeStatus.textContent = t("admin.status.processing", "處理中…");
-      try {
-        const payload: Record<string, unknown> = {
-          text,
-          updatedAt: serverTimestamp(),
-        };
-        if (expiresOn) payload.expiresOn = expiresOn;
-        else payload.expiresOn = deleteField();
-        await setDoc(publicNoticeDocRef, payload, { merge: true });
-        if (clear) {
-          publicNoticeTextInput.value = "";
-          publicNoticeExpiresInput.value = "";
-        }
-        publicNoticeStatus.textContent = t("admin.status.updated", "已更新");
-        publicNoticeStatus.classList.add("ok");
-      } catch (e) {
-        publicNoticeStatus.textContent = e instanceof Error ? e.message : t("admin.memberList.saveFail", "儲存失敗");
-        publicNoticeStatus.classList.add("error");
-      } finally {
-        savePublicNoticeBtn.removeAttribute("disabled");
-        clearPublicNoticeBtn.removeAttribute("disabled");
-        clearPublicNoticeExpiresBtn.removeAttribute("disabled");
-      }
-    }
-
-    savePublicNoticeBtn.addEventListener("click", () => void persistPublicNotice(false));
-    clearPublicNoticeBtn.addEventListener("click", () => void persistPublicNotice(true));
-    clearPublicNoticeExpiresBtn.addEventListener("click", () => {
-      publicNoticeExpiresInput.value = "";
-      void persistPublicNotice(false);
-    });
-
-    const blockPublicNotice = el("section", { class: "admin-announce__block admin-announce__block--public-notice" }, [
-      el("h4", { class: "admin-announce__block-title" }, [t("admin.notice.blockTitle", "前台小公告")]),
-      el("p", { class: "hint admin-announce__block-lead" }, [
-        t(
-          "admin.notice.blockLead",
-          "顯示於預約頁訪次統計下方、分頁上方；訪客與會員皆可見。可選到期日（台北）：到期當天仍顯示，隔日起自動隱藏；留空則不自動下架。訪客可按「關閉」在本機暫時隱藏至您更新公告為止。",
-        ),
-      ]),
-      el("label", { class: "field" }, [
-        t("admin.notice.textLabel", "公告內文（留空即不顯示）"),
-        publicNoticeTextInput,
-      ]),
-      el("label", { class: "field" }, [
-        t("admin.notice.expiresLabel", "到期日（選填，台北時區）"),
-        el("div", { class: "row-actions admin-notice-expires-row" }, [
-          publicNoticeExpiresInput,
-          clearPublicNoticeExpiresBtn,
-        ]),
-      ]),
-      el("div", { class: "row-actions" }, [savePublicNoticeBtn, clearPublicNoticeBtn]),
-      publicNoticeStatus,
-    ]);
-
     const blockCaps = el("section", { class: "admin-announce__block admin-announce__block--caps" }, [
       el("h4", { class: "admin-announce__block-title" }, [t("admin.announce.blockCapsTitle", "預約名額")]),
       el("p", { class: "hint admin-announce__block-lead" }, [
@@ -1445,7 +1335,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     announcementSection.append(
       el("h3", { class: "admin-announce__page-title" }, [t("admin.announce.heading", "前台與預約規則")]),
       blockServicePause,
-      blockPublicNotice,
       blockCaps,
       announcePricingFlat,
       announceWheelRedeemBlock,
@@ -3095,7 +2984,44 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
               archiveBtn.removeAttribute("disabled");
             }
           });
-          const actionCell = el("div", { class: "admin-booking-actions" }, [cancelBtn, archiveBtn]);
+          const settleBtn = el("button", { class: "ghost", type: "button" }, [
+            t("admin.settleBooking.btn", "改扣次"),
+          ]);
+          const canSettle = bookingCanSettleWithSessions(b);
+          settleBtn.hidden = !canSettle;
+          settleBtn.title = canSettle
+            ? t("admin.settleBooking.btnTitle", "現金／加價現金預約改為扣次結帳")
+            : "";
+          settleBtn.addEventListener("click", async () => {
+            if (!canSettle) return;
+            const payload = await showAdminSettleBookingSessionsModal(b);
+            if (!payload) return;
+            adminStatus.textContent = t("admin.settleBooking.processing", "扣次結帳中…");
+            adminStatus.className = "status-line";
+            settleBtn.setAttribute("disabled", "true");
+            try {
+              const fn = settleBookingWithSessionsAdminCall();
+              await fn({
+                bookingId: b.id,
+                sessions: payload.sessions,
+                note: payload.note,
+                ...(payload.alreadyDeducted ? { alreadyDeducted: true } : {}),
+                ...localeApiParam(),
+              });
+              adminStatus.textContent = t("admin.settleBooking.done", "已改扣次結帳");
+              adminStatus.classList.add("ok");
+              await refreshWalletStatus({ keepWalletSummaryDuringFetch: true });
+            } catch (e) {
+              adminStatus.textContent = errorMessage(e);
+              adminStatus.classList.add("error");
+              settleBtn.removeAttribute("disabled");
+            }
+          });
+          const actionCell = el("div", { class: "admin-booking-actions" }, [
+            settleBtn,
+            cancelBtn,
+            archiveBtn,
+          ]);
           const cid = typeof b.customerId === "string" ? b.customerId.trim() : "";
           const canReschedule =
             !bookingIsCancelledForAdmin(b.status) && !bookingIsDoneForAdmin(b);

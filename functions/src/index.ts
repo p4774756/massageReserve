@@ -1434,6 +1434,11 @@ function isCashBookingMode(v: string): v is CashBookingMode {
   return (CASH_BOOKING_MODES as readonly string[]).includes(v);
 }
 
+function bookingSessionCreditsDeducted(d: Record<string, unknown>): number {
+  const raw = d.sessionCreditsDeducted;
+  return typeof raw === "number" ? Math.max(0, Math.floor(raw)) : 0;
+}
+
 function formatCashBookingHistoryNote(d: Record<string, unknown>): string {
   const dateKey = typeof d.dateKey === "string" ? d.dateKey : "";
   const startSlot = typeof d.startSlot === "string" ? d.startSlot : "";
@@ -1563,6 +1568,7 @@ export const listWalletTransactionsAdmin = onCall(publicCall, async (request) =>
       const d = docSnap.data() as Record<string, unknown>;
       const bookingMode = typeof d.bookingMode === "string" ? d.bookingMode : "";
       if (!isCashBookingMode(bookingMode)) return [];
+      if (d.settledWithSessions === true || bookingSessionCreditsDeducted(d) >= 1) return [];
       const paidCash = typeof d.paidCash === "number" ? d.paidCash : 0;
       const price = typeof d.price === "number" ? d.price : 0;
       const amount = paidCash > 0 ? paidCash : price;
@@ -1684,19 +1690,18 @@ export const getConsumptionStatsAdmin = onCall(publicCall, async (request) => {
   let bookingSnap;
   try {
     if (customerId) {
+      // 僅 equality，不需 customerId+dateKey 複合索引；日期區間於記憶體篩選
       bookingSnap = await db
         .collection("bookings")
         .where("customerId", "==", customerId)
-        .where("dateKey", ">=", dateFrom)
-        .where("dateKey", "<=", dateTo)
         .limit(CONSUMPTION_STATS_MAX_BOOKINGS)
         .get();
     } else {
+      // 僅 dateKey 區間（單欄位），status 於記憶體篩選
       bookingSnap = await db
         .collection("bookings")
         .where("dateKey", ">=", dateFrom)
         .where("dateKey", "<=", dateTo)
-        .where("status", "in", [...ACTIVE_STATUSES])
         .limit(CONSUMPTION_STATS_MAX_BOOKINGS)
         .get();
     }
@@ -1706,7 +1711,11 @@ export const getConsumptionStatsAdmin = onCall(publicCall, async (request) => {
     if (/requires an index/i.test(msg)) {
       throw new HttpsError(
         "failed-precondition",
-        st(locale, "consumptionStats.indexBuilding", "統計索引建立中，請數分鐘後再試。"),
+        st(
+          locale,
+          "consumptionStats.indexBuilding",
+          "統計查詢需要 Firestore 索引，請執行 firebase deploy --only firestore:indexes 後再試。",
+        ),
       );
     }
     throw new HttpsError("internal", st(locale, "consumptionStats.queryFail", "統計查詢失敗，請稍後再試。"));
@@ -1724,21 +1733,32 @@ export const getConsumptionStatsAdmin = onCall(publicCall, async (request) => {
 
   for (const docSnap of bookingSnap.docs) {
     const d = docSnap.data() as Record<string, unknown>;
+    const dateKey = typeof d.dateKey === "string" ? d.dateKey : "";
+    if (customerId && (dateKey < dateFrom || dateKey > dateTo)) continue;
+
     const status = typeof d.status === "string" ? d.status : "pending";
-    if (customerId && (status === "cancelled" || status === "deleted")) continue;
-    if (!customerId && !(ACTIVE_STATUSES as readonly string[]).includes(status)) continue;
+    if (status === "cancelled" || status === "deleted") continue;
+    if (!(ACTIVE_STATUSES as readonly string[]).includes(status)) continue;
 
     const bookingMode = typeof d.bookingMode === "string" ? d.bookingMode : "";
     if (!STATS_PAYMENT_MODES.includes(bookingMode as (typeof STATS_PAYMENT_MODES)[number])) continue;
 
     const paidCash = typeof d.paidCash === "number" ? d.paidCash : 0;
     const price = typeof d.price === "number" ? d.price : 0;
-    const cashNtd = STATS_CASH_BOOKING_MODES.has(bookingMode) ? (paidCash > 0 ? paidCash : price) : 0;
+    const sessionCreditsDeducted = bookingSessionCreditsDeducted(d);
+    const cashNtd =
+      STATS_CASH_BOOKING_MODES.has(bookingMode) && sessionCreditsDeducted < 1
+        ? paidCash > 0
+          ? paidCash
+          : price
+        : 0;
     const units = typeof d.units === "number" && d.units > 0 ? Math.floor(d.units) : 1;
-    const sessionCreditsDeductedRaw = d.sessionCreditsDeducted;
-    const sessionCreditsDeducted =
-      typeof sessionCreditsDeductedRaw === "number" ? Math.max(0, Math.floor(sessionCreditsDeductedRaw)) : 0;
-    const sessions = bookingMode === "member_wallet" ? (sessionCreditsDeducted >= 1 ? sessionCreditsDeducted : units) : 0;
+    const sessions =
+      bookingMode === "member_wallet" || sessionCreditsDeducted >= 1
+        ? sessionCreditsDeducted >= 1
+          ? sessionCreditsDeducted
+          : units
+        : 0;
 
     bookingCount += 1;
     cashTotalNtd += cashNtd;
@@ -1772,11 +1792,10 @@ export const getConsumptionStatsAdmin = onCall(publicCall, async (request) => {
   try {
     let walletSnap;
     if (customerId) {
+      // 僅 equality；日期區間於記憶體篩選（避免 customerId+createdAt 複合索引）
       walletSnap = await db
         .collection("walletTransactions")
         .where("customerId", "==", customerId)
-        .where("createdAt", ">=", startTs)
-        .where("createdAt", "<=", endTs)
         .limit(CONSUMPTION_STATS_MAX_WALLET_TX)
         .get();
     } else {
@@ -1791,6 +1810,10 @@ export const getConsumptionStatsAdmin = onCall(publicCall, async (request) => {
 
     for (const docSnap of walletSnap.docs) {
       const d = docSnap.data();
+      if (customerId) {
+        const createdSec = firestoreTimestampToSeconds(d.createdAt);
+        if (createdSec == null || createdSec < startSec || createdSec > endSec) continue;
+      }
       const type = typeof d.type === "string" ? d.type : "";
       if (type === STATS_WALLET_TOPUP) {
         topupAmountNtd += typeof d.amount === "number" ? d.amount : 0;
@@ -3109,6 +3132,192 @@ export const sendMemberDirectEmailAdmin = onCall(
   },
 );
 
+const SETTLE_BOOKING_SESSIONS_MIN = 1;
+const SETTLE_BOOKING_SESSIONS_MAX = 50;
+const SETTLE_BOOKING_NOTE_MIN = 3;
+const SETTLE_BOOKING_NOTE_MAX = 500;
+
+/**
+ * 管理員：將現金／加價現金／QR 預約改為扣次結帳（扣 sessionCredits、寫 session_charge、預約標記 settledWithSessions）。
+ */
+export const settleBookingWithSessionsAdmin = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
+  const operatorUid = request.auth?.uid;
+  if (!operatorUid) {
+    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
+  }
+  await assertAdminByUid(operatorUid, locale);
+
+  const bookingId = typeof request.data?.bookingId === "string" ? request.data.bookingId.trim() : "";
+  if (!bookingId) {
+    throw new HttpsError("invalid-argument", st(locale, "booking.idRequired", "bookingId 必填"));
+  }
+
+  const noteRaw = typeof request.data?.note === "string" ? request.data.note.trim() : "";
+  if (noteRaw.length < SETTLE_BOOKING_NOTE_MIN) {
+    throw new HttpsError(
+      "invalid-argument",
+      st(locale, "settleBooking.noteTooShort", "備註至少 {{min}} 字，請簡述現場約定。", { min: SETTLE_BOOKING_NOTE_MIN }),
+    );
+  }
+  if (noteRaw.length > SETTLE_BOOKING_NOTE_MAX) {
+    throw new HttpsError(
+      "invalid-argument",
+      st(locale, "settleBooking.noteTooLong", "備註不可超過 {{max}} 字。", { max: SETTLE_BOOKING_NOTE_MAX }),
+    );
+  }
+
+  const sessionsRaw = request.data?.sessions ?? request.data?.units;
+  let sessions = typeof sessionsRaw === "number" && Number.isFinite(sessionsRaw) ? Math.floor(sessionsRaw) : 0;
+  if (sessions > SETTLE_BOOKING_SESSIONS_MAX) {
+    throw new HttpsError(
+      "invalid-argument",
+      st(locale, "settleBooking.sessionsRange", "扣次數須為 {{min}}～{{max}} 的整數。", {
+        min: SETTLE_BOOKING_SESSIONS_MIN,
+        max: SETTLE_BOOKING_SESSIONS_MAX,
+      }),
+    );
+  }
+
+  const alreadyDeducted = request.data?.alreadyDeducted === true;
+
+  const bookingRef = db.collection("bookings").doc(bookingId);
+  const walletTxRef = db.collection("walletTransactions").doc();
+
+  await db.runTransaction(async (tx) => {
+    const bookingSnap = await tx.get(bookingRef);
+    if (!bookingSnap.exists) {
+      throw new HttpsError("not-found", st(locale, "booking.notFound", "找不到預約"));
+    }
+    const data = bookingSnap.data() as Record<string, unknown>;
+    const status = (data.status as BookingStatus | undefined) ?? "pending";
+    if (status === "cancelled") {
+      throw new HttpsError("failed-precondition", st(locale, "settleBooking.cancelled", "已取消的預約不可改扣次結帳。"));
+    }
+    if (status === "deleted") {
+      throw new HttpsError("failed-precondition", st(locale, "settleBooking.deleted", "已刪除的預約不可改扣次結帳。"));
+    }
+
+    const customerId = typeof data.customerId === "string" ? data.customerId.trim() : "";
+    if (!customerId) {
+      throw new HttpsError("failed-precondition", st(locale, "settleBooking.needMember", "此預約無會員，無法扣次結帳。"));
+    }
+
+    const bookingMode = typeof data.bookingMode === "string" ? data.bookingMode : "";
+    if (!isCashBookingMode(bookingMode)) {
+      throw new HttpsError(
+        "failed-precondition",
+        st(locale, "settleBooking.badMode", "僅現金、QR 或加價現金預約可改為扣次結帳。"),
+      );
+    }
+
+    if (data.settledWithSessions === true || bookingSessionCreditsDeducted(data) >= 1) {
+      throw new HttpsError("failed-precondition", st(locale, "settleBooking.already", "此預約已扣次結帳。"));
+    }
+
+    const unitsDefault =
+      typeof data.units === "number" && data.units > 0 ? Math.floor(data.units) : SETTLE_BOOKING_SESSIONS_MIN;
+    if (sessions < 1) sessions = unitsDefault;
+    if (sessions < SETTLE_BOOKING_SESSIONS_MIN || sessions > SETTLE_BOOKING_SESSIONS_MAX) {
+      throw new HttpsError(
+        "invalid-argument",
+        st(locale, "settleBooking.sessionsRange", "扣次數須為 {{min}}～{{max}} 的整數。", {
+          min: SETTLE_BOOKING_SESSIONS_MIN,
+          max: SETTLE_BOOKING_SESSIONS_MAX,
+        }),
+      );
+    }
+
+    const paidCashRaw = typeof data.paidCash === "number" ? data.paidCash : 0;
+    const priceRaw = typeof data.price === "number" ? data.price : 0;
+    const paidCashOriginal = paidCashRaw > 0 ? paidCashRaw : priceRaw;
+
+    const pricingRef = db.collection("siteSettings").doc("pricing");
+    const customerRef = db.collection("customers").doc(customerId);
+    const [pricingSnap, customerSnap] = await Promise.all([tx.get(pricingRef), tx.get(customerRef)]);
+    const sessionPriceNtd = resolveSessionPriceNtd(pricingSnap.data());
+
+    const walletBalanceRaw = customerSnap.exists ? customerSnap.get("walletBalance") : 0;
+    const sessionCreditsRaw = customerSnap.exists ? customerSnap.get("sessionCredits") : 0;
+    const drawChancesRaw = customerSnap.exists ? customerSnap.get("drawChances") : 0;
+    const wheelPointsRaw = customerSnap.exists ? customerSnap.get("wheelPoints") : 0;
+    let walletBalance = typeof walletBalanceRaw === "number" ? walletBalanceRaw : 0;
+    let sessionCredits = typeof sessionCreditsRaw === "number" ? sessionCreditsRaw : 0;
+    const drawChances = typeof drawChancesRaw === "number" ? drawChancesRaw : 0;
+    const wheelPoints = typeof wheelPointsRaw === "number" ? wheelPointsRaw : 0;
+    const folded = foldWalletBalanceIntoSessions(walletBalance, sessionCredits, sessionPriceNtd);
+    walletBalance = folded.walletBalance;
+    sessionCredits = folded.sessionCredits;
+
+    if (!alreadyDeducted) {
+      if (sessionCredits < sessions) {
+        throw new HttpsError(
+          "failed-precondition",
+          st(
+            locale,
+            "settleBooking.insufficient",
+            "會員可預約次數不足（目前 {{have}} 次，需扣 {{need}} 次）。",
+            { have: sessionCredits, need: sessions },
+          ),
+        );
+      }
+      sessionCredits -= sessions;
+
+      tx.set(
+        customerRef,
+        {
+          walletBalance,
+          sessionCredits,
+          drawChances,
+          wheelPoints,
+          updatedAt: FieldValueOrServerTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+
+    const dateKey = typeof data.dateKey === "string" ? data.dateKey : "";
+    const startSlot = typeof data.startSlot === "string" ? data.startSlot : "";
+    const whenPart = [dateKey, startSlot].filter(Boolean).join(" ");
+    const txNote = [
+      alreadyDeducted
+        ? `標記改扣次結帳：${sessions} 次（原 ${bookingMode}${paidCashOriginal > 0 ? ` ${paidCashOriginal} 元` : ""}；次數已於他處扣除）`
+        : `改扣次結帳：${sessions} 次（原 ${bookingMode}${paidCashOriginal > 0 ? ` ${paidCashOriginal} 元` : ""}）`,
+      whenPart ? `預約 ${whenPart}` : "",
+      noteRaw,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+
+    if (!alreadyDeducted) {
+      tx.set(walletTxRef, {
+        customerId,
+        bookingId,
+        type: "session_charge",
+        amount: 0,
+        sessionsDelta: -sessions,
+        sessionPriceSnapshot: sessionPriceNtd,
+        note: txNote,
+        operatorId: operatorUid,
+        createdAt: FieldValueOrServerTimestamp(),
+      });
+    }
+
+    tx.update(bookingRef, {
+      sessionCreditsDeducted: sessions,
+      paidCash: 0,
+      paidCashOriginal,
+      settledWithSessions: true,
+      settlementNote: noteRaw,
+      settledWithSessionsAt: FieldValueOrServerTimestamp(),
+      settledWithSessionsBy: operatorUid,
+      updatedAt: FieldValueOrServerTimestamp(),
+    });
+  });
+
+  return { ok: true as const, bookingId, sessions };
+});
+
 export const cancelBooking = onCall(publicCall, async (request) => {
   const locale = parseLocale(request.data);
   const uid = request.auth?.uid;
@@ -3169,8 +3378,7 @@ export const cancelBooking = onCall(publicCall, async (request) => {
     const bookingMode = typeof data.bookingMode === "string" ? data.bookingMode : "";
     const legacyWalletRefund =
       customerId && bookingMode === "member_wallet" && walletDeducted > 0 && sessionCreditsDeducted < 1;
-    const sessionRefund =
-      customerId && bookingMode === "member_wallet" && sessionCreditsDeducted >= 1;
+    const sessionRefund = customerId && sessionCreditsDeducted >= 1 && !legacyWalletRefund;
 
     if (legacyWalletRefund) {
       const customerRef = db.collection("customers").doc(customerId);

@@ -162,8 +162,35 @@ export function adminBookingStatusUpdateError(e: unknown): string {
 
 /** 後台預約表：建立當下寫入的總價快照（`bookings.price`） */
 export function adminBookingPriceDisplay(
-  b: Pick<Booking, "price" | "capOverflow" | "capOverflowSurchargeNtd">,
+  b: Pick<
+    Booking,
+    | "price"
+    | "capOverflow"
+    | "capOverflowSurchargeNtd"
+    | "settledWithSessions"
+    | "sessionCreditsDeducted"
+    | "paidCashOriginal"
+  >,
 ): { text: string; title?: string } {
+  const settled = b.settledWithSessions === true;
+  const deducted =
+    typeof b.sessionCreditsDeducted === "number" && b.sessionCreditsDeducted > 0
+      ? Math.floor(b.sessionCreditsDeducted)
+      : 0;
+  if (settled && deducted > 0) {
+    const orig =
+      typeof b.paidCashOriginal === "number" && b.paidCashOriginal > 0
+        ? b.paidCashOriginal
+        : typeof b.price === "number"
+          ? b.price
+          : 0;
+    return {
+      text: t("admin.table.priceSettledSessions", "扣 {{n}} 次", { n: deducted }),
+      title: t("admin.table.priceSettledSessionsTitle", "原應收 {{amount}} 元，已改扣次結帳", {
+        amount: String(orig),
+      }),
+    };
+  }
   const p = b.price;
   if (typeof p === "number" && Number.isFinite(p) && p > 0) {
     let title = t("admin.table.priceSnapshotTitle", "建立預約時寫入的總價");
@@ -197,4 +224,20 @@ export function bookingMemberYesNo(b: Pick<Booking, "bookingMode" | "customerId"
   if (typeof mode === "string" && mode.startsWith("member_")) return t("guest.yes", "是");
   if (typeof b.customerId === "string" && b.customerId.length > 0) return t("guest.yes", "是");
   return t("guest.dash", "—");
+}
+
+const CASH_SETTLE_BOOKING_MODES = new Set(["member_cash", "member_qr", "member_cap_overflow"]);
+
+/** 後台：現金類預約是否可改為扣次結帳 */
+export function bookingCanSettleWithSessions(
+  b: Pick<Booking, "bookingMode" | "customerId" | "status" | "settledWithSessions" | "sessionCreditsDeducted">,
+): boolean {
+  const mode = typeof b.bookingMode === "string" ? b.bookingMode : "";
+  if (!CASH_SETTLE_BOOKING_MODES.has(mode)) return false;
+  const cid = typeof b.customerId === "string" ? b.customerId.trim() : "";
+  if (!cid) return false;
+  if (b.settledWithSessions === true) return false;
+  if (typeof b.sessionCreditsDeducted === "number" && b.sessionCreditsDeducted >= 1) return false;
+  const st = bookingStatusNorm(b.status);
+  return st !== "cancelled" && st !== "deleted";
 }
