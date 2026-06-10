@@ -1411,10 +1411,43 @@ export const grantDrawChancesAdmin = onCall(walletAdminCall, async (request) => 
   return { ok: true as const, drawChancesAdded: delta, drawChancesTotal };
 });
 
-const ADMIN_WALLET_TX_TYPES = ["topup", "admin_session_adjust", "admin_grant_draw"] as const;
+const ADMIN_WALLET_TX_TYPES = [
+  "topup",
+  "admin_session_adjust",
+  "admin_grant_draw",
+  "session_charge",
+  "session_refund",
+  "refund",
+  "points_redeem",
+  "prize_points",
+] as const;
 type AdminWalletTxType = (typeof ADMIN_WALLET_TX_TYPES)[number];
 
-/** 後台：查詢會員儲值／調整次數／贈送抽獎之 walletTransactions 稽核紀錄 */
+const CASH_BOOKING_MODES = ["member_cash", "member_qr", "member_cap_overflow"] as const;
+type CashBookingMode = (typeof CASH_BOOKING_MODES)[number];
+
+function isAdminWalletTxType(v: string): v is AdminWalletTxType {
+  return (ADMIN_WALLET_TX_TYPES as readonly string[]).includes(v);
+}
+
+function isCashBookingMode(v: string): v is CashBookingMode {
+  return (CASH_BOOKING_MODES as readonly string[]).includes(v);
+}
+
+function formatCashBookingHistoryNote(d: Record<string, unknown>): string {
+  const dateKey = typeof d.dateKey === "string" ? d.dateKey : "";
+  const startSlot = typeof d.startSlot === "string" ? d.startSlot : "";
+  const status = typeof d.status === "string" ? d.status : "";
+  const displayName = typeof d.displayName === "string" ? d.displayName.trim() : "";
+  const userNote = typeof d.note === "string" ? d.note.trim() : "";
+  const whenPart = [dateKey, startSlot].filter(Boolean).join(" ");
+  const statusPart = status ? `狀態：${status}` : "";
+  const namePart = displayName ? `姓名：${displayName}` : "";
+  const notePart = userNote ? `備註：${userNote}` : "";
+  return [whenPart, statusPart, namePart, notePart].filter(Boolean).join(" · ");
+}
+
+/** 後台：查詢會員現金預約、walletTransactions 消費／儲值／調整等稽核紀錄 */
 export const listWalletTransactionsAdmin = onCall(publicCall, async (request) => {
   const locale = parseLocale(request.data);
   const uid = request.auth?.uid;
@@ -1429,9 +1462,9 @@ export const listWalletTransactionsAdmin = onCall(publicCall, async (request) =>
   }
 
   const typeFilterRaw = typeof request.data?.typeFilter === "string" ? request.data.typeFilter.trim() : "";
-  const typeFilter = ADMIN_WALLET_TX_TYPES.includes(typeFilterRaw as AdminWalletTxType)
-    ? (typeFilterRaw as AdminWalletTxType)
-    : null;
+  const typeFilterWallet = isAdminWalletTxType(typeFilterRaw) ? typeFilterRaw : null;
+  const typeFilterBooking = isCashBookingMode(typeFilterRaw) ? typeFilterRaw : null;
+  const typeFilter = typeFilterWallet ?? typeFilterBooking;
 
   const limitRaw = request.data?.limit;
   let limit = 50;
@@ -1441,52 +1474,381 @@ export const listWalletTransactionsAdmin = onCall(publicCall, async (request) =>
 
   const customerId = await resolveCustomerUidForTopup(customerIdRaw, locale);
   const fetchLimit = typeFilter ? limit : Math.min(200, limit * 4);
+  const needWallet = !typeFilter || typeFilterWallet != null;
+  const needBookings = !typeFilter || typeFilterBooking != null;
 
-  let snap;
-  try {
-    // 僅依 customerId 篩選，記憶體排序，避免複合索引建立中導致查詢失敗
-    snap = await db.collection("walletTransactions").where("customerId", "==", customerId).limit(fetchLimit).get();
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error("listWalletTransactionsAdmin query failed", customerId, e);
-    if (/requires an index/i.test(msg)) {
-      throw new HttpsError(
-        "failed-precondition",
-        st(
-          locale,
-          "walletHistory.indexBuilding",
-          "紀錄索引建立中，請數分鐘後再試；若持續失敗請聯絡管理員。",
-        ),
-      );
+  type HistoryRow = {
+    id: string;
+    type: string;
+    amount: number;
+    sessionsDelta: number | null;
+    drawChancesDelta: number | null;
+    note: string;
+    operatorId: string;
+    createdAt: number | null;
+    bookingId?: string;
+  };
+
+  let transactions: HistoryRow[] = [];
+
+  if (needWallet) {
+    let snap;
+    try {
+      // 僅依 customerId 篩選，記憶體排序，避免複合索引建立中導致查詢失敗
+      snap = await db.collection("walletTransactions").where("customerId", "==", customerId).limit(fetchLimit).get();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("listWalletTransactionsAdmin query failed", customerId, e);
+      if (/requires an index/i.test(msg)) {
+        throw new HttpsError(
+          "failed-precondition",
+          st(
+            locale,
+            "walletHistory.indexBuilding",
+            "紀錄索引建立中，請數分鐘後再試；若持續失敗請聯絡管理員。",
+          ),
+        );
+      }
+      throw new HttpsError("internal", st(locale, "walletHistory.queryFail", "查詢紀錄失敗，請稍後再試。"));
     }
-    throw new HttpsError("internal", st(locale, "walletHistory.queryFail", "查詢紀錄失敗，請稍後再試。"));
+
+    transactions = snap.docs
+      .map((docSnap) => {
+        const d = docSnap.data();
+        const type = typeof d.type === "string" ? d.type : "";
+        return {
+          id: docSnap.id,
+          type,
+          amount: typeof d.amount === "number" ? d.amount : 0,
+          sessionsDelta: typeof d.sessionsDelta === "number" ? d.sessionsDelta : null,
+          drawChancesDelta: typeof d.drawChancesDelta === "number" ? d.drawChancesDelta : null,
+          note: typeof d.note === "string" ? d.note : "",
+          operatorId: typeof d.operatorId === "string" ? d.operatorId : "",
+          createdAt: firestoreTimestampToSeconds(d.createdAt),
+        };
+      })
+      .filter((row) => isAdminWalletTxType(row.type));
+
+    if (typeFilterWallet) {
+      transactions = transactions.filter((row) => row.type === typeFilterWallet);
+    }
   }
 
-  let transactions = snap.docs
-    .map((docSnap) => {
-      const d = docSnap.data();
-      const type = typeof d.type === "string" ? d.type : "";
-      return {
-        id: docSnap.id,
-        type,
-        amount: typeof d.amount === "number" ? d.amount : 0,
-        sessionsDelta: typeof d.sessionsDelta === "number" ? d.sessionsDelta : null,
-        drawChancesDelta: typeof d.drawChancesDelta === "number" ? d.drawChancesDelta : null,
-        note: typeof d.note === "string" ? d.note : "",
-        operatorId: typeof d.operatorId === "string" ? d.operatorId : "",
-        createdAt: firestoreTimestampToSeconds(d.createdAt),
+  if (needBookings) {
+    let bookingSnap;
+    try {
+      bookingSnap = await db
+        .collection("bookings")
+        .where("customerId", "==", customerId)
+        .orderBy("startAt", "desc")
+        .limit(fetchLimit)
+        .get();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("listWalletTransactionsAdmin bookings query failed", customerId, e);
+      if (/requires an index/i.test(msg)) {
+        throw new HttpsError(
+          "failed-precondition",
+          st(
+            locale,
+            "walletHistory.indexBuilding",
+            "紀錄索引建立中，請數分鐘後再試；若持續失敗請聯絡管理員。",
+          ),
+        );
+      }
+      throw new HttpsError("internal", st(locale, "walletHistory.queryFail", "查詢紀錄失敗，請稍後再試。"));
+    }
+
+    const bookingRows = bookingSnap.docs.flatMap((docSnap) => {
+      const d = docSnap.data() as Record<string, unknown>;
+      const bookingMode = typeof d.bookingMode === "string" ? d.bookingMode : "";
+      if (!isCashBookingMode(bookingMode)) return [];
+      const paidCash = typeof d.paidCash === "number" ? d.paidCash : 0;
+      const price = typeof d.price === "number" ? d.price : 0;
+      const amount = paidCash > 0 ? paidCash : price;
+      const createdAt =
+        firestoreTimestampToSeconds(d.createdAt) ?? firestoreTimestampToSeconds(d.startAt);
+      const row: HistoryRow = {
+        id: `booking:${docSnap.id}`,
+        type: bookingMode,
+        amount,
+        sessionsDelta: null,
+        drawChancesDelta: null,
+        note: formatCashBookingHistoryNote(d),
+        operatorId: "",
+        createdAt,
+        bookingId: docSnap.id,
       };
-    })
-    .filter((row) => ADMIN_WALLET_TX_TYPES.includes(row.type as AdminWalletTxType));
+      return [row];
+    });
 
-  if (typeFilter) {
-    transactions = transactions.filter((row) => row.type === typeFilter);
+    const filteredBookingRows = typeFilterBooking
+      ? bookingRows.filter((row) => row.type === typeFilterBooking)
+      : bookingRows;
+    transactions = transactions.concat(filteredBookingRows);
   }
+
   transactions = transactions
     .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
     .slice(0, limit);
 
   return { customerId, transactions };
+});
+
+const STATS_CASH_BOOKING_MODES = new Set(["member_cash", "member_qr", "member_cap_overflow"]);
+const STATS_PAYMENT_MODES = [
+  "member_cash",
+  "member_qr",
+  "member_cap_overflow",
+  "member_wallet",
+  "member_beverage",
+] as const;
+const STATS_WALLET_TOPUP = "topup";
+const STATS_WALLET_ADJUST = "admin_session_adjust";
+const CONSUMPTION_STATS_MAX_BOOKINGS = 2500;
+const CONSUMPTION_STATS_MAX_WALLET_TX = 2500;
+const CONSUMPTION_STATS_MAX_RANGE_DAYS = 366;
+
+function parseTaipeiDateKeyInput(raw: unknown, locale: ServerLocale, labelKey: string, labelFallback: string): string {
+  const s = typeof raw === "string" ? raw.trim() : "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    throw new HttpsError("invalid-argument", st(locale, labelKey, labelFallback));
+  }
+  const dt = DateTime.fromISO(s, { zone: TIMEZONE }).startOf("day");
+  if (!dt.isValid) {
+    throw new HttpsError("invalid-argument", st(locale, labelKey, labelFallback));
+  }
+  return s;
+}
+
+function taipeiDateKeyRangeSeconds(from: string, to: string): { startSec: number; endSec: number } {
+  const start = DateTime.fromISO(from, { zone: TIMEZONE }).startOf("day");
+  const end = DateTime.fromISO(to, { zone: TIMEZONE }).endOf("day");
+  return { startSec: Math.floor(start.toSeconds()), endSec: Math.floor(end.toSeconds()) };
+}
+
+type ConsumptionStatsByModeRow = {
+  mode: string;
+  bookingCount: number;
+  cashNtd: number;
+  sessions: number;
+};
+
+type ConsumptionStatsTopMemberRow = {
+  customerId: string;
+  email: string | null;
+  bookingCount: number;
+  cashNtd: number;
+  sessions: number;
+};
+
+/** 後台：依日期區間統計會員消費（現金／扣次／付款方式分布；可選單一會員） */
+export const getConsumptionStatsAdmin = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
+  }
+  await assertAdminByUid(uid, locale);
+
+  const dateFrom = parseTaipeiDateKeyInput(
+    request.data?.dateFrom,
+    locale,
+    "consumptionStats.badFrom",
+    "起始日期格式須為 YYYY-MM-DD",
+  );
+  const dateTo = parseTaipeiDateKeyInput(
+    request.data?.dateTo,
+    locale,
+    "consumptionStats.badTo",
+    "結束日期格式須為 YYYY-MM-DD",
+  );
+  if (dateFrom > dateTo) {
+    throw new HttpsError("invalid-argument", st(locale, "consumptionStats.badRange", "起始日期不可晚於結束日期"));
+  }
+  const fromDt = DateTime.fromISO(dateFrom, { zone: TIMEZONE }).startOf("day");
+  const toDt = DateTime.fromISO(dateTo, { zone: TIMEZONE }).startOf("day");
+  const spanDays = Math.floor(toDt.diff(fromDt, "days").days) + 1;
+  if (spanDays > CONSUMPTION_STATS_MAX_RANGE_DAYS) {
+    throw new HttpsError(
+      "invalid-argument",
+      st(locale, "consumptionStats.rangeTooLong", "查詢區間最長 {{days}} 天", {
+        days: CONSUMPTION_STATS_MAX_RANGE_DAYS,
+      }),
+    );
+  }
+
+  const customerIdRaw = typeof request.data?.customerId === "string" ? request.data.customerId.trim() : "";
+  const customerId = customerIdRaw ? await resolveCustomerUidForTopup(customerIdRaw, locale) : null;
+
+  let bookingSnap;
+  try {
+    if (customerId) {
+      bookingSnap = await db
+        .collection("bookings")
+        .where("customerId", "==", customerId)
+        .where("dateKey", ">=", dateFrom)
+        .where("dateKey", "<=", dateTo)
+        .limit(CONSUMPTION_STATS_MAX_BOOKINGS)
+        .get();
+    } else {
+      bookingSnap = await db
+        .collection("bookings")
+        .where("dateKey", ">=", dateFrom)
+        .where("dateKey", "<=", dateTo)
+        .where("status", "in", [...ACTIVE_STATUSES])
+        .limit(CONSUMPTION_STATS_MAX_BOOKINGS)
+        .get();
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("getConsumptionStatsAdmin bookings query failed", e);
+    if (/requires an index/i.test(msg)) {
+      throw new HttpsError(
+        "failed-precondition",
+        st(locale, "consumptionStats.indexBuilding", "統計索引建立中，請數分鐘後再試。"),
+      );
+    }
+    throw new HttpsError("internal", st(locale, "consumptionStats.queryFail", "統計查詢失敗，請稍後再試。"));
+  }
+
+  const byMode = new Map<string, ConsumptionStatsByModeRow>();
+  for (const mode of STATS_PAYMENT_MODES) {
+    byMode.set(mode, { mode, bookingCount: 0, cashNtd: 0, sessions: 0 });
+  }
+  const byMember = new Map<string, { bookingCount: number; cashNtd: number; sessions: number }>();
+
+  let bookingCount = 0;
+  let cashTotalNtd = 0;
+  let sessionsConsumed = 0;
+
+  for (const docSnap of bookingSnap.docs) {
+    const d = docSnap.data() as Record<string, unknown>;
+    const status = typeof d.status === "string" ? d.status : "pending";
+    if (customerId && (status === "cancelled" || status === "deleted")) continue;
+    if (!customerId && !(ACTIVE_STATUSES as readonly string[]).includes(status)) continue;
+
+    const bookingMode = typeof d.bookingMode === "string" ? d.bookingMode : "";
+    if (!STATS_PAYMENT_MODES.includes(bookingMode as (typeof STATS_PAYMENT_MODES)[number])) continue;
+
+    const paidCash = typeof d.paidCash === "number" ? d.paidCash : 0;
+    const price = typeof d.price === "number" ? d.price : 0;
+    const cashNtd = STATS_CASH_BOOKING_MODES.has(bookingMode) ? (paidCash > 0 ? paidCash : price) : 0;
+    const units = typeof d.units === "number" && d.units > 0 ? Math.floor(d.units) : 1;
+    const sessionCreditsDeductedRaw = d.sessionCreditsDeducted;
+    const sessionCreditsDeducted =
+      typeof sessionCreditsDeductedRaw === "number" ? Math.max(0, Math.floor(sessionCreditsDeductedRaw)) : 0;
+    const sessions = bookingMode === "member_wallet" ? (sessionCreditsDeducted >= 1 ? sessionCreditsDeducted : units) : 0;
+
+    bookingCount += 1;
+    cashTotalNtd += cashNtd;
+    sessionsConsumed += sessions;
+
+    const modeRow = byMode.get(bookingMode) ?? { mode: bookingMode, bookingCount: 0, cashNtd: 0, sessions: 0 };
+    modeRow.bookingCount += 1;
+    modeRow.cashNtd += cashNtd;
+    modeRow.sessions += sessions;
+    byMode.set(bookingMode, modeRow);
+
+    const memberUid = typeof d.customerId === "string" ? d.customerId.trim() : "";
+    if (memberUid && !customerId) {
+      const prev = byMember.get(memberUid) ?? { bookingCount: 0, cashNtd: 0, sessions: 0 };
+      prev.bookingCount += 1;
+      prev.cashNtd += cashNtd;
+      prev.sessions += sessions;
+      byMember.set(memberUid, prev);
+    }
+  }
+
+  const { startSec, endSec } = taipeiDateKeyRangeSeconds(dateFrom, dateTo);
+  const startTs = Timestamp.fromMillis(startSec * 1000);
+  const endTs = Timestamp.fromMillis(endSec * 1000);
+
+  let topupAmountNtd = 0;
+  let topupSessions = 0;
+  let adminAdjustSessionsNet = 0;
+  let walletTxTruncated = false;
+
+  try {
+    let walletSnap;
+    if (customerId) {
+      walletSnap = await db
+        .collection("walletTransactions")
+        .where("customerId", "==", customerId)
+        .where("createdAt", ">=", startTs)
+        .where("createdAt", "<=", endTs)
+        .limit(CONSUMPTION_STATS_MAX_WALLET_TX)
+        .get();
+    } else {
+      walletSnap = await db
+        .collection("walletTransactions")
+        .where("createdAt", ">=", startTs)
+        .where("createdAt", "<=", endTs)
+        .limit(CONSUMPTION_STATS_MAX_WALLET_TX)
+        .get();
+    }
+    if (walletSnap.size >= CONSUMPTION_STATS_MAX_WALLET_TX) walletTxTruncated = true;
+
+    for (const docSnap of walletSnap.docs) {
+      const d = docSnap.data();
+      const type = typeof d.type === "string" ? d.type : "";
+      if (type === STATS_WALLET_TOPUP) {
+        topupAmountNtd += typeof d.amount === "number" ? d.amount : 0;
+        topupSessions += typeof d.sessionsDelta === "number" ? d.sessionsDelta : 0;
+      } else if (type === STATS_WALLET_ADJUST) {
+        adminAdjustSessionsNet += typeof d.sessionsDelta === "number" ? d.sessionsDelta : 0;
+      }
+    }
+  } catch (e) {
+    console.error("getConsumptionStatsAdmin wallet query failed", e);
+  }
+
+  const byPaymentMode = STATS_PAYMENT_MODES.map((mode) => byMode.get(mode)!)
+    .filter((row) => row.bookingCount > 0 || row.cashNtd > 0 || row.sessions > 0);
+
+  let topMembers: ConsumptionStatsTopMemberRow[] | undefined;
+  if (!customerId && byMember.size > 0) {
+    const sorted = [...byMember.entries()]
+      .sort((a, b) => b[1].cashNtd - a[1].cashNtd || b[1].sessions - a[1].sessions)
+      .slice(0, 10);
+    const auth = getAuth();
+    topMembers = await Promise.all(
+      sorted.map(async ([memberUid, stats]) => {
+        let email: string | null = null;
+        try {
+          const user = await auth.getUser(memberUid);
+          email = user.email ?? null;
+        } catch {
+          email = null;
+        }
+        return {
+          customerId: memberUid,
+          email,
+          bookingCount: stats.bookingCount,
+          cashNtd: stats.cashNtd,
+          sessions: stats.sessions,
+        };
+      }),
+    );
+  }
+
+  return {
+    dateFrom,
+    dateTo,
+    customerId,
+    truncated: bookingSnap.size >= CONSUMPTION_STATS_MAX_BOOKINGS,
+    walletTxTruncated,
+    summary: {
+      bookingCount,
+      cashTotalNtd,
+      sessionsConsumed,
+      topupAmountNtd,
+      topupSessions,
+      adminAdjustSessionsNet,
+    },
+    byPaymentMode,
+    topMembers,
+  };
 });
 
 export const getAdminStatus = onCall(publicCall, async (request) => {

@@ -46,6 +46,7 @@ export const topupWalletCall = () => httpsCallable(getFns(), "topupWallet");
 export const adjustSessionCreditsAdminCall = () => httpsCallable(getFns(), "adjustSessionCreditsAdmin");
 export const grantDrawChancesAdminCall = () => httpsCallable(getFns(), "grantDrawChancesAdmin");
 export const listWalletTransactionsAdminCall = () => httpsCallable(getFns(), "listWalletTransactionsAdmin");
+export const getConsumptionStatsAdminCall = () => httpsCallable(getFns(), "getConsumptionStatsAdmin");
 export const completeBookingCall = () => httpsCallable(getFns(), "completeBooking");
 export const cancelBookingCall = () => httpsCallable(getFns(), "cancelBooking");
 export const rescheduleBookingAdminCall = () => httpsCallable(getFns(), "rescheduleBookingAdmin");
