@@ -35,6 +35,7 @@ import {
 import { renderAdminForbidden as paintAdminForbiddenView, renderAdminLoggedOut as paintAdminLoginView } from "./adminLoginViews";
 import { resolveCapOverflowSettingsClient } from "./capOverflow";
 import { resolveBookingCapsClient } from "./bookingCaps";
+import { resolveWheelPreviewSettingsClient } from "./wheelPreviewSetting";
 import {
   FIXED_SESSION_PRICE_NTD,
   resolveSessionPriceNtdClient,
@@ -115,6 +116,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
   let adminBookingCapsUnsub: (() => void) | null = null;
   let adminBookingBlocksUnsub: (() => void) | null = null;
   let adminServicePauseUnsub: (() => void) | null = null;
+  let adminWheelPreviewUnsub: (() => void) | null = null;
   let bookingBlocksBeforeUnloadHandler: ((ev: BeforeUnloadEvent) => void) | null = null;
   let bookingBlocksHasUnsavedSnapshot: () => boolean = () => false;
   let bookingBlocksConfirmLeave: () => Promise<boolean> = async () => true;
@@ -145,6 +147,10 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     if (adminServicePauseUnsub) {
       adminServicePauseUnsub();
       adminServicePauseUnsub = null;
+    }
+    if (adminWheelPreviewUnsub) {
+      adminWheelPreviewUnsub();
+      adminWheelPreviewUnsub = null;
     }
   }
 
@@ -581,6 +587,65 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       el("label", { class: "field" }, [t("admin.wheelRedeem.pointsPer", "幾點換 1 次"), wheelPointsPerInput]),
       el("div", { class: "row-actions" }, [saveWheelRedeemBtn]),
       wheelRedeemAdminStatus,
+    ]);
+
+    const wheelPreviewDocRef = doc(db, "siteSettings", "wheel");
+    const wheelPreviewEnabledInput = el("input", { type: "checkbox" });
+    const saveWheelPreviewBtn = el("button", { type: "button", class: "primary" }, [
+      t("admin.wheelPreview.save", "儲存拉霸預覽設定"),
+    ]);
+    const wheelPreviewAdminStatus = el("div", { class: "status-line" });
+
+    adminWheelPreviewUnsub = onSnapshot(
+      wheelPreviewDocRef,
+      (snap) => {
+        const settings = resolveWheelPreviewSettingsClient(snap.data());
+        wheelPreviewEnabledInput.checked = settings.previewEnabledForMembers;
+      },
+      () => {
+        wheelPreviewAdminStatus.textContent = t("admin.snapshot.loadFail", "無法讀取拉霸預覽設定。");
+        wheelPreviewAdminStatus.className = "status-line error";
+      },
+    );
+
+    saveWheelPreviewBtn.addEventListener("click", async () => {
+      wheelPreviewAdminStatus.textContent = "";
+      wheelPreviewAdminStatus.className = "status-line";
+      saveWheelPreviewBtn.setAttribute("disabled", "true");
+      wheelPreviewAdminStatus.textContent = t("admin.status.processing", "處理中…");
+      try {
+        await setDoc(
+          wheelPreviewDocRef,
+          {
+            previewEnabledForMembers: wheelPreviewEnabledInput.checked,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+        wheelPreviewAdminStatus.textContent = t("admin.status.updated", "已更新");
+        wheelPreviewAdminStatus.classList.add("ok");
+      } catch (e) {
+        wheelPreviewAdminStatus.textContent = e instanceof Error ? e.message : t("admin.memberList.saveFail", "儲存失敗");
+        wheelPreviewAdminStatus.classList.add("error");
+      } finally {
+        saveWheelPreviewBtn.removeAttribute("disabled");
+      }
+    });
+
+    const announceWheelPreviewBlock = el("section", { class: "admin-announce__block admin-announce__block--wheel-preview" }, [
+      el("h4", { class: "admin-announce__block-title" }, [t("admin.wheelPreview.heading", "拉霸特效預覽")]),
+      el("p", { class: "hint admin-announce__block-lead" }, [
+        t(
+          "admin.wheelPreview.lead",
+          "管理員在會員中心永遠可見「預覽拉霸特效」（不扣次數）。勾選下方後，一般會員登入後也可使用。",
+        ),
+      ]),
+      el("label", { class: "field checkbox-field" }, [
+        wheelPreviewEnabledInput,
+        t("admin.wheelPreview.enableForMembers", "開放一般會員使用「預覽拉霸特效」"),
+      ]),
+      el("div", { class: "row-actions" }, [saveWheelPreviewBtn]),
+      wheelPreviewAdminStatus,
     ]);
 
     topupBtn.addEventListener("click", async () => {
@@ -1351,6 +1416,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       blockServicePause,
       blockCaps,
       announcePricingFlat,
+      announceWheelPreviewBlock,
       announceWheelRedeemBlock,
     );
 

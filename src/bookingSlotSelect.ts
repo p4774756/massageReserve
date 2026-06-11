@@ -1,13 +1,36 @@
-import { allHolidayOutcallStartSlots, allStartSlots } from "./slots";
+import { allHolidayOutcallStartSlots, allStartSlots, slotBlockedByLunch } from "./slots";
 import { isStartSlotInPastForTaipeiToday } from "./taipeiDates";
 import { el } from "./domUtil";
 import { t } from "./i18n";
 
 export function blockNoteForSlot(blockReason: string | undefined, blockedHere: boolean): string {
   if (!blockedHere || blockReason === undefined) return "";
-  return blockReason
-    ? t("slot.blockedWith", "（不開放：{{reason}}）", { reason: blockReason })
+  return blockReason.trim()
+    ? t("slot.blockedReason", "（{{reason}}）", { reason: blockReason.trim() })
     : t("slot.blocked", "（不開放預約）");
+}
+
+export function lunchNoteForSlot(lunchHere: boolean): string {
+  return lunchHere ? t("slot.lunch", "（午休）") : "";
+}
+
+export function takenNoteForSlot(takenHere: boolean): string {
+  return takenHere ? t("slot.taken", "（已佔用）") : "";
+}
+
+function unavailableSuffixForSlot(opts: {
+  takenHere: boolean;
+  pastHere: boolean;
+  blockedHere: boolean;
+  lunchHere: boolean;
+  blockReason: string | undefined;
+}): string {
+  const { takenHere, pastHere, blockedHere, lunchHere, blockReason } = opts;
+  if (blockedHere) return blockNoteForSlot(blockReason, true);
+  if (takenHere && lunchHere) return lunchNoteForSlot(true);
+  if (takenHere) return takenNoteForSlot(true);
+  if (pastHere) return t("slot.past", "（已過）");
+  return "";
 }
 
 export type RefillSlotsContext = {
@@ -21,6 +44,7 @@ export function refillSlots(
   selectedDateKey: string,
   blockedReasonBySlot: Map<string, string> = new Map(),
   holidayOutcall = false,
+  durationMinutes = 15,
 ): void {
   const { slotSelect } = ctx;
   const prev = slotSelect.value;
@@ -35,14 +59,15 @@ export function refillSlots(
     const pastHere = isStartSlotInPastForTaipeiToday(selectedDateKey, s);
     const blockReason = blockedReasonBySlot.get(s);
     const blockedHere = blockReason !== undefined;
+    const lunchHere = !blockedHere && !holidayOutcall && slotBlockedByLunch(s, durationMinutes);
 
     /** 連續「已過」且未被佔用的格子合併成一列，避免下拉清單過長（與不開放區間合併同理） */
-    const mergeablePast = pastHere && !takenHere;
+    const mergeablePast = pastHere && !takenHere && !blockedHere;
     if (mergeablePast) {
       let j = i;
       while (j + 1 < slots.length) {
         const s2 = slots[j + 1]!;
-        if (taken.has(s2)) break;
+        if (taken.has(s2) || blockedReasonBySlot.has(s2)) break;
         if (!isStartSlotInPastForTaipeiToday(selectedDateKey, s2)) break;
         j++;
       }
@@ -55,13 +80,13 @@ export function refillSlots(
       }
     }
 
-    const mergeableBlocked = blockedHere && !takenHere && !pastHere;
+    /** 不開放時段（含後台事由）優先於「已佔用」顯示 */
+    const mergeableBlocked = blockedHere && !pastHere;
     if (mergeableBlocked) {
       const reason0 = blockReason as string;
       let j = i;
       while (j + 1 < slots.length) {
         const s2 = slots[j + 1]!;
-        if (taken.has(s2)) break;
         if (isStartSlotInPastForTaipeiToday(selectedDateKey, s2)) break;
         const r2 = blockedReasonBySlot.get(s2);
         if (r2 === undefined || r2 !== reason0) break;
@@ -78,29 +103,54 @@ export function refillSlots(
       }
     }
 
-    /** 連續「已佔用」合併成一列（例如 11:30–13:00（已佔用）） */
-    if (takenHere) {
+    /** 午休區間（後端標為 unavailable，前端改顯示「午休」） */
+    const mergeableLunch = lunchHere && takenHere && !pastHere;
+    if (mergeableLunch) {
       let j = i;
       while (j + 1 < slots.length) {
         const s2 = slots[j + 1]!;
         if (!taken.has(s2)) break;
+        if (blockedReasonBySlot.has(s2)) break;
+        if (isStartSlotInPastForTaipeiToday(selectedDateKey, s2)) break;
+        if (!slotBlockedByLunch(s2, durationMinutes)) break;
+        j++;
+      }
+      if (j > i) {
+        const timePart = t("slot.lunchRangeTimes", "{{from}}–{{to}}", { from: s, to: slots[j]! });
+        const lunchNote = lunchNoteForSlot(true);
+        slotSelect.append(el("option", { value: "", disabled: true }, [`${timePart}${lunchNote}`]));
+        i = j + 1;
+        continue;
+      }
+    }
+
+    /** 連續「已佔用」（預約衝突）合併成一列 */
+    const mergeableTaken = takenHere && !blockedHere && !lunchHere && !pastHere;
+    if (mergeableTaken) {
+      let j = i;
+      while (j + 1 < slots.length) {
+        const s2 = slots[j + 1]!;
+        if (!taken.has(s2)) break;
+        if (blockedReasonBySlot.has(s2)) break;
+        if (slotBlockedByLunch(s2, durationMinutes)) break;
         j++;
       }
       if (j > i) {
         const timePart = t("slot.takenRangeTimes", "{{from}}–{{to}}", { from: s, to: slots[j]! });
-        const takenNote = t("slot.taken", "（已佔用）");
+        const takenNote = takenNoteForSlot(true);
         slotSelect.append(el("option", { value: "", disabled: true }, [`${timePart}${takenNote}`]));
         i = j + 1;
         continue;
       }
     }
 
-    const blockNote = blockNoteForSlot(blockReason, blockedHere);
-    const suffix = takenHere
-      ? t("slot.taken", "（已佔用）")
-      : pastHere
-        ? t("slot.past", "（已過）")
-        : blockNote;
+    const suffix = unavailableSuffixForSlot({
+      takenHere,
+      pastHere,
+      blockedHere,
+      lunchHere,
+      blockReason,
+    });
     const o = el("option", { value: s, disabled: takenHere || pastHere || blockedHere }, [
       `${s}${suffix}`,
     ]);

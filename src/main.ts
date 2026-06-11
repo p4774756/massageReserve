@@ -61,6 +61,7 @@ import {
 } from "./taipeiDates";
 import { showAlertModal, showConfirmModal } from "./modals";
 import { wrapPasswordField } from "./passwordField";
+import { resolveWheelPreviewSettingsClient } from "./wheelPreviewSetting";
 import { paintMemberWalletSummary, type MemberWalletSummaryOpts } from "./walletSummaryUi";
 import {
   BOOKING_UNIT_MINUTES_FIXED,
@@ -91,8 +92,10 @@ function render() {
   const auth = getFirebaseAuth();
   const db = getDb();
   const pricingDocRef = doc(db, "siteSettings", "pricing");
-  /** 管理員在會員中心可見「預覽拉霸特效」（不經後台開關） */
+  const wheelSettingsDocRef = doc(db, "siteSettings", "wheel");
+  /** 管理員在會員中心永遠可見「預覽拉霸特效」；一般會員依後台開關 */
   let currentUserIsAdmin = false;
+  let wheelPreviewEnabledForMembers = false;
 
   /** 會員中心關閉時將輪盤區塊移回隱藏 holder（於下方建構後賦值） */
   let parkMemberHubGames: () => void = () => {};
@@ -2513,7 +2516,7 @@ function render() {
 
 
   function syncWheelPreviewBtnVisibility() {
-    wheelTestBtn.hidden = !currentUserIsAdmin;
+    wheelTestBtn.hidden = !(currentUserIsAdmin || wheelPreviewEnabledForMembers);
   }
 
   /** 後台寫入 `siteSettings/pricing` 後即時反映 */
@@ -2529,6 +2532,17 @@ function render() {
     },
     () => {
       /* 讀取失敗時保留上一輪數值與 Callable 結果 */
+    },
+  );
+
+  onSnapshot(
+    wheelSettingsDocRef,
+    (snap) => {
+      wheelPreviewEnabledForMembers = resolveWheelPreviewSettingsClient(snap.data()).previewEnabledForMembers;
+      syncWheelPreviewBtnVisibility();
+    },
+    () => {
+      /* 讀取失敗時保留上一輪設定 */
     },
   );
 

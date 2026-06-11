@@ -2,6 +2,10 @@
 const SERVICE_DAY_END_MINUTES = 17 * 60;
 const SLOT_STEP_MINUTES = 15;
 const HOLIDAY_OUTCALL_SLOT_STEP_MINUTES = 30;
+/** 與 `functions/src/bookingLogic.ts` 午休區間一致 */
+const LUNCH_START_MINUTES = 11 * 60 + 45;
+const LUNCH_END_MINUTES = 13 * 60 + 15;
+const DEFAULT_BOOKING_DURATION_MINUTES = 15;
 
 function buildGridStartSlots(slotStepMinutes: number): string[] {
   const slots: string[] = [];
@@ -44,4 +48,20 @@ export function endSlotFromStartAndDuration(startSlot: string, durationMinutes: 
   const start = minutesFromHHmm(startSlot);
   if (start === null) return startSlot;
   return hhmmFromMinutes(start + durationMinutes);
+}
+
+export function serviceRangeOverlapsLunch(srv0: number, srv1: number): boolean {
+  return srv0 < LUNCH_END_MINUTES && srv1 > LUNCH_START_MINUTES;
+}
+
+/** 此開始時間若預約會與午休重疊（與後端 `startSlotFitsDuration` 判斷一致） */
+export function slotBlockedByLunch(
+  startSlot: string,
+  durationMinutes = DEFAULT_BOOKING_DURATION_MINUTES,
+): boolean {
+  const start = minutesFromHHmm(startSlot);
+  if (start === null || durationMinutes <= 0) return false;
+  const end = start + durationMinutes;
+  if (end > SERVICE_DAY_END_MINUTES) return false;
+  return serviceRangeOverlapsLunch(start, end);
 }
