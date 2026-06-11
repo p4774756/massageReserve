@@ -1886,6 +1886,24 @@ button.ghost:disabled {
 }
 
 /* 後台預約月曆 */
+.admin-bookings-cap-summary {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface-muted));
+  min-height: 0;
+}
+
+.admin-bookings-cap-summary[hidden] {
+  display: none !important;
+}
+
+.admin-bookings-cap-summary .pill {
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--accent-2) 7%, var(--surface));
+}
+
 .admin-bookings-calendar {
   margin: 0 0 18px;
   padding: 14px 16px 16px;

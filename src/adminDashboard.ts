@@ -34,6 +34,7 @@ import {
 } from "./adminCustomerProfile";
 import { renderAdminForbidden as paintAdminForbiddenView, renderAdminLoggedOut as paintAdminLoginView } from "./adminLoginViews";
 import { resolveCapOverflowSettingsClient } from "./capOverflow";
+import { resolveBookingCapsClient } from "./bookingCaps";
 import {
   FIXED_SESSION_PRICE_NTD,
   resolveSessionPriceNtdClient,
@@ -71,9 +72,11 @@ import {
   isDateKeyMonFri,
   isDateKeySatSun,
   taipeiLatestBookableDateKey,
+  taipeiMondayOfSameWeek,
   taipeiTodayDateKey,
   taipeiWeekdayNumMon1Sun7,
   taipeiWeekdaySun0FromDateKey,
+  weekdayZhFromDateKeyTaipei,
 } from "./taipeiDates";
 import {
   DEFAULT_SERVICE_PAUSE_MESSAGE,
@@ -171,6 +174,12 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     bookingBlocksConfirmLeave = async () => true;
 
     const adminStatus = el("div", { class: "status-line" });
+    let adminBookingCapsLive = {
+      maxPerDay: 2,
+      maxPerWorkWeek: 4,
+      capOverflowEnabled: true,
+    };
+    let repaintAdminBookingsCapSummary: () => void = () => {};
     const walletTopupSection = el("div", { class: "admin-announce admin-announce--wallet" }, []);
     const topupCustomerId = el("input", {
       type: "text",
@@ -743,6 +752,11 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         const overflow = resolveCapOverflowSettingsClient(data);
         capOverflowEnabledInput.checked = overflow.enabled;
         capOverflowSurchargeInput.value = String(overflow.surchargeNtd);
+        adminBookingCapsLive = {
+          ...resolveBookingCapsClient(data),
+          capOverflowEnabled: overflow.enabled,
+        };
+        repaintAdminBookingsCapSummary();
       },
       () => {
         bookingCapsStatus.textContent = t("admin.snapshot.loadFail", "無法讀取名額上限設定。");
@@ -2098,6 +2112,75 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       wrap.append(tip);
     }
 
+    function buildAdminCapSummaryPill(
+      label: string,
+      count: number,
+      cap: number,
+      full: boolean,
+      showOverflowTag: boolean,
+    ): HTMLElement {
+      const children: (Node | string)[] = [
+        el("span", { class: "pill__label" }, [label]),
+        el("span", { class: "pill__value" }, [
+          el("strong", {}, [String(count)]),
+          ` / ${cap}`,
+        ]),
+      ];
+      if (full && showOverflowTag) {
+        children.push(el("span", { class: "pill__tag" }, [t("booking.metaOverflowTag", "已滿可加價")]));
+      }
+      return el("span", { class: full ? "pill pill--cap-full" : "pill" }, children);
+    }
+
+    const adminBookingsCapSummary = el("div", {
+      class: "admin-bookings-cap-summary meta-pills",
+    });
+
+    function paintAdminBookingsCapSummary(): void {
+      const dk = adminBookingsCalendarSelectedDateKey;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dk)) {
+        adminBookingsCapSummary.replaceChildren();
+        adminBookingsCapSummary.hidden = true;
+        return;
+      }
+      adminBookingsCapSummary.hidden = false;
+      const weekStart = taipeiMondayOfSameWeek(dk);
+      const { maxPerDay, maxPerWorkWeek, capOverflowEnabled } = adminBookingCapsLive;
+      let dayCount = 0;
+      let weekCount = 0;
+      for (const b of adminCalendarLastVisible) {
+        if (!bookingCountsTowardAvailabilityCap(b.status)) continue;
+        const bdk = b.dateKey;
+        if (!bdk || !/^\d{4}-\d{2}-\d{2}$/.test(bdk)) continue;
+        if (b.capOverflow === true) continue;
+        const bWeek =
+          typeof b.weekStart === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.weekStart)
+            ? b.weekStart
+            : taipeiMondayOfSameWeek(bdk);
+        if (bdk === dk) dayCount += 1;
+        if (bWeek === weekStart) weekCount += 1;
+      }
+      const dayFull = dayCount >= maxPerDay;
+      const weekFull = weekCount >= maxPerWorkWeek;
+      const showOverflowTag = capOverflowEnabled && (dayFull || weekFull);
+      const weekdayZh = weekdayZhFromDateKeyTaipei(dk);
+      const dayLabel =
+        weekdayZh ?
+          t("booking.metaDayWithWeekday", "當日（{{weekday}}）已預約", { weekday: weekdayZh })
+        : t("booking.metaDay", "當日已預約（張）");
+      adminBookingsCapSummary.replaceChildren(
+        buildAdminCapSummaryPill(dayLabel, dayCount, maxPerDay, dayFull, showOverflowTag),
+        buildAdminCapSummaryPill(
+          t("booking.metaWeek", "本工作週已預約（張）"),
+          weekCount,
+          maxPerWorkWeek,
+          weekFull,
+          showOverflowTag,
+        ),
+      );
+    }
+    repaintAdminBookingsCapSummary = paintAdminBookingsCapSummary;
+
     function paintAdminBookingsCalendar(): void {
       ensureAdminCalendarCursor();
       const y = adminCalendarYear;
@@ -2209,6 +2292,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         for (let j = 0; j < 7; j++) row.append(cells[i + j]!);
         adminCalendarGrid.append(row);
       }
+      paintAdminBookingsCapSummary();
     }
 
     const adminCalPrev = el("button", { type: "button", class: "ghost admin-calendar__nav-btn" }, ["‹"]);
@@ -2747,7 +2831,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     tabBookingBlocks.setAttribute("aria-controls", "admin-tab-panel-booking-blocks");
     tabAnnounce.setAttribute("aria-controls", "admin-tab-panel-announce");
 
-    panelBookingsHubEl.append(adminBookingsCalendarSection, adminStatus, tableHolder);
+    panelBookingsHubEl.append(adminBookingsCalendarSection, adminBookingsCapSummary, adminStatus, tableHolder);
     panelMembersEl.append(membersSubTablist, membersSubPanelsWrap);
     panelAnnounceEl.append(announcementSection);
 
