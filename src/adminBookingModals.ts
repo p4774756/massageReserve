@@ -1,7 +1,7 @@
 import { el } from "./domUtil";
 import { t } from "./i18n";
 import type { Booking } from "./bookingTypes";
-import { bookingModeLabel, bookingStatusLabel } from "./bookingDisplay";
+import { bookingModeLabelSafe, bookingStatusLabel } from "./bookingDisplay";
 import { showAdminOptionalReasonModal } from "./modals";
 
 export type AdminSettleBookingSessionsResult = {
@@ -13,7 +13,7 @@ export type AdminSettleBookingSessionsResult = {
 
 export function showAdminSettleBookingSessionsModal(b: Booking): Promise<AdminSettleBookingSessionsResult | null> {
   const defaultSessions = typeof b.units === "number" && b.units > 0 ? Math.floor(b.units) : 1;
-  const modeLabel = bookingModeLabel(b.bookingMode as Booking["bookingMode"]);
+  const modeLabel = bookingModeLabelSafe(b.bookingMode);
   const price = typeof b.price === "number" && b.price > 0 ? b.price : undefined;
   const summary = [
     t("admin.settleBooking.intro", "將此筆現金預約改為扣次結帳；會員帳戶將扣除指定次數，統計不再計入現金。"),

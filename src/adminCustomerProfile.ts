@@ -1,60 +1,20 @@
 import {
-  addCustomerAdminNoteAdminCall,
   getCustomerAdminProfileAdminCall,
   setCustomerAdminBriefAdminCall,
   updateMemberNicknameAdminCall,
 } from "./firebase";
 import type { Booking } from "./bookingTypes";
 import { el } from "./domUtil";
-import { intlLocaleTag, localeApiParam, t } from "./i18n";
+import { localeApiParam, t } from "./i18n";
 
 const ADMIN_BRIEF_MAX = 300;
-const ADMIN_NOTE_MAX = 2000;
-
-export type AdminCustomerNoteRow = {
-  id: string;
-  text: string;
-  category: string;
-  createdAt: number | null;
-  createdBy: string;
-};
 
 export type AdminCustomerProfileLoaded = {
   customerId: string;
   email: string | null;
   nickname: string;
   adminBrief: string;
-  notes: AdminCustomerNoteRow[];
 };
-
-function noteCategoryLabel(cat: string): string {
-  switch (cat) {
-    case "health":
-      return t("admin.customerProfile.catHealth", "健康／禁忌");
-    case "preference":
-      return t("admin.customerProfile.catPreference", "偏好");
-    case "incident":
-      return t("admin.customerProfile.catIncident", "事件");
-    default:
-      return t("admin.customerProfile.catGeneral", "一般");
-  }
-}
-
-function formatNoteWhen(seconds: number | null): string {
-  if (seconds == null) return "";
-  try {
-    return new Intl.DateTimeFormat(intlLocaleTag(), {
-      timeZone: "Asia/Taipei",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(new Date(seconds * 1000));
-  } catch {
-    return "";
-  }
-}
 
 export function collectMemberCustomerIdsFromBookings(bookings: Booking[]): string[] {
   const ids = new Set<string>();
@@ -159,26 +119,6 @@ export function openAdminCustomerProfileModal(opts: OpenAdminCustomerProfileOpts
     ),
   );
 
-  const noteCategorySelect = el("select", { class: "admin-customer-profile-note-cat" });
-  for (const [val, label] of [
-    ["general", noteCategoryLabel("general")],
-    ["health", noteCategoryLabel("health")],
-    ["preference", noteCategoryLabel("preference")],
-    ["incident", noteCategoryLabel("incident")],
-  ] as const) {
-    noteCategorySelect.append(el("option", { value: val }, [label]));
-  }
-  const noteInput = el("textarea", {
-    class: "admin-customer-profile-note-input",
-    rows: 3,
-    maxLength: ADMIN_NOTE_MAX,
-  });
-  noteInput.setAttribute("placeholder", t("admin.customerProfile.notePlaceholder", "新增一筆情況紀錄…"));
-  const addNoteBtn = el("button", { type: "button", class: "ghost" }, [
-    t("admin.customerProfile.addNote", "新增筆記"),
-  ]);
-  const notesList = el("div", { class: "admin-customer-profile-notes" });
-
   const cancelBtn = el("button", { class: "ghost", type: "button" }, [t("modal.cancel", "取消")]);
   const saveBtn = el("button", { class: "primary", type: "button" }, [
     t("admin.customerProfile.save", "儲存摘要與稱呼"),
@@ -202,23 +142,6 @@ export function openAdminCustomerProfileModal(opts: OpenAdminCustomerProfileOpts
   });
   document.addEventListener("keydown", onKeyDown);
 
-  function paintNotes(notes: AdminCustomerNoteRow[]) {
-    notesList.replaceChildren();
-    if (notes.length === 0) {
-      notesList.append(
-        el("p", { class: "hint" }, [t("admin.customerProfile.notesEmpty", "尚無筆記。")]),
-      );
-      return;
-    }
-    for (const n of notes) {
-      const meta = el("div", { class: "admin-customer-profile-note-meta" }, [
-        `${noteCategoryLabel(n.category)} · ${formatNoteWhen(n.createdAt)}`,
-      ]);
-      const body = el("p", { class: "admin-customer-profile-note-text" }, [n.text]);
-      notesList.append(el("article", { class: "admin-customer-profile-note" }, [meta, body]));
-    }
-  }
-
   async function loadProfile() {
     statusLine.textContent = t("admin.customerProfile.loading", "載入中…");
     statusLine.className = "status-line";
@@ -230,42 +153,12 @@ export function openAdminCustomerProfileModal(opts: OpenAdminCustomerProfileOpts
       whoLine.textContent = email ? `${email} · ${data.customerId}` : data.customerId;
       nickInput.value = data.nickname ?? "";
       briefInput.value = data.adminBrief ?? "";
-      paintNotes(Array.isArray(data.notes) ? data.notes : []);
       statusLine.textContent = "";
     } catch (e) {
       statusLine.textContent = e instanceof Error ? e.message : t("admin.customerProfile.loadFail", "載入失敗");
       statusLine.classList.add("error");
     }
   }
-
-  addNoteBtn.addEventListener("click", async () => {
-    const text = noteInput.value.trim();
-    if (!text) {
-      statusLine.textContent = t("admin.customerProfile.noteEmpty", "請輸入筆記內容。");
-      statusLine.classList.add("error");
-      return;
-    }
-    statusLine.textContent = "";
-    statusLine.className = "status-line";
-    addNoteBtn.setAttribute("disabled", "true");
-    try {
-      const fn = addCustomerAdminNoteAdminCall();
-      await fn({
-        customerId: opts.customerId,
-        text,
-        category: noteCategorySelect.value,
-        ...localeApiParam(),
-      });
-      noteInput.value = "";
-      await loadProfile();
-      opts.onSaved?.();
-    } catch (e) {
-      statusLine.textContent = e instanceof Error ? e.message : t("admin.customerProfile.noteFail", "新增筆記失敗");
-      statusLine.classList.add("error");
-    } finally {
-      addNoteBtn.removeAttribute("disabled");
-    }
-  });
 
   saveBtn.addEventListener("click", async () => {
     statusLine.textContent = "";
@@ -307,15 +200,6 @@ export function openAdminCustomerProfileModal(opts: OpenAdminCustomerProfileOpts
       t("admin.customerProfile.briefHint", "最多 {{max}} 字；會顯示在後台預約列表，會員看不到。", {
         max: ADMIN_BRIEF_MAX,
       }),
-    ]),
-    el("h4", { class: "admin-customer-profile-notes-heading" }, [
-      t("admin.customerProfile.notesHeading", "情況筆記"),
-    ]),
-    notesList,
-    el("div", { class: "admin-customer-profile-add-note" }, [
-      el("label", { class: "field" }, [t("admin.customerProfile.noteCatLabel", "類別"), noteCategorySelect]),
-      el("label", { class: "field" }, [t("admin.customerProfile.noteFieldLabel", "內容"), noteInput]),
-      addNoteBtn,
     ]),
     statusLine,
     actions,

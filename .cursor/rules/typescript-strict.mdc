@@ -1,0 +1,36 @@
+---
+description: TypeScript 型別安全慣例（禁止 unsafe cast、邊界 narrow）
+globs: "**/*.{ts,tsx}"
+alwaysApply: false
+---
+
+# TypeScript 型別安全
+
+## 禁止
+
+- 用 `as SomeUnion` 把 `string | undefined` 塞進函式參數（例如 `as BookingMode`、`as Booking["bookingMode"]`）
+- 改完 `.ts` 只跑 `vite build` 就結案（build 已含 `typecheck`，但仍應知悉）
+
+## 邊界資料（API、Firestore、表單 value）
+
+1. 在**讀取邊界** narrow：`isBookingMode()`、`parseX()`、或明確 `switch`/`if` 比對
+2. 內部函式參數用精確 union（如 `BookingMode`），不要用 `string`
+3. 顯示未知值用 `bookingModeLabelSafe()` 或 `isBookingMode(m) ? bookingModeLabel(m) : fallback`
+
+## 範例
+
+```typescript
+// ❌ BAD
+bookingModeLabel(row.mode as Booking["bookingMode"]);
+
+// ✅ GOOD
+bookingModeLabelSafe(row.mode);
+
+// ✅ GOOD（已知字面量 union 時）
+if (isBookingMode(raw)) bookingModeLabel(raw);
+```
+
+## 完成前
+
+- 執行 `npm run typecheck`（`npm run build` 亦會跑）
+- 新增 union 常值時同步更新 `BOOKING_MODES` / type guard（`src/bookingTypes.ts`）

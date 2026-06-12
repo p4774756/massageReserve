@@ -2449,53 +2449,16 @@ button.ghost:disabled {
   resize: vertical;
 }
 
-.admin-customer-profile-notes {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  max-height: 14rem;
-  overflow-y: auto;
-  margin: 8px 0 12px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.admin-customer-profile-note-meta {
-  font-size: 0.78rem;
-  color: var(--muted);
-  margin-bottom: 4px;
-}
-
-.admin-customer-profile-note-text {
-  margin: 0;
-  font-size: 0.9rem;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.admin-customer-profile-add-note {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
 .admin-member-email-cell-wrap {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 8px;
   min-width: 0;
-  max-width: 22rem;
+  max-width: 100%;
 }
 
 .admin-member-email-cell__text {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  flex: 1 1 auto;
+  max-width: 100%;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2509,13 +2472,6 @@ button.ghost:disabled {
   border-radius: 50%;
   background: var(--accent, #6eb5ff);
   flex-shrink: 0;
-}
-
-.admin-member-profile-btn {
-  flex: 0 0 auto;
-  font-size: 0.82rem;
-  padding: 4px 10px;
-  white-space: nowrap;
 }
 
 .admin-bookings-table select {
@@ -3075,28 +3031,30 @@ tbody tr:hover td {
 }
 
 .admin-member-list-table table {
-  width: auto;
-  min-width: 100%;
-  table-layout: auto;
+  width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
 }
 
 .admin-member-list-table th,
 .admin-member-list-table td {
   vertical-align: middle;
+  padding: 8px 10px;
+}
+
+.admin-member-list-table th:not(:last-child),
+.admin-member-list-table td:not(:last-child) {
+  border-right: 1px solid var(--border);
 }
 
 .admin-member-list-table thead th {
   white-space: nowrap;
 }
 
-.admin-member-list-table th:nth-child(1) {
-  min-width: 13rem;
-}
-
+.admin-member-list-table th:nth-child(1),
 .admin-member-list-table td:nth-child(1) {
-  min-width: 13rem;
-  max-width: 24rem;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .admin-member-email-cell {
@@ -3105,19 +3063,37 @@ tbody tr:hover td {
 
 .admin-member-list-table th:nth-child(2),
 .admin-member-list-table td:nth-child(2) {
-  min-width: 6.5rem;
+  width: 7.5rem;
 }
 
 /* 可預約次數／輪盤點數／可抽次數：表頭與數字皆右對齊 */
 .admin-member-list-table th:nth-child(3),
-.admin-member-list-table td:nth-child(3),
+.admin-member-list-table td:nth-child(3) {
+  width: 7.5rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
 .admin-member-list-table th:nth-child(4),
 .admin-member-list-table td:nth-child(4),
 .admin-member-list-table th:nth-child(5),
 .admin-member-list-table td:nth-child(5) {
+  width: 6.5rem;
   text-align: right;
   white-space: nowrap;
-  min-width: 5.5rem;
+}
+
+.admin-member-list-table th:nth-child(3),
+.admin-member-list-table th:nth-child(4),
+.admin-member-list-table th:nth-child(5) {
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+.admin-member-list-table th .admin-member-sort-btn {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .admin-member-list-table th:nth-child(3) .admin-member-sort-btn,
@@ -3125,7 +3101,7 @@ tbody tr:hover td {
 .admin-member-list-table th:nth-child(5) .admin-member-sort-btn {
   justify-content: flex-end;
   text-align: right;
-  width: 100%;
+  margin-left: 0;
 }
 
 .admin-member-nick-cell {
@@ -3134,7 +3110,7 @@ tbody tr:hover td {
 
 .admin-member-nick-trigger {
   display: inline-block;
-  max-width: 280px;
+  max-width: 100%;
   margin: 0;
   padding: 2px 0;
   border: none;
@@ -3166,8 +3142,8 @@ tbody tr:hover td {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 36px;
-  padding: 6px 8px;
+  min-height: 30px;
+  padding: 4px 6px;
   margin: -2px 0;
   max-width: 100%;
   box-sizing: border-box;
@@ -3210,8 +3186,9 @@ tbody tr:hover td {
   box-sizing: border-box;
 }
 
-.admin-member-list-table thead .admin-member-sort-btn {
-  max-width: none;
+.admin-member-list-table .admin-member-sort-btn {
+  padding: 3px 5px;
+  font-size: 0.82rem;
 }
 
 .admin-member-sort-btn__label {

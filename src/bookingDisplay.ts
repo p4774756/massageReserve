@@ -1,6 +1,6 @@
 import { el } from "./domUtil";
 import { intlLocaleTag, t } from "./i18n";
-import type { Booking, BookingMode } from "./bookingTypes";
+import { isBookingMode, type Booking, type BookingMode } from "./bookingTypes";
 import { slotStartInstantMsTaipei } from "./taipeiDates";
 
 function beverageOptionLabel(): string {
@@ -35,6 +35,15 @@ export function bookingModeLabel(
         : t("booking.mode.member_cap_overflow", "加價現金（名額已滿）"),
   };
   return labels[mode];
+}
+
+/** 後台／API 邊界：未知或空值時回 fallback，避免 unsafe cast */
+export function bookingModeLabelSafe(
+  mode: string | undefined | null,
+  opts?: { units?: number; unitPriceNtd?: number; capOverflowSurchargeNtd?: number },
+  fallback = "—",
+): string {
+  return isBookingMode(mode) ? bookingModeLabel(mode, opts) : mode?.trim() || fallback;
 }
 
 /** 後台狀態下拉：待確認 → 已完成；不含「已確認」（與待確認重疊）與「已取消」（改由取消按鈕） */

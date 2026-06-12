@@ -9,6 +9,20 @@ export type BookingMode =
   /** 當日或本工作週名額已滿時：現場現金（按摩費 + 加價） */
   | "member_cap_overflow";
 
+export const BOOKING_MODES: readonly BookingMode[] = [
+  "guest_cash",
+  "guest_beverage",
+  "member_cash",
+  "member_wallet",
+  "member_beverage",
+  "member_qr",
+  "member_cap_overflow",
+] as const;
+
+export function isBookingMode(value: string | undefined | null): value is BookingMode {
+  return typeof value === "string" && (BOOKING_MODES as readonly string[]).includes(value);
+}
+
 export type Booking = {
   id: string;
   displayName: string;

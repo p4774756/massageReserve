@@ -59,6 +59,7 @@ import {
   bookingCanSettleWithSessions,
   bookingMemberYesNo,
   bookingModeLabel,
+  bookingModeLabelSafe,
   bookingStatusLabel,
   bookingStatusNorm,
   populateAdminBookingStatusSelect,
@@ -1905,7 +1906,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       for (const row of rows) {
         statsByModeTable.append(
           el("tr", {}, [
-            el("td", {}, [bookingModeLabel(row.mode as Booking["bookingMode"])]),
+            el("td", {}, [bookingModeLabelSafe(row.mode)]),
             el("td", { class: "mono" }, [String(row.bookingCount)]),
             el("td", { class: "mono" }, [row.cashNtd > 0 ? String(row.cashNtd) : "—"]),
             el("td", { class: "mono" }, [row.sessions > 0 ? String(row.sessions) : "—"]),
@@ -2614,14 +2615,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
             }),
           );
         }
-        const profileBtn = el("button", { type: "button", class: "ghost admin-member-profile-btn" }, [
-          t("admin.customerProfile.openProfile", "檔案"),
-        ]);
-        profileBtn.addEventListener("click", (ev) => {
-          ev.stopPropagation();
-          openAdminMemberProfileModal(m);
-        });
-        emailCell.append(emailInner, profileBtn);
+        emailCell.append(emailInner);
         memberListTable.append(
           el("tr", {}, [
             emailCell,
