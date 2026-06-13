@@ -59,6 +59,24 @@ import { parseLocale, st, type ServerLocale } from "./serverI18n";
 import { maskDisplayNameForPublic } from "./maskDisplayName";
 import { resolveCapOverflowSettings } from "./capOverflow";
 import { applyTsmcSessionPricingSync } from "./tsmcPricing";
+import { runMonthlyChampionAward } from "./monthlyChampion";
+import {
+  addMemberConsumption,
+  bookingSessionCreditsDeducted,
+  CONSUMPTION_RANK_PUBLIC_MAX,
+  CONSUMPTION_STATS_MAX_BOOKINGS,
+  CONSUMPTION_STATS_MAX_RANGE_DAYS,
+  CONSUMPTION_STATS_MAX_WALLET_TX,
+  consumptionRankPublicPeriodRange,
+  parseBookingConsumption,
+  publicRankDisplayName,
+  sortMemberConsumptionEntries,
+  STATS_PAYMENT_MODES,
+  STATS_WALLET_ADJUST,
+  STATS_WALLET_TOPUP,
+  type ConsumptionStatsByModeRow,
+  type MemberConsumptionTotals,
+} from "./consumptionStats";
 
 initializeApp();
 const db = getFirestore();
@@ -189,10 +207,11 @@ async function notifyMemberWalletChangedEmail(
   }
 }
 
+/** 後台儲值：可填 Email，或填 Firestore 稱呼（不含 @ 時依稱呼精確比對） */
 async function resolveCustomerUidForTopup(raw: string, locale: ServerLocale): Promise<string> {
   const trimmed = raw.trim();
   if (!trimmed) {
-    throw new HttpsError("invalid-argument", st(locale, "topup.needId", "請填入會員識別（Email 或 UID）"));
+    throw new HttpsError("invalid-argument", st(locale, "topup.needId", "請填入會員 Email 或暱稱"));
   }
   if (trimmed.includes("@")) {
     try {
@@ -202,7 +221,39 @@ async function resolveCustomerUidForTopup(raw: string, locale: ServerLocale): Pr
       throw new HttpsError("not-found", st(locale, "topup.emailNotFound", "找不到此 Email 的會員帳號"));
     }
   }
-  return trimmed;
+  const needle = trimmed.toLowerCase();
+  const auth = getAuth();
+  const hits: string[] = [];
+  let pageToken: string | undefined;
+  for (let p = 0; p < 12 && hits.length < 2; p++) {
+    const res = await auth.listUsers(1000, pageToken);
+    const uids = res.users.map((u) => u.uid);
+    const refs = uids.map((id) => db.collection("customers").doc(id));
+    const snaps = refs.length > 0 ? await db.getAll(...refs) : [];
+    const snapByUid = new Map(snaps.map((s) => [s.id, s]));
+    for (const u of res.users) {
+      if (!u.email) continue;
+      const snap = snapByUid.get(u.uid);
+      const d = snap?.exists ? (snap.data() as Record<string, unknown>) : {};
+      const nickname = typeof d.nickname === "string" ? d.nickname.trim() : "";
+      if (nickname.length > 0 && nickname.toLowerCase() === needle) {
+        hits.push(u.uid);
+        if (hits.length >= 2) break;
+      }
+    }
+    if (!res.pageToken || hits.length >= 2) break;
+    pageToken = res.pageToken;
+  }
+  if (hits.length === 0) {
+    throw new HttpsError("not-found", st(locale, "topup.nicknameNotFound", "找不到此暱稱的會員，請改用 Email 或從建議清單選取"));
+  }
+  if (hits.length > 1) {
+    throw new HttpsError(
+      "invalid-argument",
+      st(locale, "topup.nicknameAmbiguous", "此暱稱對應多位會員，請改用 Email"),
+    );
+  }
+  return hits[0]!;
 }
 
 function asPositiveInteger(v: unknown): number | null {
@@ -989,6 +1040,65 @@ export const syncSessionPriceFromTsmcDaily = onSchedule(
   },
 );
 
+/** 每月 1 日：結算上個月消費冠軍，贈送 1 次按摩並更新前台祝賀 */
+export const awardMonthlyConsumptionChampion = onSchedule(
+  {
+    schedule: "0 9 1 * *",
+    timeZone: TIMEZONE,
+    region,
+    secrets: [resendApiKey],
+  },
+  async () => {
+    const result = await runMonthlyChampionAward({
+      db,
+      resendApiKey: resendApiKey.value(),
+      resendFrom: resendFrom.value(),
+    });
+    if (result.ok) {
+      console.info("awardMonthlyConsumptionChampion ok", result.monthKey, result.customerId);
+    } else {
+      console.info("awardMonthlyConsumptionChampion skipped", result.reason, result.monthKey ?? "");
+    }
+  },
+);
+
+/** 管理員：手動觸發月消費冠軍結算（可指定 YYYY-MM，供補發） */
+export const runMonthlyChampionAwardAdmin = onCall(walletAdminCall, async (request) => {
+  const locale = parseLocale(request.data);
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
+  }
+  await assertAdminByUid(uid, locale);
+
+  const monthKeyRaw = typeof request.data?.monthKey === "string" ? request.data.monthKey.trim() : "";
+  const result = await runMonthlyChampionAward({
+    db,
+    resendApiKey: resendApiKey.value(),
+    resendFrom: resendFrom.value(),
+    ...(monthKeyRaw ? { monthKey: monthKeyRaw } : {}),
+  });
+
+  if (!result.ok) {
+    const reasonMessages: Record<string, string> = {
+      already_awarded: st(locale, "monthlyChampion.alreadyAwarded", "該月份已結算過，無法重複贈送。"),
+      no_eligible_winner: st(locale, "monthlyChampion.noWinner", "該月份無符合條件的消費冠軍。"),
+      invalid_month_key: st(locale, "monthlyChampion.badMonthKey", "monthKey 須為 YYYY-MM。"),
+      aggregate_failed: st(locale, "monthlyChampion.aggregateFail", "統計失敗，請稍後再試。"),
+    };
+    throw new HttpsError(
+      "failed-precondition",
+      reasonMessages[result.reason] ?? st(locale, "monthlyChampion.failed", "月冠軍結算失敗。"),
+    );
+  }
+
+  return {
+    ok: true as const,
+    monthKey: result.monthKey,
+    displayName: result.displayNamePublic,
+  };
+});
+
 /** 管理員：手動觸發台積電連動定價同步（規則同排程） */
 export const syncSessionPriceFromTsmcAdmin = onCall(publicCall, async (request) => {
   const locale = parseLocale(request.data);
@@ -1434,11 +1544,6 @@ function isCashBookingMode(v: string): v is CashBookingMode {
   return (CASH_BOOKING_MODES as readonly string[]).includes(v);
 }
 
-function bookingSessionCreditsDeducted(d: Record<string, unknown>): number {
-  const raw = d.sessionCreditsDeducted;
-  return typeof raw === "number" ? Math.max(0, Math.floor(raw)) : 0;
-}
-
 function formatCashBookingHistoryNote(d: Record<string, unknown>): string {
   const dateKey = typeof d.dateKey === "string" ? d.dateKey : "";
   const startSlot = typeof d.startSlot === "string" ? d.startSlot : "";
@@ -1601,20 +1706,6 @@ export const listWalletTransactionsAdmin = onCall(publicCall, async (request) =>
   return { customerId, transactions };
 });
 
-const STATS_CASH_BOOKING_MODES = new Set(["member_cash", "member_qr", "member_cap_overflow"]);
-const STATS_PAYMENT_MODES = [
-  "member_cash",
-  "member_qr",
-  "member_cap_overflow",
-  "member_wallet",
-  "member_beverage",
-] as const;
-const STATS_WALLET_TOPUP = "topup";
-const STATS_WALLET_ADJUST = "admin_session_adjust";
-const CONSUMPTION_STATS_MAX_BOOKINGS = 2500;
-const CONSUMPTION_STATS_MAX_WALLET_TX = 2500;
-const CONSUMPTION_STATS_MAX_RANGE_DAYS = 366;
-
 function parseTaipeiDateKeyInput(raw: unknown, locale: ServerLocale, labelKey: string, labelFallback: string): string {
   const s = typeof raw === "string" ? raw.trim() : "";
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) {
@@ -1632,13 +1723,6 @@ function taipeiDateKeyRangeSeconds(from: string, to: string): { startSec: number
   const end = DateTime.fromISO(to, { zone: TIMEZONE }).endOf("day");
   return { startSec: Math.floor(start.toSeconds()), endSec: Math.floor(end.toSeconds()) };
 }
-
-type ConsumptionStatsByModeRow = {
-  mode: string;
-  bookingCount: number;
-  cashNtd: number;
-  sessions: number;
-};
 
 type ConsumptionStatsTopMemberRow = {
   customerId: string;
@@ -1725,58 +1809,37 @@ export const getConsumptionStatsAdmin = onCall(publicCall, async (request) => {
   for (const mode of STATS_PAYMENT_MODES) {
     byMode.set(mode, { mode, bookingCount: 0, cashNtd: 0, sessions: 0 });
   }
-  const byMember = new Map<string, { bookingCount: number; cashNtd: number; sessions: number }>();
+  const byMember = new Map<string, MemberConsumptionTotals>();
 
   let bookingCount = 0;
   let cashTotalNtd = 0;
   let sessionsConsumed = 0;
 
   for (const docSnap of bookingSnap.docs) {
-    const d = docSnap.data() as Record<string, unknown>;
-    const dateKey = typeof d.dateKey === "string" ? d.dateKey : "";
-    if (customerId && (dateKey < dateFrom || dateKey > dateTo)) continue;
-
-    const status = typeof d.status === "string" ? d.status : "pending";
-    if (status === "cancelled" || status === "deleted") continue;
-    if (!(ACTIVE_STATUSES as readonly string[]).includes(status)) continue;
-
-    const bookingMode = typeof d.bookingMode === "string" ? d.bookingMode : "";
-    if (!STATS_PAYMENT_MODES.includes(bookingMode as (typeof STATS_PAYMENT_MODES)[number])) continue;
-
-    const paidCash = typeof d.paidCash === "number" ? d.paidCash : 0;
-    const price = typeof d.price === "number" ? d.price : 0;
-    const sessionCreditsDeducted = bookingSessionCreditsDeducted(d);
-    const cashNtd =
-      STATS_CASH_BOOKING_MODES.has(bookingMode) && sessionCreditsDeducted < 1
-        ? paidCash > 0
-          ? paidCash
-          : price
-        : 0;
-    const units = typeof d.units === "number" && d.units > 0 ? Math.floor(d.units) : 1;
-    const sessions =
-      bookingMode === "member_wallet" || sessionCreditsDeducted >= 1
-        ? sessionCreditsDeducted >= 1
-          ? sessionCreditsDeducted
-          : units
-        : 0;
+    const parsed = parseBookingConsumption(docSnap.data() as Record<string, unknown>, {
+      dateFrom,
+      dateTo,
+      customerId,
+    });
+    if (!parsed) continue;
 
     bookingCount += 1;
-    cashTotalNtd += cashNtd;
-    sessionsConsumed += sessions;
+    cashTotalNtd += parsed.cashNtd;
+    sessionsConsumed += parsed.sessions;
 
-    const modeRow = byMode.get(bookingMode) ?? { mode: bookingMode, bookingCount: 0, cashNtd: 0, sessions: 0 };
+    const modeRow = byMode.get(parsed.bookingMode) ?? {
+      mode: parsed.bookingMode,
+      bookingCount: 0,
+      cashNtd: 0,
+      sessions: 0,
+    };
     modeRow.bookingCount += 1;
-    modeRow.cashNtd += cashNtd;
-    modeRow.sessions += sessions;
-    byMode.set(bookingMode, modeRow);
+    modeRow.cashNtd += parsed.cashNtd;
+    modeRow.sessions += parsed.sessions;
+    byMode.set(parsed.bookingMode, modeRow);
 
-    const memberUid = typeof d.customerId === "string" ? d.customerId.trim() : "";
-    if (memberUid && !customerId) {
-      const prev = byMember.get(memberUid) ?? { bookingCount: 0, cashNtd: 0, sessions: 0 };
-      prev.bookingCount += 1;
-      prev.cashNtd += cashNtd;
-      prev.sessions += sessions;
-      byMember.set(memberUid, prev);
+    if (!customerId) {
+      addMemberConsumption(byMember, parsed.memberUid, parsed.cashNtd, parsed.sessions);
     }
   }
 
@@ -1831,9 +1894,7 @@ export const getConsumptionStatsAdmin = onCall(publicCall, async (request) => {
 
   let topMembers: ConsumptionStatsTopMemberRow[] | undefined;
   if (!customerId && byMember.size > 0) {
-    const sorted = [...byMember.entries()]
-      .sort((a, b) => b[1].cashNtd - a[1].cashNtd || b[1].sessions - a[1].sessions)
-      .slice(0, 10);
+    const sorted = sortMemberConsumptionEntries(byMember, 10);
     const auth = getAuth();
     topMembers = await Promise.all(
       sorted.map(async ([memberUid, stats]) => {
@@ -1871,6 +1932,72 @@ export const getConsumptionStatsAdmin = onCall(publicCall, async (request) => {
     },
     byPaymentMode,
     topMembers,
+  };
+});
+
+type ConsumptionRankPublicRow = {
+  displayName: string;
+  bookingCount: number;
+  cashNtd: number;
+  sessions: number;
+};
+
+/** 前台：本週／本月消費排行（遮罩名稱，不需登入） */
+export const getConsumptionRankPublic = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
+  const periodRaw = request.data?.period;
+  const period = periodRaw === "month" ? "month" : "week";
+  const { dateFrom, dateTo } = consumptionRankPublicPeriodRange(period);
+
+  let bookingSnap;
+  try {
+    bookingSnap = await db
+      .collection("bookings")
+      .where("dateKey", ">=", dateFrom)
+      .where("dateKey", "<=", dateTo)
+      .limit(CONSUMPTION_STATS_MAX_BOOKINGS)
+      .get();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("getConsumptionRankPublic bookings query failed", e);
+    if (/requires an index/i.test(msg)) {
+      throw new HttpsError(
+        "failed-precondition",
+        st(
+          locale,
+          "consumptionRank.indexBuilding",
+          "排行查詢需要 Firestore 索引，請稍後再試。",
+        ),
+      );
+    }
+    throw new HttpsError("internal", st(locale, "consumptionRank.queryFail", "排行載入失敗，請稍後再試。"));
+  }
+
+  const byMember = new Map<string, MemberConsumptionTotals>();
+
+  for (const docSnap of bookingSnap.docs) {
+    const parsed = parseBookingConsumption(docSnap.data() as Record<string, unknown>);
+    if (!parsed) continue;
+    addMemberConsumption(byMember, parsed.memberUid, parsed.cashNtd, parsed.sessions);
+  }
+
+  const sorted = sortMemberConsumptionEntries(byMember, CONSUMPTION_RANK_PUBLIC_MAX);
+
+  const rows: ConsumptionRankPublicRow[] = await Promise.all(
+    sorted.map(async ([memberUid, stats]) => ({
+      displayName: await publicRankDisplayName(db, memberUid, locale),
+      bookingCount: stats.bookingCount,
+      cashNtd: stats.cashNtd,
+      sessions: stats.sessions,
+    })),
+  );
+
+  return {
+    period,
+    dateFrom,
+    dateTo,
+    truncated: bookingSnap.size >= CONSUMPTION_STATS_MAX_BOOKINGS,
+    rows,
   };
 });
 
@@ -1931,7 +2058,7 @@ export const createMemberAccount = onCall(publicCall, async (request) => {
   }
 });
 
-/** 後台依 Email 前綴搜尋會員（掃描 Auth 使用者列表，適合人數不多的場景） */
+/** 後台依 Email 前綴或稱呼片段搜尋會員（掃描 Auth + Firestore customers，適合人數不多的場景） */
 export const searchMemberUsers = onCall(publicCall, async (request) => {
   const locale = parseLocale(request.data);
   const uid = request.auth?.uid;
@@ -1942,22 +2069,32 @@ export const searchMemberUsers = onCall(publicCall, async (request) => {
 
   const prefixRaw = typeof request.data?.prefix === "string" ? request.data.prefix.trim().toLowerCase() : "";
   if (prefixRaw.length < 2) {
-    return { users: [] as { uid: string; email: string }[] };
+    return { users: [] as { uid: string; email: string; nickname: string }[] };
   }
 
   const auth = getAuth();
-  const matches: { uid: string; email: string }[] = [];
+  const matches: { uid: string; email: string; nickname: string }[] = [];
   let pageToken: string | undefined;
   const maxMatches = 15;
   const maxPages = 12;
 
   for (let page = 0; page < maxPages && matches.length < maxMatches; page++) {
     const res = await auth.listUsers(1000, pageToken);
+    const uids = res.users.map((u) => u.uid);
+    const refs = uids.map((id) => db.collection("customers").doc(id));
+    const snaps = refs.length > 0 ? await db.getAll(...refs) : [];
+    const snapByUid = new Map(snaps.map((s) => [s.id, s]));
+
     for (const u of res.users) {
       const email = u.email;
       if (!email) continue;
-      if (email.toLowerCase().startsWith(prefixRaw)) {
-        matches.push({ uid: u.uid, email });
+      const snap = snapByUid.get(u.uid);
+      const d = snap?.exists ? (snap.data() as Record<string, unknown>) : {};
+      const nickname = typeof d.nickname === "string" ? d.nickname.trim() : "";
+      const emailMatch = email.toLowerCase().startsWith(prefixRaw);
+      const nicknameMatch = nickname.length > 0 && nickname.toLowerCase().includes(prefixRaw);
+      if (emailMatch || nicknameMatch) {
+        matches.push({ uid: u.uid, email, nickname });
         if (matches.length >= maxMatches) break;
       }
     }

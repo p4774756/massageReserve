@@ -32,6 +32,8 @@ import { createVisitorStatsLine } from "./visitorStats";
 import { runSlotSpectacle } from "./slotSpectacle";
 import { initI18n, intlLocaleTag, localeApiParam, t } from "./i18n";
 import { createMyBookingsPanel } from "./myBookingsPanel";
+import { createConsumptionRankPanel } from "./consumptionRankPanel";
+import { createMonthlyChampionBanner } from "./monthlyChampionBanner";
 import { createAdminDashboard } from "./adminDashboard";
 import { canCurrentUserAccessAdmin } from "./adminAccess";
 import { adminSessionCallName, shortUidForDisplay } from "./adminSessionUtil";
@@ -153,6 +155,8 @@ function render() {
   const pageHeroInner = el("div", { class: "page-hero__inner" }, [pageHeadTopRow, titleDesc]);
   const pageHero = el("div", { class: "page-hero" }, [pageHeroBg, pageHeroScrim, pageHeroInner]);
   const titleTextCol = el("div", { class: "page-head-text" }, [visitorStatsLine]);
+  const monthlyChampionBanner = createMonthlyChampionBanner(db);
+  titleTextCol.append(monthlyChampionBanner.root);
   const pageHeadBody = el("div", { class: "page-head-body" }, [pageHero, titleTextCol]);
 
   const panelBook = el("main", { class: "panel panel-book" });
@@ -988,6 +992,7 @@ function render() {
   });
   const { stopMyBookingsListener, ensureMyBookingsListener } = myBookingsPanel;
   const myBookingsSection = myBookingsPanel.root;
+  const consumptionRankPanel = createConsumptionRankPanel();
 
   function syncHeadMemberButtons() {
     const user = auth.currentUser;
@@ -1121,12 +1126,16 @@ function render() {
     memberModalWalletMirror = null;
     if (auth.currentUser) return;
     const overlay = el("div", { class: "modal-overlay" });
-    const dialog = el("div", { class: "modal-card member-modal" });
+    const dialog = el("div", { class: "modal-card member-modal member-modal--auth" });
     dialog.setAttribute("role", "dialog");
     dialog.setAttribute("aria-modal", "true");
-    const status = el("div", { class: "status-line" });
+    const status = el("div", { class: "status-line member-auth-status" });
     const modalTitle = el("h3", {}, [t("auth.modal.title", "會員登入／註冊")]);
-      const loginStack = el("div", { class: "member-auth-stack" });
+    const closeBtn = el("button", { class: "ghost member-modal__close", type: "button" }, [
+      t("modal.close", "關閉"),
+    ]);
+    const authBody = el("div", { class: "member-modal__main member-auth-body" });
+    const loginStack = el("div", { class: "member-auth-stack" });
       const registerStack = el("div", { class: "member-auth-stack", hidden: true });
       const resetStack = el("div", { class: "member-auth-stack", hidden: true });
 
@@ -1158,7 +1167,6 @@ function render() {
       });
       const registerBtn = el("button", { class: "primary", type: "button" }, [t("auth.registerSend", "註冊並寄驗證信")]);
       const resetSendBtn = el("button", { class: "primary", type: "button" }, [t("auth.resetSend", "寄送重設密碼信")]);
-      const cancelBtn = el("button", { class: "ghost", type: "button" }, [t("modal.close", "關閉")]);
       const switchToRegister = el("button", { class: "ghost", type: "button" }, [t("auth.switchRegister", "還沒有帳號？註冊")]);
       const switchToLogin = el("button", { class: "ghost", type: "button" }, [t("auth.switchLogin", "返回登入")]);
       const switchToForgot = el("button", { class: "ghost", type: "button" }, [t("auth.forgot", "忘記密碼？")]);
@@ -1278,7 +1286,7 @@ function render() {
         }
       });
 
-      cancelBtn.addEventListener("click", () => overlay.remove());
+      closeBtn.addEventListener("click", () => overlay.remove());
 
       resetSendBtn.addEventListener("click", async () => {
         status.textContent = "";
@@ -1324,16 +1332,14 @@ function render() {
           ),
         ]),
         el("label", { class: "field" }, ["Email", resetEmail]),
-        el("div", { class: "hint" }, [switchToLoginFromReset]),
+        el("div", { class: "hint member-auth-links member-auth-links--single" }, [switchToLoginFromReset]),
       );
 
+    authBody.append(loginStack, registerStack, resetStack, status);
     dialog.append(
-      modalTitle,
-      loginStack,
-      registerStack,
-      resetStack,
-      status,
-      el("div", { class: "modal-actions" }, [cancelBtn, loginBtn, registerBtn, resetSendBtn]),
+      el("div", { class: "member-modal__head" }, [modalTitle, closeBtn]),
+      authBody,
+      el("div", { class: "modal-actions member-auth-actions" }, [loginBtn, registerBtn, resetSendBtn]),
     );
     syncAuthModalPrimaryButtons();
 
@@ -2364,30 +2370,36 @@ function render() {
     }
   });
 
-  let bookSubTab: "book" | "mybookings" = "book";
+  let bookSubTab: "book" | "mybookings" | "rank" = "book";
 
   const bookTabList = el("div", { class: "book-tabs", role: "tablist" });
   bookTabList.setAttribute(
     "aria-label",
     t(
       "book.tabsAria",
-      "預約按摩、我的預約；「我的預約」於登入會員後顯示。抽拉霸請開啟會員中心。",
+      "預約按摩、我的預約、消費排行；「我的預約」於登入會員後顯示。抽拉霸請開啟會員中心。",
     ),
   );
   const tabBook = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-book" }, [
     t("book.tab.booking", "預約按摩"),
   ]);
+  const tabRank = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-rank" }, [
+    t("book.tab.consumptionRank", "消費排行"),
+  ]);
   const tabMyBookings = el("button", { type: "button", class: "tab book-tab", role: "tab", id: "book-tab-my-bookings" }, [
     t("book.tab.myBookings", "我的預約"),
   ]);
   tabBook.setAttribute("aria-controls", "book-tab-panel-book");
+  tabRank.setAttribute("aria-controls", "book-tab-panel-rank");
   tabMyBookings.setAttribute("aria-controls", "book-tab-panel-my-bookings");
   tabBook.setAttribute("aria-selected", "true");
+  tabRank.setAttribute("aria-selected", "false");
   tabMyBookings.setAttribute("aria-selected", "false");
   tabBook.tabIndex = 0;
+  tabRank.tabIndex = -1;
   tabMyBookings.tabIndex = -1;
   tabMyBookings.hidden = true;
-  bookTabList.append(tabBook, tabMyBookings);
+  bookTabList.append(tabBook, tabMyBookings, tabRank);
 
   const bookFormTop = el("div", { class: "book-form-top" }, [
     el("label", { class: "field book-form-top__name" }, [t("field.name", "姓名（必填）"), nameInput]),
@@ -2467,6 +2479,15 @@ function render() {
   bookPanelMyBookings.setAttribute("aria-labelledby", "book-tab-my-bookings");
   bookPanelMyBookings.append(myBookingsSection);
 
+  const bookPanelRank = el("div", {
+    class: "book-tab-panel book-tab-panel--rank",
+    id: "book-tab-panel-rank",
+    role: "tabpanel",
+    hidden: true,
+  });
+  bookPanelRank.setAttribute("aria-labelledby", "book-tab-rank");
+  bookPanelRank.append(consumptionRankPanel.root);
+
   memberHubGamesRoot = el("div", { class: "member-hub-games member-hub-games--wheel-only" });
   memberHubGamesRoot.append(memberHubPanelWheel);
   memberHubGamesHolder.append(memberHubGamesRoot);
@@ -2475,16 +2496,21 @@ function render() {
     memberHubGamesHolder.append(memberHubGamesRoot!);
   };
 
-  function setBookSubTab(which: "book" | "mybookings") {
+  function setBookSubTab(which: "book" | "mybookings" | "rank") {
     bookSubTab = which;
     tabBook.setAttribute("aria-selected", String(which === "book"));
+    tabRank.setAttribute("aria-selected", String(which === "rank"));
     tabMyBookings.setAttribute("aria-selected", String(which === "mybookings"));
     tabBook.tabIndex = which === "book" ? 0 : -1;
+    tabRank.tabIndex = which === "rank" ? 0 : -1;
     tabMyBookings.tabIndex = which === "mybookings" ? 0 : -1;
     bookPanelBook.hidden = which !== "book";
+    bookPanelRank.hidden = which !== "rank";
     bookPanelMyBookings.hidden = which !== "mybookings";
+    if (which === "rank") void consumptionRankPanel.load();
   }
   tabBook.addEventListener("click", () => setBookSubTab("book"));
+  tabRank.addEventListener("click", () => setBookSubTab("rank"));
   tabMyBookings.addEventListener("click", () => setBookSubTab("mybookings"));
 
   syncBookMyBookingsTabVisibility = () => {
@@ -2499,7 +2525,7 @@ function render() {
   };
   syncBookMyBookingsTabVisibility();
 
-  panelBook.append(bookTabList, bookPanelBook, bookPanelMyBookings);
+  panelBook.append(bookTabList, bookPanelBook, bookPanelRank, bookPanelMyBookings);
 
   /** --- 管理後台 --- */
   const adminWrap = el("div", {}, []);

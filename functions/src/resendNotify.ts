@@ -639,6 +639,71 @@ export async function sendMemberWalletChangedEmail(opts: {
   }
 }
 
+export type MonthlyChampionRewardEmailPayload = {
+  to: string;
+  displayName: string;
+  monthKey: string;
+  monthLabel: string;
+  cashNtd: number;
+  sessions: number;
+  bookingCount: number;
+  sessionCreditsAfter: number;
+};
+
+/** 月消費冠軍：贈送 1 次按摩 */
+export async function sendMonthlyChampionRewardEmail(opts: {
+  apiKey: string;
+  from: string;
+  payload: MonthlyChampionRewardEmailPayload;
+}): Promise<void> {
+  const { apiKey, from, payload } = opts;
+  const rows: EmailDetailRow[] = [
+    { label: "獲獎月份", value: payload.monthLabel, emphasize: true },
+    { label: "贈送內容", value: "1 次按摩（可預約次數 +1）", emphasize: true },
+    { label: "該月現金消費（元）", value: payload.cashNtd > 0 ? String(payload.cashNtd) : "—" },
+    { label: "該月扣次", value: payload.sessions > 0 ? String(payload.sessions) : "—" },
+    { label: "該月有效預約", value: `${payload.bookingCount} 筆` },
+    { label: "目前可預約次數", value: `${payload.sessionCreditsAfter} 次` },
+  ];
+
+  const text = buildNotifyEmailPlainText({
+    title: "月消費冠軍獎勵",
+    greeting: `${payload.displayName} 您好，`,
+    introLines: [
+      `恭喜您獲得 ${payload.monthLabel} 消費冠軍！`,
+      "店家已為您贈送 1 次按摩，請在本月內登入預約站安排時段。",
+    ],
+    rows,
+    outroLines: ["登入「會員中心」可查看可預約次數；如有疑問請與店家聯繫。"],
+    footer: "— 按摩預約系統（自動通知，請勿直接回覆此信）",
+  });
+
+  const html = buildNotifyEmailHtml({
+    title: "月消費冠軍獎勵",
+    greeting: `${payload.displayName} 您好，`,
+    introLines: [
+      `恭喜您獲得 <strong>${escapeHtmlForEmail(payload.monthLabel)}</strong> 消費冠軍！`,
+      "店家已為您贈送 <strong>1 次按摩</strong>，請在本月內登入預約站安排時段。",
+    ],
+    rows,
+    outroLines: ["登入「會員中心」可查看可預約次數；如有疑問請與店家聯繫。"],
+    footer: "— 按摩預約系統（自動通知，請勿直接回覆此信）",
+  });
+
+  const resend = new Resend(apiKey);
+  const subject = `恭喜！${payload.monthLabel}消費冠軍 — 已贈送 1 次按摩`;
+  const { error } = await resend.emails.send({
+    from,
+    to: [payload.to],
+    subject,
+    text,
+    html,
+  });
+  if (error) {
+    throwResendEmailError(error);
+  }
+}
+
 export async function sendBroadcastHtmlEmail(opts: {
   apiKey: string;
   from: string;

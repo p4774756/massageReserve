@@ -190,7 +190,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     const walletTopupSection = el("div", { class: "admin-announce admin-announce--wallet" }, []);
     const topupCustomerId = el("input", {
       type: "text",
-      placeholder: t("admin.placeholder.memberId", "會員 Email（建議）或 UID"),
+      placeholder: t("admin.placeholder.memberId", "會員 Email 或暱稱"),
       autocomplete: "off",
     });
     const topupSuggestions = el("ul", {
@@ -210,14 +210,17 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         try {
           const fn = searchMemberUsersCall();
           const res = await fn({ prefix: q, ...localeApiParam() });
-          const users = (res.data as { users?: { uid: string; email: string }[] }).users ?? [];
+          const users =
+            (res.data as { users?: { uid: string; email: string; nickname?: string }[] }).users ?? [];
           suggestions.innerHTML = "";
           if (users.length === 0) {
             suggestions.hidden = true;
             return;
           }
           for (const u of users) {
-            const li = el("li", { class: "member-typeahead-item", role: "option" }, [u.email]);
+            const nick = (u.nickname ?? "").trim();
+            const label = nick ? `${nick} · ${u.email}` : u.email;
+            const li = el("li", { class: "member-typeahead-item", role: "option" }, [label]);
             li.addEventListener("mousedown", (ev) => {
               ev.preventDefault();
               input.value = u.email;
@@ -259,7 +262,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
 
     const historyCustomerId = el("input", {
       type: "text",
-      placeholder: t("admin.placeholder.memberId", "會員 Email（建議）或 UID"),
+      placeholder: t("admin.placeholder.memberId", "會員 Email 或暱稱"),
       autocomplete: "off",
     });
     const historySuggestions = el("ul", {
@@ -273,7 +276,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
 
     const statsCustomerId = el("input", {
       type: "text",
-      placeholder: t("admin.placeholder.memberId", "會員 Email（建議）或 UID"),
+      placeholder: t("admin.placeholder.memberId", "會員 Email 或暱稱"),
       autocomplete: "off",
     });
     const statsSuggestions = el("ul", {
@@ -657,7 +660,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       const sessions = Number(topupSessions.value);
       const note = topupNote.value.trim();
       if (!customerId) {
-        topupStatus.textContent = t("admin.topup.needId", "請輸入會員 Email 或 UID。");
+        topupStatus.textContent = t("admin.topup.needId", "請輸入會員 Email 或暱稱。");
         topupStatus.classList.add("error");
         return;
       }
@@ -692,7 +695,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       const sessionsDelta = Number(adjustSessionDelta.value);
       const note = adjustSessionNote.value.trim();
       if (!customerId) {
-        adjustSessionStatus.textContent = t("admin.topup.needId", "請輸入會員 Email 或 UID。");
+        adjustSessionStatus.textContent = t("admin.topup.needId", "請輸入會員 Email 或暱稱。");
         adjustSessionStatus.classList.add("error");
         return;
       }
@@ -738,7 +741,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       const delta = Number(grantDrawDelta.value);
       const note = grantDrawNote.value.trim();
       if (!customerId) {
-        grantDrawStatus.textContent = t("admin.topup.needId", "請輸入會員 Email 或 UID。");
+        grantDrawStatus.textContent = t("admin.topup.needId", "請輸入會員 Email 或暱稱。");
         grantDrawStatus.classList.add("error");
         return;
       }
@@ -1509,11 +1512,11 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     wireWalletAccordionsExclusive([accordionTopup, accordionAdjust, accordionGrant]);
 
     const walletMemberBar = el("section", { class: "admin-announce__wallet-segment admin-announce__wallet-segment--member" }, [
-      el("label", { class: "field" }, [t("admin.wallet.memberLabel", "會員（Email 或 UID）"), topupTypeaheadWrap]),
+      el("label", { class: "field" }, [t("admin.wallet.memberLabel", "會員（Email 或暱稱）"), topupTypeaheadWrap]),
       el("p", { class: "hint admin-wallet-member-bar__hint" }, [
         t(
           "admin.wallet.memberHint",
-          "以下儲值與調整皆套用此會員；輸入至少 2 字元可搜尋 Email，亦可直接貼上 UID。",
+          "以下儲值與調整皆套用此會員；輸入至少 2 字元可搜尋 Email 或暱稱。",
         ),
       ]),
     ]);
@@ -1600,6 +1603,8 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
           return t("admin.walletHistory.typeAdjust", "調整可預約次數");
         case "admin_grant_draw":
           return t("admin.walletHistory.typeGrant", "贈送輪盤抽獎次數");
+        case "monthly_champion_reward":
+          return t("admin.walletHistory.typeMonthlyChampion", "月消費冠軍獎勵");
         case "session_charge":
           return t("admin.walletHistory.typeSessionCharge", "預約扣次");
         case "session_refund":
@@ -1729,7 +1734,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       walletHistoryStatus.className = "status-line";
       const customerId = historyCustomerId.value.trim();
       if (!customerId) {
-        walletHistoryStatus.textContent = t("admin.topup.needId", "請輸入會員 Email 或 UID。");
+        walletHistoryStatus.textContent = t("admin.topup.needId", "請輸入會員 Email 或暱稱。");
         walletHistoryStatus.classList.add("error");
         return;
       }
@@ -1752,7 +1757,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
           walletHistoryAllRows.length > 0
             ? t("admin.walletHistory.found", "共 {{n}} 筆紀錄。", { n: walletHistoryAllRows.length })
             : t("admin.walletHistory.none", "查無紀錄。");
-        walletHistoryStatus.classList.add(walletHistoryAllRows.length > 0 ? "ok" : "");
+        if (walletHistoryAllRows.length > 0) walletHistoryStatus.classList.add("ok");
       } catch (e) {
         walletHistoryAllRows = [];
         walletHistoryPageIndex = 0;
@@ -1768,11 +1773,11 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
 
     const memberHistorySection = el("div", { class: "admin-announce admin-announce--wallet" }, []);
     const historyMemberBar = el("section", { class: "admin-announce__wallet-segment admin-announce__wallet-segment--member" }, [
-      el("label", { class: "field" }, [t("admin.wallet.memberLabel", "會員（Email 或 UID）"), historyTypeaheadWrap]),
+      el("label", { class: "field" }, [t("admin.wallet.memberLabel", "會員（Email 或暱稱）"), historyTypeaheadWrap]),
       el("p", { class: "hint admin-wallet-member-bar__hint" }, [
         t(
           "admin.walletHistory.memberHint",
-          "查詢前請先指定會員；輸入至少 2 字元可搜尋 Email，亦可直接貼上 UID（與「會員儲值」分頁共用）。",
+          "查詢前請先指定會員；輸入至少 2 字元可搜尋 Email 或暱稱（與「會員儲值」分頁共用）。",
         ),
       ]),
     ]);
@@ -1988,7 +1993,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
           parts.push(t("admin.consumptionStats.truncatedWallet", "儲值／調整資料已達查詢上限，數字可能偏低。"));
         }
         statsStatus.textContent = parts.join(" ") || t("admin.consumptionStats.none", "查無資料。");
-        statsStatus.classList.add(summary && summary.bookingCount > 0 ? "ok" : "");
+        if (summary && summary.bookingCount > 0) statsStatus.classList.add("ok");
       } catch (e) {
         paintConsumptionStatsSummary(null);
         paintConsumptionStatsByMode([]);

@@ -1423,6 +1423,131 @@ main.panel[hidden] {
   margin-top: 0;
 }
 
+.book-tab-panel--rank {
+  min-width: 0;
+}
+
+.monthly-champion-banner {
+  margin: 0;
+  padding: 11px 14px;
+  border: 1px solid rgb(var(--accent-rgb) / 0.45);
+  border-radius: var(--radius);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) 22%, var(--surface)) 0%,
+    color-mix(in srgb, var(--accent-2) 12%, var(--surface)) 100%
+  );
+  box-shadow: var(--shadow-sm);
+}
+
+.monthly-champion-banner[hidden] {
+  display: none !important;
+}
+
+.monthly-champion-banner__title {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--accent-bright);
+  letter-spacing: 0.02em;
+}
+
+.monthly-champion-banner__body {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.consumption-rank {
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--accent-2) 8%, var(--surface));
+  box-shadow: var(--shadow-sm);
+}
+
+.consumption-rank__heading {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.consumption-rank__lead {
+  margin: 0 0 12px;
+}
+
+.consumption-rank__period {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.consumption-rank__period-btn {
+  min-width: 5.5rem;
+  font-weight: 600;
+}
+
+.consumption-rank__period-btn:not([aria-selected="true"]) {
+  color: var(--muted);
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+.consumption-rank__period-btn[aria-selected="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: var(--shadow-sm);
+}
+
+.consumption-rank__period-btn[aria-selected="true"]:hover:not(:disabled) {
+  filter: brightness(1.06);
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: #ffffff;
+}
+
+.consumption-rank__status {
+  margin-bottom: 10px;
+}
+
+.consumption-rank__table-wrap {
+  margin-top: 4px;
+}
+
+.consumption-rank__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.consumption-rank__table th,
+.consumption-rank__table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.consumption-rank__table th {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.consumption-rank__col-rank {
+  width: 2.5rem;
+  text-align: center;
+}
+
+.consumption-rank__table tbody tr:last-child td {
+  border-bottom: none;
+}
+
 .grid {
   display: grid;
   gap: 22px;
@@ -2122,11 +2247,86 @@ button.ghost:disabled {
   margin-top: 10px;
 }
 
+.member-modal--auth {
+  gap: 18px;
+}
+
+.member-auth-body {
+  gap: 14px;
+}
+
+.member-auth-stack {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.member-auth-stack[hidden] {
+  display: none;
+}
+
+.member-auth-status {
+  min-height: 0;
+}
+
+.member-auth-status:empty {
+  display: none;
+}
+
 .member-auth-links {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 14px;
+  justify-content: space-between;
+  gap: 8px 12px;
+  width: 100%;
+  margin: 2px 0 0;
+  padding-top: 2px;
+}
+
+.member-auth-links--single {
+  justify-content: flex-start;
+}
+
+.member-auth-links button.ghost {
+  padding: 6px 0;
+  min-height: 0;
+  font-size: 0.84rem;
+  font-weight: 600;
+  text-align: left;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.member-auth-links button.ghost:hover:not(:disabled) {
+  background: transparent;
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.member-auth-actions {
+  justify-content: stretch;
+  margin-top: 2px;
+}
+
+.member-auth-actions .primary {
+  width: 100%;
+  justify-content: center;
+}
+
+.member-modal--auth label.field {
+  gap: 6px;
+}
+
+.member-modal--auth .field-password-row {
+  gap: 8px;
+}
+
+.member-modal--auth button.password-reveal-btn {
+  min-width: 3.2rem;
+  padding: 11px 10px;
+  text-align: center;
 }
 
 .my-bookings {
@@ -6464,6 +6664,13 @@ body.wheel-spectacle-lock {
 /* 前台：Sōl Spa 靜謐奢華（後台主色見下方 .shell.admin-mode，Yahoo 奇摩紫） */
 /* -------------------------------------------------------------------------- */
 
+/* 前台圓角略收，避免到處大圓角／膠囊形 */
+html.sol-spa:not(:has(.shell.admin-mode)) {
+  --radius: 4px;
+  --radius-sm: 2px;
+  --radius-lg: 6px;
+}
+
 html.sol-spa body {
   background-color: var(--bg);
   background-image:
@@ -6614,6 +6821,17 @@ html.sol-spa:not(:has(.shell.admin-mode)) button.primary:not(.wheel-spectacle-pr
   filter: brightness(0.96);
 }
 
+html.sol-spa:not(:has(.shell.admin-mode)) .member-auth-links button.ghost {
+  border-color: transparent;
+  background: transparent;
+}
+
+html.sol-spa:not(:has(.shell.admin-mode)) .member-auth-links button.ghost:hover:not(:disabled) {
+  background: transparent;
+  color: var(--accent);
+  text-decoration: underline;
+}
+
 html.sol-spa:not(:has(.shell.admin-mode)) button.ghost {
   border: 1px solid var(--border-strong);
   background: var(--surface-elevated);
@@ -6625,6 +6843,33 @@ html.sol-spa:not(:has(.shell.admin-mode)) button.ghost {
 html.sol-spa:not(:has(.shell.admin-mode)) button.ghost:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 12%, var(--surface-elevated));
   border-color: var(--accent);
+}
+
+html.sol-spa:not(:has(.shell.admin-mode)) .consumption-rank__period-btn:not([aria-selected="true"]) {
+  border-color: var(--border);
+  background: var(--surface-elevated);
+  color: var(--muted);
+}
+
+html.sol-spa:not(:has(.shell.admin-mode)) .consumption-rank__period-btn:not([aria-selected="true"]):hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-elevated));
+  border-color: rgb(var(--accent-rgb) / 0.45);
+  color: var(--ink);
+}
+
+html.sol-spa:not(:has(.shell.admin-mode)) .consumption-rank__period-btn[aria-selected="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: var(--shadow-sm);
+}
+
+html.sol-spa:not(:has(.shell.admin-mode)) .consumption-rank__period-btn[aria-selected="true"]:hover:not(:disabled) {
+  filter: brightness(1.06);
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: #ffffff;
 }
 
 html.sol-spa:not(:has(.shell.admin-mode)) .modal-overlay {
@@ -6677,6 +6922,15 @@ html.sol-spa:not(:has(.shell.admin-mode)) textarea:focus-visible {
 html.sol-spa:not(:has(.shell.admin-mode)) .pill {
   border-color: var(--border);
   background: var(--surface-elevated);
+}
+
+html.sol-spa:not(:has(.shell.admin-mode)) .book-service-kind {
+  border-radius: var(--radius-sm);
+}
+
+html.sol-spa:not(:has(.shell.admin-mode)) .book-pick-calendar__badge,
+html.sol-spa:not(:has(.shell.admin-mode)) .book-pick-calendar__hover-tip-tag {
+  border-radius: var(--radius-sm);
 }
 
 html.sol-spa:not(:has(.shell.admin-mode)) .page-head .visitor-stats.visitor-stats--wretch {

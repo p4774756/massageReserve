@@ -69,6 +69,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    /** 月消費冠軍結算紀錄：僅 Cloud Functions */
+    match /monthlyChampionAwards/{monthKey} {
+      allow read, write: if false;
+    }
+
     /** 輪盤獎項與紀錄：僅管理後台與 Functions */
     match /wheelPrizes/{id} {
       allow read, write: if false;
