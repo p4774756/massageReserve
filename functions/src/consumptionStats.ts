@@ -12,6 +12,7 @@ export const STATS_PAYMENT_MODES = [
   "member_cap_overflow",
   "member_wallet",
   "member_beverage",
+  "member_meal",
 ] as const;
 
 export const STATS_WALLET_TOPUP = "topup";

@@ -38,7 +38,7 @@ import { createAdminDashboard } from "./adminDashboard";
 import { canCurrentUserAccessAdmin } from "./adminAccess";
 import { adminSessionCallName, shortUidForDisplay } from "./adminSessionUtil";
 import { resolveCapOverflowSettingsClient } from "./capOverflow";
-import { bookingModeLabel } from "./bookingDisplay";
+import { bookingModeLabel, treatOptionLabel } from "./bookingDisplay";
 import type { BookingMode } from "./bookingTypes";
 import { refillSlots } from "./bookingSlotSelect";
 import { allStartSlots } from "./slots";
@@ -1561,8 +1561,8 @@ function render() {
     } else if (isMember) {
       bookingModeHint.textContent = t(
         "member.modeHint.memberUnits",
-        "「預約次數扣抵」為儲值或輪盤點兌換的按摩次數（非現金）。您目前有 {{have}} 次；亦可現金 {{total}} 元、掃描 QR Code 付款，或「請師傅一杯飲料」（現場約定）。",
-        { have: sessionCreditsCount, total: totalPrice },
+        "「預約次數扣抵」為管理員後台儲值或輪盤點兌換的按摩次數（非現金）。您目前有 {{have}} 次；亦可現金 {{total}} 元、掃描 QR Code 付款，或「{{treat}}」（現場約定）。",
+        { have: sessionCreditsCount, total: totalPrice, treat: treatOptionLabel() },
       );
     } else {
       const loggedInUnverified = Boolean(
@@ -2266,7 +2266,8 @@ function render() {
     if (bookingMode === "member_wallet" && sessionCreditsCount < BOOKING_UNITS) {
       bookStatus.textContent = t(
         "booking.sessionShort",
-        "預約次數不足，請改用現金、「請師傅一杯飲料」或先儲值次數。",
+        "預約次數不足，請改用現金、「{{treat}}」或請管理員後台儲值次數。",
+        { treat: treatOptionLabel() },
       );
       bookStatus.classList.add("error");
       return;

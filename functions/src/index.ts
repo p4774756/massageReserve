@@ -655,13 +655,14 @@ export const createBooking = onCall(
     bookingModeRaw === "member_cash" ||
     bookingModeRaw === "member_wallet" ||
     bookingModeRaw === "member_beverage" ||
+    bookingModeRaw === "member_meal" ||
     bookingModeRaw === "member_qr" ||
     bookingModeRaw === "member_cap_overflow"
       ? bookingModeRaw
       : "";
   const uid = request.auth?.uid;
   if (!bookingMode) {
-    if (bookingModeRaw === "guest_cash" || bookingModeRaw === "guest_beverage") {
+    if (bookingModeRaw === "guest_cash" || bookingModeRaw === "guest_beverage" || bookingModeRaw === "guest_meal") {
       throw new HttpsError(
         "permission-denied",
         st(locale, "booking.membersOnly", "預約僅限註冊會員，請先註冊並登入；訪客預約已關閉。"),
@@ -849,7 +850,7 @@ export const createBooking = onCall(
       } else if (bookingMode === "member_cash" || bookingMode === "member_qr") {
         customerId = uid!;
         paidCash = totalPrice;
-      } else if (bookingMode === "member_beverage") {
+      } else if (bookingMode === "member_beverage" || bookingMode === "member_meal") {
         customerId = uid!;
       } else {
         customerId = uid!;
@@ -872,7 +873,7 @@ export const createBooking = onCall(
             st(
               locale,
               "booking.sessionShort",
-              "預約次數不足，請改用現金、飲料折抵或先儲值次數。",
+              "預約次數不足，請改用現金、「請師傅 🍛 或🥤」或請管理員後台儲值次數。",
             ),
           );
         }
@@ -2704,7 +2705,7 @@ export const rescheduleBookingAdmin = onCall(
     }
 
     const mode = bookingMode;
-    if (mode !== "guest_cash" && mode !== "guest_beverage" && customerId) {
+    if (mode !== "guest_cash" && mode !== "guest_beverage" && mode !== "guest_meal" && customerId) {
       const apiKey = resendApiKey.value().trim();
       if (apiKey) {
         const from = resendFrom.value().trim() || "Massage預約 <onboarding@resend.dev>";
@@ -2758,7 +2759,7 @@ export const testSendMemberBookingStatusEmail = onCall(
     }
     const data = snap.data() as Record<string, unknown>;
     const mode = data.bookingMode;
-    if (mode === "guest_cash" || mode === "guest_beverage") {
+    if (mode === "guest_cash" || mode === "guest_beverage" || mode === "guest_meal") {
       throw new HttpsError("failed-precondition", st(locale, "testStatusEmail.guest", "訪客預約不會寄發會員狀態信。"));
     }
     const customerId = typeof data.customerId === "string" ? data.customerId.trim() : "";
@@ -3901,7 +3902,7 @@ export const notifyMemberBookingStatusChange = onDocumentUpdated(
     if (prevStatus === nextStatus) return;
 
     const mode = after.bookingMode;
-    if (mode === "guest_cash" || mode === "guest_beverage") return;
+    if (mode === "guest_cash" || mode === "guest_beverage" || mode === "guest_meal") return;
     const customerId = typeof after.customerId === "string" ? after.customerId.trim() : "";
     if (!customerId) return;
 

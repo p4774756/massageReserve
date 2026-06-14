@@ -1,9 +1,11 @@
 export type BookingMode =
   | "guest_cash"
   | "guest_beverage"
+  | "guest_meal"
   | "member_cash"
   | "member_wallet"
   | "member_beverage"
+  | "member_meal"
   /** 現場掃描 TWQR／QR Code 轉帳（金額同現金） */
   | "member_qr"
   /** 當日或本工作週名額已滿時：現場現金（按摩費 + 加價） */
@@ -12,9 +14,11 @@ export type BookingMode =
 export const BOOKING_MODES: readonly BookingMode[] = [
   "guest_cash",
   "guest_beverage",
+  "guest_meal",
   "member_cash",
   "member_wallet",
   "member_beverage",
+  "member_meal",
   "member_qr",
   "member_cap_overflow",
 ] as const;

@@ -121,7 +121,7 @@ export function showAdminCancelBookingModal(summaryLines: string): Promise<strin
 /** 與後端寄信條件一致：會員預約（非訪客 mode、有 customerId） */
 export function memberBookingGetsStatusEmail(b: Pick<Booking, "bookingMode" | "customerId">): boolean {
   const mode = b.bookingMode;
-  if (mode === "guest_cash" || mode === "guest_beverage") return false;
+  if (mode === "guest_cash" || mode === "guest_beverage" || mode === "guest_meal") return false;
   const cid = typeof b.customerId === "string" ? b.customerId.trim() : "";
   return cid.length > 0;
 }

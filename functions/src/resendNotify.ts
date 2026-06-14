@@ -40,9 +40,11 @@ export function isResendOnboardingFromAddress(from: string): boolean {
 const BOOKING_MODE_LABEL: Record<string, string> = {
   guest_cash: "訪客｜現場現金",
   guest_beverage: "訪客｜飲料折抵",
+  guest_meal: "訪客｜一餐折抵",
   member_cash: "會員｜現場現金",
   member_wallet: "會員｜次數扣 1 次",
   member_beverage: "會員｜飲料折抵",
+  member_meal: "會員｜一餐折抵",
   member_qr: "會員｜掃描 QR Code 付款",
   member_cap_overflow: "會員｜加價現金（名額已滿）",
 };

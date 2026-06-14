@@ -3,8 +3,8 @@ import { intlLocaleTag, t } from "./i18n";
 import { isBookingMode, type Booking, type BookingMode } from "./bookingTypes";
 import { slotStartInstantMsTaipei } from "./taipeiDates";
 
-function beverageOptionLabel(): string {
-  return t("booking.beverageOption", "請師傅一杯飲料");
+export function treatOptionLabel(): string {
+  return t("booking.treatOption", "請師傅 🍛 或🥤");
 }
 
 export function bookingModeLabel(
@@ -15,13 +15,15 @@ export function bookingModeLabel(
   const unitPrice = opts?.unitPriceNtd ?? 0;
   const labels: Record<BookingMode, string> = {
     guest_cash: t("booking.mode.guest_cash", "訪客現金"),
-    guest_beverage: beverageOptionLabel(),
+    guest_beverage: treatOptionLabel(),
+    guest_meal: treatOptionLabel(),
     member_cash:
       unitPrice > 0
         ? t("booking.mode.member_cashTotal", "會員現金（{{total}} 元）", { total: unitPrice * units })
         : t("booking.mode.member_cash", "會員現金"),
     member_wallet: t("booking.mode.member_wallet", "預約次數扣抵"),
-    member_beverage: beverageOptionLabel(),
+    member_beverage: treatOptionLabel(),
+    member_meal: treatOptionLabel(),
     member_qr:
       unitPrice > 0
         ? t("booking.mode.member_qrTotal", "掃描 QR Code 付款（{{total}} 元）", { total: unitPrice * units })
@@ -229,7 +231,7 @@ export function createAdminBookingPriceCell(b: Booking): HTMLTableCellElement {
 /** 後台預約表：是否為會員預約（是／否） */
 export function bookingMemberYesNo(b: Pick<Booking, "bookingMode" | "customerId">): string {
   const mode = b.bookingMode;
-  if (mode === "guest_cash" || mode === "guest_beverage") return t("guest.no", "否");
+  if (mode === "guest_cash" || mode === "guest_beverage" || mode === "guest_meal") return t("guest.no", "否");
   if (typeof mode === "string" && mode.startsWith("member_")) return t("guest.yes", "是");
   if (typeof b.customerId === "string" && b.customerId.length > 0) return t("guest.yes", "是");
   return t("guest.dash", "—");
