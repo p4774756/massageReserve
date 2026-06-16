@@ -873,7 +873,7 @@ export const createBooking = onCall(
             st(
               locale,
               "booking.sessionShort",
-              "預約次數不足，請改用現金、「請師傅 🍛 或🥤」或請管理員後台儲值次數。",
+              "預約次數不足，請改用現金、「用食物交換 🍛🥤」或請管理員後台儲值次數。",
             ),
           );
         }

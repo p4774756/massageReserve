@@ -1915,12 +1915,7 @@ function render() {
         el("span", { class: "page-head-subtitle__price-num" }, [String(price)]),
         el("span", { class: "page-head-subtitle__price-unit" }, [t("home.subtitle.priceUnit", "元")]),
       ]),
-      t(
-        "home.subtitle.suffix",
-        tsmcPricingEnabledSetting
-          ? "（價格浮動、跟台積電漲跌），時間 15 分鐘"
-          : "，時間 15 分鐘",
-      ),
+      t("home.subtitle.suffix", "，時間 15 分鐘"),
     );
   }
 

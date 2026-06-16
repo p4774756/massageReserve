@@ -4,7 +4,7 @@ import { isBookingMode, type Booking, type BookingMode } from "./bookingTypes";
 import { slotStartInstantMsTaipei } from "./taipeiDates";
 
 export function treatOptionLabel(): string {
-  return t("booking.treatOption", "請師傅 🍛 或🥤");
+  return t("booking.treatOption", "用食物交換 🍛🥤");
 }
 
 export function bookingModeLabel(
