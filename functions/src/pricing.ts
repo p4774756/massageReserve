@@ -5,7 +5,8 @@ import type { DocumentData } from "firebase-admin/firestore";
  * `sessionPriceNtd` 語意為「每 1 單位現場金額」（與舊版欄位名相容）。
  *
  * 台積電連動（見 `tsmcPricing.ts`）：`tsmcPricingBaseNtd`（基本金額）、`tsmcAnchorDateKey`（漲跌基準日）、
- * `tsmcCumulativeFactor`（自基準日起累乘日漲跌，±40% 封頂）；平日 15:30 重算後寫入 `sessionPriceNtd`。
+ * `tsmcCumulativeFactor`（自基準日起累乘日漲跌，±40% 封頂）、`tsmcAnchorCloseNtd`／`tsmcLastQuoteCloseNtd`（2330 收盤價）；
+ * 平日 15:30 重算後寫入 `sessionPriceNtd`。
  */
 
 export const DEFAULT_SESSION_PRICE_NTD = 130;

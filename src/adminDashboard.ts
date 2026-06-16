@@ -86,6 +86,7 @@ import {
   parseServicePause,
 } from "./servicePause";
 import { intlLocaleTag, localeApiParam, t } from "./i18n";
+import { fetchTsmcQuoteClosesSince } from "./tsmcQuoteClient";
 import type { Firestore } from "firebase/firestore";
 import { showConfirmModal } from "./modals";
 
@@ -343,16 +344,135 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     const pricingCurrentPriceLine = el("p", { class: "hint admin-pricing-current-price" });
     const tsmcSyncInfo = el("div", { class: "status-line admin-pricing-tsmc-info" });
     const savePricingBtn = el("button", { type: "button", class: "primary" }, [t("admin.pricing.save", "儲存定價")]);
+    const syncTsmcBtn = el("button", { type: "button", class: "ghost" }, [
+      t("admin.pricing.tsmcSyncNow", "同步 2330 行情"),
+    ]);
     const pricingAdminStatus = el("div", { class: "status-line" });
     const saveWheelRedeemBtn = el("button", { type: "button", class: "primary" }, [
       t("admin.wheelRedeem.save", "儲存兌換門檻"),
     ]);
     const wheelRedeemAdminStatus = el("div", { class: "status-line" });
     let lastPricingSnapData: Record<string, unknown> | undefined;
+    let tsmcCloseBackfillStarted = false;
+    type TsmcAdminSyncPayload = {
+      ok?: boolean;
+      skipped?: boolean;
+      error?: string;
+      sessionPriceNtd?: number;
+      changePercent?: number;
+      quoteDateKey?: string;
+      anchorDateKey?: string;
+      cumulativeFactor?: number;
+      anchorCloseNtd?: number;
+      lastQuoteCloseNtd?: number;
+    };
+    const tsmcCloseNtdValid = (raw: unknown): boolean => {
+      const n = typeof raw === "number" && Number.isFinite(raw) ? raw : Number(raw);
+      return Number.isFinite(n) && n > 0;
+    };
+    const pricingNeedsTsmcCloseBackfill = (d: Record<string, unknown> | undefined): boolean => {
+      if (!d || d.tsmcPricingEnabled === false) return false;
+      const err = typeof d.tsmcLastSyncError === "string" ? d.tsmcLastSyncError.trim() : "";
+      if (err) return false;
+      const dateKey = typeof d.tsmcLastQuoteDateKey === "string" ? d.tsmcLastQuoteDateKey.trim() : "";
+      if (!dateKey) return false;
+      return !tsmcCloseNtdValid(d.tsmcAnchorCloseNtd) || !tsmcCloseNtdValid(d.tsmcLastQuoteCloseNtd);
+    };
+    const mergeTsmcAdminSync = (
+      last: Record<string, unknown> | undefined,
+      data: TsmcAdminSyncPayload,
+    ): Record<string, unknown> => {
+      const merged: Record<string, unknown> = { ...(last ?? {}) };
+      if (typeof data.sessionPriceNtd === "number" && Number.isFinite(data.sessionPriceNtd)) {
+        merged.sessionPriceNtd = data.sessionPriceNtd;
+      }
+      if (typeof data.changePercent === "number" && Number.isFinite(data.changePercent)) {
+        merged.tsmcLastChangePercent = data.changePercent;
+      }
+      if (typeof data.quoteDateKey === "string" && data.quoteDateKey.trim()) {
+        merged.tsmcLastQuoteDateKey = data.quoteDateKey.trim();
+      }
+      if (typeof data.anchorDateKey === "string" && data.anchorDateKey.trim()) {
+        merged.tsmcAnchorDateKey = data.anchorDateKey.trim();
+      }
+      if (typeof data.cumulativeFactor === "number" && Number.isFinite(data.cumulativeFactor)) {
+        merged.tsmcCumulativeFactor = data.cumulativeFactor;
+      }
+      if (typeof data.anchorCloseNtd === "number" && Number.isFinite(data.anchorCloseNtd)) {
+        merged.tsmcAnchorCloseNtd = data.anchorCloseNtd;
+      }
+      if (typeof data.lastQuoteCloseNtd === "number" && Number.isFinite(data.lastQuoteCloseNtd)) {
+        merged.tsmcLastQuoteCloseNtd = data.lastQuoteCloseNtd;
+      }
+      return merged;
+    };
+    async function runTsmcPricingSyncAdmin(): Promise<TsmcAdminSyncPayload> {
+      const fn = syncSessionPriceFromTsmcAdminCall();
+      const res = await fn({ ...localeApiParam() });
+      return (res.data ?? {}) as TsmcAdminSyncPayload;
+    }
+    function resolveTsmcAnchorKeyForAdmin(d: Record<string, unknown> | undefined): string {
+      const fromSnap =
+        typeof d?.tsmcAnchorDateKey === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d.tsmcAnchorDateKey.trim())
+          ? d.tsmcAnchorDateKey.trim()
+          : "";
+      if (fromSnap) return fromSnap;
+      const fromInput = tsmcAnchorDateInput.value.trim();
+      return /^\d{4}-\d{2}-\d{2}$/.test(fromInput) ? fromInput : "";
+    }
+    async function fillTsmcClosesFromClient(): Promise<boolean> {
+      const anchorKey = resolveTsmcAnchorKeyForAdmin(lastPricingSnapData);
+      if (!anchorKey) return false;
+      const closes = await fetchTsmcQuoteClosesSince(anchorKey);
+      if (!closes) return false;
+      await setDoc(
+        pricingDocRef,
+        {
+          tsmcAnchorCloseNtd: closes.anchorCloseNtd,
+          tsmcLastQuoteCloseNtd: closes.lastQuoteCloseNtd,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+      lastPricingSnapData = {
+        ...(lastPricingSnapData ?? {}),
+        tsmcAnchorCloseNtd: closes.anchorCloseNtd,
+        tsmcLastQuoteCloseNtd: closes.lastQuoteCloseNtd,
+      };
+      return true;
+    }
+    async function ensureTsmcQuoteCloses(d: Record<string, unknown> | undefined): Promise<void> {
+      if (!pricingNeedsTsmcCloseBackfill(d)) return;
+      try {
+        const data = await runTsmcPricingSyncAdmin();
+        if (data.ok !== false && !data.skipped) {
+          lastPricingSnapData = mergeTsmcAdminSync(lastPricingSnapData, data);
+        }
+      } catch {
+        /* 仍嘗試客戶端補齊 */
+      }
+      if (!pricingNeedsTsmcCloseBackfill(lastPricingSnapData)) return;
+      try {
+        await fillTsmcClosesFromClient();
+      } catch {
+        /* 保留 — */
+      }
+    }
+    async function maybeBackfillTsmcCloses(d: Record<string, unknown> | undefined): Promise<void> {
+      if (tsmcCloseBackfillStarted || !pricingNeedsTsmcCloseBackfill(d)) return;
+      tsmcCloseBackfillStarted = true;
+      tsmcSyncInfo.textContent = t("admin.pricing.tsmcSyncFetching", "正在同步 2330 收盤價…");
+      try {
+        await ensureTsmcQuoteCloses(d);
+      } finally {
+        paintPricingAdminView(lastPricingSnapData);
+      }
+    }
     function syncTsmcAnchorFieldVisible() {
       const show = tsmcPricingEnabledInput.checked;
       tsmcAnchorWrap.hidden = !show;
       tsmcAnchorHint.hidden = !show;
+      syncTsmcBtn.hidden = !show;
     }
     function pricingPreviewData(): Record<string, unknown> {
       const base = Number(pricingBaseInput.value);
@@ -365,6 +485,11 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         tsmcAnchorDateKey: tsmcAnchorDateInput.value.trim() || taipeiTodayDateKey(),
       };
     }
+    const formatTsmcCloseNtd = (raw: unknown): string => {
+      const n = typeof raw === "number" && Number.isFinite(raw) ? raw : Number(raw);
+      if (!Number.isFinite(n) || n <= 0) return "—";
+      return Math.round(n).toLocaleString("zh-TW");
+    };
     const formatTsmcSyncInfo = (d: Record<string, unknown> | undefined, enabled: boolean): string => {
       if (!enabled) return "";
       if (!d) return t("admin.pricing.tsmcSyncNever", "尚未同步過台積電行情；平日 15:30 自動更新。");
@@ -389,10 +514,12 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         Number.isFinite(factorNum) && factorNum > 0 ? `${(factorNum * 100).toFixed(1)}%` : "100.0%";
       return t(
         "admin.pricing.tsmcSyncBrief",
-        "基準日 {{anchor}}；2330 最近行情 {{date}}，日漲跌 {{pct}}，累積係數 {{factor}}；平日 15:30 自動更新。",
+        "基準日 {{anchor}}（2330 收 {{anchorClose}} 元）；最近行情 {{date}}（收 {{quoteClose}} 元），日漲跌 {{pct}}，累積係數 {{factor}}；平日 15:30 自動更新。",
         {
           anchor: anchorKey,
+          anchorClose: formatTsmcCloseNtd(d.tsmcAnchorCloseNtd),
           date: dateKey,
+          quoteClose: formatTsmcCloseNtd(d.tsmcLastQuoteCloseNtd),
           pct: pctStr,
           factor: factorStr,
         },
@@ -422,6 +549,8 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
               tsmcCumulativeFactor?: unknown;
               tsmcLastChangePercent?: unknown;
               tsmcLastQuoteDateKey?: unknown;
+              tsmcAnchorCloseNtd?: unknown;
+              tsmcLastQuoteCloseNtd?: unknown;
               tsmcLastSyncError?: unknown;
             }
           | undefined;
@@ -439,10 +568,25 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
           const anchorKey = anchorRaw.trim();
           tsmcAnchorDateInput.value = anchorKey;
         }
-        lastPricingSnapData = d as Record<string, unknown> | undefined;
+        lastPricingSnapData = (() => {
+          const snapData = (d as Record<string, unknown> | undefined) ?? undefined;
+          if (!snapData || !lastPricingSnapData) return snapData;
+          const merged = { ...snapData };
+          if (!tsmcCloseNtdValid(merged.tsmcAnchorCloseNtd) && tsmcCloseNtdValid(lastPricingSnapData.tsmcAnchorCloseNtd)) {
+            merged.tsmcAnchorCloseNtd = lastPricingSnapData.tsmcAnchorCloseNtd;
+          }
+          if (
+            !tsmcCloseNtdValid(merged.tsmcLastQuoteCloseNtd) &&
+            tsmcCloseNtdValid(lastPricingSnapData.tsmcLastQuoteCloseNtd)
+          ) {
+            merged.tsmcLastQuoteCloseNtd = lastPricingSnapData.tsmcLastQuoteCloseNtd;
+          }
+          return merged;
+        })();
         tsmcPricingEnabledInput.checked = d?.tsmcPricingEnabled !== false;
         syncTsmcAnchorFieldVisible();
         paintPricingAdminView(lastPricingSnapData);
+        void maybeBackfillTsmcCloses(lastPricingSnapData);
       },
       () => {
         pricingAdminStatus.textContent = t("admin.pricing.loadFail", "無法讀取定價設定。");
@@ -503,19 +647,22 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         await setDoc(pricingDocRef, pricingPatch, { merge: true });
         if (tsmcEnabled) {
           pricingAdminStatus.textContent = t("admin.pricing.tsmcSyncing", "已儲存，正在同步台積電行情…");
-          const fn = syncSessionPriceFromTsmcAdminCall();
-          const res = await fn({ ...localeApiParam() });
-          const data = res.data as
-            | { ok?: boolean; skipped?: boolean; reason?: string; error?: string; sessionPriceNtd?: number }
-            | undefined;
-          if (data?.ok === false && data.error) {
+          const data = await runTsmcPricingSyncAdmin();
+          if (data.ok === false && data.error) {
             pricingAdminStatus.textContent = t("admin.pricing.tsmcSyncFail", "已儲存，但同步失敗：{{err}}", {
               err: data.error,
             });
             pricingAdminStatus.classList.add("error");
             return;
           }
-          if (data?.ok && typeof data.sessionPriceNtd === "number") {
+          if (data.ok !== false && !data.skipped) {
+            lastPricingSnapData = mergeTsmcAdminSync(lastPricingSnapData, data);
+            if (pricingNeedsTsmcCloseBackfill(lastPricingSnapData)) {
+              await fillTsmcClosesFromClient();
+            }
+            paintPricingAdminView(lastPricingSnapData);
+          }
+          if (data.ok !== false && typeof data.sessionPriceNtd === "number") {
             pricingAdminStatus.textContent = t("admin.pricing.savedWithPrice", "已更新；前台金額 {{price}} 元。", {
               price: data.sessionPriceNtd,
             });
@@ -562,6 +709,50 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       }
     });
 
+    syncTsmcBtn.addEventListener("click", async () => {
+      pricingAdminStatus.textContent = "";
+      pricingAdminStatus.className = "status-line";
+      if (!tsmcPricingEnabledInput.checked) {
+        pricingAdminStatus.textContent = t("admin.pricing.tsmcSyncDisabled", "請先勾選台積電連動。");
+        pricingAdminStatus.classList.add("error");
+        return;
+      }
+      syncTsmcBtn.setAttribute("disabled", "true");
+      tsmcSyncInfo.textContent = t("admin.pricing.tsmcSyncFetching", "正在同步 2330 收盤價…");
+      try {
+        const data = await runTsmcPricingSyncAdmin();
+        if (data.ok === false && data.error) {
+          pricingAdminStatus.textContent = t("admin.pricing.tsmcSyncFail", "同步失敗：{{err}}", { err: data.error });
+          pricingAdminStatus.classList.add("error");
+          return;
+        }
+        if (data.skipped) {
+          pricingAdminStatus.textContent = t("admin.pricing.tsmcSyncSkipped", "未同步（台積電連動已關閉）。");
+          return;
+        }
+        if (data.ok !== false) {
+          lastPricingSnapData = mergeTsmcAdminSync(lastPricingSnapData, data);
+          if (pricingNeedsTsmcCloseBackfill(lastPricingSnapData)) {
+            await fillTsmcClosesFromClient();
+          }
+          paintPricingAdminView(lastPricingSnapData);
+          pricingAdminStatus.textContent =
+            typeof data.sessionPriceNtd === "number"
+              ? t("admin.pricing.tsmcSyncOkWithPrice", "已同步；前台金額 {{price}} 元。", {
+                  price: data.sessionPriceNtd,
+                })
+              : t("admin.pricing.tsmcSyncOk", "已同步 2330 行情。");
+          pricingAdminStatus.classList.add("ok");
+        }
+      } catch (e) {
+        pricingAdminStatus.textContent = e instanceof Error ? e.message : t("admin.memberList.saveFail", "儲存失敗");
+        pricingAdminStatus.classList.add("error");
+      } finally {
+        syncTsmcBtn.removeAttribute("disabled");
+        paintPricingAdminView(lastPricingSnapData);
+      }
+    });
+
     const announcePricingFlat = el("section", { class: "admin-announce__block admin-announce__block--pricing" }, [
       el("h4", { class: "admin-announce__block-title" }, [t("admin.pricing.heading", "預約定價")]),
       el("label", { class: "field" }, [t("admin.pricing.basePrice", "基本金額（元）"), pricingBaseInput]),
@@ -579,7 +770,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       tsmcAnchorWrap,
       tsmcAnchorHint,
       tsmcSyncInfo,
-      el("div", { class: "row-actions" }, [savePricingBtn]),
+      el("div", { class: "row-actions admin-pricing-actions" }, [savePricingBtn, syncTsmcBtn]),
       pricingAdminStatus,
     ]);
 

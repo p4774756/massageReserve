@@ -10,6 +10,18 @@ const appVersion = typeof pkg.version === "string" && pkg.version.length > 0 ? p
 const appBuildDate = new Date().toLocaleString("sv-SE", { timeZone: "Asia/Taipei" }).slice(0, 10);
 
 export default defineConfig({
+  server: {
+    proxy: {
+      "/api/yahoo-chart": {
+        target: "https://query1.finance.yahoo.com/v8/finance/chart",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/yahoo-chart\/?/, ""),
+        headers: {
+          "User-Agent": "massage-reserve-tsmc-pricing/1",
+        },
+      },
+    },
+  },
   define: {
     __APP_VERSION__: JSON.stringify(appVersion),
     __APP_BUILD_DATE__: JSON.stringify(appBuildDate),

@@ -69,7 +69,6 @@ import {
   BOOKING_UNIT_MINUTES_FIXED,
   resolvePointsPerMassageClient,
   resolveSessionPriceNtdClient,
-  resolveTsmcPricingEnabledClient,
   roundSessionPriceNtdForCash,
 } from "./sitePricingResolve";
 
@@ -894,7 +893,6 @@ function render() {
   const bookingPeersHint = el("div", { class: "booking-peers-hint hint", hidden: true });
   /** 與後端 `functions/src/pricing.ts` 預設對齊（定價 API 失敗時的首屏 fallback） */
   let sessionPriceNtdSetting = 130;
-  let tsmcPricingEnabledSetting = true;
   let capOverflowEnabledSetting = true;
   let capOverflowSurchargeNtdSetting = 100;
   /** 當日或本週名額已滿且後台開放加價預約 */
@@ -1922,11 +1920,7 @@ function render() {
   function applyBookingPricingFromApi(d: {
     sessionPriceNtd?: number;
     pointsPerMassage?: number;
-    tsmcPricingEnabled?: boolean;
   }) {
-    if (typeof d.tsmcPricingEnabled === "boolean") {
-      tsmcPricingEnabledSetting = d.tsmcPricingEnabled;
-    }
     if (typeof d.sessionPriceNtd === "number" && Number.isFinite(d.sessionPriceNtd)) {
       sessionPriceNtdSetting = roundSessionPriceNtdForCash(d.sessionPriceNtd);
     }
@@ -2549,7 +2543,6 @@ function render() {
       applyBookingPricingFromApi({
         sessionPriceNtd: resolveSessionPriceNtdClient(raw),
         pointsPerMassage: resolvePointsPerMassageClient(raw),
-        tsmcPricingEnabled: resolveTsmcPricingEnabledClient(raw),
       });
     },
     () => {

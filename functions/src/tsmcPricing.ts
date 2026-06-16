@@ -21,6 +21,8 @@ export type TsmcPricingSyncResult =
       anchorDateKey: string;
       quoteDateKey: string;
       cumulativeFactor: number;
+      anchorCloseNtd: number;
+      lastQuoteCloseNtd: number;
       appliedToday: boolean;
     }
   | { ok: false; error: string };
@@ -118,7 +120,13 @@ export function parseYahooDailyBars(result: YahooChartResult): TsmcDailyBar[] {
 export function computeTsmcCumulativeFromBars(
   bars: TsmcDailyBar[],
   anchorDateKey: string,
-): { factor: number; quoteDateKey: string; lastChangePercent: number } {
+): {
+  factor: number;
+  quoteDateKey: string;
+  lastChangePercent: number;
+  anchorClose: number;
+  lastQuoteClose: number;
+} {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(anchorDateKey)) {
     throw new Error("漲跌基準日格式錯誤");
   }
@@ -131,6 +139,7 @@ export function computeTsmcCumulativeFromBars(
   }
   let factor = 1;
   let lastChangePercent = 0;
+  const anchorBar = bars[anchorIdx]!;
   const lastBar = bars[bars.length - 1]!;
   for (let i = anchorIdx + 1; i < bars.length; i++) {
     const prev = bars[i - 1]!.close;
@@ -140,7 +149,13 @@ export function computeTsmcCumulativeFromBars(
     factor = clampTsmcCumulativeFactor(factor * (1 + pct / 100));
     lastChangePercent = pct;
   }
-  return { factor, quoteDateKey: lastBar.dateKey, lastChangePercent };
+  return {
+    factor,
+    quoteDateKey: lastBar.dateKey,
+    lastChangePercent,
+    anchorClose: anchorBar.close,
+    lastQuoteClose: lastBar.close,
+  };
 }
 
 function assertQuoteNotTooStale(quoteDateKey: string): void {
@@ -207,12 +222,16 @@ export async function applyTsmcSessionPricingSync(db: Firestore): Promise<TsmcPr
   let factor: number;
   let quoteDateKey: string;
   let lastChangePercent: number;
+  let anchorClose: number;
+  let lastQuoteClose: number;
   try {
     bars = await fetchTsmcDailyBarsSince(anchorDateKey);
     const computed = computeTsmcCumulativeFromBars(bars, anchorDateKey);
     factor = computed.factor;
     quoteDateKey = computed.quoteDateKey;
     lastChangePercent = computed.lastChangePercent;
+    anchorClose = computed.anchorClose;
+    lastQuoteClose = computed.lastQuoteClose;
     assertQuoteNotTooStale(quoteDateKey);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
@@ -239,6 +258,8 @@ export async function applyTsmcSessionPricingSync(db: Firestore): Promise<TsmcPr
       tsmcAnchorDateKey: anchorDateKey,
       tsmcCumulativeFactor: factor,
       tsmcLastChangePercent: lastChangePercent,
+      tsmcAnchorCloseNtd: anchorClose,
+      tsmcLastQuoteCloseNtd: lastQuoteClose,
       tsmcLastQuoteDateKey: quoteDateKey,
       tsmcLastAppliedQuoteDateKey: quoteDateKey,
       tsmcLastSyncSource: "yahoo_chart",
@@ -268,6 +289,8 @@ export async function applyTsmcSessionPricingSync(db: Firestore): Promise<TsmcPr
     anchorDateKey,
     quoteDateKey,
     cumulativeFactor: factor,
+    anchorCloseNtd: anchorClose,
+    lastQuoteCloseNtd: lastQuoteClose,
     appliedToday,
   };
 }

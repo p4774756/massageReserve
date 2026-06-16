@@ -59,6 +59,7 @@ import { parseLocale, st, type ServerLocale } from "./serverI18n";
 import { maskDisplayNameForPublic } from "./maskDisplayName";
 import { resolveCapOverflowSettings } from "./capOverflow";
 import { applyTsmcSessionPricingSync } from "./tsmcPricing";
+export { yahooChartProxy } from "./yahooChartProxy";
 import { runMonthlyChampionAward } from "./monthlyChampion";
 import {
   addMemberConsumption,
