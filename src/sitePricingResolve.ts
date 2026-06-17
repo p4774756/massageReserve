@@ -11,6 +11,9 @@ const DEFAULT_POINTS_PER_MASSAGE = 10;
 /** 與 `functions/src/pricing.ts` 對齊：單筆預約固定 15 分鐘 */
 export const BOOKING_UNIT_MINUTES_FIXED = 15;
 
+/** 前台副標顯示的單次服務時長（分）；排程佔用仍為 BOOKING_UNIT_MINUTES_FIXED */
+export const DISPLAY_SESSION_MINUTES = 17;
+
 /** 與 `functions/src/pricing.ts` 相同：現場收現進位至 10 元倍數 */
 export const SESSION_PRICE_CASH_STEP_NTD = 10;
 

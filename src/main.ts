@@ -67,6 +67,7 @@ import { resolveWheelPreviewSettingsClient } from "./wheelPreviewSetting";
 import { paintMemberWalletSummary, type MemberWalletSummaryOpts } from "./walletSummaryUi";
 import {
   BOOKING_UNIT_MINUTES_FIXED,
+  DISPLAY_SESSION_MINUTES,
   resolvePointsPerMassageClient,
   resolveSessionPriceNtdClient,
   roundSessionPriceNtdForCash,
@@ -1913,7 +1914,9 @@ function render() {
         el("span", { class: "page-head-subtitle__price-num" }, [String(price)]),
         el("span", { class: "page-head-subtitle__price-unit" }, [t("home.subtitle.priceUnit", "元")]),
       ]),
-      t("home.subtitle.suffix", "，時間 15 分鐘"),
+      t("home.subtitle.suffix", "，時間 {{minutes}} 分鐘", {
+        minutes: DISPLAY_SESSION_MINUTES,
+      }),
     );
   }
 
