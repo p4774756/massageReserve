@@ -354,6 +354,22 @@ export function runSlotSpectacle(
     mainInner.append(sideDecor, reelStack, playTri);
     machineMain.append(mainInner);
 
+    const resultLine = document.createElement("div");
+    resultLine.className = "wheel-spectacle-result";
+    resultLine.hidden = true;
+
+    const subLine = document.createElement("p");
+    subLine.className = "wheel-spectacle-sub";
+    subLine.hidden = true;
+
+    const machineGoldFoot = document.createElement("div");
+    machineGoldFoot.className = "slot-spectacle-machine-gold-foot";
+    machineGoldFoot.append(subLine);
+
+    const machineGold = document.createElement("div");
+    machineGold.className = "slot-spectacle-machine-gold";
+    machineGold.append(machineMain, machineGoldFoot);
+
     const lever = document.createElement("button");
     lever.type = "button";
     lever.className = "slot-spectacle-lever";
@@ -373,17 +389,9 @@ export function runSlotSpectacle(
     leverSwing.append(leverGraphic, pullHint);
     lever.append(leverSwing);
 
-    machineCluster.append(machineMain, lever);
+    machineCluster.append(machineGold, lever);
     machineRow.append(machineCluster);
     machine.append(machineRow);
-
-    const resultLine = document.createElement("div");
-    resultLine.className = "wheel-spectacle-result";
-    resultLine.hidden = true;
-
-    const subLine = document.createElement("p");
-    subLine.className = "wheel-spectacle-sub";
-    subLine.hidden = true;
 
     const actions = document.createElement("div");
     actions.className = "wheel-spectacle-actions";
@@ -407,8 +415,12 @@ export function runSlotSpectacle(
     footEnc.textContent = t("slot.footEncourage", "✦ 好運就在下一次！ ✦");
     idleCta.append(pullBtn, footEnc);
 
+    const stageFoot = document.createElement("div");
+    stageFoot.className = "slot-spectacle-stage-foot";
+    stageFoot.append(idleCta, actions);
+
     stage.classList.add("is-slot-idle");
-    stage.append(stageHead, hub, machine, idleCta, resultLine, subLine, actions);
+    stage.append(stageHead, hub, machine, resultLine, stageFoot);
     stageMount.append(stage);
 
     const shardTop = document.createElement("div");
@@ -622,6 +634,7 @@ export function runSlotSpectacle(
           lever.removeAttribute("disabled");
           idleCloseBtn.removeAttribute("disabled");
           phase = "idle";
+          stage.classList.add("is-slot-done");
           resultLine.hidden = false;
           resultLine.classList.add("is-error");
           resultLine.textContent =
@@ -742,6 +755,7 @@ export function runSlotSpectacle(
               : t("slot.subOther", "祝你有美好的一天");
 
         phase = "done";
+        stage.classList.add("is-slot-done");
         primaryBtn.disabled = false;
         actions.hidden = false;
         dismiss = () => {
