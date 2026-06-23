@@ -57,8 +57,8 @@ jobs:
           RESEND_FROM: ${{ secrets.RESEND_FROM }}
           EMAIL_PUBLIC_ORIGIN: ${{ secrets.EMAIL_PUBLIC_ORIGIN }}
 
-      # 遠端若仍有已從程式碼移除的 Callable，firebase deploy --non-interactive 會中止。
-      # 下列為舊版街機／Little Mary 相關函式；已刪除時該次 delete 會失敗，略過即可。
+      # 遠端若仍有已從程式碼移除的函式，先嘗試刪除（失敗略過）。
+      # deploy 另加 --force：non-interactive 時允許刪除本地已不存在的 Cloud Functions。
       - name: Remove orphaned legacy Cloud Functions (asia-east1)
         run: |
           LEGACY=(
@@ -69,6 +69,9 @@ jobs:
             littleMarySpin
             littleMarySpinAccount
             redeemArcadePointsForSession
+            syncSessionPriceFromTsmcDaily
+            syncSessionPriceFromTsmcAdmin
+            yahooChartProxy
           )
           for fn in "${LEGACY[@]}"; do
             npx -y firebase-tools@latest functions:delete "$fn" --region asia-east1 --force || true
@@ -77,6 +80,6 @@ jobs:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
 
       - name: Deploy to Firebase
-        run: npx -y firebase-tools@latest deploy --non-interactive
+        run: npx -y firebase-tools@latest deploy --non-interactive --force
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}

@@ -16,7 +16,7 @@ export const BOOKING_UNIT_MINUTES_FIXED = 15;
 /** 每次按摩金額下限（元） */
 export const MIN_SESSION_PRICE_NTD = 1;
 
-export function roundSessionPriceNtdForCash(ntd: number): number {
+export function normalizeSessionPriceNtd(ntd: number): number {
   const n = typeof ntd === "number" && Number.isFinite(ntd) ? Math.round(ntd) : Number(ntd);
   if (!Number.isInteger(n)) return DEFAULT_SESSION_PRICE_NTD;
   if (n < MIN_SESSION_PRICE_NTD) return MIN_SESSION_PRICE_NTD;
@@ -33,7 +33,7 @@ export function resolveSessionPriceNtd(raw: DocumentData | undefined): number {
   if (!Number.isInteger(n) || n < MIN_SESSION_PRICE_NTD || n > 500_000) {
     return DEFAULT_SESSION_PRICE_NTD;
   }
-  return roundSessionPriceNtdForCash(n);
+  return normalizeSessionPriceNtd(n);
 }
 
 export function resolvePointsPerMassage(raw: DocumentData | undefined): number {

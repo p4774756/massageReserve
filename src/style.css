@@ -38,7 +38,7 @@
   --link: #C9A07E;
   --link-visited: #A88468;
   --section-gap: 28px;
-  --hero-image: url("/media/spa-hero-dark.jpg");
+  --hero-image: url("/media/spa-hero-anime-male-longhair.jpg");
   font-family: var(--font);
 }
 
@@ -2379,62 +2379,12 @@ button.ghost:disabled {
   }
 }
 
-/* 定價：台積電連動子區（與預約名額加價列相同 checkbox 橫排慣例） */
-.admin-pricing-tsmc {
-  display: grid;
-  gap: 12px;
-  margin-top: 4px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border);
-}
-
 .admin-announce__block-subtitle {
   margin: 0;
   font-size: 0.88rem;
   font-weight: 700;
   color: var(--ink);
   letter-spacing: 0.02em;
-}
-
-.admin-pricing-tsmc__hint {
-  margin: 0;
-  line-height: 1.45;
-}
-
-.admin-pricing-tsmc__grid {
-  margin-top: 0;
-}
-
-.admin-pricing-tsmc__grid > label.checkbox-field {
-  align-self: end;
-  min-height: 46px;
-  box-sizing: border-box;
-  font-weight: 500;
-  line-height: 1.35;
-}
-
-.admin-pricing-tsmc__grid > label.field:not(.checkbox-field) input[type="number"] {
-  min-height: 46px;
-  box-sizing: border-box;
-}
-
-.admin-pricing-tsmc-info {
-  margin: 0;
-  font-size: 0.84rem;
-  line-height: 1.45;
-  color: var(--muted);
-}
-
-.admin-pricing-tsmc__actions {
-  margin-top: 0;
-}
-
-@media (max-width: 520px) {
-  .admin-pricing-tsmc__grid > label.checkbox-field {
-    align-self: start;
-    min-height: 0;
-    padding-top: 2px;
-  }
 }
 
 .table-wrap {
@@ -5728,7 +5678,7 @@ body.wheel-spectacle-lock {
   flex: none;
   border-radius: 38px;
   padding: 22px 3px;
-  /* 本體底色與體積感；華麗金邊僅保留捲軸區 .slot-spectacle-reel-gilt */
+  /* 本體底色與體積感 */
   background:
     linear-gradient(188deg, rgb(255 254 238 / 0.55) 0%, transparent 15%),
     linear-gradient(178deg, #fff0a8 0%, #ffc948 14%, #eca51e 40%, #b76a0c 68%, #6e3f08 100%);
@@ -5763,7 +5713,7 @@ body.wheel-spectacle-lock {
   gap: 0;
 }
 
-/* 須高於 .slot-spectacle-side-decor，否則左側箭頭整層會蓋住 gilt 金框 */
+/* 播放箭頭疊在捲軸區左側 */
 .slot-spectacle-machine-main-inner > .slot-spectacle-reel-stack {
   position: relative;
   z-index: 5;
@@ -5771,28 +5721,32 @@ body.wheel-spectacle-lock {
 
 .slot-spectacle-side-decor {
   position: absolute;
-  /* 略外移，減少與捲軸深色底叠在一起的視覺裁切 */
   left: -22px;
   top: 50%;
-  z-index: 2;
+  z-index: 1;
   width: 66px;
   height: calc(var(--slot-cell-h) + 8px);
   transform: translateY(-50%);
+  pointer-events: none;
 }
 
 .slot-spectacle-hinge {
   display: none;
 }
 
-.slot-spectacle-play-tri {
-  position: relative;
-  z-index: 2;
+.slot-spectacle-machine-main-inner > .slot-spectacle-play-tri {
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  z-index: 14;
   width: 58px;
   height: 66px;
   display: grid;
   place-items: center;
+  transform: translateY(-50%);
   color: transparent;
   font-size: 0;
+  pointer-events: none;
   background: linear-gradient(148deg, #fff6c4 0%, #ffd03a 42%, #e88910 78%, #a35608 100%);
   clip-path: polygon(7% 5%, 92% 50%, 7% 95%);
   filter:
@@ -5800,34 +5754,14 @@ body.wheel-spectacle-lock {
     drop-shadow(0 5px 6px rgb(56 24 4 / 0.58));
 }
 
-/* public/media/slot-inner-gilt-frame.png — RGBA 雕花外框；勿含大面積白／淺灰不透明底（會變成畫面上「超大白邊」） */
-.slot-spectacle-reel-gilt {
-  position: absolute;
-  inset: -40px -36px;
-  border-radius: 38px;
-  background-position: center;
-  background-repeat: no-repeat;
-  /* 橫向多拉伸：PNG 透明洞變寬，獎項列較不擠（直向維持約略對齊捲軸） */
-  background-size: 168% 112%;
-  pointer-events: none;
-  /* 須高於捲軸：`slot-inner-gilt-frame.png` 為 RGBA、中央透明洞露出獎項（勿用無 alpha 的 RGB 圖） */
-  z-index: 12;
-  opacity: 1;
-  mix-blend-mode: normal;
-  transform: translateZ(0);
-}
-
 .slot-spectacle-reel-frame {
   position: relative;
   z-index: 0;
-  /* isolate 讓 gilt 與捲軸的 z-index 只在框內比較，避免與外層誤叠 */
   isolation: isolate;
-  /* 與 gilt 透明洞對齊：內縮捲軸，獎項不頂到燈珠金屬內緣；上下略收與較矮列高搭配 */
+  /* 內縮捲軸，獎項不頂到機台內緣 */
   padding: 14px 3px 18px 3px;
   border-radius: 22px;
-  /* 勿 overflow:hidden，會裁掉 reel-gilt 負 inset 裝飾 */
   background: linear-gradient(180deg, #1f140a, #060402);
-  /* 僅內凹景深，不再叠 inset 假邊避免多圈邊線 */
   box-shadow: inset 0 10px 26px rgb(0 0 0 / 0.48);
 }
 
@@ -5935,7 +5869,7 @@ body.wheel-spectacle-lock {
   top: var(--slot-lever-abs-top);
   bottom: 2px;
   width: calc(var(--slot-lever-graphic-w) + 48px);
-  /* 高於機台與內框裝飾（含 reel-gilt），避免被 PNG 疊層擋住 */
+  /* 高於機台捲軸區，避免被疊層擋住 */
   z-index: 20;
   overflow: visible;
 }
@@ -6142,20 +6076,14 @@ body.wheel-spectacle-lock {
       inset 0 -10px 18px rgb(52 26 8 / 0.34);
   }
 
-  .slot-spectacle-reel-gilt {
-    inset: -30px -26px;
-    border-radius: 26px;
-    background-size: 166% 108%;
-    opacity: 1;
-  }
-
   .slot-spectacle-side-decor {
     left: -16px;
     width: 40px;
     height: 52px;
   }
 
-  .slot-spectacle-play-tri {
+  .slot-spectacle-machine-main-inner > .slot-spectacle-play-tri {
+    left: 0;
     width: 36px;
     height: 42px;
   }
@@ -6621,7 +6549,7 @@ html.sol-spa:not(:has(.shell.admin-mode)) {
   --shadow-lg: 0 2px 12px rgb(0 0 0 / 0.1);
   --link: #282828;
   --link-visited: #555555;
-  --hero-image: url("/media/spa-hero-light.jpg");
+  --hero-image: url("/media/spa-hero-anime-male-longhair.jpg");
 }
 
 html.sol-spa body {

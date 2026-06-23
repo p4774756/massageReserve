@@ -36,7 +36,7 @@ import { resolveCapOverflowSettingsClient } from "./capOverflow";
 import { resolveBookingCapsClient } from "./bookingCaps";
 import { resolveWheelPreviewSettingsClient } from "./wheelPreviewSetting";
 import {
-  roundSessionPriceNtdForCash,
+  normalizeSessionPriceNtd,
   resolveSessionPriceNtdClient,
 } from "./sitePricingResolve";
 import {
@@ -348,7 +348,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     pricingPriceInput.addEventListener("input", () => {
       const base = Number(pricingPriceInput.value);
       const rounded =
-        Number.isFinite(base) && base >= 1 ? roundSessionPriceNtdForCash(Math.round(base)) : 110;
+        Number.isFinite(base) && base >= 1 ? normalizeSessionPriceNtd(Math.round(base)) : 110;
       paintPricingAdminView({ sessionPriceNtd: rounded });
     });
 
@@ -361,7 +361,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
         pricingAdminStatus.classList.add("error");
         return;
       }
-      const roundedPrice = roundSessionPriceNtdForCash(Math.round(priceRaw));
+      const normalizedPrice = normalizeSessionPriceNtd(Math.round(priceRaw));
       savePricingBtn.setAttribute("disabled", "true");
       try {
         await setDoc(
@@ -369,14 +369,13 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
           {
             unitMinutes: deleteField(),
             maxUnitsPerBooking: deleteField(),
-            sessionPriceNtd: roundedPrice,
-            tsmcPricingEnabled: false,
+            sessionPriceNtd: normalizedPrice,
             updatedAt: serverTimestamp(),
           },
           { merge: true },
         );
         pricingAdminStatus.textContent = t("admin.pricing.savedWithPrice", "已更新；前台金額 {{price}} 元。", {
-          price: roundedPrice,
+          price: normalizedPrice,
         });
         pricingAdminStatus.classList.add("ok");
       } catch (e) {

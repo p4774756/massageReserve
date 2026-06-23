@@ -17,7 +17,7 @@ export const DISPLAY_SESSION_MINUTES = 17;
 /** 與 `functions/src/pricing.ts` 對齊：金額驗證下限 */
 export const MIN_SESSION_PRICE_NTD = 1;
 
-export function roundSessionPriceNtdForCash(ntd: number): number {
+export function normalizeSessionPriceNtd(ntd: number): number {
   const n = typeof ntd === "number" && Number.isFinite(ntd) ? Math.round(ntd) : Number(ntd);
   if (!Number.isInteger(n)) return DEFAULT_SESSION_PRICE_NTD;
   if (n < MIN_SESSION_PRICE_NTD) return MIN_SESSION_PRICE_NTD;
@@ -46,7 +46,7 @@ export function resolveSessionPriceNtdClient(raw: Record<string, unknown> | unde
   if (!Number.isInteger(n) || n < MIN_SESSION_PRICE_NTD || n > 500_000) {
     return DEFAULT_SESSION_PRICE_NTD;
   }
-  return roundSessionPriceNtdForCash(n);
+  return normalizeSessionPriceNtd(n);
 }
 
 export function resolvePointsPerMassageClient(raw: Record<string, unknown> | undefined): number {

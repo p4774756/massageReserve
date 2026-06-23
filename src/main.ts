@@ -66,7 +66,7 @@ import {
   FIXED_SESSION_PRICE_NTD,
   resolvePointsPerMassageClient,
   resolveSessionPriceNtdClient,
-  roundSessionPriceNtdForCash,
+  normalizeSessionPriceNtd,
 } from "./sitePricingResolve";
 
 function render() {
@@ -1878,7 +1878,7 @@ function render() {
     pointsPerMassage?: number;
   }) {
     if (typeof d.sessionPriceNtd === "number" && Number.isFinite(d.sessionPriceNtd)) {
-      sessionPriceNtdSetting = roundSessionPriceNtdForCash(d.sessionPriceNtd);
+      sessionPriceNtdSetting = normalizeSessionPriceNtd(d.sessionPriceNtd);
     }
     if (typeof d.pointsPerMassage === "number" && Number.isFinite(d.pointsPerMassage)) {
       pointsPerMassageSetting = Math.max(2, Math.round(d.pointsPerMassage));

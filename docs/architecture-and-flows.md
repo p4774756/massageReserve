@@ -106,9 +106,7 @@ flowchart LR
 |------|-----------|----------|
 | `getAvailability` | 公開 | 依 `dateKey` 回傳可預約時段（已佔用時段由後端計算；可含同日匿名顯示名遮罩） |
 | `getBookingDayCounts` | 公開 | 月曆用：指定月份各日預約筆數（不含 `cancelled`） |
-| `getBookingPricing` | 公開 | 回傳現場定價與點數兌換門檻（與 `siteSettings/pricing` 對齊） |
-| `syncSessionPriceFromTsmcDaily` | 排程 | 平日台北 15:30：2330 日漲跌累乘 `tsmcCumulativeFactor`（封頂 0.75～1.25，±25%），再進位至 10 元寫入 `sessionPriceNtd` |
-| `syncSessionPriceFromTsmcAdmin` | 管理員 | 手動觸發同上同步（後台「立即依台積電同步」） |
+| `getBookingPricing` | 公開 | 回傳 `siteSettings/pricing` 的每次金額與點數兌換門檻 |
 | `recordSiteVisit` | 公開 | 訪次統計（`siteStats/visitorCounters`，台北日曆日／週）；前端每瀏覽器分頁工作階段建議最多呼叫一次 |
 | `createBooking` | 會員（須登入驗證） | 建立預約、名額檢查、錢包扣款；名額已滿且 `bookingCaps` 開放時可 `capOverflow`＋`member_cap_overflow`（按摩費＋加價現金）；可通知擁有者 |
 | `getMyWallet` | 已登入 | 讀取自己的餘額、可抽次數、暱稱 |

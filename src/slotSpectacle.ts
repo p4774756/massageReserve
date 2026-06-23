@@ -206,8 +206,6 @@ const SLOT_CROWN_SVG = `<svg class="slot-spectacle-crown-svg" xmlns="http://www.
 
 /** 拉霸標題區旁裝飾龍（PNG：`public/media/slot-dragon-banner.png`） */
 const SLOT_DRAGON_IMG_SRC = `${import.meta.env.BASE_URL}media/slot-dragon-banner.png`;
-/** 機台外框／捲軸內框華麗金屬裝飾（透明中央，見 public/media） */
-const SLOT_INNER_GILT_SRC = `${import.meta.env.BASE_URL}media/slot-inner-gilt-frame.png`;
 /** 拉桿整支（透明 PNG，見 public/media/slot-lever-full.png） */
 const SLOT_LEVER_FULL_SRC = `${import.meta.env.BASE_URL}media/slot-lever-full.png`;
 
@@ -235,20 +233,16 @@ function buildIdleStrip(prizes: WheelPrizeLabel[]): { strip: WheelPrizeLabel[]; 
   return { strip, offsetY };
 }
 
-/** 捲軸金框：開場即掛上，避免「準備中」只剩機台金色橫條 */
+/** 捲軸框：開場即掛上，避免「準備中」只剩機台金色橫條 */
 function mountSoloReelFrame(): { reelFrame: HTMLDivElement; stripEl: HTMLDivElement } {
   const reelFrame = document.createElement("div");
   reelFrame.className = "slot-spectacle-reel-frame";
-  const reelGilt = document.createElement("div");
-  reelGilt.className = "slot-spectacle-reel-gilt";
-  reelGilt.setAttribute("aria-hidden", "true");
-  reelGilt.style.backgroundImage = `url("${SLOT_INNER_GILT_SRC}")`;
   const reelWindow = document.createElement("div");
   reelWindow.className = "slot-spectacle-reel-window slot-spectacle-reel-window--solo";
   const stripEl = document.createElement("div");
   stripEl.className = "slot-spectacle-strip";
   reelWindow.append(stripEl);
-  reelFrame.append(reelGilt, reelWindow);
+  reelFrame.append(reelWindow);
   return { reelFrame, stripEl };
 }
 
@@ -337,10 +331,12 @@ export function runSlotSpectacle(
     sideDecor.setAttribute("aria-hidden", "true");
     const hinge = document.createElement("span");
     hinge.className = "slot-spectacle-hinge";
+    sideDecor.append(hinge);
+
     const playTri = document.createElement("span");
     playTri.className = "slot-spectacle-play-tri";
+    playTri.setAttribute("aria-hidden", "true");
     playTri.textContent = "▶";
-    sideDecor.append(hinge, playTri);
 
     const reelStack = document.createElement("div");
     reelStack.className = "slot-spectacle-reel-stack";
@@ -355,7 +351,7 @@ export function runSlotSpectacle(
     reelsRow.append(reelFrame);
 
     reelStack.append(payline, reelsRow);
-    mainInner.append(sideDecor, reelStack);
+    mainInner.append(sideDecor, reelStack, playTri);
     machineMain.append(mainInner);
 
     const lever = document.createElement("button");
