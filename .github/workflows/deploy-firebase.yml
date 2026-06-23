@@ -79,7 +79,27 @@ jobs:
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
 
-      - name: Deploy to Firebase
-        run: npx -y firebase-tools@latest deploy --non-interactive --force
+      - name: Deploy Hosting & Functions
+        run: npx -y firebase-tools@latest deploy --only hosting,functions --non-interactive --force
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+
+      # Firestore API 偶發 503；與 hosting/functions 分開，避免整包 deploy 因索引上傳失敗而全滅
+      - name: Deploy Firestore rules & indexes (retry)
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5; do
+            if npx -y firebase-tools@latest deploy --only firestore --non-interactive; then
+              echo "Firestore deploy succeeded on attempt ${attempt}"
+              exit 0
+            fi
+            if [ "$attempt" -eq 5 ]; then
+              echo "Firestore deploy failed after ${attempt} attempts"
+              exit 1
+            fi
+            wait_s=$((attempt * 25))
+            echo "Firestore deploy attempt ${attempt} failed (often transient 503); retry in ${wait_s}s..."
+            sleep "$wait_s"
+          done
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
