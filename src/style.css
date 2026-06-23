@@ -791,95 +791,6 @@ main.panel {
   gap: var(--section-gap);
 }
 
-.book-service-pause {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 8px 12px;
-  margin: 0 0 14px;
-  padding: 12px 14px 13px;
-  border-radius: var(--radius);
-  border: 1px solid #76362c;
-  background: color-mix(in srgb, #c0392b 12%, var(--surface));
-  box-shadow: var(--shadow-sm);
-}
-
-.book-service-pause[hidden] {
-  display: none !important;
-}
-
-.book-service-pause__label {
-  flex: 0 0 auto;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #a93226;
-  padding: 2px 7px;
-  border-radius: var(--radius-sm);
-  border: 1px solid #70362c;
-  background: color-mix(in srgb, #c0392b 10%, var(--surface));
-}
-
-.book-service-pause__body {
-  flex: 1 1 12rem;
-  margin: 0;
-  font-size: 0.92rem;
-  line-height: 1.5;
-  color: var(--ink);
-}
-
-.book-service-pause__resume {
-  flex: 1 0 100%;
-  margin: 0;
-  font-size: 0.82rem;
-}
-
-.shell.admin-mode .admin-announce__block--service-pause {
-  border-left: 4px solid #84372b;
-}
-
-.admin-service-pause__actions {
-  margin-bottom: 4px;
-}
-
-.admin-service-pause__toggle--paused {
-  background: #27ae60;
-  border-color: #1e8449;
-}
-
-.admin-service-pause__toggle--paused:hover {
-  background: #229954;
-}
-
-.admin-service-pause__message {
-  width: 100%;
-  min-height: 3.2rem;
-  resize: vertical;
-}
-
-.admin-service-pause__footer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 12px;
-}
-
-.admin-service-pause__footer > button {
-  flex-shrink: 0;
-  margin: 0;
-}
-
-.admin-service-pause__footer > .status-line {
-  flex: 1 1 8rem;
-  min-width: 0;
-  margin: 0;
-}
-
-.admin-service-pause__footer > .status-line:empty {
-  display: none;
-}
-
 /* 作者樣式若指定 display:flex，會蓋過部分瀏覽器對 [hidden] 的預設，導致兩個 main 同時可見 */
 main.panel[hidden] {
   display: none !important;
@@ -2980,8 +2891,7 @@ tbody tr:hover td {
 .shell.admin-mode .admin-announce--settings .admin-announce__block--caps,
 .shell.admin-mode .admin-announce--settings .admin-announce__block--blocks,
 .shell.admin-mode .admin-announce--settings .admin-announce__block--pricing,
-.shell.admin-mode .admin-announce--settings .admin-announce__block--rules,
-.shell.admin-mode .admin-announce--settings .admin-announce__block--service-pause {
+.shell.admin-mode .admin-announce--settings .admin-announce__block--rules {
   border-left-color: var(--border);
   background: var(--surface-muted);
 }

@@ -69,8 +69,6 @@ export const getCustomerAdminProfileAdminCall = () => httpsCallable(getFns(), "g
 export const setCustomerAdminBriefAdminCall = () => httpsCallable(getFns(), "setCustomerAdminBriefAdmin");
 export const addCustomerAdminNoteAdminCall = () => httpsCallable(getFns(), "addCustomerAdminNoteAdmin");
 export const recordSiteVisitCall = () => httpsCallable(getFns(), "recordSiteVisit");
-export const syncSessionPriceFromTsmcAdminCall = () =>
-  httpsCallable(getFns(), "syncSessionPriceFromTsmcAdmin");
 export function getDb() {
   return getFirestore(getFirebaseApp());
 }

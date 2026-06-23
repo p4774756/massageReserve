@@ -25,8 +25,6 @@ import {
 } from "./resendNotify";
 import {
   ACTIVE_STATUSES,
-  allHolidayOutcallStartSlots,
-  allStartSlots,
   assertSlotAllowed,
   blockedReasonForSlot,
   bookingIntervalFromStartSlot,
@@ -45,7 +43,6 @@ import {
   TIMEZONE,
   weekdayZhFromDateKey,
 } from "./bookingLogic";
-import { isServicePaused, parseServicePause } from "./servicePause";
 import {
   durationMinutesForUnits as pricingDurationMinutesForUnits,
   foldWalletBalanceIntoSessions,
@@ -53,13 +50,10 @@ import {
   parseBookingUnits,
   resolvePointsPerMassage,
   resolveSessionPriceNtd,
-  resolveTsmcPricingEnabledForApi,
 } from "./pricing";
 import { parseLocale, st, type ServerLocale } from "./serverI18n";
 import { maskDisplayNameForPublic } from "./maskDisplayName";
 import { resolveCapOverflowSettings } from "./capOverflow";
-import { applyTsmcSessionPricingSync } from "./tsmcPricing";
-export { yahooChartProxy } from "./yahooChartProxy";
 import { runMonthlyChampionAward } from "./monthlyChampion";
 import {
   addMemberConsumption,
@@ -429,37 +423,6 @@ export const getAvailability = onCall(publicCall, async (request) => {
     throw new HttpsError("invalid-argument", st(locale, "avail.weekdaysOnly", "僅能查詢週一到週五"));
   }
 
-  const pauseSnap = await db.collection("siteSettings").doc("servicePause").get();
-  const pause = parseServicePause(pauseSnap.data());
-  if (pause.paused) {
-    const units = parseBookingUnits(request.data?.units) ?? 1;
-    const durationMinutes = pricingDurationMinutesForUnits(units, BOOKING_UNIT_MINUTES_FIXED);
-    const allSlots = holidayOutcall ? allHolidayOutcallStartSlots() : allStartSlots();
-    return {
-      servicePaused: true,
-      pauseMessage: pause.message,
-      pauseResumeOn: pause.resumeOn ?? null,
-      taken: allSlots,
-      unavailableStarts: allSlots,
-      units,
-      durationMinutes,
-      unitMinutes: BOOKING_UNIT_MINUTES_FIXED,
-      blockedSlots: [],
-      dayCount: 0,
-      weekCount: 0,
-      dayCap: 0,
-      weekCap: 0,
-      dayFull: true,
-      weekFull: true,
-      capOverflowEnabled: false,
-      capOverflowSurchargeNtd: 0,
-      dayPeersMasked: [],
-      daySlotsMasked: [],
-      daySlotsDetail: [],
-      weekPeersMasked: [],
-    };
-  }
-
   const weekStart = mondayOfWeek(day).toISODate()!;
 
   const [daySnap, weekSnap, blocksSnap, capsSnap] = await Promise.all([
@@ -638,12 +601,6 @@ export const createBooking = onCall(
   async (request) => {
   const data = request.data as CreateBookingInput;
   const locale = parseLocale(data);
-
-  const pauseSnap = await db.collection("siteSettings").doc("servicePause").get();
-  const pause = parseServicePause(pauseSnap.data());
-  if (isServicePaused(pauseSnap.data())) {
-    throw new HttpsError("failed-precondition", pause.message);
-  }
 
   const displayName = typeof data.displayName === "string" ? data.displayName.trim() : "";
   const note = typeof data.note === "string" ? data.note.trim() : "";
@@ -1026,21 +983,8 @@ export const getBookingPricing = onCall(publicCall, async (request) => {
   return {
     sessionPriceNtd: resolveSessionPriceNtd(raw),
     pointsPerMassage: resolvePointsPerMassage(raw),
-    tsmcPricingEnabled: resolveTsmcPricingEnabledForApi(raw),
   };
 });
-
-/** 平日收盤後：依台積電（2330）日漲跌幅線性更新 `sessionPriceNtd`（基準見 `tsmcPricingBaseNtd`） */
-export const syncSessionPriceFromTsmcDaily = onSchedule(
-  {
-    schedule: "30 15 * * 1-5",
-    timeZone: TIMEZONE,
-    region,
-  },
-  async () => {
-    await applyTsmcSessionPricingSync(db);
-  },
-);
 
 /** 每月 1 日：結算上個月消費冠軍，贈送 1 次按摩並更新前台祝賀 */
 export const awardMonthlyConsumptionChampion = onSchedule(
@@ -1099,17 +1043,6 @@ export const runMonthlyChampionAwardAdmin = onCall(walletAdminCall, async (reque
     monthKey: result.monthKey,
     displayName: result.displayNamePublic,
   };
-});
-
-/** 管理員：手動觸發台積電連動定價同步（規則同排程） */
-export const syncSessionPriceFromTsmcAdmin = onCall(publicCall, async (request) => {
-  const locale = parseLocale(request.data);
-  const uid = request.auth?.uid;
-  if (!uid) {
-    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
-  }
-  await assertAdminByUid(uid, locale);
-  return applyTsmcSessionPricingSync(db);
 });
 
 /** 會員：輪盤點數滿門檻時手動兌換為 1 次預約次數 */

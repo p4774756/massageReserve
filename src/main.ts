@@ -9,7 +9,7 @@ import {
   signInWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
-import { doc, getDoc, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import {
   createBookingCall,
   getAvailabilityCall,
@@ -23,11 +23,7 @@ import {
   spinWheelCall,
   listActiveWheelPrizesCall,
 } from "./firebase";
-import {
-  formatServicePauseResumeLine,
-  parseServicePause,
-  servicePauseDocRef,
-} from "./servicePause";
+import { resolveCapOverflowSettingsClient } from "./capOverflow";
 import { createVisitorStatsLine } from "./visitorStats";
 import { runSlotSpectacle } from "./slotSpectacle";
 import { initI18n, intlLocaleTag, localeApiParam, t } from "./i18n";
@@ -37,7 +33,6 @@ import { createMonthlyChampionBanner } from "./monthlyChampionBanner";
 import { createAdminDashboard } from "./adminDashboard";
 import { canCurrentUserAccessAdmin } from "./adminAccess";
 import { adminSessionCallName, shortUidForDisplay } from "./adminSessionUtil";
-import { resolveCapOverflowSettingsClient } from "./capOverflow";
 import { bookingModeLabel, treatOptionLabel } from "./bookingDisplay";
 import type { BookingMode } from "./bookingTypes";
 import { refillSlots } from "./bookingSlotSelect";
@@ -68,6 +63,7 @@ import { paintMemberWalletSummary, type MemberWalletSummaryOpts } from "./wallet
 import {
   BOOKING_UNIT_MINUTES_FIXED,
   DISPLAY_SESSION_MINUTES,
+  FIXED_SESSION_PRICE_NTD,
   resolvePointsPerMassageClient,
   resolveSessionPriceNtdClient,
   roundSessionPriceNtdForCash,
@@ -893,7 +889,7 @@ function render() {
   /** getAvailability 回傳之匿名預約者（首字 + x），置於名額 pill 下方 */
   const bookingPeersHint = el("div", { class: "booking-peers-hint hint", hidden: true });
   /** 與後端 `functions/src/pricing.ts` 預設對齊（定價 API 失敗時的首屏 fallback） */
-  let sessionPriceNtdSetting = 130;
+  let sessionPriceNtdSetting = FIXED_SESSION_PRICE_NTD;
   let capOverflowEnabledSetting = true;
   let capOverflowSurchargeNtdSetting = 100;
   /** 當日或本週名額已滿且後台開放加價預約 */
@@ -1825,48 +1821,6 @@ function render() {
   let bookingCapacityBlocksSlots = false;
   /** 查詢空檔中：暫停時段選單操作，版面維持不隱藏以免閃爍 */
   let bookingAvailabilityLoading = false;
-  /** 後台一鍵暫停新預約 */
-  let bookingServicePaused = false;
-  let bookingServicePauseMessage = "";
-  let bookingServicePauseResumeOn: string | undefined;
-
-  const servicePauseBanner = el("div", {
-    class: "book-service-pause",
-    role: "status",
-    hidden: true,
-  });
-  const servicePauseBannerBody = el("p", { class: "book-service-pause__body" });
-  const servicePauseBannerResume = el("p", { class: "book-service-pause__resume hint", hidden: true });
-  servicePauseBanner.append(
-    el("span", { class: "book-service-pause__label" }, [t("servicePause.label", "暫停接客")]),
-    servicePauseBannerBody,
-    servicePauseBannerResume,
-  );
-
-  function syncServicePauseBookingUi(): void {
-    bookPanelBook.classList.toggle("book-tab-panel--paused", bookingServicePaused);
-    servicePauseBanner.hidden = !bookingServicePaused;
-    bookFormTop.hidden = bookingServicePaused;
-    if (bookingServicePaused) {
-      memberExtrasWrap.hidden = true;
-    }
-    if (bookingServicePaused) {
-      servicePauseBannerBody.textContent = bookingServicePauseMessage;
-      const resumeLine = formatServicePauseResumeLine(bookingServicePauseResumeOn);
-      servicePauseBannerResume.hidden = !resumeLine;
-      servicePauseBannerResume.textContent = resumeLine;
-    }
-    if (bookingServicePaused) {
-      nameInput.setAttribute("disabled", "true");
-      noteInput.setAttribute("disabled", "true");
-      submitBtn.setAttribute("disabled", "true");
-    } else {
-      nameInput.removeAttribute("disabled");
-      noteInput.removeAttribute("disabled");
-      submitBtn.removeAttribute("disabled");
-    }
-    syncBookingStepVisibility();
-  }
 
   /** 依日期／時段顯示「時段＋名額」區與「付款＋備註＋送出」區，減少一進頁的視覺負擔 */
   function syncBookingStepVisibility() {
@@ -1886,14 +1840,13 @@ function render() {
       (showSlotFields && !bookingAvailabilityLoading && !pickable);
 
     const scheduleHasMessage = (scheduleStatus.textContent ?? "").trim().length > 0;
-    slotStepSection.hidden =
-      dk === "" || bookingServicePaused || (hideStartTimeRow && !scheduleHasMessage);
-    bookFormTopAside.hidden = dk === "" || bookingServicePaused;
-    slotFieldWrap.hidden = hideStartTimeRow || bookingServicePaused;
+    slotStepSection.hidden = dk === "" || (hideStartTimeRow && !scheduleHasMessage);
+    bookFormTopAside.hidden = dk === "";
+    slotFieldWrap.hidden = hideStartTimeRow;
 
     const slotPicked = Boolean(slotSelect.value);
     /** 與時段列一致：無可選時段／載入中／額滿時一併隱藏付款與送出 */
-    finalizeSection.hidden = bookingServicePaused || !slotPicked || !showSlotFields || hideStartTimeRow;
+    finalizeSection.hidden = !slotPicked || !showSlotFields || hideStartTimeRow;
   }
 
   syncDateFieldLabelText();
@@ -1977,16 +1930,6 @@ function render() {
     try {
       bookingCapacityBlocksSlots = false;
       bookingCapOverflowOffer = false;
-
-      if (bookingServicePaused) {
-        bookingCapacityBlocksSlots = true;
-        const dk = dateInput.value;
-        runRefillSlots(new Set(), true, dk, new Map());
-        setScheduleFeedback(bookingServicePauseMessage, "error");
-        syncBookingStepVisibility();
-        paintBookingPickCalendar();
-        return;
-      }
 
       const minKey = taipeiTodayDateKey();
       const maxKey = taipeiLatestBookableDateKey();
@@ -2180,11 +2123,6 @@ function render() {
   submitBtn.addEventListener("click", async () => {
     bookStatus.textContent = "";
     bookStatus.className = "status-line";
-    if (bookingServicePaused) {
-      bookStatus.textContent = bookingServicePauseMessage;
-      bookStatus.classList.add("error");
-      return;
-    }
     const displayName = nameInput.value.trim();
     const dateKey = dateInput.value;
     const startSlot = slotSelect.value;
@@ -2412,7 +2350,6 @@ function render() {
   });
   bookPanelBook.setAttribute("aria-labelledby", "book-tab-book");
   bookPanelBook.append(
-    servicePauseBanner,
     bookFormTop,
     /** 與選時段／付款區分離：未完成信箱驗證時顯示提示（餘額／輪盤／兌換在會員中心） */
     memberExtrasWrap,
@@ -2564,44 +2501,6 @@ function render() {
     },
   );
 
-  function applyServicePauseSettings(parsed: ReturnType<typeof parseServicePause>): void {
-    const wasPaused = bookingServicePaused;
-    bookingServicePaused = parsed.paused;
-    bookingServicePauseMessage = parsed.message;
-    bookingServicePauseResumeOn = parsed.resumeOn;
-    syncServicePauseBookingUi();
-    if (bookingServicePaused || wasPaused) {
-      void refreshAvailability();
-    }
-    if (!bookingServicePaused && wasPaused) {
-      void refreshWalletStatus();
-    }
-  }
-
-  async function refreshServicePauseFromServer(): Promise<void> {
-    try {
-      const snap = await getDoc(servicePauseDocRef(db));
-      applyServicePauseSettings(parseServicePause(snap.data()));
-    } catch (e) {
-      console.warn("servicePause getDoc refresh failed", e);
-    }
-  }
-
-  onSnapshot(
-    servicePauseDocRef(db),
-    (snap) => {
-      applyServicePauseSettings(parseServicePause(snap.data()));
-    },
-    (err) => {
-      console.warn("servicePause onSnapshot failed", err);
-    },
-  );
-
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState !== "visible" || tab !== "book") return;
-    void refreshServicePauseFromServer();
-  });
-
   async function syncAdminView() {
     if (tab !== "admin") return;
     const user = auth.currentUser;
@@ -2646,8 +2545,6 @@ function render() {
     panelAdmin.hidden = isBook;
     if (isBook) {
       stopAdminListener();
-      syncServicePauseBookingUi();
-      void refreshServicePauseFromServer();
     } else {
       void syncAdminView();
     }
