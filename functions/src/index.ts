@@ -30,6 +30,7 @@ import {
   bookingIntervalFromStartSlot,
   bookingRangeOverlaps,
   countBookingsTowardCap,
+  memberHasActiveBookingInWeek,
   isBookingStartInPastTaipei,
   isHolidayOutcallBookableDay,
   isWeekday,
@@ -456,6 +457,10 @@ export const getAvailability = onCall(publicCall, async (request) => {
     }));
   const dayCount = countBookingsTowardCap(daySnap.docs, excludeBookingId || undefined);
   const weekCount = countBookingsTowardCap(weekSnap.docs, excludeBookingId || undefined);
+  const memberUid = request.auth?.uid;
+  const memberAlreadyBookedThisWeek =
+    Boolean(memberUid) &&
+    memberHasActiveBookingInWeek(weekSnap.docs, memberUid!, excludeBookingId || undefined);
   const unavailableStarts = listUnavailableStartSlotsForDay({
     dateKey,
     durationMinutes,
@@ -486,6 +491,7 @@ export const getAvailability = onCall(publicCall, async (request) => {
     daySlotsMasked,
     daySlotsDetail,
     weekPeersMasked,
+    memberAlreadyBookedThisWeek,
   };
 });
 
@@ -721,6 +727,13 @@ export const createBooking = onCall(
       const capOverflowSettings = resolveCapOverflowSettings(capsSnap.data());
       const dayFull = countBookingsTowardCap(daySnap.docs) >= maxPerDay;
       const weekFull = countBookingsTowardCap(weekSnap.docs) >= maxPerWorkWeek;
+
+      if (memberHasActiveBookingInWeek(weekSnap.docs, uid)) {
+        throw new HttpsError(
+          "failed-precondition",
+          st(locale, "booking.memberWeekLimit", "每位會員本工作週僅能預約一次。"),
+        );
+      }
 
       if (capOverflowRequested) {
         if (!capOverflowSettings.enabled) {
@@ -2555,6 +2568,18 @@ export const rescheduleBookingAdmin = onCall(
 
         const [daySnap, weekSnap, capsSnap] = await Promise.all([tx.get(dayQ), tx.get(weekQ), tx.get(capsRef)]);
         const { maxPerDay, maxPerWorkWeek } = resolveBookingCaps(capsSnap.data());
+
+        if (
+          customerId &&
+          oldWeekStart !== newWeekStart &&
+          memberHasActiveBookingInWeek(weekSnap.docs, customerId, bookingId)
+        ) {
+          txError = new HttpsError(
+            "failed-precondition",
+            st(locale, "booking.memberWeekLimit", "每位會員本工作週僅能預約一次。"),
+          );
+          return;
+        }
 
         if (!capOverflow) {
           const dayCountExSelf = countBookingsTowardCap(daySnap.docs, bookingId);

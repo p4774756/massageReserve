@@ -62,7 +62,6 @@ import { resolveWheelPreviewSettingsClient } from "./wheelPreviewSetting";
 import { paintMemberWalletSummary, type MemberWalletSummaryOpts } from "./walletSummaryUi";
 import {
   BOOKING_UNIT_MINUTES_FIXED,
-  DISPLAY_SESSION_MINUTES,
   FIXED_SESSION_PRICE_NTD,
   resolvePointsPerMassageClient,
   resolveSessionPriceNtdClient,
@@ -1819,6 +1818,8 @@ function render() {
 
   /** 當日／本工作週名額已滿時後端會停用所有時段；隱藏時段選單以免以為還能選時間 */
   let bookingCapacityBlocksSlots = false;
+  /** 會員本工作週已有有效預約時不可再約 */
+  let bookingMemberWeekLimitReached = false;
   /** 查詢空檔中：暫停時段選單操作，版面維持不隱藏以免閃爍 */
   let bookingAvailabilityLoading = false;
 
@@ -1837,6 +1838,7 @@ function render() {
     const hideStartTimeRow =
       !showSlotFields ||
       bookingCapacityBlocksSlots ||
+      bookingMemberWeekLimitReached ||
       (showSlotFields && !bookingAvailabilityLoading && !pickable);
 
     const scheduleHasMessage = (scheduleStatus.textContent ?? "").trim().length > 0;
@@ -1867,9 +1869,6 @@ function render() {
         el("span", { class: "page-head-subtitle__price-num" }, [String(price)]),
         el("span", { class: "page-head-subtitle__price-unit" }, [t("home.subtitle.priceUnit", "元")]),
       ]),
-      t("home.subtitle.suffix", "，時間 {{minutes}} 分鐘", {
-        minutes: DISPLAY_SESSION_MINUTES,
-      }),
     );
   }
 
@@ -1929,6 +1928,7 @@ function render() {
   async function refreshAvailability() {
     try {
       bookingCapacityBlocksSlots = false;
+      bookingMemberWeekLimitReached = false;
       bookingCapOverflowOffer = false;
 
       const minKey = taipeiTodayDateKey();
@@ -2000,8 +2000,10 @@ function render() {
           dayPeersMasked?: string[];
           daySlotsMasked?: string[];
           weekPeersMasked?: string[];
+          memberAlreadyBookedThisWeek?: boolean;
         };
         const taken = new Set(data.taken);
+        bookingMemberWeekLimitReached = data.memberAlreadyBookedThisWeek === true;
         const dayFull = data.dayFull ?? data.dayCount >= data.dayCap;
         const weekFull = data.weekFull ?? data.weekCount >= data.weekCap;
         if (typeof data.capOverflowEnabled === "boolean") {
@@ -2015,7 +2017,8 @@ function render() {
         mergeBookingPickCalDayCount(dk, data.dayCount);
         mergeBookingPickCalDayPeers(dk, daySlotEntriesFromAvailability(data));
         refreshBookingPickCalDayBadge(dk);
-        const blocked = capFull && !bookingCapOverflowOffer;
+        const blocked =
+          bookingMemberWeekLimitReached || (capFull && !bookingCapOverflowOffer);
         bookingCapacityBlocksSlots = blocked;
         const blockedMap = new Map<string, string>();
         for (const b of data.blockedSlots ?? []) {
@@ -2070,7 +2073,12 @@ function render() {
           bookingPeersHint.replaceChildren();
           bookingPeersHint.hidden = true;
         }
-        if (bookingCapOverflowOffer) {
+        if (bookingMemberWeekLimitReached) {
+          setScheduleFeedback(
+            t("booking.memberWeekLimit", "每位會員本工作週僅能預約一次。"),
+            "error",
+          );
+        } else if (bookingCapOverflowOffer) {
           setScheduleFeedback("");
         } else if (dayFull) {
           setScheduleFeedback(t("booking.dayFull", "這一天已額滿。"), "error");
@@ -2175,6 +2183,11 @@ function render() {
         buildMembersOnlyReminderBody(),
         t("modal.ok", "我知道了"),
       );
+      return;
+    }
+    if (bookingMemberWeekLimitReached) {
+      bookStatus.textContent = t("booking.memberWeekLimit", "每位會員本工作週僅能預約一次。");
+      bookStatus.classList.add("error");
       return;
     }
     if (bookingCapOverflowOffer && bookingMode !== "member_cap_overflow") {
@@ -2522,6 +2535,9 @@ function render() {
       syncWheelPreviewBtnVisibility();
       await refreshBookingPricing();
       await refreshWalletStatus();
+      if (tab === "book") {
+        void refreshAvailability();
+      }
     })();
     syncAdminHeadSignedInHint();
     if (tab !== "admin") return;

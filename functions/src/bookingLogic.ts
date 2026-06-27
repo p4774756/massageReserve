@@ -80,6 +80,26 @@ export function countBookingsTowardCap(docs: CapCountableDoc[], excludeBookingId
   return n;
 }
 
+function customerIdFromDoc(doc: CapCountableDoc): string {
+  const raw = doc.get?.("customerId");
+  return typeof raw === "string" ? raw.trim() : "";
+}
+
+/** 會員在本工作週是否已有有效預約（含 capOverflow；可 exclude 一筆 booking id） */
+export function memberHasActiveBookingInWeek(
+  docs: CapCountableDoc[],
+  customerId: string,
+  excludeBookingId?: string,
+): boolean {
+  const cid = customerId.trim();
+  if (!cid) return false;
+  for (const d of docs) {
+    if (excludeBookingId && d.id === excludeBookingId) continue;
+    if (customerIdFromDoc(d) === cid) return true;
+  }
+  return false;
+}
+
 function serviceDayEndMinutes(): number {
   return SERVICE_DAY_END_HOUR * 60 + SERVICE_DAY_END_MINUTE;
 }

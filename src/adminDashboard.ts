@@ -17,7 +17,6 @@ import {
   adjustSessionCreditsAdminCall,
   grantDrawChancesAdminCall,
   listWalletTransactionsAdminCall,
-  getConsumptionStatsAdminCall,
   listMembersAdminCall,
   searchMemberUsersCall,
   topupWalletCall,
@@ -57,7 +56,6 @@ import {
   bookingCanSettleWithSessions,
   bookingMemberYesNo,
   bookingModeLabel,
-  bookingModeLabelSafe,
   bookingStatusLabel,
   bookingStatusNorm,
   populateAdminBookingStatusSelect,
@@ -262,26 +260,12 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     historyTypeaheadWrap.append(historyCustomerId, historySuggestions);
     wireMemberTypeahead(historyCustomerId, historySuggestions);
 
-    const statsCustomerId = el("input", {
-      type: "text",
-      placeholder: t("admin.placeholder.memberId", "會員 Email 或暱稱"),
-      autocomplete: "off",
-    });
-    const statsSuggestions = el("ul", {
-      class: "member-typeahead-list",
-      hidden: true,
-      role: "listbox",
-    });
-    const statsTypeaheadWrap = el("div", { class: "member-typeahead-wrap" });
-    statsTypeaheadWrap.append(statsCustomerId, statsSuggestions);
-    wireMemberTypeahead(statsCustomerId, statsSuggestions);
-
     function syncAllMemberIdInputs(changed: HTMLInputElement) {
-      for (const input of [topupCustomerId, historyCustomerId, statsCustomerId]) {
+      for (const input of [topupCustomerId, historyCustomerId]) {
         if (input !== changed && input.value !== changed.value) input.value = changed.value;
       }
     }
-    for (const input of [topupCustomerId, historyCustomerId, statsCustomerId]) {
+    for (const input of [topupCustomerId, historyCustomerId]) {
       input.addEventListener("input", () => syncAllMemberIdInputs(input));
     }
     const topupAmount = el("input", { type: "number", value: "100", min: "1", step: "1" });
@@ -1511,238 +1495,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     paintWalletHistoryTable();
     memberHistorySection.append(historyMemberBar, walletHistoryCard);
 
-    type ConsumptionStatsSummary = {
-      bookingCount: number;
-      cashTotalNtd: number;
-      sessionsConsumed: number;
-      topupAmountNtd: number;
-      topupSessions: number;
-      adminAdjustSessionsNet: number;
-    };
-    type ConsumptionStatsByMode = {
-      mode: string;
-      bookingCount: number;
-      cashNtd: number;
-      sessions: number;
-    };
-    type ConsumptionStatsTopMember = {
-      customerId: string;
-      email: string | null;
-      bookingCount: number;
-      cashNtd: number;
-      sessions: number;
-    };
-
-    function defaultConsumptionStatsDateFrom(): string {
-      const today = taipeiTodayDateKey();
-      return `${today.slice(0, 8)}01`;
-    }
-
-    const statsDateFromInput = el("input", { type: "date", value: defaultConsumptionStatsDateFrom() });
-    const statsDateToInput = el("input", { type: "date", value: taipeiTodayDateKey() });
-    const statsQueryBtn = el("button", { type: "button", class: "ghost" }, [
-      t("admin.consumptionStats.queryBtn", "查詢統計"),
-    ]);
-    const statsStatus = el("div", { class: "status-line" });
-    const statsSummaryGrid = el("div", { class: "admin-consumption-stats__cards" });
-    const statsByModeTableWrap = el("div", { class: "table-wrap admin-consumption-stats-table" });
-    const statsByModeTable = el("table", {}, []);
-    statsByModeTableWrap.append(statsByModeTable);
-    const statsTopMembersSection = el("section", { class: "admin-consumption-stats__top-members", hidden: true });
-    const statsTopMembersTableWrap = el("div", { class: "table-wrap admin-consumption-stats-table" });
-    const statsTopMembersTable = el("table", {}, []);
-    statsTopMembersTableWrap.append(statsTopMembersTable);
-    statsTopMembersSection.append(
-      el("h4", { class: "admin-consumption-stats__subheading" }, [
-        t("admin.consumptionStats.topMembersHeading", "現金消費排行（前 10）"),
-      ]),
-      statsTopMembersTableWrap,
-    );
-
-    function paintConsumptionStatsSummary(summary: ConsumptionStatsSummary | null) {
-      statsSummaryGrid.replaceChildren();
-      if (!summary) return;
-      const cards: { label: string; value: string }[] = [
-        {
-          label: t("admin.consumptionStats.cardBookings", "有效預約筆數"),
-          value: String(summary.bookingCount),
-        },
-        {
-          label: t("admin.consumptionStats.cardCash", "現金收入合計（元）"),
-          value: String(summary.cashTotalNtd),
-        },
-        {
-          label: t("admin.consumptionStats.cardSessions", "扣次合計"),
-          value: String(summary.sessionsConsumed),
-        },
-        {
-          label: t("admin.consumptionStats.cardTopup", "後台儲值（元／次）"),
-          value: `${summary.topupAmountNtd}／${summary.topupSessions}`,
-        },
-        {
-          label: t("admin.consumptionStats.cardAdjust", "後台調整次數（淨增減）"),
-          value: summary.adminAdjustSessionsNet > 0 ? `+${summary.adminAdjustSessionsNet}` : String(summary.adminAdjustSessionsNet),
-        },
-      ];
-      for (const card of cards) {
-        statsSummaryGrid.append(
-          el("div", { class: "admin-consumption-stats__card" }, [
-            el("span", { class: "admin-consumption-stats__card-label" }, [card.label]),
-            el("strong", { class: "admin-consumption-stats__card-value mono" }, [card.value]),
-          ]),
-        );
-      }
-    }
-
-    function paintConsumptionStatsByMode(rows: ConsumptionStatsByMode[]) {
-      statsByModeTable.replaceChildren();
-      statsByModeTable.append(
-        el("tr", {}, [
-          el("th", {}, [t("admin.consumptionStats.colMode", "付款方式")]),
-          el("th", {}, [t("admin.consumptionStats.colCount", "預約筆數")]),
-          el("th", {}, [t("admin.consumptionStats.colCash", "現金（元）")]),
-          el("th", {}, [t("admin.consumptionStats.colSessions", "扣次")]),
-        ]),
-      );
-      if (rows.length === 0) {
-        statsByModeTable.append(
-          el("tr", {}, [
-            el("td", { colSpan: 4, class: "admin-consumption-stats__empty" }, [
-              t("admin.consumptionStats.empty", "此區間尚無有效預約紀錄。"),
-            ]),
-          ]),
-        );
-        return;
-      }
-      for (const row of rows) {
-        statsByModeTable.append(
-          el("tr", {}, [
-            el("td", {}, [bookingModeLabelSafe(row.mode)]),
-            el("td", { class: "mono" }, [String(row.bookingCount)]),
-            el("td", { class: "mono" }, [row.cashNtd > 0 ? String(row.cashNtd) : "—"]),
-            el("td", { class: "mono" }, [row.sessions > 0 ? String(row.sessions) : "—"]),
-          ]),
-        );
-      }
-    }
-
-    function paintConsumptionStatsTopMembers(rows: ConsumptionStatsTopMember[] | undefined, memberFiltered: boolean) {
-      statsTopMembersSection.hidden = memberFiltered || !rows || rows.length === 0;
-      statsTopMembersTable.replaceChildren();
-      if (memberFiltered || !rows || rows.length === 0) return;
-      statsTopMembersTable.append(
-        el("tr", {}, [
-          el("th", {}, [t("admin.consumptionStats.colMember", "會員")]),
-          el("th", {}, [t("admin.consumptionStats.colCount", "預約筆數")]),
-          el("th", {}, [t("admin.consumptionStats.colCash", "現金（元）")]),
-          el("th", {}, [t("admin.consumptionStats.colSessions", "扣次")]),
-        ]),
-      );
-      for (const row of rows) {
-        const label = row.email?.trim() || `${row.customerId.slice(0, 8)}…`;
-        statsTopMembersTable.append(
-          el("tr", {}, [
-            el("td", { title: row.customerId }, [label]),
-            el("td", { class: "mono" }, [String(row.bookingCount)]),
-            el("td", { class: "mono" }, [row.cashNtd > 0 ? String(row.cashNtd) : "—"]),
-            el("td", { class: "mono" }, [row.sessions > 0 ? String(row.sessions) : "—"]),
-          ]),
-        );
-      }
-    }
-
-    async function loadConsumptionStats() {
-      statsStatus.textContent = "";
-      statsStatus.className = "status-line";
-      const dateFrom = statsDateFromInput.value.trim();
-      const dateTo = statsDateToInput.value.trim();
-      if (!dateFrom || !dateTo) {
-        statsStatus.textContent = t("admin.consumptionStats.needDates", "請選擇起訖日期。");
-        statsStatus.classList.add("error");
-        return;
-      }
-      const memberRaw = statsCustomerId.value.trim();
-      statsQueryBtn.setAttribute("disabled", "true");
-      statsStatus.textContent = t("admin.consumptionStats.loading", "統計中…");
-      try {
-        const fn = getConsumptionStatsAdminCall();
-        const res = await fn({
-          dateFrom,
-          dateTo,
-          ...(memberRaw ? { customerId: memberRaw } : {}),
-          ...localeApiParam(),
-        });
-        const data = res.data as {
-          summary?: ConsumptionStatsSummary;
-          byPaymentMode?: ConsumptionStatsByMode[];
-          topMembers?: ConsumptionStatsTopMember[];
-          truncated?: boolean;
-          walletTxTruncated?: boolean;
-          customerId?: string | null;
-        };
-        const summary = data.summary ?? null;
-        paintConsumptionStatsSummary(summary);
-        paintConsumptionStatsByMode(Array.isArray(data.byPaymentMode) ? data.byPaymentMode : []);
-        paintConsumptionStatsTopMembers(data.topMembers, Boolean(data.customerId || memberRaw));
-        const parts: string[] = [];
-        if (summary) {
-          parts.push(
-            t("admin.consumptionStats.found", "統計完成：{{bookings}} 筆預約。", {
-              bookings: summary.bookingCount,
-            }),
-          );
-        }
-        if (data.truncated) {
-          parts.push(t("admin.consumptionStats.truncatedBookings", "預約資料已達查詢上限，數字可能偏低。"));
-        }
-        if (data.walletTxTruncated) {
-          parts.push(t("admin.consumptionStats.truncatedWallet", "儲值／調整資料已達查詢上限，數字可能偏低。"));
-        }
-        statsStatus.textContent = parts.join(" ") || t("admin.consumptionStats.none", "查無資料。");
-        if (summary && summary.bookingCount > 0) statsStatus.classList.add("ok");
-      } catch (e) {
-        paintConsumptionStatsSummary(null);
-        paintConsumptionStatsByMode([]);
-        paintConsumptionStatsTopMembers(undefined, Boolean(statsCustomerId.value.trim()));
-        statsStatus.textContent = errorMessage(e);
-        statsStatus.classList.add("error");
-      } finally {
-        statsQueryBtn.removeAttribute("disabled");
-      }
-    }
-
-    statsQueryBtn.addEventListener("click", () => void loadConsumptionStats());
-
-    const memberConsumptionStatsSection = el("div", { class: "admin-announce admin-announce--wallet" }, []);
-    const consumptionStatsCard = el("section", { class: "admin-announce__wallet-segment admin-consumption-stats" }, [
-      el("h3", {}, [t("admin.consumptionStats.heading", "消費統計")]),
-      el("p", { class: "hint" }, [
-        t(
-          "admin.consumptionStats.lead",
-          "依預約日期（台北）統計現金收入、扣次與付款方式分布；可選會員或留空查全站。不含已取消／已刪除預約。",
-        ),
-      ]),
-      el("div", { class: "admin-consumption-stats__toolbar" }, [
-        el("label", { class: "field" }, [t("admin.consumptionStats.dateFrom", "起始日期"), statsDateFromInput]),
-        el("label", { class: "field" }, [t("admin.consumptionStats.dateTo", "結束日期"), statsDateToInput]),
-        el("label", { class: "field admin-consumption-stats__member" }, [
-          t("admin.consumptionStats.memberOptional", "會員（選填）"),
-          statsTypeaheadWrap,
-        ]),
-        statsQueryBtn,
-      ]),
-      statsStatus,
-      statsSummaryGrid,
-      el("h4", { class: "admin-consumption-stats__subheading" }, [
-        t("admin.consumptionStats.byModeHeading", "依付款方式"),
-      ]),
-      statsByModeTableWrap,
-      statsTopMembersSection,
-    ]);
-    memberConsumptionStatsSection.append(consumptionStatsCard);
-    paintConsumptionStatsSummary(null);
-    paintConsumptionStatsByMode([]);
-
     walletTopupSection.append(walletMemberBar, walletMemberOpsCard);
     const tableHolder = el("div", { class: "table-wrap admin-bookings-table" });
     const table = el("table", {}, []);
@@ -2443,10 +2195,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       t("admin.memberTab.history", "消費與紀錄"),
     ]);
     subTabMemberHistory.id = "admin-member-subtab-history";
-    const subTabMemberStats = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
-      t("admin.memberTab.stats", "消費統計"),
-    ]);
-    subTabMemberStats.id = "admin-member-subtab-stats";
     const subTabMemberList = el("button", { type: "button", class: "admin-tab", role: "tab" }, [
       t("admin.memberTab.list", "會員清單"),
     ]);
@@ -2478,44 +2226,19 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     panelMemberHistorySub.setAttribute("aria-labelledby", "admin-member-subtab-history");
     panelMemberHistorySub.append(memberHistorySection);
 
-    const panelMemberStatsSub = el("div", {
-      class: "admin-tab-panel admin-member-subpanel",
-      role: "tabpanel",
-      id: "admin-member-subpanel-stats",
-      hidden: true,
-    });
-    panelMemberStatsSub.setAttribute("aria-labelledby", "admin-member-subtab-stats");
-    panelMemberStatsSub.append(memberConsumptionStatsSection);
-
     subTabMemberList.setAttribute("aria-controls", "admin-member-subpanel-list");
     subTabMemberWallet.setAttribute("aria-controls", "admin-member-subpanel-wallet");
     subTabMemberHistory.setAttribute("aria-controls", "admin-member-subpanel-history");
-    subTabMemberStats.setAttribute("aria-controls", "admin-member-subpanel-stats");
 
     const membersSubTablist = el("div", { class: "admin-tabs admin-member-subtabs", role: "tablist" });
-    membersSubTablist.append(subTabMemberList, subTabMemberWallet, subTabMemberHistory, subTabMemberStats);
+    membersSubTablist.append(subTabMemberList, subTabMemberWallet, subTabMemberHistory);
     const membersSubPanelsWrap = el("div", { class: "admin-member-subpanels" });
-    membersSubPanelsWrap.append(
-      panelMemberListSub,
-      panelMemberWalletSub,
-      panelMemberHistorySub,
-      panelMemberStatsSub,
-    );
+    membersSubPanelsWrap.append(panelMemberListSub, panelMemberWalletSub, panelMemberHistorySub);
 
-    const memberSubTabButtons = [
-      subTabMemberList,
-      subTabMemberWallet,
-      subTabMemberHistory,
-      subTabMemberStats,
-    ] as const;
-    const memberSubTabPanels = [
-      panelMemberListSub,
-      panelMemberWalletSub,
-      panelMemberHistorySub,
-      panelMemberStatsSub,
-    ] as const;
+    const memberSubTabButtons = [subTabMemberList, subTabMemberWallet, subTabMemberHistory] as const;
+    const memberSubTabPanels = [panelMemberListSub, panelMemberWalletSub, panelMemberHistorySub] as const;
 
-    function selectMembersSubTab(index: 0 | 1 | 2 | 3) {
+    function selectMembersSubTab(index: 0 | 1 | 2) {
       memberSubTabButtons.forEach((btn, i) => {
         const on = i === index;
         btn.setAttribute("aria-selected", String(on));
@@ -2531,7 +2254,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     subTabMemberList.addEventListener("click", () => selectMembersSubTab(0));
     subTabMemberWallet.addEventListener("click", () => selectMembersSubTab(1));
     subTabMemberHistory.addEventListener("click", () => selectMembersSubTab(2));
-    subTabMemberStats.addEventListener("click", () => selectMembersSubTab(3));
 
     membersSubTablist.addEventListener("keydown", (ev) => {
       if (ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;
@@ -2541,7 +2263,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       const delta = ev.key === "ArrowRight" ? 1 : -1;
       const n = memberSubTabButtons.length;
       const next = ((cur + delta) % n + n) % n;
-      selectMembersSubTab(next as 0 | 1 | 2 | 3);
+      selectMembersSubTab(next as 0 | 1 | 2);
       memberSubTabButtons[next].focus();
     });
 
