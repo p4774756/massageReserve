@@ -203,7 +203,7 @@ async function notifyMemberWalletChangedEmail(
   }
 }
 
-/** 後台儲值：可填 Email，或填 Firestore 稱呼（不含 @ 時依稱呼精確比對） */
+/** 後台會員識別：Email（含 @）、Firebase UID、或 Firestore 稱呼（精確比對） */
 async function resolveCustomerUidForTopup(raw: string, locale: ServerLocale): Promise<string> {
   const trimmed = raw.trim();
   if (!trimmed) {
@@ -215,6 +215,14 @@ async function resolveCustomerUidForTopup(raw: string, locale: ServerLocale): Pr
       return userRecord.uid;
     } catch {
       throw new HttpsError("not-found", st(locale, "topup.emailNotFound", "找不到此 Email 的會員帳號"));
+    }
+  }
+  if (trimmed.length >= 20 && trimmed.length <= 128 && /^[a-zA-Z0-9_-]+$/.test(trimmed)) {
+    try {
+      const userRecord = await getAuth().getUser(trimmed);
+      return userRecord.uid;
+    } catch {
+      // 非有效 UID，改以稱呼比對
     }
   }
   const needle = trimmed.toLowerCase();
