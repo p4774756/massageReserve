@@ -1481,6 +1481,7 @@ const ADMIN_WALLET_TX_TYPES = [
   "topup",
   "admin_session_adjust",
   "admin_grant_draw",
+  "monthly_champion_reward",
   "session_charge",
   "session_refund",
   "refund",

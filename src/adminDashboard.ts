@@ -1231,6 +1231,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       | "topup"
       | "admin_session_adjust"
       | "admin_grant_draw"
+      | "monthly_champion_reward"
       | "session_charge"
       | "session_refund"
       | "refund"
@@ -1251,6 +1252,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       { value: "topup", label: t("admin.walletHistory.typeTopup", "儲值") },
       { value: "admin_session_adjust", label: t("admin.walletHistory.typeAdjust", "調整可預約次數") },
       { value: "admin_grant_draw", label: t("admin.walletHistory.typeGrant", "贈送輪盤抽獎次數") },
+      { value: "monthly_champion_reward", label: t("admin.walletHistory.typeMonthlyChampion", "月消費冠軍獎勵") },
       { value: "points_redeem", label: t("admin.walletHistory.typePointsRedeem", "點數兌換") },
       { value: "prize_points", label: t("admin.walletHistory.typePrizePoints", "輪盤點數獎勵") },
       { value: "refund", label: t("admin.walletHistory.typeRefund", "取消退回儲值金（早期資料）") },
