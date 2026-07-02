@@ -3,6 +3,7 @@ import {
   collection,
   deleteField,
   doc,
+  getDoc,
   onSnapshot,
   orderBy,
   query,
@@ -17,7 +18,6 @@ import {
   adjustSessionCreditsAdminCall,
   grantDrawChancesAdminCall,
   listWalletTransactionsAdminCall,
-  getMonthlyChampionAwardAdminCall,
   listMembersAdminCall,
   searchMemberUsersCall,
   topupWalletCall,
@@ -78,6 +78,7 @@ import {
   weekdayZhFromDateKeyTaipei,
 } from "./taipeiDates";
 import { intlLocaleTag, localeApiParam, t } from "./i18n";
+import { MONTHLY_CHAMPION_CELEBRATION_DOC_ID } from "./monthlyChampionBanner";
 import type { Firestore } from "firebase/firestore";
 import { showConfirmModal } from "./modals";
 
@@ -1351,19 +1352,45 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
       return `${id.slice(0, 8)}…`;
     }
 
-    const championAwardHint = el("p", { class: "hint admin-wallet-history__champion-hint", hidden: true });
+    const championAwardCallout = el("div", { class: "admin-wallet-history__champion-callout" });
+    const championAwardHint = el("p", { class: "admin-wallet-history__champion-hint" }, [
+      t("admin.walletHistory.championLoading", "月冠軍會員：載入中…"),
+    ]);
     const championAwardApplyBtn = el("button", { type: "button", class: "ghost admin-wallet-history__champion-apply", hidden: true }, [
       t("admin.walletHistory.championApply", "代入查詢"),
     ]);
+    championAwardCallout.append(
+      el("div", { class: "admin-wallet-history__champion-row" }, [championAwardHint, championAwardApplyBtn]),
+    );
     let championAwardEmail: string | null = null;
 
+    function parseCelebrationForAdmin(data: Record<string, unknown> | undefined): { monthLabel: string; displayName: string } | null {
+      if (!data) return null;
+      const monthKey = typeof data.monthKey === "string" ? data.monthKey.trim() : "";
+      const displayName = typeof data.displayName === "string" ? data.displayName.trim() : "";
+      const showUntil = typeof data.showUntil === "string" ? data.showUntil.trim() : "";
+      if (!monthKey || !displayName || !showUntil || taipeiTodayDateKey() > showUntil) return null;
+      const m = /^(\d{4})-(\d{2})$/.exec(monthKey);
+      const monthLabel = m ? `${m[1]}年${Number(m[2])}月` : monthKey;
+      return { monthLabel, displayName };
+    }
+
+    async function loadCelebrationFallback(): Promise<{ monthLabel: string; displayName: string } | null> {
+      try {
+        const snap = await getDoc(doc(db, "siteSettings", MONTHLY_CHAMPION_CELEBRATION_DOC_ID));
+        return parseCelebrationForAdmin(snap.data() as Record<string, unknown> | undefined);
+      } catch {
+        return null;
+      }
+    }
+
     async function loadChampionAwardHint() {
-      championAwardHint.hidden = true;
+      championAwardHint.textContent = t("admin.walletHistory.championLoading", "月冠軍會員：載入中…");
       championAwardApplyBtn.hidden = true;
       championAwardEmail = null;
       try {
-        const fn = getMonthlyChampionAwardAdminCall();
-        const res = await fn(localeApiParam());
+        const fn = listWalletTransactionsAdminCall();
+        const res = await fn({ monthlyChampionHintOnly: true, ...localeApiParam() });
         const data = res.data as {
           ok?: boolean;
           award?: {
@@ -1372,22 +1399,47 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
             displayNamePublic?: string;
           };
         };
-        if (!data.ok || !data.award) return;
-        const email = typeof data.award.email === "string" ? data.award.email.trim() : "";
-        const monthLabel = typeof data.award.monthLabel === "string" ? data.award.monthLabel : "";
-        const displayName = typeof data.award.displayNamePublic === "string" ? data.award.displayNamePublic : "";
-        if (!monthLabel || !displayName) return;
-        championAwardEmail = email || null;
-        const who = email ? `${email}（${displayName}）` : displayName;
+        if (data.ok && data.award) {
+          const email = typeof data.award.email === "string" ? data.award.email.trim() : "";
+          const monthLabel = typeof data.award.monthLabel === "string" ? data.award.monthLabel : "";
+          const displayName = typeof data.award.displayNamePublic === "string" ? data.award.displayNamePublic : "";
+          if (monthLabel && displayName) {
+            championAwardEmail = email || null;
+            const who = email ? `${email}（${displayName}）` : displayName;
+            championAwardHint.textContent = t(
+              "admin.walletHistory.championHint",
+              "{{month}}消費冠軍為 {{who}}。若查不到贈送紀錄，請確認查詢的是此會員。",
+              { month: monthLabel, who },
+            );
+            championAwardApplyBtn.hidden = !email;
+            return;
+          }
+        }
+        const celebration = await loadCelebrationFallback();
+        if (celebration) {
+          championAwardHint.textContent = t(
+            "admin.walletHistory.championHintNoEmail",
+            "{{month}}消費冠軍為 {{name}}（遮罩顯示）。冠軍 Email 尚無法載入，請重新整理或稍後再試。",
+            { month: celebration.monthLabel, name: celebration.displayName },
+          );
+          return;
+        }
+        championAwardHint.textContent = t("admin.walletHistory.championNone", "本月無月消費冠軍結算資料。");
+      } catch (e) {
+        const celebration = await loadCelebrationFallback();
+        if (celebration) {
+          championAwardHint.textContent = t(
+            "admin.walletHistory.championHintLoadFail",
+            "{{month}}消費冠軍為 {{name}}。Email 載入失敗：{{err}}",
+            { month: celebration.monthLabel, name: celebration.displayName, err: errorMessage(e) },
+          );
+          return;
+        }
         championAwardHint.textContent = t(
-          "admin.walletHistory.championHint",
-          "{{month}}消費冠軍為 {{who}}。若查不到贈送紀錄，請確認查詢的是此會員。",
-          { month: monthLabel, who },
+          "admin.walletHistory.championLoadFail",
+          "月冠軍會員載入失敗：{{err}}",
+          { err: errorMessage(e) },
         );
-        championAwardHint.hidden = false;
-        championAwardApplyBtn.hidden = !email;
-      } catch {
-        /* ignore */
       }
     }
 
@@ -1515,6 +1567,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
 
     const memberHistorySection = el("div", { class: "admin-announce admin-announce--wallet" }, []);
     const historyMemberBar = el("section", { class: "admin-announce__wallet-segment admin-announce__wallet-segment--member" }, [
+      championAwardCallout,
       el("label", { class: "field" }, [t("admin.wallet.memberLabel", "會員（Email 或暱稱）"), historyTypeaheadWrap]),
       el("p", { class: "hint admin-wallet-member-bar__hint" }, [
         t(
@@ -1533,7 +1586,6 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
           "查詢會員現金／QR／加價現金預約、預約扣次、取消退回，以及後台儲值與手動調整之稽核紀錄。",
         ),
       ]),
-      el("div", { class: "admin-wallet-history__champion-row" }, [championAwardHint, championAwardApplyBtn]),
       el("div", { class: "admin-wallet-history__toolbar" }, [
         el("label", { class: "field admin-wallet-history__filter" }, [
           t("admin.walletHistory.typeFilterLabel", "類型篩選"),

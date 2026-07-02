@@ -1556,6 +1556,22 @@ export const listWalletTransactionsAdmin = onCall(publicCall, async (request) =>
   }
   await assertAdminByUid(uid, locale);
 
+  const monthlyChampionHintOnly = request.data?.monthlyChampionHintOnly === true;
+  if (monthlyChampionHintOnly) {
+    const monthKeyRaw = typeof request.data?.monthKey === "string" ? request.data.monthKey.trim() : "";
+    const range = monthKeyRaw
+      ? monthlyChampionMonthRangeForKey(monthKeyRaw)
+      : monthlyChampionMonthRange();
+    if (!range) {
+      throw new HttpsError("invalid-argument", st(locale, "monthlyChampion.badMonthKey", "monthKey 須為 YYYY-MM。"));
+    }
+    const award = await getMonthlyChampionAwardAdminRow(db, range.monthKey);
+    if (!award) {
+      return { ok: false as const, reason: "not_found" as const, monthKey: range.monthKey };
+    }
+    return { ok: true as const, award };
+  }
+
   const customerIdRaw = typeof request.data?.customerId === "string" ? request.data.customerId.trim() : "";
   if (!customerIdRaw) {
     throw new HttpsError("invalid-argument", st(locale, "topup.needId", "請填入會員識別（Email 或 UID）"));
