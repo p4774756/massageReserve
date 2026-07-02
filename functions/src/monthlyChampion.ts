@@ -16,7 +16,60 @@ import { sendMonthlyChampionRewardEmail } from "./resendNotify";
 export const MONTHLY_CHAMPION_AWARD_COLLECTION = "monthlyChampionAwards";
 export const MONTHLY_CHAMPION_CELEBRATION_DOC_ID = "monthlyChampionCelebration";
 export const WALLET_TX_TYPE_MONTHLY_CHAMPION = "monthly_champion_reward";
-const SYSTEM_OPERATOR_ID = "system_monthly_champion";
+export const MONTHLY_CHAMPION_SYSTEM_OPERATOR_ID = "system_monthly_champion";
+const SYSTEM_OPERATOR_ID = MONTHLY_CHAMPION_SYSTEM_OPERATOR_ID;
+
+function firestoreTimestampToSeconds(v: unknown): number | null {
+  if (v && typeof v === "object" && "toMillis" in v && typeof (v as { toMillis: () => number }).toMillis === "function") {
+    return Math.floor((v as { toMillis: () => number }).toMillis() / 1000);
+  }
+  return null;
+}
+
+export type MonthlyChampionAwardAdminRow = {
+  monthKey: string;
+  monthLabel: string;
+  customerId: string;
+  email: string | null;
+  displayNamePublic: string;
+  walletTransactionId: string;
+  createdAt: number | null;
+  cashNtd: number;
+  sessions: number;
+  bookingCount: number;
+};
+
+/** 後台：查詢指定月份冠軍結算（含 Email，供對照消費紀錄） */
+export async function getMonthlyChampionAwardAdminRow(
+  db: Firestore,
+  monthKey: string,
+): Promise<MonthlyChampionAwardAdminRow | null> {
+  const snap = await db.collection(MONTHLY_CHAMPION_AWARD_COLLECTION).doc(monthKey).get();
+  if (!snap.exists) return null;
+  const d = snap.data() as Record<string, unknown>;
+  const customerId = typeof d.customerId === "string" ? d.customerId.trim() : "";
+  if (!customerId) return null;
+  let email: string | null = null;
+  try {
+    const user = await getAuth().getUser(customerId);
+    email = user.email?.trim() ?? null;
+  } catch {
+    /* ignore */
+  }
+  const displayNamePublic = await memberPublicDisplayName(db, customerId);
+  return {
+    monthKey: snap.id,
+    monthLabel: formatMonthKeyLabelZh(snap.id),
+    customerId,
+    email,
+    displayNamePublic,
+    walletTransactionId: typeof d.walletTransactionId === "string" ? d.walletTransactionId : "",
+    createdAt: firestoreTimestampToSeconds(d.createdAt),
+    cashNtd: typeof d.cashNtd === "number" ? d.cashNtd : 0,
+    sessions: typeof d.sessions === "number" ? d.sessions : 0,
+    bookingCount: typeof d.bookingCount === "number" ? d.bookingCount : 0,
+  };
+}
 
 export type MonthlyChampionMonthRange = {
   monthKey: string;

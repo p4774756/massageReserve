@@ -17,6 +17,7 @@ import {
   adjustSessionCreditsAdminCall,
   grantDrawChancesAdminCall,
   listWalletTransactionsAdminCall,
+  getMonthlyChampionAwardAdminCall,
   listMembersAdminCall,
   searchMemberUsersCall,
   topupWalletCall,
@@ -1343,9 +1344,58 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
     function formatWalletHistoryOperator(operatorId: string): string {
       const id = operatorId.trim();
       if (!id) return "—";
+      if (id === "system_monthly_champion") {
+        return t("admin.walletHistory.operatorMonthlyChampion", "系統（月冠軍）");
+      }
       if (id.length <= 12) return id;
       return `${id.slice(0, 8)}…`;
     }
+
+    const championAwardHint = el("p", { class: "hint admin-wallet-history__champion-hint", hidden: true });
+    const championAwardApplyBtn = el("button", { type: "button", class: "ghost admin-wallet-history__champion-apply", hidden: true }, [
+      t("admin.walletHistory.championApply", "代入查詢"),
+    ]);
+    let championAwardEmail: string | null = null;
+
+    async function loadChampionAwardHint() {
+      championAwardHint.hidden = true;
+      championAwardApplyBtn.hidden = true;
+      championAwardEmail = null;
+      try {
+        const fn = getMonthlyChampionAwardAdminCall();
+        const res = await fn(localeApiParam());
+        const data = res.data as {
+          ok?: boolean;
+          award?: {
+            monthLabel?: string;
+            email?: string | null;
+            displayNamePublic?: string;
+          };
+        };
+        if (!data.ok || !data.award) return;
+        const email = typeof data.award.email === "string" ? data.award.email.trim() : "";
+        const monthLabel = typeof data.award.monthLabel === "string" ? data.award.monthLabel : "";
+        const displayName = typeof data.award.displayNamePublic === "string" ? data.award.displayNamePublic : "";
+        if (!monthLabel || !displayName) return;
+        championAwardEmail = email || null;
+        const who = email ? `${email}（${displayName}）` : displayName;
+        championAwardHint.textContent = t(
+          "admin.walletHistory.championHint",
+          "{{month}}消費冠軍為 {{who}}。若查不到贈送紀錄，請確認查詢的是此會員。",
+          { month: monthLabel, who },
+        );
+        championAwardHint.hidden = false;
+        championAwardApplyBtn.hidden = !email;
+      } catch {
+        /* ignore */
+      }
+    }
+
+    championAwardApplyBtn.addEventListener("click", () => {
+      if (!championAwardEmail) return;
+      historyCustomerId.value = championAwardEmail;
+      void loadWalletHistory();
+    });
 
     function paintWalletHistoryTable() {
       walletHistoryTable.replaceChildren();
@@ -1483,6 +1533,7 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
           "查詢會員現金／QR／加價現金預約、預約扣次、取消退回，以及後台儲值與手動調整之稽核紀錄。",
         ),
       ]),
+      el("div", { class: "admin-wallet-history__champion-row" }, [championAwardHint, championAwardApplyBtn]),
       el("div", { class: "admin-wallet-history__toolbar" }, [
         el("label", { class: "field admin-wallet-history__filter" }, [
           t("admin.walletHistory.typeFilterLabel", "類型篩選"),
@@ -2255,7 +2306,10 @@ export function createAdminDashboard(ctx: AdminDashboardContext): AdminDashboard
 
     subTabMemberList.addEventListener("click", () => selectMembersSubTab(0));
     subTabMemberWallet.addEventListener("click", () => selectMembersSubTab(1));
-    subTabMemberHistory.addEventListener("click", () => selectMembersSubTab(2));
+    subTabMemberHistory.addEventListener("click", () => {
+      selectMembersSubTab(2);
+      void loadChampionAwardHint();
+    });
 
     membersSubTablist.addEventListener("keydown", (ev) => {
       if (ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;

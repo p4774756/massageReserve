@@ -55,7 +55,16 @@ import {
 import { parseLocale, st, type ServerLocale } from "./serverI18n";
 import { maskDisplayNameForPublic } from "./maskDisplayName";
 import { resolveCapOverflowSettings } from "./capOverflow";
-import { runMonthlyChampionAward } from "./monthlyChampion";
+import {
+  formatMonthKeyLabelZh,
+  getMonthlyChampionAwardAdminRow,
+  MONTHLY_CHAMPION_AWARD_COLLECTION,
+  MONTHLY_CHAMPION_SYSTEM_OPERATOR_ID,
+  monthlyChampionMonthRange,
+  monthlyChampionMonthRangeForKey,
+  runMonthlyChampionAward,
+  WALLET_TX_TYPE_MONTHLY_CHAMPION,
+} from "./monthlyChampion";
 import {
   addMemberConsumption,
   bookingSessionCreditsDeducted,
@@ -1066,6 +1075,30 @@ export const runMonthlyChampionAwardAdmin = onCall(walletAdminCall, async (reque
   };
 });
 
+/** 管理員：查詢月消費冠軍結算（含 Email，供對照消費與紀錄） */
+export const getMonthlyChampionAwardAdmin = onCall(publicCall, async (request) => {
+  const locale = parseLocale(request.data);
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", st(locale, "auth.needLogin", "請先登入"));
+  }
+  await assertAdminByUid(uid, locale);
+
+  const monthKeyRaw = typeof request.data?.monthKey === "string" ? request.data.monthKey.trim() : "";
+  const range = monthKeyRaw
+    ? monthlyChampionMonthRangeForKey(monthKeyRaw)
+    : monthlyChampionMonthRange();
+  if (!range) {
+    throw new HttpsError("invalid-argument", st(locale, "monthlyChampion.badMonthKey", "monthKey 須為 YYYY-MM。"));
+  }
+
+  const row = await getMonthlyChampionAwardAdminRow(db, range.monthKey);
+  if (!row) {
+    return { ok: false as const, reason: "not_found" as const, monthKey: range.monthKey };
+  }
+  return { ok: true as const, award: row };
+});
+
 /** 會員：輪盤點數滿門檻時手動兌換為 1 次預約次數 */
 export const redeemWheelPoints = onCall(publicCall, async (request) => {
   const locale = parseLocale(request.data);
@@ -1561,22 +1594,32 @@ export const listWalletTransactionsAdmin = onCall(publicCall, async (request) =>
   if (needWallet) {
     let snap;
     try {
-      // 僅依 customerId 篩選，記憶體排序，避免複合索引建立中導致查詢失敗
-      snap = await db.collection("walletTransactions").where("customerId", "==", customerId).limit(fetchLimit).get();
+      snap = await db
+        .collection("walletTransactions")
+        .where("customerId", "==", customerId)
+        .orderBy("createdAt", "desc")
+        .limit(fetchLimit)
+        .get();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      console.error("listWalletTransactionsAdmin query failed", customerId, e);
       if (/requires an index/i.test(msg)) {
-        throw new HttpsError(
-          "failed-precondition",
-          st(
-            locale,
-            "walletHistory.indexBuilding",
-            "紀錄索引建立中，請數分鐘後再試；若持續失敗請聯絡管理員。",
-          ),
-        );
+        try {
+          snap = await db.collection("walletTransactions").where("customerId", "==", customerId).limit(fetchLimit).get();
+        } catch (fallbackErr) {
+          console.error("listWalletTransactionsAdmin query failed", customerId, fallbackErr);
+          throw new HttpsError(
+            "failed-precondition",
+            st(
+              locale,
+              "walletHistory.indexBuilding",
+              "紀錄索引建立中，請數分鐘後再試；若持續失敗請聯絡管理員。",
+            ),
+          );
+        }
+      } else {
+        console.error("listWalletTransactionsAdmin query failed", customerId, e);
+        throw new HttpsError("internal", st(locale, "walletHistory.queryFail", "查詢紀錄失敗，請稍後再試。"));
       }
-      throw new HttpsError("internal", st(locale, "walletHistory.queryFail", "查詢紀錄失敗，請稍後再試。"));
     }
 
     transactions = snap.docs
@@ -1598,6 +1641,36 @@ export const listWalletTransactionsAdmin = onCall(publicCall, async (request) =>
 
     if (typeFilterWallet) {
       transactions = transactions.filter((row) => row.type === typeFilterWallet);
+    }
+
+    if (!typeFilter || typeFilterWallet === WALLET_TX_TYPE_MONTHLY_CHAMPION) {
+      try {
+        const awardSnap = await db
+          .collection(MONTHLY_CHAMPION_AWARD_COLLECTION)
+          .where("customerId", "==", customerId)
+          .get();
+        const existingIds = new Set(transactions.map((row) => row.id));
+        for (const docSnap of awardSnap.docs) {
+          const d = docSnap.data() as Record<string, unknown>;
+          const walletTxId = typeof d.walletTransactionId === "string" ? d.walletTransactionId.trim() : "";
+          if (walletTxId && existingIds.has(walletTxId)) continue;
+          const monthKey = docSnap.id;
+          const row: HistoryRow = {
+            id: walletTxId || `monthlyChampionAward:${monthKey}`,
+            type: WALLET_TX_TYPE_MONTHLY_CHAMPION,
+            amount: 0,
+            sessionsDelta: 1,
+            drawChancesDelta: null,
+            note: `${formatMonthKeyLabelZh(monthKey)}消費冠軍獎勵：贈送 1 次按摩`,
+            operatorId: MONTHLY_CHAMPION_SYSTEM_OPERATOR_ID,
+            createdAt: firestoreTimestampToSeconds(d.createdAt),
+          };
+          transactions.push(row);
+          existingIds.add(row.id);
+        }
+      } catch (e) {
+        console.error("listWalletTransactionsAdmin monthly champion awards failed", customerId, e);
+      }
     }
   }
 

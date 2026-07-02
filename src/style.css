@@ -3477,7 +3477,24 @@ tbody tr:hover td {
   margin-top: 10px;
 }
 
+.admin-wallet-history__champion-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0 0 4px;
+}
+
+.admin-wallet-history__champion-hint {
+  margin: 0;
+}
+
+.admin-wallet-history__champion-apply {
+  flex-shrink: 0;
+}
+
 .admin-wallet-history__toolbar {
+  margin-top: 10px;
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
